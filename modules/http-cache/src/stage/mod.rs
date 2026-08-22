@@ -209,6 +209,7 @@ impl HttpCacheStage {
                 .store(current_gen, Ordering::Relaxed);
         }
 
+        store.ensure_cleanup_task();
         store
     }
 

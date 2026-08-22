@@ -4,9 +4,9 @@ mod purge;
 mod tests;
 pub mod types;
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 
 use ahash::{AHashMap, AHashSet, RandomState};
 use http::header::{self, HeaderMap};
@@ -18,6 +18,7 @@ use tokio::sync::Notify;
 use crate::lscache::PurgeOperation;
 use crate::policy::{recalculate_freshness, CacheScope};
 use crate::store::persist::writer::ZonePersistState;
+use crate::SECONDARY_RUNTIME;
 
 pub use self::key::build_entry_key;
 pub use self::key::normalize_key_value;
@@ -83,10 +84,11 @@ pub struct CacheStore {
     base_key_entries: Arc<dashmap::DashMap<String, FxHashSet<String>, FxBuildHasher>>,
     variants_by_base: dashmap::DashMap<String, Vec<StoredVariant>, RandomState>,
     max_entries: AtomicUsize,
-    last_cleanup: AtomicU64,
     inflight: dashmap::DashMap<String, InflightEntry, FxBuildHasher>,
     active_locks: AtomicUsize,
     persist: OnceLock<Arc<ZonePersistState>>,
+    expired_count: Arc<AtomicUsize>,
+    cleanup_task_active: AtomicBool,
 }
 
 /// Tracks an in-flight upstream fetch for a specific cache key.
@@ -161,10 +163,11 @@ impl CacheStore {
             base_key_entries,
             variants_by_base: dashmap::DashMap::with_hasher(RandomState::new()),
             max_entries: AtomicUsize::new(max_entries),
-            last_cleanup: AtomicU64::new(0),
             inflight: dashmap::DashMap::with_hasher(FxBuildHasher),
             active_locks: AtomicUsize::new(0),
             persist: OnceLock::new(),
+            expired_count: Arc::new(AtomicUsize::new(0)),
+            cleanup_task_active: AtomicBool::new(false),
         }
     }
 
@@ -220,6 +223,21 @@ impl CacheStore {
             .entry(base_key.to_owned())
             .or_insert(FxHashSet::default())
             .insert(entry_key.to_owned());
+    }
+
+    #[inline]
+    fn remove(&self, key: &str) -> Option<(String, StoredEntry)> {
+        let (orig_key, entry) = self.entries.remove(key)?;
+        if !self.entries.contains_key(key) {
+            if let Some(mut e) = self.base_key_entries.get_mut(&entry.base_key) {
+                e.remove(key);
+                if e.is_empty() {
+                    drop(e);
+                    self.base_key_entries.remove(&entry.base_key);
+                }
+            }
+        }
+        Some((orig_key, entry))
     }
 
     #[inline]
@@ -285,7 +303,7 @@ impl CacheStore {
         private_key: Option<&str>,
     ) -> LookupOutcome {
         let stats = StoreStats {
-            expired_evictions: self.cleanup_expired(),
+            expired_evictions: self.get_cleanup_expired(),
             ..Default::default()
         };
 
@@ -402,7 +420,7 @@ impl CacheStore {
         request_cookies: &AHashMap<String, String>,
     ) -> (StoreStats, usize) {
         let mut stats = StoreStats {
-            expired_evictions: self.cleanup_expired(),
+            expired_evictions: self.get_cleanup_expired(),
             ..Default::default()
         };
 
@@ -480,7 +498,7 @@ impl CacheStore {
         let mut affected_base_keys = AHashSet::default();
         stats.purged = keys_to_remove.len();
         for key in keys_to_remove {
-            if let Some((_, entry)) = self.entries.remove(&key) {
+            if let Some((_, entry)) = self.remove(&key) {
                 self.record_delete(&key);
                 affected_base_keys.insert(entry.base_key);
             }
@@ -507,29 +525,8 @@ impl CacheStore {
         }
     }
 
-    /// Run the full expired-entry scan only if at least `CLEANUP_INTERVAL_SECS`
-    /// elapsed since the last scan. Returns true when the caller's thread won
-    /// the right to scan this interval.
-    #[inline]
-    fn should_cleanup(&self) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let last = self.last_cleanup.load(Ordering::Relaxed);
-        if now.saturating_sub(last) < CLEANUP_INTERVAL_SECS {
-            return false;
-        }
-        self.last_cleanup
-            .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
-            .is_ok()
-    }
-
     #[inline]
     fn cleanup_expired(&self) -> usize {
-        if !self.should_cleanup() {
-            return 0;
-        }
         let expired_keys: Vec<String> = self
             .entries
             .iter()
@@ -544,7 +541,7 @@ impl CacheStore {
         let mut count = 0;
         let mut orphaned_base_keys = AHashSet::default();
         for key in expired_keys {
-            if let Some((_, entry)) = self.entries.remove(&key) {
+            if let Some((_, entry)) = self.remove(&key) {
                 self.record_delete(&key);
                 count += 1;
                 orphaned_base_keys.insert(entry.base_key);
@@ -633,9 +630,37 @@ impl CacheStore {
 
     /// Replay a restored `Delete` tombstone into the store.
     pub fn restore_delete(&self, key: &str) {
-        if let Some((_, entry)) = self.entries.remove(key) {
+        if let Some((_, entry)) = self.remove(key) {
             self.remove_orphaned_base_key(&entry.base_key);
         }
+    }
+
+    /// Ensures the cleanup background task is spawned on secondary runtime.
+    #[inline]
+    pub fn ensure_cleanup_task(self: &Arc<Self>) {
+        let Some(secondary_handle) = SECONDARY_RUNTIME.get() else {
+            // Tokio not yet initialized
+            return;
+        };
+        if self.cleanup_task_active.swap(true, Ordering::Relaxed) {
+            // Task already spawned, don't spawn duplicates
+            return;
+        }
+        let store = self.clone();
+        secondary_handle.spawn(async move {
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(CLEANUP_INTERVAL_SECS));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                store.cleanup_expired();
+            }
+        });
+    }
+
+    #[inline]
+    fn get_cleanup_expired(&self) -> usize {
+        self.expired_count.swap(0, Ordering::Relaxed)
     }
 }
 
