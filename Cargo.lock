@@ -1634,7 +1634,6 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
- "parking_lot",
  "rustc-hash",
  "tokio",
  "typemap_rev",
