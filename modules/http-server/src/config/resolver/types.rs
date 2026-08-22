@@ -58,14 +58,21 @@ pub struct ResolutionResult {
     pub configuration: LayeredConfiguration,
     /// The resolved location path
     pub location_path: ResolvedLocationPath,
+    /// Whether error configuration resolution is possible
+    pub has_error_config: bool,
 }
 
 impl ResolutionResult {
     #[inline]
-    pub fn new(configuration: LayeredConfiguration, location_path: ResolvedLocationPath) -> Self {
+    pub fn new(
+        configuration: LayeredConfiguration,
+        location_path: ResolvedLocationPath,
+        has_error_config: bool,
+    ) -> Self {
         Self {
             configuration,
             location_path,
+            has_error_config,
         }
     }
 }

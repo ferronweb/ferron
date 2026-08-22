@@ -879,10 +879,12 @@ async fn request_handler_inner(
     let request = ctx.req.take().expect("invalid HTTP context state");
     let request_uri = request.uri().clone();
     let (request_parts, body) = request.into_parts();
-    let cloned_request = http::Request::from_parts(
-        request_parts.clone(),
-        Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync(),
-    );
+    let cloned_request = resolution.has_error_config.then(|| {
+        http::Request::from_parts(
+            request_parts.clone(),
+            Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync(),
+        )
+    });
     let request = http::Request::from_parts(request_parts, body);
 
     let admin_email = resolution
@@ -915,7 +917,7 @@ async fn request_handler_inner(
         if status >= 400 {
             ctx.previous_error = Some(status);
             if ctx.req.is_none() {
-                ctx.req = Some(cloned_request);
+                ctx.req = cloned_request;
             }
             // Rebuild the resolver request from the current request in context
             if let Some(req) = ctx.req.take() {

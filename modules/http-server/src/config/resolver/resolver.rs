@@ -5,6 +5,7 @@ use std::sync::Arc;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationMatcherExpr};
 use ferron_http::HttpContext;
+use rustc_hash::FxHashMap;
 
 use super::super::prepare::{
     PreparedConfiguration, PreparedHostConfigurationBlock, PreparedHostConfigurationErrorConfig,
@@ -16,7 +17,7 @@ use super::types::{ResolutionResult, ResolvedLocationPath};
 #[derive(Debug, Clone, Default)]
 struct ErrorHandlerStatusLookup<T> {
     catchall_values: Vec<T>,
-    status_code_values: HashMap<u16, Vec<T>>,
+    status_code_values: FxHashMap<u16, Vec<T>>,
 }
 
 impl<T> ErrorHandlerStatusLookup<T> {
@@ -24,7 +25,7 @@ impl<T> ErrorHandlerStatusLookup<T> {
     fn new() -> Self {
         Self {
             catchall_values: Vec::new(),
-            status_code_values: HashMap::new(),
+            status_code_values: Default::default(),
         }
     }
 
@@ -138,6 +139,9 @@ impl ThreeStageResolver {
         Some(ResolutionResult::new(
             base.configuration,
             base.location_path,
+            base.matched_scopes
+                .iter()
+                .any(|s| !s.block.error_handlers.status_code_values.is_empty()),
         ))
     }
 
@@ -153,11 +157,13 @@ impl ThreeStageResolver {
         let mut base = self.resolve_base(ip, hostname, path, ctx)?;
         base.location_path.error_key = Some(error_code);
 
+        let mut has_error_config = false;
         for scope in &base.matched_scopes {
             let remaining_path_keys =
                 Self::path_lookup_key_from_segments(&scope.remaining_path_segments);
             for handler in scope.block.error_handlers.get(error_code) {
                 base.configuration.add_layer(Arc::clone(&handler.layer));
+                has_error_config = true;
                 Self::apply_nested_layers(
                     handler,
                     &remaining_path_keys,
@@ -171,6 +177,7 @@ impl ThreeStageResolver {
         Some(ResolutionResult::new(
             base.configuration,
             base.location_path,
+            has_error_config,
         ))
     }
 
