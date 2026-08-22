@@ -494,10 +494,25 @@ pub async fn send_via_wrapper(
     _local_limit: Option<usize>,
     metrics: &mut ProxyMetrics,
 ) -> Result<ferron_http::HttpResponse, ProxyError> {
+    let parts_cloned = {
+        let req = ctx.req.take();
+        if let Some(req) = req {
+            if req.method().is_idempotent() {
+                let (oparts, body) = req.into_parts();
+                let parts = oparts.clone();
+                ctx.req.replace(http::Request::from_parts(oparts, body));
+                Some(parts)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
     let request = crate::proxy::request::construct_proxy_request(ctx, config, proxy_url)?;
+    let body_cloned = request.body().clone();
     let extensions = request.extensions().clone();
 
-    let request_cloned = request.method().is_idempotent().then(|| request.clone());
     let start = std::time::Instant::now();
     let response = match wrapper.send_request(request).await {
         Ok(resp) => {
@@ -507,11 +522,10 @@ pub async fn send_via_wrapper(
             resp
         }
         Err(e) => {
-            if let Some(request_cloned) = request_cloned {
-                // request_cloned = None if request method is not idempotent
+            if let Some(parts) = parts_cloned {
+                // parts_cloned = None if request method is not idempotent
                 // (meaning there could be different effects for same request)
-                let (parts, body) = request_cloned.into_parts();
-                if let Some(inner_body) = body.recycle() {
+                if let Some(inner_body) = body_cloned.recycle() {
                     // Recycle request body so to allow retries later on
                     ctx.req
                         .replace(http::Request::from_parts(parts, inner_body));
