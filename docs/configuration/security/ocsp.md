@@ -81,77 +81,14 @@ example.com {
 | --------- | -------- | ------- | -------- | ------------------------------- |
 | `enabled` | `<bool>` | `true`  | No       | Whether OCSP stapling is active |
 
-## How it works
-
-### Startup sequence
-
-1. The OCSP module initializes a background service on the secondary tokio runtime
-2. The TLS provider loads or gets certificates
-3. The OCSP module **preloads** the certificate into the service immediately
-4. The background task fetches an OCSP response from the CA responder
-5. The OCSP module verifies the response to make sure it is valid and matches the certificate
-6. The OCSP module caches the response and attaches it to later TLS handshakes
-
-### Refresh cycle
-
-The background task maintains fresh OCSP responses:
-
-1. **Initial fetch**: triggered by preloading on config load
-2. **Safety margin**: the service refreshes responses before expiry (25% of validity period)
-3. **Jitter**: randomized delay (up to 5 minutes) prevents refresh storms
-4. **Error handling**: the service retries failed fetches with exponential backoff
-
-### OCSP Must-Staple
-
-The module automatically detects certificates with the **OCSP Must-Staple** extension (TLS Feature `status_request`, RFC 7633). Must-Staple certificates **require** a stapled OCSP response. Clients that enforce Must-Staple will reject connections without one. Preloading makes sure the service fetches the response immediately on startup.
-
-## Response verification
-
-When the OCSP stapler fetches an OCSP response, it runs several checks before caching and stapling it.
-
-### Signature verification
-
-The CA (or an intermediate CA) signs the OCSP response. The server verifies this signature using the public key of the issuer certificate. Supported signature algorithms:
-
-| Algorithm        | OID                     | Notes                                   |
-| ---------------- | ----------------------- | --------------------------------------- |
-| RSA-PKCS1-SHA256 | `1.2.840.113549.1.1.11` | Default for most CA-issued certificates |
-| RSA-PKCS1-SHA384 | `1.2.840.113549.1.1.12` | Stronger hash                           |
-| RSA-PKCS1-SHA512 | `1.2.840.113549.1.1.13` | Strongest hash                          |
-| RSA-PKCS1-SHA1   | `1.2.840.113549.1.1.5`  | Legacy (deprecated)                     |
-
-If the issuer certificate is not directly available, the OCSP response may include intermediate certificates in its `certs` field. The server tries these as fallbacks for signature verification.
-
-### Issuer name and key hash verification
-
-The OCSP response contains hashes of the subject and public key of the issuer certificate. The server verifies that these hashes match the actual issuer certificate. This prevents replay attacks where someone presents a valid OCSP response for one certificate as if it were for another.
-
-### Serial number verification
-
-The server verifies that the serial number in the OCSP response matches the serial number of the leaf certificate. This prevents an attacker from reusing a valid OCSP response for a different certificate.
-
-### Hash algorithms
-
-The OCSP response specifies a hash algorithm used for the issuer name and key hashes. Supported algorithms:
-
-| Algorithm | OID                      |
-| --------- | ------------------------ |
-| SHA-256   | `2.16.840.1.101.3.4.2.1` |
-| SHA-384   | `2.16.840.1.101.3.4.2.2` |
-| SHA-512   | `2.16.840.1.101.3.4.2.3` |
-| SHA-1     | `1.3.14.3.2.26`          |
-
-If the OCSP response uses an unsupported algorithm, the fetch fails with a verification error.
-
 ## OCSP responder URL
 
 The responder URL comes from the **Authority Information Access (AIA)** extension of the certificate. Most CA-issued certificates include this automatically.
 
 If the certificate has no OCSP URL, OCSP stapling is silently skipped for that certificate. The server does not raise an error.
 
-## Security considerations
-
-- If the OCSP responder is unreachable, the service keeps the last cached response. It uses that response until it fetches a new one. The service does not serve responses past their `nextUpdate` time. It keeps retrying until it gets a fresh response.
+> [!tip]
+> The module automatically detects certificates with the OCSP Must-Staple extension (TLS Feature `status_request`, RFC 7633). Must-Staple certificates require a stapled OCSP response. Clients that enforce Must-Staple will reject connections without one. Preloading makes sure the service fetches the response immediately on startup.
 
 ## Troubleshooting
 
