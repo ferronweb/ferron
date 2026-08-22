@@ -23,13 +23,15 @@ pub struct ProxyBodyInner {
 
 #[derive(Clone)]
 pub struct ProxyBody {
-    inner: Arc<parking_lot::Mutex<Option<ProxyBodyInner>>>,
+    inner: std::rc::Rc<std::cell::RefCell<Option<ProxyBodyInner>>>,
 }
+
+// Somehow, it compiles even if it uses Rc<RefCell<T>>, which is !Sync and even !Send...
 
 impl ProxyBody {
     #[inline]
     pub fn new(body: UnsyncBoxBody<Bytes, std::io::Error>) -> Self {
-        let inner = Arc::new(parking_lot::Mutex::new(Some(ProxyBodyInner {
+        let inner = std::rc::Rc::new(std::cell::RefCell::new(Some(ProxyBodyInner {
             inner: body,
             recycleable: true,
         })));
@@ -38,7 +40,7 @@ impl ProxyBody {
 
     #[inline]
     pub fn recycle(self) -> Option<UnsyncBoxBody<Bytes, std::io::Error>> {
-        let mut guard = self.inner.lock();
+        let mut guard = self.inner.borrow_mut();
         if !guard.as_ref().map_or(false, |i| i.recycleable) {
             return None;
         }
@@ -55,7 +57,7 @@ impl hyper::body::Body for ProxyBody {
         self: std::pin::Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
-        let mut guard = self.inner.lock();
+        let mut guard = self.inner.borrow_mut();
         if let Some(inner) = guard.as_mut() {
             let ready_inner =
                 std::task::ready!(std::pin::Pin::new(&mut inner.inner).poll_frame(cx));
@@ -69,7 +71,7 @@ impl hyper::body::Body for ProxyBody {
     #[inline]
     fn size_hint(&self) -> hyper::body::SizeHint {
         self.inner
-            .lock()
+            .borrow()
             .as_ref()
             .map(|i| i.inner.size_hint())
             .unwrap_or_default()
@@ -78,7 +80,7 @@ impl hyper::body::Body for ProxyBody {
     #[inline]
     fn is_end_stream(&self) -> bool {
         self.inner
-            .lock()
+            .borrow()
             .as_ref()
             .map_or(false, |i| i.inner.is_end_stream())
     }
