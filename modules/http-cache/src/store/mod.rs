@@ -221,7 +221,7 @@ impl CacheStore {
     fn insert_base_key_entry(&self, entry_key: &str, base_key: &str) {
         self.base_key_entries
             .entry(base_key.to_owned())
-            .or_insert(FxHashSet::default())
+            .or_default()
             .insert(entry_key.to_owned());
     }
 
