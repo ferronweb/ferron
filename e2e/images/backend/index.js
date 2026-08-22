@@ -28,6 +28,7 @@ app.get("/whoami", (_req, res, _next) => {
 
 app.get("/unstable", (req, res, _next) => {
   const sleep = Number.parseInt(req.query.sleep || "0", 10);
+  const unsafe = req.query.unsafe === "true";
   if (sleep > 0) {
     setTimeout(() => {
       res.send(backendName);
@@ -37,7 +38,11 @@ app.get("/unstable", (req, res, _next) => {
 
   if (unstableFailuresRemaining > 0) {
     unstableFailuresRemaining -= 1;
-    res.status(503).send(`unstable:${backendName}`);
+    if (unsafe) {
+      req.socket.destroy();
+    } else {
+      res.status(503).send(`unstable:${backendName}`);
+    }
     return;
   }
 

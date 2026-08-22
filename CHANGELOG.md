@@ -15,6 +15,10 @@
 - **HTTP/3 enabled by default**: HTTP/3 is now enabled by default in Ferron, as it's also no longer declared experimental (it was declared such, because the previous HTTP/3 implementation, `h3`, was declared experimental as well).
 - **Interpolations allowed in static error page paths**: interpolations are now supported in static error page paths served by the HTTP server, allowing for using them with A/B testing.
 
+#### Reverse proxy
+
+- **HTTP error resilience**: when a backend fails while HTTP request is sent, if the request method is idempotent and body is not sent yet, Ferron will retry the request instead of bailing out.
+
 ### Fixed
 
 #### HTTP cache

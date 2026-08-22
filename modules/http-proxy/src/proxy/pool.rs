@@ -497,6 +497,7 @@ pub async fn send_via_wrapper(
     let request = crate::proxy::request::construct_proxy_request(ctx, config, proxy_url)?;
     let extensions = request.extensions().clone();
 
+    let request_cloned = request.method().is_idempotent().then(|| request.clone());
     let start = std::time::Instant::now();
     let response = match wrapper.send_request(request).await {
         Ok(resp) => {
@@ -506,6 +507,16 @@ pub async fn send_via_wrapper(
             resp
         }
         Err(e) => {
+            if let Some(request_cloned) = request_cloned {
+                // request_cloned = None if request method is not idempotent
+                // (meaning there could be different effects for same request)
+                let (parts, body) = request_cloned.into_parts();
+                if let Some(inner_body) = body.recycle() {
+                    // Recycle request body so to allow retries later on
+                    ctx.req
+                        .replace(http::Request::from_parts(parts, inner_body));
+                }
+            }
             return Err(ProxyError::SendRequestError(format!("Bad gateway: {e}")));
         }
     };

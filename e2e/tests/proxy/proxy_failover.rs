@@ -267,3 +267,72 @@ async fn test_failover_disabled() {
 
     ferron.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_failover_on_http_error() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let mut config_file = self::common::create_temp_file();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    let network = "e2e-test-failover-httperror";
+
+    let _backend_ok = create_backend_container(network, "backend-ok", "backend-ok", 0)
+        .await
+        .unwrap();
+    let _backend_unstable =
+        create_backend_container(network, "backend-unstable", "backend-unstable", 10)
+            .await
+            .unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            br#"
+*:80 {
+  proxy {
+    upstream "http://backend-ok:3000"
+    upstream "http://backend-unstable:3000"
+
+    algorithm round_robin
+  }
+}
+"#,
+        )
+        .unwrap();
+
+    let ferron = create_ferron_container(network, config_file.path())
+        .await
+        .unwrap();
+
+    let port = ferron
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap();
+
+    for _ in 0..9 {
+        let response = client
+            .get(format!("http://localhost:{}/unstable?unsafe=true", port))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            reqwest::StatusCode::OK,
+            "Expected 200 OK when one backend is unstable"
+        );
+    }
+
+    ferron.stop().await.unwrap();
+}

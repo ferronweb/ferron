@@ -142,7 +142,7 @@ pub(super) fn construct_proxy_request(
         ferron_http::trace_context::inject_trace_headers(&mut parts.headers, tc);
     }
 
-    Ok(Request::from_parts(parts, body))
+    Ok(Request::from_parts(parts, ProxyBody::new(body)))
 }
 
 #[inline]

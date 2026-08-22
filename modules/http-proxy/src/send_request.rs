@@ -16,7 +16,73 @@ use crate::types::error::ProxyError;
 use crate::types::upstream::UpstreamInner;
 
 /// Body type used for proxied requests.
-pub type ProxyBody = UnsyncBoxBody<Bytes, std::io::Error>;
+pub struct ProxyBodyInner {
+    inner: UnsyncBoxBody<Bytes, std::io::Error>,
+    recycleable: bool,
+}
+
+#[derive(Clone)]
+pub struct ProxyBody {
+    inner: Arc<parking_lot::Mutex<Option<ProxyBodyInner>>>,
+}
+
+impl ProxyBody {
+    #[inline]
+    pub fn new(body: UnsyncBoxBody<Bytes, std::io::Error>) -> Self {
+        let inner = Arc::new(parking_lot::Mutex::new(Some(ProxyBodyInner {
+            inner: body,
+            recycleable: true,
+        })));
+        Self { inner }
+    }
+
+    #[inline]
+    pub fn recycle(self) -> Option<UnsyncBoxBody<Bytes, std::io::Error>> {
+        let mut guard = self.inner.lock();
+        if !guard.as_ref().map_or(false, |i| i.recycleable) {
+            return None;
+        }
+        Some(guard.take()?.inner)
+    }
+}
+
+impl hyper::body::Body for ProxyBody {
+    type Data = Bytes;
+    type Error = std::io::Error;
+
+    #[inline]
+    fn poll_frame(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+        let mut guard = self.inner.lock();
+        if let Some(inner) = guard.as_mut() {
+            let ready_inner =
+                std::task::ready!(std::pin::Pin::new(&mut inner.inner).poll_frame(cx));
+            inner.recycleable = false; // Let's not "recycle" partially-consumed request bodies...
+            Poll::Ready(ready_inner)
+        } else {
+            Poll::Ready(None)
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> hyper::body::SizeHint {
+        self.inner
+            .lock()
+            .as_ref()
+            .map(|i| i.inner.size_hint())
+            .unwrap_or_default()
+    }
+
+    #[inline]
+    fn is_end_stream(&self) -> bool {
+        self.inner
+            .lock()
+            .as_ref()
+            .map_or(false, |i| i.inner.is_end_stream())
+    }
+}
 
 enum SendRequestInner {
     Http1(hyper::client::conn::http1::SendRequest<ProxyBody>),
