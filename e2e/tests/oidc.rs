@@ -21,6 +21,8 @@ async fn create_mock_idp_container(network: &str) -> Result<ContainerAsync<Gener
         .with_port(ContainerPort::Tcp(8080))
         .with_response_matcher(|response| response.status().is_success()),
     )))
+    // Non-interactive login: the authorization endpoint redirects back with a code immediately
+    .with_env_var("JSON_CONFIG", r#"{"interactiveLogin": false}"#)
     .with_network(network)
     .with_hostname("mockidp")
     .start()
