@@ -8,7 +8,6 @@ use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::builder::build_server_config_builder;
 use ferron_tls::config::TlsServerConfig;
 use ferron_tls::{observability, validate_tls_common, TcpTlsContext, TcpTlsResolver};
-use num_traits::ToPrimitive;
 use rustls::ServerConfig;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -18,48 +17,12 @@ use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 /// [`TcpTlsManualProvider::execute`].
 static EVENT_SINK: OnceLock<Arc<CompositeEventSink>> = OnceLock::new();
 
-/// Set the event sink for the `tls-manual` module. Call during module
-/// initialization. Multiple calls are ignored; only the first one wins.
-pub fn set_event_sink(event_sink: Arc<CompositeEventSink>) {
-    let _ = EVENT_SINK.set(event_sink);
-}
-
-fn event_sink() -> Option<Arc<CompositeEventSink>> {
-    EVENT_SINK.get().cloned()
-}
-
 fn resolve_host(ctx: &TcpTlsContext<'_>) -> String {
     ctx.domain
         .host
         .clone()
         .or_else(|| ctx.domain.ip.map(|i| i.to_canonical().to_string()))
         .unwrap_or_default()
-}
-
-/// Check if a certificate has the OCSP Must-Staple (TLS Feature status_request) extension.
-///
-/// Per RFC 7633, the TLS Feature extension contains a SEQUENCE of feature values.
-/// The `status_request` feature (value 5) indicates OCSP Must-Staple.
-fn cert_has_must_staple(leaf: &CertificateDer<'_>) -> bool {
-    let Ok(cert) = rasn::der::decode::<rasn_pkix::Certificate>(leaf.as_ref()) else {
-        return false;
-    };
-
-    let Some(extensions) = &cert.tbs_certificate.extensions else {
-        return false;
-    };
-
-    for ext in extensions.iter() {
-        if ext.extn_id == rasn::oid!("1.3.6.1.5.5.7.1.24") {
-            if let Ok(items) =
-                rasn::der::decode::<rasn::types::SequenceOf<rasn::types::Integer>>(&ext.extn_value)
-            {
-                return items.iter().any(|item| item.to_u32() == Some(5));
-            }
-        }
-    }
-
-    false
 }
 
 /// Build a `rustls::sign::CertifiedKey` from loaded certs and private key.
@@ -120,8 +83,8 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
         // Emit the unified `ferron.tls.certificate_not_after` gauge for the
         // leaf certificate that is about to be mounted into the in-memory
         // rustls context.
-        if let (Some(sink), Some(leaf)) = (event_sink(), certs.first()) {
-            observability::emit_certificate_not_after(&sink, "manual", &resolve_host(ctx), leaf);
+        if let (Some(sink), Some(leaf)) = (EVENT_SINK.get(), certs.first()) {
+            observability::emit_certificate_not_after(sink, "manual", &resolve_host(ctx), leaf);
         }
 
         let mut config_with_tickets =
@@ -151,23 +114,20 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
             // starts fetching as soon as the config is loaded.
             if let Some(certified_key) = build_certified_key(&certs, &private_key) {
                 if let Some(leaf) = certs.first() {
-                    if cert_has_must_staple(leaf) {
-                        ferron_core::log_info!(
-                            "OCSP stapling enabled — Must-Staple detected, preloading certificate"
-                        );
-                    }
                     // The same leaf is being mounted into the OCSP service; emit
                     // the unified cert expiration gauge a second time so
                     // observers can see that preload as a distinct mount.
-                    if let Some(sink) = event_sink() {
+                    if let Some(sink) = EVENT_SINK.get() {
                         observability::emit_certificate_not_after(
-                            &sink,
+                            sink,
                             "manual",
                             &resolve_host(ctx),
                             leaf,
                         );
                     }
                 }
+                // It would be already preloaded, even without Must-Staple extension,
+                // no need to check for Must-Staple...
                 ocsp_handle.preload_with_host(certified_key.cert.clone(), resolve_host(ctx));
             }
         }
@@ -246,7 +206,7 @@ impl ModuleLoader for TlsManualModuleLoader {
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
-        set_event_sink(event_sink);
+        let _ = EVENT_SINK.set(event_sink);
         Ok(())
     }
 }

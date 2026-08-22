@@ -2117,9 +2117,6 @@ dependencies = [
  "ferron-observability",
  "ferron-ocsp",
  "ferron-tls",
- "num-traits",
- "rasn",
- "rasn-pkix",
  "rustls",
  "rustls-pki-types",
 ]
