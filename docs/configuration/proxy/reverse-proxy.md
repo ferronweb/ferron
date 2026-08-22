@@ -623,31 +623,6 @@ example.com {
 > [!tip]
 > For active health checks, make sure the probe endpoint is reachable on all backends. Keep probes lightweight. Use HEAD requests when the response body is not needed. If Ferron marks upstreams unhealthy incorrectly, check logs and verify `expect_status`.
 
-## DNS result caching
-
-When you enable strict DNS or SRV resolution, Ferron caches resolved DNS results in memory with TTL-based expiry. The cache key includes the hostname (strict DNS) or SRV name, port, and DNS server list. This makes sure different resolver configurations never get stale results.
-
-Ferron derives the cached TTL from the minimum TTL across all DNS response records. It uses a 30-second fallback when no TTL is available. This prevents stale backends from remaining in the pool while avoiding unnecessary DNS resolution for high-traffic hostnames.
-
-Ferron evicts cache entries lazily. It treats expired entries as cache misses and re-resolves them on demand. A periodic background task removes expired entries every 60 seconds to prevent unbounded memory growth for hostnames no longer queried.
-
-> [!info]
-> Cache metrics are available as `ferron.proxy.dns.cache_hit` and `ferron.proxy.dns.cache_miss` counters.
-
-**Configuration example:**
-
-```ferron
-example.com {
-    proxy {
-        upstream http://myapp.example.com:8080 {
-            dns_servers "8.8.8.8,8.8.4.4"
-        }
-    }
-}
-```
-
-In this example, Ferron caches the strict DNS resolution for `myapp.example.com`. Later requests use the cached result until the DNS TTL expires, reducing DNS resolution overhead.
-
 ## Retry budgets
 
 The retry budget uses a token-bucket algorithm shared across all requests for a given proxy setup:
@@ -748,7 +723,7 @@ The reverse proxy module contributes the following fields to the HTTP access log
 | `ferron.proxy.same_upstream_retry_count` | int    | Number of times Ferron retried the same upstream (0 if none).           |
 | `ferron.proxy.circuit_breaker_state`     | string | Circuit breaker state of the backend: `closed`, `open`, or `half_open`. |
 
-## Trace spans
+### Trace spans
 
 The reverse proxy stage sets the following attributes on its `ferron.stage.reverse_proxy` span:
 

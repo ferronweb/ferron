@@ -164,7 +164,7 @@ legacy.example.com {
 
 ## File handle reuse
 
-Ferron reuses file handles (and I/O errors) for static file responses to reduce file I/O overhead. The reuse lasts at most 200 milliseconds after the first request. Ferron caches the file metadata and the open file handle in memory. The cache key is the file path. Ferron invalidates the cache when the file changes.
+Ferron reuses file handles (and I/O errors) for static file responses to reduce file I/O overhead. The reuse lasts at most 200 milliseconds after the first request.
 
 ## Observability
 

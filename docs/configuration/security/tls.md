@@ -123,11 +123,6 @@ api.example.com {
 | ---------------------------------- | ----- | --------------------------------------------------------------------------------- | -------------------------------------------- |
 | `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
-## Security considerations
-
-- Prefer TLS 1.3 cipher suites (`TLS_AES_*`, `TLS_CHACHA20_*`). They are simpler and avoid known TLS 1.2 weaknesses.
-- `x25519` is the recommended default for ECDH curves: fast, secure, and widely supported.
-
 ## Troubleshooting
 
 ### Client certificate handshake failure
