@@ -435,9 +435,10 @@ macro_rules! compress {
             body: UnsyncBoxBody<Bytes, std::io::Error>,
         ) -> UnsyncBoxBody<Bytes, std::io::Error> {
             let stream = BodyStream::new(body);
-            let data_stream = TryStreamExt::map_ok(stream, |frame: http_body::Frame<Bytes>| {
-                frame.into_data().unwrap_or_default()
-            });
+            let data_stream =
+                TryStreamExt::try_filter_map(stream, |frame: http_body::Frame<Bytes>| async {
+                    Ok(frame.into_data().ok())
+                });
             let reader = StreamReader::new(data_stream);
             let encoder = ($compression)(reader);
             let reader_stream =
