@@ -174,7 +174,7 @@ If you specify a hostname (for example, a domain name) and give no explicit port
 - `snippet <name> { ... }` defines a reusable block of directives.
 - `use <snippet-name>` inside a block expands that snippet in place.
 
-> [!callout]
+> [!note]
 >
 > - Top-level file includes and snippet expansion work differently.
 > - `Parse error` rejects include cycles and snippet cycles.
