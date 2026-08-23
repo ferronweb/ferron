@@ -128,7 +128,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         let upstreams = crate::upstream::resolve_upstreams(&config.upstreams).await;
 
-        // Set or update per-upstream local limits.
         let conn_manager = self.state.get_conn_manager();
         for upstream in &upstreams {
             if let Some(limit) = upstream.limit {
@@ -197,18 +196,15 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         };
 
-        // Attach captured method metadata to metrics
         metrics.request_method = captured_method;
         metrics.method_idempotent = captured_idempotent;
 
-        // Capture retry budget tokens after request completion
         if let Some(ref budget) = retry_budget {
             metrics.retry_budget_tokens = Some(budget.available_tokens());
         }
 
         ctx.res = Some(response);
 
-        // Inject backend identity into access log fields
         if let Some(backend) = metrics.final_selected_backend.as_ref() {
             let log_fields = custom_access_log_fields(ctx);
             log_fields.insert(
@@ -708,7 +704,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         }
 
         if let Some(backend) = metrics.final_selected_backend.as_ref() {
-            // Backend active connections gauge
             let active_conns = self
                 .state
                 .conn_state
@@ -815,7 +810,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         }
 
-        // Inject upstream runtime state into the request span for OTLP traces
         if let Some(backend) = metrics.final_selected_backend.as_ref() {
             crate::metrics::inject_upstream_state_span_attributes(
                 ctx,

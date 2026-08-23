@@ -14,7 +14,6 @@ pub fn extract_affinity_key(
 
     let key = match &affinity.affinity_type {
         AffinityType::Cookie(cfg) => {
-            // Read cookie from request headers
             let req = ctx.req.as_ref()?;
             req.headers()
                 .get(http::header::COOKIE)
@@ -114,7 +113,6 @@ pub fn maybe_set_affinity_cookie(
 
     cookie_value.push_str(&format!("; SameSite={}", cookie_cfg.samesite.as_str()));
 
-    // Set the cookie on the response
     match resp {
         ferron_http::HttpResponse::Custom(mut resp) => {
             if let Ok(header_value) = http::HeaderValue::from_str(&cookie_value) {

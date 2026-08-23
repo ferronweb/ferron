@@ -170,12 +170,10 @@ impl ProxyState {
     /// If a task is already running for this config, does nothing.
     #[inline]
     fn ensure_health_check_task(&self, config_keys: &[usize], upstreams: &[Upstream]) {
-        // Check if task already exists
         if self.health_check_tasks.contains_key(config_keys) {
             return;
         }
 
-        // Check if any upstream has health checks enabled
         let has_health_checks = upstreams.iter().any(|u| match u {
             Upstream::Static(cfg) => cfg.health_check_config.enabled,
             Upstream::Srv(cfg) => cfg.health_check_config.enabled,
@@ -185,7 +183,6 @@ impl ProxyState {
             return;
         }
 
-        // Get the secondary runtime handle for spawning the health check task
         let (runtime_handle, event_sink) = match runtime_handle::try_get_secondary_runtime_handle()
         {
             Some(h) => h,
@@ -197,7 +194,6 @@ impl ProxyState {
             }
         };
 
-        // Spawn the health check task with a callback to update the shared counter
         self.health_check_tasks.ensure(config_keys, || {
             let counter = self
                 .active_unhealthy_counters
@@ -282,7 +278,6 @@ impl ModuleLoader for ReverseProxyModuleLoader {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _ = self.state.as_ref().map(|s| s.get_conn_manager());
 
-        // Read global concurrent connections limit if configured
         if let Some(val) = config
             .global_config
             .directives
@@ -298,7 +293,6 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                 GLOBAL_CONCURRENT_CONNECTIONS
                     .store(new_limit, std::sync::atomic::Ordering::Relaxed);
 
-                // If limit changed and conn_manager already exists, update it in place
                 if old_limit != new_limit {
                     if let Some(ref state) = self.state {
                         let cm = state.get_conn_manager();
@@ -308,7 +302,6 @@ impl ModuleLoader for ReverseProxyModuleLoader {
             }
         }
 
-        // Clear mTLS cache
         self::config::MTLS_FILE_CACHE.clear();
 
         // Prevent load balancing state memory leaks on config reload
@@ -348,9 +341,7 @@ impl Module for ReverseProxyModule {
         let (secondary_handle, pool_sink) =
             runtime_handle::get_secondary_runtime_handle(runtime, self.sink.clone());
 
-        // Spawn periodic pool depth gauge emission on the secondary runtime
         secondary_handle.spawn(metrics::emit_pool_and_dns_metrics(pool_sink));
-        // Spawn periodic DNS result cache cleanup on the secondary runtime
         secondary_handle.spawn(metrics::cleanup_dns_cache_task());
 
         self.sink.emit(ferron_observability::Event::Log(

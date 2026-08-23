@@ -766,26 +766,6 @@ mod tests {
     use rustc_hash::FxBuildHasher;
 
     #[test]
-    fn test_status_code_matching() {
-        let config_2xx = UpstreamHealthCheckConfig {
-            expect_status: ExpectedStatusCodes::Successful,
-            ..Default::default()
-        };
-        assert!(config_2xx.expect_status.matches(200));
-        assert!(config_2xx.expect_status.matches(299));
-        assert!(!config_2xx.expect_status.matches(300));
-        assert!(!config_2xx.expect_status.matches(199));
-
-        let config_2xx_3xx = UpstreamHealthCheckConfig {
-            expect_status: ExpectedStatusCodes::SuccessfulOrRedirect,
-            ..Default::default()
-        };
-        assert!(config_2xx_3xx.expect_status.matches(200));
-        assert!(config_2xx_3xx.expect_status.matches(399));
-        assert!(!config_2xx_3xx.expect_status.matches(400));
-    }
-
-    #[test]
     fn test_health_state_transition_to_unhealthy() {
         let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
         let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));

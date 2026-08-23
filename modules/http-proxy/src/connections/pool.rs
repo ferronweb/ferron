@@ -91,7 +91,6 @@ where
         let old_max = state.max_size;
         state.max_size = new_capacity;
 
-        // If capacity decreased, evict excess idle connections.
         if new_capacity < old_max {
             self.evict_excess_idle(new_capacity);
         }
@@ -106,7 +105,6 @@ where
         let state = unsafe { &mut *self.inner.get() };
         let current_idle = state.idle_total;
 
-        // Calculate maximum idle connections allowed.
         let max_idle = max_capacity.saturating_sub(state.outstanding);
 
         if current_idle <= max_idle {
@@ -116,7 +114,6 @@ where
         let mut to_evict = current_idle - max_idle;
         let mut evicted = 0;
 
-        // Evict connections across all keys.
         for conns in state.idle.values_mut() {
             if to_evict == 0 {
                 break;
@@ -248,14 +245,12 @@ where
         let state = unsafe { &mut *self.inner.get() };
         let local_limit_key = local_limit.as_ref().map(|(limit_key, _)| limit_key.clone());
 
-        // Check local limit if specified.
         if let Some((limit_key, limit)) = local_limit.as_ref() {
             if self.is_at_local_limit(limit_key, *limit) {
                 return None;
             }
         }
 
-        // Try to get an idle connection.
         let inner = if let Some(idle_conns) = state.idle.get_mut(&key) {
             let mut removed_conns = Vec::with_capacity(idle_conns.len());
             let mut found_conn = None;
@@ -285,7 +280,6 @@ where
 
         state.outstanding += 1;
 
-        // Increment local outstanding if applicable.
         if let Some(ref limit_key) = local_limit_key {
             self.increment_local_outstanding(limit_key);
         }
@@ -310,7 +304,6 @@ where
 
         state.outstanding = outstanding_before.saturating_sub(1);
 
-        // Check if we can store the connection.
         let can_store = if state.unbounded {
             true
         } else {
@@ -325,7 +318,8 @@ where
             }
             state.idle_total += 1;
         }
-        // else: drop the connection (it will be dropped when this function ends)
+
+        // Drop the connection (it will be dropped when this function ends)
         can_store
     }
 
@@ -445,19 +439,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pool_new() {
-        let pool = SingleThreadPool::<String, String, u32>::new(10);
-        assert_eq!(pool.max_size(), Some(10));
-        assert_eq!(pool.outstanding_count(), 0);
-    }
-
-    #[test]
-    fn test_pool_unbounded() {
-        let pool = SingleThreadPool::<String, String, u32>::new_unbounded();
-        assert_eq!(pool.max_size(), None);
-    }
-
-    #[test]
     fn test_pull_and_return() {
         let pool = Rc::new(SingleThreadPool::<String, String, u32>::new(10));
 
@@ -489,6 +470,8 @@ mod tests {
     #[test]
     fn test_global_limit() {
         let pool = Rc::new(SingleThreadPool::<String, String, u32>::new(2));
+        assert_eq!(pool.max_size(), Some(2));
+        assert_eq!(pool.outstanding_count(), 0);
 
         // Fill the pool
         let first_item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
@@ -550,6 +533,7 @@ mod tests {
     #[test]
     fn test_unbounded_pool() {
         let pool = Rc::new(SingleThreadPool::<String, String, u32>::new_unbounded());
+        assert_eq!(pool.max_size(), None);
 
         // Can pull many items without hitting limit
         let mut items = Vec::new();

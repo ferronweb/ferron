@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferron_http::trace_context::current_event_trace_context;
-use futures_util::future::select_ok;
 use http_body_util::BodyExt;
 use rustls::pki_types::ServerName;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
@@ -51,12 +50,6 @@ pub async fn try_send_with_pool(
     tracked_connection: Option<Arc<()>>,
     metrics: &mut ProxyMetrics,
 ) -> Result<ferron_http::HttpResponse, ProxyError> {
-    // Collect non-ready-but-alive connection for racing
-    let mut pending_items: Vec<PooledConnection> = Vec::new();
-    // Track a non-ready-but-kept item slot for reuse in establish_and_send
-    // (avoids double-pull when the connection is dead and can't be raced).
-    let mut reusable_item: Option<PooledConnection> = None;
-
     // Pull one connection from the pool and check readiness
     let mut pull_start = None;
     let item_fut = async {
@@ -96,7 +89,10 @@ pub async fn try_send_with_pool(
         metrics.pool_hit = true;
         // Here, `item.inner_mut()` is guaranteed to be `Some`,
         // because if it would be `None`, `is_ready` would be always `false`
-        let wrapper = item.inner_mut().take().unwrap();
+        let wrapper = item
+            .inner_mut()
+            .take()
+            .expect("invalid reverse proxy conn pool item state");
         return send_via_wrapper(
             ctx,
             config,
@@ -112,51 +108,33 @@ pub async fn try_send_with_pool(
         .await;
     }
 
-    if should_keep {
-        // Connection is alive but not ready, collect for racing
-        if item.inner().is_some() {
-            pending_items.push(item);
-        }
-    } else {
-        // Connection is dead, keep the item slot for reuse in establish_and_send
-        // to avoid pulling a second time.
-        reusable_item = Some(item);
-    }
-
-    // Race pending items against establishing new
-    if !pending_items.is_empty() {
-        match wait_for_any_ready(&mut pending_items, idle_timeout).await {
-            Some(mut item) => {
-                metrics.connection_reused = true;
-                metrics.pool_hit = true;
-                let wrapper = item
-                    .inner_mut()
-                    .take()
-                    .expect("pending item should have inner value");
-                return send_via_wrapper(
-                    ctx,
-                    config,
-                    wrapper,
-                    item,
-                    proxy_url,
-                    tracked_connection,
-                    true,
-                    upstream.proxy_unix.is_some(),
-                    local_limit,
-                    metrics,
-                )
-                .await;
-            }
-            None => {
-                // All pending items failed, establish new connection...
-            }
+    if should_keep && item.inner().is_some() {
+        if wait_for_ready(&mut item, idle_timeout).await {
+            metrics.connection_reused = true;
+            metrics.pool_hit = true;
+            let wrapper = item
+                .inner_mut()
+                .take()
+                .expect("pending item should have inner value");
+            return send_via_wrapper(
+                ctx,
+                config,
+                wrapper,
+                item,
+                proxy_url,
+                tracked_connection,
+                true,
+                upstream.proxy_unix.is_some(),
+                local_limit,
+                metrics,
+            )
+            .await;
         }
     }
 
     establish_and_send(
         ctx,
         config,
-        cm,
         upstream,
         proxy_url,
         client_ip,
@@ -164,47 +142,22 @@ pub async fn try_send_with_pool(
         is_https,
         _conn_state,
         tracked_connection,
-        reusable_item,
+        item,
         metrics,
-        idle_timeout,
     )
     .await
 }
 
-/// Wait for any pending connection to become ready.
-///
-/// Returns the item if one becomes ready, or `None` if all fail.
+/// Wait for the pending connection to become ready.
 #[inline]
-async fn wait_for_any_ready(
-    pending_items: &mut Vec<PooledConnection>,
-    idle_timeout: Duration,
-) -> Option<PooledConnection> {
-    if pending_items.is_empty() {
-        return None;
+async fn wait_for_ready(pending_item: &mut PooledConnection, idle_timeout: Duration) -> bool {
+    if let Some(wrapper) = pending_item.inner_mut() {
+        if wrapper.wait_ready(Some(idle_timeout)).await {
+            return true;
+        }
     }
 
-    let futures: Vec<_> = pending_items
-        .drain(..)
-        .map(|mut item| {
-            Box::pin(async move {
-                if let Some(wrapper) = item.inner_mut() {
-                    if wrapper.wait_ready(Some(idle_timeout)).await {
-                        return Ok(item);
-                    }
-                }
-                Err(())
-            })
-        })
-        .collect();
-
-    if futures.is_empty() {
-        return None;
-    }
-
-    match select_ok(futures).await {
-        Ok((item, _remaining)) => Some(item),
-        Err(_) => None,
-    }
+    false
 }
 
 /// Classify a connect failure into a proxy error. `scheme` is used only in
@@ -285,7 +238,6 @@ where
     S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     G: 'static,
 {
-    // Write PROXY protocol header if configured (before HTTP handshake)
     if let Some(proxy_header_version) = config.proxy_header {
         if let Some(cip) = client_ip {
             let local_addr = ctx.local_address;
@@ -370,7 +322,6 @@ where
 pub async fn establish_and_send(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
-    cm: &ConnectionManager,
     upstream: Arc<UpstreamInner>,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
@@ -378,19 +329,10 @@ pub async fn establish_and_send(
     is_https: bool,
     _conn_state: Option<&ConnectionsTrackState>,
     tracked_connection: Option<Arc<()>>,
-    existing_item: Option<PooledConnection>,
+    mut item: PooledConnection,
     metrics: &mut ProxyMetrics,
-    idle_timeout: Duration,
 ) -> Result<ferron_http::HttpResponse, ProxyError> {
     metrics.pool_miss = true;
-    let mut item: PooledConnection = if let Some(it) = existing_item {
-        it
-    } else if let Some(limit) = local_limit {
-        cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit), idle_timeout)
-            .await
-    } else {
-        cm.pull(upstream.clone(), client_ip, idle_timeout).await
-    };
 
     *item.inner_mut() = None;
 
@@ -402,8 +344,6 @@ pub async fn establish_and_send(
     let is_unix = false;
 
     let wrapper_fut = async {
-        // Two small connect adapters (TCP and Unix), then one shared
-        // PROXY-header / TLS / HTTP dispatch sequence.
         if is_unix {
             #[cfg(unix)]
             {
@@ -425,7 +365,6 @@ pub async fn establish_and_send(
                 unreachable!()
             }
         } else {
-            // Use pre-resolved IP from connect_to if available, otherwise parse from proxy_url
             let addr = if let Some(ct) = &upstream.connect_to {
                 ct.to_string()
             } else {
@@ -541,22 +480,16 @@ pub async fn send_via_wrapper(
 
     let (mut parts, body) = response.into_parts();
 
-    // Handle HTTP 101 Switching Protocols (upgrades)
     if status == http::StatusCode::SWITCHING_PROTOCOLS {
         let response_upgrade = http::Response::from_parts(parts.clone(), ());
         handle_upgrade(response_upgrade, extensions, ctx, item).await?;
 
-        // Remove some response headers as indicated by "Connection" header (RFC 7230)
         crate::proxy::response::remove_headers_rfc7230(&mut parts);
 
         Ok(ferron_http::HttpResponse::Custom(
             http::Response::from_parts(parts, body.map_err(std::io::Error::other).boxed_unsync()),
         ))
     } else if config.intercept_errors && status.as_u16() >= 400 {
-        // Intercept upstream error responses if configured.
-        // When intercept_errors is true, upstream 4xx/5xx responses
-        // are replaced with Ferron's built-in error response.
-        // When intercept_errors is false (default), the full upstream response is passed through.
         Ok(ferron_http::HttpResponse::BuiltinError(
             status.as_u16(),
             None,
@@ -603,7 +536,6 @@ pub async fn send_via_wrapper(
             Some(truncated_tracker),
         );
 
-        // Remove some response headers as indicated by "Connection" header (RFC 7230)
         crate::proxy::response::remove_headers_rfc7230(&mut parts);
 
         let mut response = http::Response::from_parts(parts, tracked_body.boxed_unsync());

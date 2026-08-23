@@ -87,7 +87,6 @@ pub async fn execute_proxy(
             attributes: Vec::new(),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
-        // Collect active health check unhealthy metrics
         if let Some(counter) = active_unhealthy_counter {
             let guard = counter.read();
             metrics.active_unhealthy_backends =
@@ -130,13 +129,11 @@ pub async fn execute_proxy(
                 attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
-            // Collect active health check unhealthy metrics
             if let Some(counter) = active_unhealthy_counter {
                 let guard = counter.read();
                 metrics.active_unhealthy_backends =
                     guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
             }
-            // Report why the final selection round failed
             let exclusions = backend_set.take_exclusions();
             metrics
                 .excluded_already_tried
@@ -221,21 +218,18 @@ pub async fn execute_proxy(
                         }
                     }
 
-                    // Collect active health check unhealthy metrics
                     if let Some(counter) = active_unhealthy_counter {
                         let guard = counter.read();
                         metrics.active_unhealthy_backends =
                             guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
                     }
 
-                    // Set affinity cookie if needed
                     let resp = maybe_set_affinity_cookie(
                         resp,
                         &config.affinity,
                         affinity_key.map(|k| String::from_utf8_lossy(&k).to_string()),
                     );
 
-                    // Record successful request in retry budget
                     if let Some(budget) = retry_budget {
                         budget.record_request();
                     }
