@@ -144,23 +144,23 @@ impl ModuleLoader for AdminApiModuleLoader {
         let admin_config = AdminConfig::from_global(&config.global_config);
 
         match (self.cache.take(), admin_config) {
-            // Admin was configured before and still configured now → reload
+            // Admin was configured before and still configured now, reload
             (Some(cached), Some(new_config)) => {
                 cached.reload(&registry, new_config, config.clone())?;
                 modules.push(cached.clone());
                 self.cache = Some(cached);
             }
-            // Admin was configured before but now removed → drop (don't re-add)
+            // Admin was configured before but now removed, drop (don't re-add)
             (Some(_cached), None) => {
                 self.cache = None;
             }
-            // Admin is newly configured → create new module
+            // Admin is newly configured, create new module
             (None, Some(new_config)) => {
                 let module = Arc::new(AdminApiModule::new(&registry, new_config, config.clone())?);
                 modules.push(module.clone());
                 self.cache = Some(module);
             }
-            // Admin was never configured and still isn't → nothing to do
+            // Admin was never configured and still isn't, nothing to do
             (None, None) => {}
         }
 

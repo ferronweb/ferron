@@ -94,11 +94,5 @@ fn parse_string_value(block: &ServerConfigurationBlock, directive: &str) -> Opti
 fn parse_bool_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool> {
     let entries = block.directives.get(directive)?;
     let entry = entries.first()?;
-
-    if entry.args.is_empty() {
-        // Bare directive, e.g. `health` without a value
-        return Some(true);
-    }
-
     Some(entry.get_flag())
 }
