@@ -6,9 +6,9 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"] }
-vibeio = { version = "0.2.19", default-features = false, features = ["time"] }
-vibeio-http = { version = "0.4.0", default-features = false, features = ["h1", "h1-zerocopy", "h2", "h3", "h3-quinn"] }
-vibeio-quinn = { version = "0.2.19" }
+zincio = { version = "0.2.22", default-features = false, features = ["time"] }
+zincio-http = { version = "0.4.2", default-features = false, features = ["h1", "h1-zerocopy", "h2", "h3", "h3-quinn"] }
+zincio-quinn = { version = "0.2.22" }
 parking_lot = "0.12"
 arc-swap = "1.7"
 http = "1"

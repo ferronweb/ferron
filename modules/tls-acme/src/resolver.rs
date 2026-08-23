@@ -13,7 +13,7 @@ use rustls::sign::CertifiedKey;
 use tokio::sync::RwLock;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::StartHandshake;
-use vibeio::net::PollTcpStream;
+use zincio::net::PollTcpStream;
 
 use crate::challenge::ACME_TLS_ALPN_NAME;
 use crate::config::SniResolverLock;

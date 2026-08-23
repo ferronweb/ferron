@@ -338,8 +338,8 @@ pub fn normalize_host_for_lookup(host: &str) -> Option<String> {
 #[inline]
 pub fn build_request_handler(
     state: Arc<RequestHandlerState>,
-) -> impl Fn(Request<vibeio_http::Incoming>) -> RequestHandlerFuture {
-    move |request: Request<vibeio_http::Incoming>| {
+) -> impl Fn(Request<zincio_http::Incoming>) -> RequestHandlerFuture {
+    move |request: Request<zincio_http::Incoming>| {
         let state = Arc::clone(&state);
         Box::pin(async move {
             let hostname = request_hostname_for_lookup(&request, state.hinted_hostname.as_deref());

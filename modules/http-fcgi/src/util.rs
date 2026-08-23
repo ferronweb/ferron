@@ -10,11 +10,11 @@ pin_project! {
     pub enum ConnectedSocket {
         Tcp {
             #[pin]
-            socket: vibeio::net::PollTcpStream,
+            socket: zincio::net::PollTcpStream,
         },
         Unix {
             #[pin]
-            socket: vibeio::net::PollUnixStream,
+            socket: zincio::net::PollUnixStream,
         },
     }
 }
@@ -25,14 +25,14 @@ pin_project! {
     pub enum ConnectedSocket {
         Tcp {
             #[pin]
-            socket: vibeio::net::PollTcpStream,
+            socket: zincio::net::PollTcpStream,
         },
     }
 }
 
 impl ConnectedSocket {
     pub async fn connect_tcp(addr: &str) -> Result<Self, std::io::Error> {
-        let socket = vibeio::net::TcpStream::connect(addr).await?;
+        let socket = zincio::net::TcpStream::connect(addr).await?;
         socket.set_nodelay(true)?;
         Ok(Self::Tcp {
             socket: socket.into_poll()?,
@@ -42,7 +42,7 @@ impl ConnectedSocket {
     #[cfg(unix)]
     pub async fn connect_unix(path: &str) -> Result<Self, std::io::Error> {
         Ok(Self::Unix {
-            socket: vibeio::net::UnixStream::connect(path).await?.into_poll()?,
+            socket: zincio::net::UnixStream::connect(path).await?.into_poll()?,
         })
     }
 

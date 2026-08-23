@@ -11,7 +11,7 @@ use rustls::client::danger::ServerCertVerifier;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::ClientConfig;
 use tokio::sync::RwLock;
-use vibeio_hyper::VibeioIo;
+use zincio_hyper::ZincioIo;
 
 use crate::{
     ConnpoolItem, ConnpoolItemInner, ConnpoolKey, ProxyBody, DEFAULT_KEEPALIVE_IDLE_TIMEOUT,
@@ -163,7 +163,7 @@ impl SendRequestWrapper {
     }
 }
 
-/// HTTP/1.x handshake using vibeio executor.
+/// HTTP/1.x handshake using zincio executor.
 #[inline]
 pub async fn http1_handshake<I>(
     io: I,
@@ -172,13 +172,13 @@ where
     I: hyper::rt::Read + hyper::rt::Write + Unpin + 'static,
 {
     let (sender, conn) = hyper::client::conn::http1::handshake(io).await?;
-    vibeio::spawn_detached(async move {
+    zincio::spawn_detached(async move {
         let _ = conn.await;
     });
     Ok(SendRequestWrapper::http1(sender))
 }
 
-/// HTTP/2 handshake using vibeio executor.
+/// HTTP/2 handshake using zincio executor.
 #[inline]
 pub async fn http2_handshake<I>(
     io: I,
@@ -186,9 +186,9 @@ pub async fn http2_handshake<I>(
 where
     I: hyper::rt::Read + hyper::rt::Write + Unpin + 'static,
 {
-    let executor = vibeio_hyper::VibeioExecutor;
+    let executor = zincio_hyper::ZincioExecutor;
     let (sender, conn) = hyper::client::conn::http2::handshake(executor, io).await?;
-    vibeio::spawn_detached(async move {
+    zincio::spawn_detached(async move {
         let _ = conn.await;
     });
     Ok(SendRequestWrapper::http2(sender))
@@ -210,7 +210,7 @@ pub async fn establish_connection(
             .to_owned();
         let port = uri.port_u16().unwrap_or(443);
         let addr = format!("{}:{}", hostname, port);
-        let stream = vibeio::net::TcpStream::connect(addr).await?.into_poll()?;
+        let stream = zincio::net::TcpStream::connect(addr).await?.into_poll()?;
 
         let tls_config = if no_verification {
             Arc::new(
@@ -233,9 +233,9 @@ pub async fn establish_connection(
             .await?;
 
         let wrapper = if tls_stream.get_ref().1.alpn_protocol() == Some(b"h2") {
-            http2_handshake(VibeioIo::new(tls_stream)).await?
+            http2_handshake(ZincioIo::new(tls_stream)).await?
         } else {
-            http1_handshake(VibeioIo::new(tls_stream)).await?
+            http1_handshake(ZincioIo::new(tls_stream)).await?
         };
 
         Ok(ConnpoolItemInner {
@@ -247,9 +247,9 @@ pub async fn establish_connection(
         let host = uri.host().ok_or("Missing host in URI")?;
         let port = uri.port_u16().unwrap_or(80);
         let addr = format!("{}:{}", host, port);
-        let stream = vibeio::net::TcpStream::connect(addr).await?.into_poll()?;
+        let stream = zincio::net::TcpStream::connect(addr).await?.into_poll()?;
 
-        let wrapper = http1_handshake(VibeioIo::new(stream)).await?;
+        let wrapper = http1_handshake(ZincioIo::new(stream)).await?;
 
         Ok(ConnpoolItemInner {
             client: wrapper,
@@ -314,7 +314,7 @@ impl ForwardedAuthClient {
 
             #[cfg(unix)]
             {
-                let stream = vibeio::net::UnixStream::connect(unix_path)
+                let stream = zincio::net::UnixStream::connect(unix_path)
                     .await?
                     .into_poll()?;
 
@@ -346,9 +346,9 @@ impl ForwardedAuthClient {
                         .await?;
 
                     let wrapper = if tls_stream.get_ref().1.alpn_protocol() == Some(b"h2") {
-                        http2_handshake(VibeioIo::new(tls_stream)).await?
+                        http2_handshake(ZincioIo::new(tls_stream)).await?
                     } else {
-                        http1_handshake(VibeioIo::new(tls_stream)).await?
+                        http1_handshake(ZincioIo::new(tls_stream)).await?
                     };
 
                     Ok(ConnpoolItemInner {
@@ -357,7 +357,7 @@ impl ForwardedAuthClient {
                     })
                 } else {
                     // For HTTP over Unix socket, connect directly
-                    let wrapper = http1_handshake(VibeioIo::new(stream)).await?;
+                    let wrapper = http1_handshake(ZincioIo::new(stream)).await?;
 
                     Ok(ConnpoolItemInner {
                         client: wrapper,

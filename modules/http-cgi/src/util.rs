@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::path::PathBuf;
-use vibeio::fs;
+use zincio::fs;
 
 #[cfg(unix)]
 pub async fn get_executable(

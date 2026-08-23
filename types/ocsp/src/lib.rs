@@ -200,7 +200,7 @@ impl ResolvesServerCert for OcspStapler {
             let leaf_bytes: Vec<u8> = leaf.to_vec();
 
             // Read cache — uses parking_lot::RwLock which is safe to call from
-            // any thread (including vibeio primary threads).
+            // any thread (including zincio primary threads).
             let cached = self.cache.read();
 
             if let Some(cached_entry) = cached.get(&leaf_bytes) {

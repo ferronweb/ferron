@@ -127,7 +127,7 @@ impl ConcurrentTokenBucket {
             throttled = true;
             let wait_time = self.time_until_available(n).await;
             if wait_time > 0.0 {
-                vibeio::time::sleep(std::time::Duration::from_secs_f64(wait_time)).await;
+                zincio::time::sleep(std::time::Duration::from_secs_f64(wait_time)).await;
             }
         }
     }

@@ -31,7 +31,7 @@ rcgen = { version = "0.14.1", default-features = false, features = ["crypto", "a
 async-trait = "0.1"
 tokio = { version = "1", features = ["fs", "sync", "time", "rt", "process"] }
 tokio-rustls = { version = "0.26.4", default-features = false }
-vibeio = "0.2.6"
+zincio = "0.2.22"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

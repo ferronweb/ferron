@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
-vibeio = { version = "0.2.6", default-features = false, features = ["fs"] }
-vibeio-http = { version = "0.4.0", default-features = false, features = ["h1", "h2", "h1-zerocopy"] }
+zincio = { version = "0.2.22", default-features = false, features = ["fs"] }
+zincio-http = { version = "0.4.2", default-features = false, features = ["h1", "h2", "h1-zerocopy"] }
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http", features = ["util"] }
 ferron-observability = { path = "../../types/observability" }

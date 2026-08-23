@@ -125,7 +125,7 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             return Ok(false);
         }
 
-        let entries = vibeio::spawn_blocking({
+        let entries = zincio::spawn_blocking({
             let dir_path = ctx.file_path.clone();
             move || read_directory_entries(dir_path)
         })
@@ -134,7 +134,7 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         .and_then(|r| r.map_err(|e| PipelineError::custom(e.to_string())))?;
 
         let maindesc_path = ctx.file_path.join(".maindesc");
-        let description = vibeio::fs::read_to_string(&maindesc_path).await.ok();
+        let description = zincio::fs::read_to_string(&maindesc_path).await.ok();
 
         let request_path = (ctx.http.original_uri.as_ref().unwrap_or(request.uri())).path();
 
@@ -341,7 +341,7 @@ fn generate_directory_listing(
 
 fn read_directory_entries(dir_path: PathBuf) -> io::Result<Vec<DirectoryListingEntry>> {
     let mut entries = Vec::new();
-    // Had to use std::fs, since vibeio::fs doesn't have read_dir...
+    // Had to use std::fs, since zincio::fs doesn't have read_dir...
     for entry in std::fs::read_dir(dir_path)? {
         let Ok(entry) = entry else {
             continue;

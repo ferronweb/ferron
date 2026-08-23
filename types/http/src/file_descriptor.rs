@@ -49,7 +49,7 @@ const FD_CACHE_MAX_ENTRIES_PREEMPTIVE: usize = 256;
 
 /// A pooled file handle with insertion timestamp for TTL-based eviction.
 struct PooledHandle {
-    file: vibeio::fs::File,
+    file: zincio::fs::File,
     /// When this handle was returned to the pool.
     pooled_at: Instant,
 }
@@ -124,8 +124,8 @@ thread_local! {
 /// for reuse by subsequent requests. This avoids redundant open syscalls
 /// while maintaining correctness (the cursor is always reset to the beginning).
 pub struct ReusedFile {
-    inner: Option<vibeio::fs::File>,
-    metadata: Result<vibeio::fs::Metadata, std::io::Error>,
+    inner: Option<zincio::fs::File>,
+    metadata: Result<zincio::fs::Metadata, std::io::Error>,
     path: PathBuf,
 }
 
@@ -190,7 +190,7 @@ impl ReusedFile {
         }
 
         // Pool miss — open fresh
-        let file = match vibeio::fs::File::open(path.as_ref()).await {
+        let file = match zincio::fs::File::open(path.as_ref()).await {
             Ok(file) => file,
             Err(e) => {
                 let e2 = if let Some(e) = e.raw_os_error() {
@@ -218,7 +218,7 @@ impl ReusedFile {
     }
 
     #[inline]
-    fn return_handle_to_pool(inner: vibeio::fs::File, path_buf: PathBuf) {
+    fn return_handle_to_pool(inner: zincio::fs::File, path_buf: PathBuf) {
         FD_REUSE_CACHE.with(move |c| {
             let mut cache = c.borrow_mut();
             cache.evict_if_full();
@@ -240,7 +240,7 @@ impl ReusedFile {
     /// metadata from the open file descriptor without following the path.
     /// This mitigates TOCTOU vulnerabilities.
     #[inline]
-    pub fn metadata(&self) -> io::Result<vibeio::fs::Metadata> {
+    pub fn metadata(&self) -> io::Result<zincio::fs::Metadata> {
         self.metadata
             .as_ref()
             .map_err(|e| {
@@ -261,7 +261,7 @@ impl ReusedFile {
 }
 
 impl Deref for ReusedFile {
-    type Target = vibeio::fs::File;
+    type Target = zincio::fs::File;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -298,7 +298,7 @@ impl Drop for ReusedFile {
             // Rewind the file cursor to the beginning so the next user
             // of this pooled handle starts at offset 0.
             //
-            // `vibeio` doesn't currently expose `rewind` for `vibeio::fs::File`,
+            // `zincio` doesn't currently expose `rewind` for `zincio::fs::File`,
             // but we can work around that by borrowing an fd, wrapping it in a
             // `std::fs::File`, and then rewinding that, and discarding the file
             // without closing the underlying fd.
@@ -340,9 +340,9 @@ mod tests {
             let file_path = dir.join(format!("file_{i}.txt"));
             std::fs::write(&file_path, format!("content {i}")).unwrap();
             let file = std::fs::File::open(&file_path).unwrap();
-            // `vibeio::fs::File`, but it isn't inside a `vibeio` runtime?
+            // `zincio::fs::File`, but it isn't inside a `zincio` runtime?
             // How is that possible!? Why does this test somehow pass?
-            let std_file = vibeio::fs::File::from_std(file).unwrap();
+            let std_file = zincio::fs::File::from_std(file).unwrap();
             pool.entries
                 .entry(file_path)
                 .or_default()
@@ -357,7 +357,7 @@ mod tests {
         let expired_path = dir.join("expired.txt");
         std::fs::write(&expired_path, b"expired").unwrap();
         let file = std::fs::File::open(&expired_path).unwrap();
-        let std_file = vibeio::fs::File::from_std(file).unwrap();
+        let std_file = zincio::fs::File::from_std(file).unwrap();
         pool.entries
             .entry(expired_path.clone())
             .or_default()

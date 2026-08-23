@@ -4,7 +4,7 @@ use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationHostFilte
 use rustls::ServerConfig;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::StartHandshake;
-use vibeio::net::PollTcpStream;
+use zincio::net::PollTcpStream;
 
 pub mod builder;
 pub mod config;

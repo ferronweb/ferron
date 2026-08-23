@@ -214,7 +214,7 @@ async fn resolve_path_metadata(url_path: &str, root: &str) -> (PathBuf, Option<(
     }
 
     // Spawn a blocking metadata lookup
-    let result = vibeio::fs::metadata(&joined).await;
+    let result = zincio::fs::metadata(&joined).await;
     let meta = result.ok().map(|m| (m.is_file(), m.is_dir()));
     if let Some((is_file, is_dir)) = meta {
         cache.insert(joined.clone(), is_file, is_dir);

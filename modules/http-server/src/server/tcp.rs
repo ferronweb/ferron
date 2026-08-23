@@ -23,7 +23,7 @@ use ferron_tls::observability::{
 use ferron_tls::TlsConnectionParams;
 use rustls::server::Acceptor;
 use tokio_util::sync::CancellationToken;
-use vibeio_http::{Http1, Http1Options, Http2, Http2Options, HttpProtocol};
+use zincio_http::{Http1, Http1Options, Http2, Http2Options, HttpProtocol};
 
 use crate::config::ThreeStageResolver;
 use crate::handler::bad_request_handler;
@@ -108,15 +108,15 @@ impl TcpListenerHandle {
 
                 // On Windows, `from_std` would fail with cloned sockets due to IOCP not
                 // allowing multiple completion ports for the same socket, so `from_std_poll`
-                // is used instead (it uses \Device\Afd, used in vibeio async runtime)
+                // is used instead (it uses \Device\Afd, used in zincio async runtime)
                 #[cfg(not(windows))]
-                let Ok(listener) = vibeio::net::TcpListener::from_std(new_listener) else {
-                    log_error!("Failed to convert listener to vibeio");
+                let Ok(listener) = zincio::net::TcpListener::from_std(new_listener) else {
+                    log_error!("Failed to convert listener to zincio");
                     return;
                 };
                 #[cfg(windows)]
-                let Ok(listener) = vibeio::net::TcpListener::from_std_poll(new_listener) else {
-                    log_error!("Failed to convert listener to vibeio");
+                let Ok(listener) = zincio::net::TcpListener::from_std_poll(new_listener) else {
+                    log_error!("Failed to convert listener to zincio");
                     return;
                 };
 
@@ -152,7 +152,7 @@ impl TcpListenerHandle {
                             emit_connection_error_metric(&global_observability, "tcp", "accept");
                             #[cfg(unix)]
                             if err.raw_os_error() == Some(24) {
-                                vibeio::time::sleep(handle_exhaustion_backoff).await;
+                                zincio::time::sleep(handle_exhaustion_backoff).await;
                                 handle_exhaustion_backoff =
                                     handle_exhaustion_backoff.saturating_mul(2);
                                 if handle_exhaustion_backoff > Duration::from_secs(1) {
@@ -204,7 +204,7 @@ impl TcpListenerHandle {
 
                     let server_config = config.load_full();
                     let connection_cancel_token = cancel_token.clone();
-                    vibeio::spawn_detached(async move {
+                    zincio::spawn_detached(async move {
                         let _conn_guard = ConnectionCountGuard::new();
 
                         // Read PROXY protocol header
@@ -218,7 +218,7 @@ impl TcpListenerHandle {
                             // Use tokio's TcpStream to read PROXY header asynchronously
                             match read_proxy_header(socket).await {
                                 Ok((stream, client_addr, server_addr)) => {
-                                    // Convert back to std TcpStream for vibeio
+                                    // Convert back to std TcpStream for zincio
                                     (stream, client_addr, server_addr)
                                 }
                                 Err(e) => {
@@ -750,7 +750,7 @@ async fn handle_http1_connection_zerocopy<S>(
 ) where
     for<'a> S: tokio::io::AsyncRead
         + tokio::io::AsyncWrite
-        + vibeio::io::AsInnerRawHandle<'a>
+        + zincio::io::AsInnerRawHandle<'a>
         + Unpin
         + 'static,
 {

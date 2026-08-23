@@ -392,7 +392,7 @@ impl Stage<HttpContext> for EarlyHintsStage {
         // Attempt to send 103 Early Hints. If it fails (e.g., not supported on
         // this connection), log a warning and continue the pipeline normally.
         if let Some(req) = ctx.req.as_mut() {
-            if let Err(e) = vibeio_http::send_early_hints(req, headers).await {
+            if let Err(e) = zincio_http::send_early_hints(req, headers).await {
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
                     target: LOG_TARGET,

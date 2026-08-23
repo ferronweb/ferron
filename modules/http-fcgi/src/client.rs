@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 use crate::util::ConnectedSocket;
 use crate::{ConnpoolItem, ProxyBody};
 
-/// FastCGI handshake using vibeio executor.
+/// FastCGI handshake using zincio executor.
 pub async fn fcgi_handshake<I>(
     io: I,
     keepalive: bool,
@@ -23,7 +23,7 @@ where
     I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
     let (sender, conn) = cegla_fcgi::client::handshake(io, keepalive).await?;
-    vibeio::spawn_detached(async move {
+    zincio::spawn_detached(async move {
         let _ = conn.await;
     });
     Ok(sender)

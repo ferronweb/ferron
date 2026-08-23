@@ -76,7 +76,7 @@ impl BasicAuthStage {
             None
         };
         let result =
-            vibeio::spawn_blocking(move || crate::password_hash::verify_password(&plain, &hash))
+            zincio::spawn_blocking(move || crate::password_hash::verify_password(&plain, &hash))
                 .await
                 .unwrap_or(false);
         drop(_permit);
@@ -468,10 +468,10 @@ mod tests {
 
     #[test]
     fn rejects_unknown_user() {
-        // Had to use `vibeio`, since this test uses vibeio::spawn_blocking,
+        // Had to use `zincio`, since this test uses zincio::spawn_blocking,
         // which would fail on Tokio.
-        let rt = vibeio::RuntimeBuilder::new()
-            .driver(vibeio::DriverKind::Mock)
+        let rt = zincio::RuntimeBuilder::new()
+            .driver(zincio::DriverKind::Mock)
             .default_blocking_pool(64)
             .build()
             .expect("failed to build runtime");

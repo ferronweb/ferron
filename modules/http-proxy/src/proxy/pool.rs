@@ -10,7 +10,7 @@ use http_body_util::BodyExt;
 use rustls::pki_types::ServerName;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
-use vibeio_hyper::VibeioIo;
+use zincio_hyper::ZincioIo;
 
 use crate::config::ProxyConfig;
 use crate::connections::{ConnectionManager, PooledConnection};
@@ -230,8 +230,8 @@ fn classify_connect_error(kind: std::io::ErrorKind, scheme: &str, error: &str) -
 async fn connect_tcp(
     addr: &str,
     ctx: &mut HttpContext,
-) -> Result<vibeio::net::PollTcpStream, ProxyError> {
-    let tcp = match vibeio::net::PollTcpStream::connect(addr)
+) -> Result<zincio::net::PollTcpStream, ProxyError> {
+    let tcp = match zincio::net::PollTcpStream::connect(addr)
         .await
         .map_err(|e| {
             ctx.events.emit(ferron_observability::Event::Log(
@@ -258,8 +258,8 @@ async fn connect_tcp(
 /// Unix connect adapter: establish a Unix stream and classify the failure.
 #[cfg(unix)]
 #[inline]
-async fn connect_unix(path: &str) -> Result<vibeio::net::PollUnixStream, ProxyError> {
-    vibeio::net::PollUnixStream::connect(path)
+async fn connect_unix(path: &str) -> Result<zincio::net::PollUnixStream, ProxyError> {
+    zincio::net::PollUnixStream::connect(path)
         .await
         .map_err(|e| classify_connect_error(e.kind(), "Unix", &e.to_string()))
 }
@@ -447,7 +447,7 @@ pub async fn establish_and_send(
         }
     };
     let wrapper_result = if let Some(t) = upstream.connection_timeout {
-        vibeio::time::timeout(t, wrapper_fut).await
+        zincio::time::timeout(t, wrapper_fut).await
     } else {
         Ok(wrapper_fut.await)
     };
@@ -649,14 +649,14 @@ pub async fn handle_upgrade(
     // Letting item drop naturally decrements the outstanding counter.
     let _wrapper = item.inner_mut().take();
 
-    let upgrade_future = vibeio_http::prepare_upgrade(&mut upgrade_request);
-    vibeio::spawn_detached(async move {
+    let upgrade_future = zincio_http::prepare_upgrade(&mut upgrade_request);
+    zincio::spawn_detached(async move {
         match hyper::upgrade::on(resp_for_upgrade).await {
             Ok(upgraded_backend) => {
                 if let Some(upgraded_future) = upgrade_future {
                     match upgraded_future.await {
                         Some(upgraded_client) => {
-                            let mut backend = VibeioIo::new(upgraded_backend);
+                            let mut backend = ZincioIo::new(upgraded_backend);
                             let mut client = upgraded_client;
 
                             if let Err(e) =

@@ -12,9 +12,9 @@ use std::task::{Context, Poll};
 use std::thread::ThreadId;
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use vibeio::net::PollTcpStream;
+use zincio::net::PollTcpStream;
 #[cfg(unix)]
-use vibeio::net::PollUnixStream;
+use zincio::net::PollUnixStream;
 
 /// A wrapper around a `PollTcpStream` that supports cross-thread safety.
 pub type SendTcpStreamPoll = SendStreamPoll<PollTcpStream>;
@@ -63,7 +63,7 @@ impl SendableStreamPoll for PollUnixStream {
     }
 }
 
-/// A wrapper around vibeio's poll-based stream that implements
+/// A wrapper around zincio's poll-based stream that implements
 /// `tokio::io::AsyncRead + AsyncWrite + Send` for use with hyper's client API.
 ///
 /// This wrapper handles cross-thread safety by reconstructing the stream
@@ -88,7 +88,7 @@ pub struct SendStreamPoll<S: SendableStreamPoll> {
 
 #[allow(private_bounds)]
 impl<S: SendableStreamPoll> SendStreamPoll<S> {
-    /// Creates a new wrapper from a vibeio poll-based stream.
+    /// Creates a new wrapper from a zincio poll-based stream.
     #[inline]
     pub fn new(inner: S) -> Self {
         #[cfg(unix)]
@@ -295,7 +295,7 @@ impl<S: SendableStreamPoll> Drop for SendStreamPoll<S> {
     }
 }
 
-// Safety: vibeio's internal Rc in InnerRawFd is only cloned during async operations.
+// Safety: zincio's internal Rc in InnerRawFd is only cloned during async operations.
 unsafe impl<S: SendableStreamPoll> Send for SendStreamPoll<S> {}
 
 /// Drop guard for `SendStreamPoll`.

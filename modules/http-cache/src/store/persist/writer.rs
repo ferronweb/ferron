@@ -436,7 +436,7 @@ pub async fn restore_zone(
         trunc_stop: RestoreStop,
         corrupt_stop: RestoreStop,
     ) -> Result<(u64, u64, u64, Option<RestoreStop>), io::Error> {
-        let data = match vibeio::fs::read(path).await {
+        let data = match zincio::fs::read(path).await {
             Ok(data) => data,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok((0, 0, 0, None)),
             Err(error) => return Err(error),

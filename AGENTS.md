@@ -4,7 +4,7 @@
 
 Rust workspace (resolver "2"). Key directories:
 
-- `core/`: runtime foundation: `Module`/`ModuleLoader` traits, config, `Registry`, `Pipeline`, dual `Runtime` (vibeio primary + tokio secondary)
+- `core/`: runtime foundation: `Module`/`ModuleLoader` traits, config, `Registry`, `Pipeline`, dual `Runtime` (zincio primary + tokio secondary)
 - `bin/`: thin CLI crate, depends on `ferron-entrypoint` with `profile-default` features
 - `entrypoint/`: wires all modules; every module crate is an optional feature (see `entrypoint/Cargo.toml`)
 - `modules/*`: feature crates grouped as `http-*`, `config-*`, `tls-*`, `dns-*`, `observability-*`, etc.
@@ -102,7 +102,7 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Stub implementation/known issue comments**: When leaving stubs in the codebase and comments explaining the stubs, include `TODO` markers. For known-issue comments, leave `FIXME` markers.
 - **Mandatory updates for features and fixes**: Every `feat:` or `fix:` commit MUST include updates to documentation (under `docs/` or `docs/configuration/`), the changelog (`CHANGELOG.md`, if user-facing as subtle implementation details don't count), and E2E tests (`e2e/tests/`, if applicable) so the change is verified and documentation does not drift. The `docs:` commit type is the exception (it may update documentation alone without adding tests or code).
 - **Module system**: Implement `ModuleLoader` trait. Register stages with `StageConstraint::Before/After` for DAG ordering via `RegistryBuilder`. All trait methods have default no-op impls — override only what's needed.
-- **Runtime**: dual model, primary threads run vibeio (one per CPU, pinned, optional io_uring), secondary is tokio.
+- **Runtime**: dual model, primary threads run zincio (one per CPU, pinned, optional io_uring), secondary is tokio.
 - **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. Release binaries are produced by `cross-build/build.sh` (PGO by default; `.cargo/config.toml` pins an i686-musl linker). `bindgen-cli` required for non-`cross` builds.
 - **Docker**: PGO build images (`Dockerfile` distroless+musl, `Dockerfile.alpine`, `Dockerfile.debian` glibc-slim). No-PGO variants could be built with `--build-arg NOPGO=1`
 - **Invalid configurations**: if intentionally describing invalid configurations, prepend `# INVALID` to exactly the first line of the configuration.

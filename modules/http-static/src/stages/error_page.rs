@@ -108,7 +108,7 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
 
             if placeholders_enabled {
                 if let Some(ref trace_context) = ctx.trace_context {
-                    if let Ok(content) = vibeio::fs::read_to_string(path).await {
+                    if let Ok(content) = zincio::fs::read_to_string(path).await {
                         let content = content
                             .replace("{{trace.id}}", &trace_context.trace_id)
                             .replace("{{trace.spanid}}", &trace_context.span_id);
@@ -180,7 +180,7 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             {
                 if let Some(fd) = raw_fd {
                     use std::os::fd::RawFd;
-                    unsafe { vibeio_http::install_zerocopy(&mut response, fd as RawFd) };
+                    unsafe { zincio_http::install_zerocopy(&mut response, fd as RawFd) };
                 }
             }
 

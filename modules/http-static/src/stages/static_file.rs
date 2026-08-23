@@ -889,7 +889,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             file
         };
 
-        // Extract raw fd for zerocopy (from the vibeio file via its std::fs::File inner)
+        // Extract raw fd for zerocopy (from the zincio file via its std::fs::File inner)
         #[cfg(unix)]
         let raw_fd = {
             use std::os::fd::AsRawFd;
@@ -922,18 +922,18 @@ impl Stage<HttpFileContext> for StaticFileStage {
         let mut response = builder.body(body).expect("failed to build file response");
 
         // Enable zerocopy for uncompressed responses on Linux
-        // vibeio-http's zerocopy bypasses the body entirely, using sendfile_exact
+        // zincio-http's zerocopy bypasses the body entirely, using sendfile_exact
         if !is_precompressed_file && used_compression == Compression::Identity {
             if let Some(handle) = raw_fd {
                 #[cfg(unix)]
                 {
                     use std::os::fd::RawFd;
-                    unsafe { vibeio_http::install_zerocopy(&mut response, handle as RawFd) };
+                    unsafe { zincio_http::install_zerocopy(&mut response, handle as RawFd) };
                 }
                 #[cfg(windows)]
                 {
                     use std::os::windows::io::RawHandle;
-                    unsafe { vibeio_http::install_zerocopy(&mut response, handle as RawHandle) };
+                    unsafe { zincio_http::install_zerocopy(&mut response, handle as RawHandle) };
                 }
             }
         }

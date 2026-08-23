@@ -578,8 +578,8 @@ dependencies = [
  "serde",
  "tokio",
  "tokio-util",
- "vibeio",
  "windows",
+ "zincio",
 ]
 
 [[package]]
@@ -629,7 +629,7 @@ dependencies = [
  "rustls-pki-types",
  "typemap_rev",
  "urlencoding",
- "vibeio",
+ "zincio",
 ]
 
 [[package]]
@@ -661,8 +661,8 @@ dependencies = [
  "subtle",
  "tokio",
  "typemap_rev",
- "vibeio",
  "webpki-roots",
+ "zincio",
 ]
 
 [[package]]
@@ -696,10 +696,10 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util",
- "vibeio",
- "vibeio-http",
- "vibeio-hyper",
  "webpki-roots",
+ "zincio",
+ "zincio-http",
+ "zincio-hyper",
 ]
 
 [[package]]
@@ -717,7 +717,7 @@ dependencies = [
  "parking_lot",
  "rustc-hash",
  "tokio",
- "vibeio",
+ "zincio",
 ]
 
 [[package]]
@@ -750,10 +750,10 @@ dependencies = [
  "tokio-util",
  "typemap_rev",
  "urlencoding",
- "vibeio",
- "vibeio-http",
- "vibeio-quinn",
  "xxhash-rust",
+ "zincio",
+ "zincio-http",
+ "zincio-quinn",
 ]
 
 [[package]]
@@ -819,8 +819,8 @@ dependencies = [
  "rustls-native-certs",
  "rustls-pki-types",
  "tokio-rustls",
- "vibeio",
  "webpki-roots",
+ "zincio",
 ]
 
 [[package]]
@@ -1927,6 +1927,49 @@ dependencies = [
  "fixedbitset",
  "hashbrown 0.15.5",
  "indexmap",
+]
+
+[[package]]
+name = "phf"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "010378780309880b08997fae13be7834dba947d36393bd372f2b1556deb2a2f6"
+dependencies = [
+ "phf_macros",
+ "phf_shared",
+ "serde",
+]
+
+[[package]]
+name = "phf_generator"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aeb62e0959d5a1bebc965f4d15d9e2b7cea002b6b0f5ba8cde6cc26738467100"
+dependencies = [
+ "fastrand",
+ "phf_shared",
+]
+
+[[package]]
+name = "phf_macros"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fa8d0ca26d424d27630da600c6624696e7dec8bf7b3b492b383c5dc49e5e085"
+dependencies = [
+ "phf_generator",
+ "phf_shared",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6fd9027e2d9319be6349febd1db4e8d02aa544921200c9b777720ac34a3aa89"
+dependencies = [
+ "siphasher",
 ]
 
 [[package]]
@@ -3111,73 +3154,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
-name = "vibeio"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1cc1d5fba9915771b32f61cb9c408904b565d4f05ec0a22a42228d4ff0dcdf7"
-dependencies = [
- "crossbeam-queue",
- "futures-util",
- "io-uring 0.6.4",
- "io-uring 0.7.14",
- "libc",
- "mio",
- "oneshot",
- "rusty_pool",
- "slab",
- "smallvec",
- "tokio",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "vibeio-http"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21b2efb675b7c9f9e15b67d51acd81393616a8bcae94c8cf3188a095d30af75c"
-dependencies = [
- "bytes",
- "futures-util",
- "http",
- "http-body",
- "http-body-util",
- "httparse",
- "httpdate",
- "kanal",
- "memchr",
- "oneshot",
- "parking_lot",
- "pin-project-lite",
- "quinn",
- "rustc-hash",
- "send_wrapper",
- "tokio",
- "tokio-util",
- "vibeio",
-]
-
-[[package]]
-name = "vibeio-hyper"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "183621f72dbeddee246465773d1b0b0a749d02d4f9b60a71a1a810535f7c83b8"
-dependencies = [
- "hyper",
- "tokio",
- "vibeio",
-]
-
-[[package]]
-name = "vibeio-quinn"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d14cde01d63a1b40c3fa3977fcd43472696086bd3aeff618bdbd67392cfd7d0b"
-dependencies = [
- "quinn",
- "vibeio",
-]
-
-[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3667,6 +3643,76 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.3",
+]
+
+[[package]]
+name = "zincio"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "184161806158fc84341702ea7e39574ec307da619c63d328ee994a8b40664518"
+dependencies = [
+ "crossbeam-queue",
+ "futures-util",
+ "io-uring 0.6.4",
+ "io-uring 0.7.14",
+ "libc",
+ "mio",
+ "oneshot",
+ "rusty_pool",
+ "slab",
+ "smallvec",
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "zincio-http"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "127337b0b7a98ab2271f4f22b97f11952f57ffd900edccc7b8851184e25416f0"
+dependencies = [
+ "bytes",
+ "futures-executor",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "httparse",
+ "httpdate",
+ "kanal",
+ "memchr",
+ "oneshot",
+ "parking_lot",
+ "phf",
+ "pin-project-lite",
+ "quinn",
+ "rustc-hash",
+ "send_wrapper",
+ "smallvec",
+ "tokio",
+ "tokio-util",
+ "zincio",
+]
+
+[[package]]
+name = "zincio-hyper"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e97cadb84eb9214962e51397273a0175a4e5d5a79ba0fd8189897f4e6cfe4b11"
+dependencies = [
+ "hyper",
+ "tokio",
+ "zincio",
+]
+
+[[package]]
+name = "zincio-quinn"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9be60a9171026c00a597534053058ba1610d274000f3946c2808bbfdcd7ff649"
+dependencies = [
+ "quinn",
+ "zincio",
 ]
 
 [[package]]

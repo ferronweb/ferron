@@ -15,7 +15,7 @@ http = "1"
 http-body-util = "0.1.3"
 bytes = "1"
 rustc-hash = "2"
-vibeio = { version = "0.2.15", default-features = false, features = ["time"] }
+zincio = { version = "0.2.22", default-features = false, features = ["time"] }
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http", features = ["abuse"] }

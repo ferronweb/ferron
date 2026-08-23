@@ -1,14 +1,14 @@
 //! Multi-threaded async runtime supporting both io_uring and traditional async I/O.
 //!
 //! The runtime consists of:
-//! - Primary tasks: Executed on dedicated threads using vibeio with optional io_uring
+//! - Primary tasks: Executed on dedicated threads using zincio with optional io_uring
 //! - Secondary tasks: Executed on a tokio multi-threaded runtime
 
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock};
 
-use vibeio::blocking::DefaultBlockingThreadPool;
+use zincio::blocking::DefaultBlockingThreadPool;
 
 use crate::log_warn;
 
@@ -17,7 +17,7 @@ static IO_URING_FAILED_WARNING_LOGGED: std::sync::Once = std::sync::Once::new();
 /// Manages async task execution across primary and secondary runtimes.
 ///
 /// The runtime uses a dual-runtime model:
-/// - Primary threads run vibeio tasks (one per CPU core) with optional io_uring
+/// - Primary threads run zincio tasks (one per CPU core) with optional io_uring
 /// - Secondary runtime is a tokio multi-threaded executor for other tasks
 #[allow(clippy::type_complexity)]
 pub struct Runtime {
@@ -67,17 +67,17 @@ impl Runtime {
                     if let Some(core_id) = core_id {
                         let _ = core_affinity::set_for_current(core_id);
                     }
-                    let use_io_uring = io_uring_enabled && vibeio::util::supports_io_uring();
+                    let use_io_uring = io_uring_enabled && zincio::util::supports_io_uring();
 
                     #[allow(unused_mut)]
-                    let mut rt_builder = vibeio::RuntimeBuilder::new()
+                    let mut rt_builder = zincio::RuntimeBuilder::new()
                         .enable_timer(true)
                         .blocking_pool(Box::new(BlockingThreadPool));
 
                     #[cfg(target_os = "linux")]
                     if !use_io_uring {
                         // Disable `io_uring` driver manually
-                        rt_builder = rt_builder.driver(vibeio::DriverKind::Mio);
+                        rt_builder = rt_builder.driver(zincio::DriverKind::Mio);
                     } else {
                         let mut runtime_metrics =
                             crate::admin::ADMIN_METRICS.runtime_metrics.write();
@@ -86,13 +86,13 @@ impl Runtime {
 
                     let rt = rt_builder
                         .build()
-                        .expect("failed to create vibeio runtime for primary tasks");
+                        .expect("failed to create zincio runtime for primary tasks");
 
                     rt.block_on(async move {
                         {
                             let mut runtime_metrics =
                                 crate::admin::ADMIN_METRICS.runtime_metrics.write();
-                            if use_io_uring && !vibeio::util::supports_completion() {
+                            if use_io_uring && !zincio::util::supports_completion() {
                                 IO_URING_FAILED_WARNING_LOGGED.call_once(|| {
                                     log_warn!(
                                         "io_uring is enabled in configuration and \
@@ -106,7 +106,7 @@ impl Runtime {
                             }
                         }
                         while let Some(task_factory) = rx.recv().await {
-                            vibeio::spawn_detached((task_factory.as_ref())());
+                            zincio::spawn_detached((task_factory.as_ref())());
                         }
                     });
                 })?;
@@ -177,10 +177,10 @@ impl Runtime {
 static GLOBAL_BLOCKING_POOL: LazyLock<DefaultBlockingThreadPool> =
     LazyLock::new(|| DefaultBlockingThreadPool::with_max_threads(1536));
 
-/// A global blocking thread pool for `vibeio`
+/// A global blocking thread pool for `zincio`
 struct BlockingThreadPool;
 
-impl vibeio::blocking::BlockingThreadPool for BlockingThreadPool {
+impl zincio::blocking::BlockingThreadPool for BlockingThreadPool {
     #[inline]
     fn spawn(&self, task: Box<dyn FnOnce() + Send + 'static>) {
         GLOBAL_BLOCKING_POOL.spawn(task);

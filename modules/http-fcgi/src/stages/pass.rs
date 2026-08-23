@@ -231,7 +231,7 @@ impl Stage<HttpContext> for FcgiPassStage {
             .map_err(|e| PipelineError::custom(e.to_string()))?;
 
         let events = ctx.events.clone();
-        vibeio::spawn_detached(async move {
+        zincio::spawn_detached(async move {
             let mut stderr_string = String::new();
             stderr
                 .read_to_string(&mut stderr_string)

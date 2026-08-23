@@ -11,7 +11,7 @@ rustls = { version = "0.23.37", default-features = false, features = ["std", "tl
 rustls-pki-types = "1"
 rustls-native-certs = "0.8"
 webpki-roots = "1"
-vibeio = { version = "0.2.6", default-features = false }
+zincio = { version = "0.2.22", default-features = false }
 tokio-rustls = { version = "0.26.4", default-features = false }
 rasn = { version = "0.28.13", optional = true }
 rasn-pkix = { version = "0.28.13", optional = true }

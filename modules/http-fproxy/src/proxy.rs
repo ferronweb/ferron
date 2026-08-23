@@ -13,8 +13,8 @@ use http::{header, Request, Response, StatusCode, Uri};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty};
 use tokio::io::{AsyncRead, AsyncWrite};
-use vibeio::net::TcpStream;
-use vibeio_hyper::VibeioIo;
+use zincio::net::TcpStream;
+use zincio_hyper::ZincioIo;
 
 use crate::config::{domain_matches, ip_denied, port_allowed, ForwardProxyConfig};
 use crate::error::{ConnectErrorKind, ForwardErrorKind, ForwardProxyError};
@@ -134,12 +134,12 @@ async fn handle_connect(
     // Prepare HTTP upgrade for the request
     let (request, upgrade_future) = {
         let mut req = request;
-        let upgrade = vibeio_http::prepare_upgrade(&mut req);
+        let upgrade = zincio_http::prepare_upgrade(&mut req);
         (req, upgrade)
     };
 
     // Spawn the tunnel
-    vibeio::spawn_detached(async move {
+    zincio::spawn_detached(async move {
         // Wait for the upgrade
         let upgraded = match upgrade_future {
             Some(future) => match future.await {
@@ -469,7 +469,7 @@ async fn http_proxy_forward(
     proxy_request: Request<HttpBody>,
     ctx: &mut HttpContext,
 ) -> Response<HttpBody> {
-    let io = VibeioIo::new(stream);
+    let io = ZincioIo::new(stream);
 
     let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
         Ok(data) => data,
@@ -485,7 +485,7 @@ async fn http_proxy_forward(
         }
     };
 
-    vibeio::spawn_detached(async move {
+    zincio::spawn_detached(async move {
         let _ = conn.await;
     });
 

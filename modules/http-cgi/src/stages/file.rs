@@ -13,7 +13,7 @@ use ferron_observability::{
 use http::Response;
 use http_body_util::BodyExt;
 use tokio::io::AsyncReadExt;
-use vibeio_cegla::VibeioCgiRuntime;
+use zincio_cegla::ZincioCgiRuntime;
 
 use crate::config::CgiConfiguration;
 use crate::util::{get_executable, SendWrapBody};
@@ -154,7 +154,7 @@ impl Stage<HttpFileContext> for CgiStage {
             }) {
             ctx.file_path.clone()
         } else {
-            vibeio::fs::canonicalize(&ctx.file_path)
+            zincio::fs::canonicalize(&ctx.file_path)
                 .await
                 .unwrap_or(ctx.file_path.clone())
         };
@@ -167,7 +167,7 @@ impl Stage<HttpFileContext> for CgiStage {
             }) {
             ctx.file_root.clone()
         } else {
-            vibeio::fs::canonicalize(&ctx.file_root)
+            zincio::fs::canonicalize(&ctx.file_root)
                 .await
                 .unwrap_or(ctx.file_root.clone())
         };
@@ -240,7 +240,7 @@ impl Stage<HttpFileContext> for CgiStage {
 
         let (response, stderr, exit_code_option) = cegla_cgi::client::execute_cgi(
             request,
-            VibeioCgiRuntime,
+            ZincioCgiRuntime,
             cmd,
             &args,
             env_builder,
@@ -349,7 +349,7 @@ impl Stage<HttpFileContext> for CgiStage {
         }
 
         let events = ctx.http.events.clone();
-        vibeio::spawn_detached(async move {
+        zincio::spawn_detached(async move {
             if let Some(mut stderr) = stderr {
                 let mut stderr_string = String::new();
                 stderr

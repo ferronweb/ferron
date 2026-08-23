@@ -134,7 +134,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
             }) {
             ctx.file_path.clone()
         } else {
-            vibeio::fs::canonicalize(&ctx.file_path)
+            zincio::fs::canonicalize(&ctx.file_path)
                 .await
                 .unwrap_or(ctx.file_path.clone())
         };
@@ -147,7 +147,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
             }) {
             ctx.file_root.clone()
         } else {
-            vibeio::fs::canonicalize(&ctx.file_root)
+            zincio::fs::canonicalize(&ctx.file_root)
                 .await
                 .unwrap_or(ctx.file_root.clone())
         };
@@ -258,7 +258,7 @@ impl Stage<HttpFileContext> for FcgiFileStage {
             .map_err(|e| PipelineError::custom(e.to_string()))?;
 
         let events = ctx.http.events.clone();
-        vibeio::spawn_detached(async move {
+        zincio::spawn_detached(async move {
             let mut stderr_string = String::new();
             stderr
                 .read_to_string(&mut stderr_string)

@@ -30,7 +30,7 @@ webpki-roots = "1.0"
 serde_json = "1"
 crc32fast = "1.4" # Here, CRC32 is used for verifying snapshot integrity as checksums, not cryptographic hashing, and so it should be allowed for these purposes even under FIPS 140-3
 parking_lot = "0.12.5"
-vibeio = { version = "0.2.19", default-features = false, features = ["fs"] }
+zincio = { version = "0.2.22", default-features = false, features = ["fs"] }
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
@@ -38,4 +38,4 @@ ferron-observability = { path = "../../types/observability" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
-vibeio = "0.2.19"
+zincio = "0.2.22"

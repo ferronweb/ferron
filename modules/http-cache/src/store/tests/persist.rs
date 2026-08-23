@@ -87,7 +87,7 @@ async fn restore_into(store: &Arc<CacheStore>, dir: &Path) {
 
 #[test]
 fn round_trip_restores_inserted_entries() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {
@@ -120,7 +120,7 @@ fn round_trip_restores_inserted_entries() {
 
 #[test]
 fn purge_persists_tombstone() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {
@@ -167,7 +167,7 @@ fn purge_persists_tombstone() {
 
 #[test]
 fn eviction_at_capacity_records_delete() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {
@@ -246,7 +246,7 @@ fn restore_entry_skips_when_capacity_zero() {
 
 #[test]
 fn restore_entry_rebuilds_variants() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {
@@ -303,7 +303,7 @@ fn restore_entry_rebuilds_variants() {
 
 #[test]
 fn update_entry_headers_records_admitted_replace() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {
@@ -752,7 +752,7 @@ fn maybe_compact_respects_interval() {
 
 #[test]
 fn restore_replays_snapshot_then_journal() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {
@@ -804,7 +804,7 @@ fn restore_replays_snapshot_then_journal() {
 
 #[test]
 fn restore_absent_files_is_clean() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {
@@ -818,7 +818,7 @@ fn restore_absent_files_is_clean() {
 
 #[test]
 fn restore_reports_corrupt_journal() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {
@@ -860,7 +860,7 @@ fn restore_reports_corrupt_journal() {
 
 #[test]
 fn restore_reports_truncated_tail() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {
@@ -899,7 +899,7 @@ fn restore_reports_truncated_tail() {
 
 #[test]
 fn restore_counts_skipped_entries() {
-    vibeio::RuntimeBuilder::new()
+    zincio::RuntimeBuilder::new()
         .build()
         .unwrap()
         .block_on(async move {

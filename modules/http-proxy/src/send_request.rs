@@ -9,7 +9,7 @@ use http_body_util::combinators::UnsyncBoxBody;
 use hyper::body::Incoming;
 use hyper::{Request, Response};
 use tokio::io::{AsyncRead, AsyncWrite};
-use vibeio_hyper::VibeioIo;
+use zincio_hyper::ZincioIo;
 
 use crate::connections::{PoolKey, PooledConnection};
 use crate::types::error::ProxyError;
@@ -212,7 +212,7 @@ impl SendRequestWrapper {
     }
 }
 
-/// HTTP/1.x handshake using vibeio executor.
+/// HTTP/1.x handshake using zincio executor.
 ///
 /// `drop_guard` keeps the underlying poll stream alive until the connection
 /// teardown; it is generic so both TCP and Unix streams share this path.
@@ -222,17 +222,17 @@ where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     G: 'static,
 {
-    let io = VibeioIo::new(io);
+    let io = ZincioIo::new(io);
     let (sender, conn) = hyper::client::conn::http1::handshake(io).await?;
     let conn_with_upgrades = conn.with_upgrades();
-    vibeio::spawn_detached(async move {
+    zincio::spawn_detached(async move {
         let _ = conn_with_upgrades.await;
         drop(drop_guard);
     });
     Ok(SendRequestWrapper::http1(sender))
 }
 
-/// HTTP/2 handshake using vibeio executor.
+/// HTTP/2 handshake using zincio executor.
 ///
 /// `drop_guard` keeps the underlying poll stream alive until the connection
 /// teardown; it is generic so both TCP and Unix streams share this path.
@@ -242,10 +242,10 @@ where
     I: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     G: 'static,
 {
-    let io = VibeioIo::new(io);
-    let executor = vibeio_hyper::VibeioExecutor;
+    let io = ZincioIo::new(io);
+    let executor = zincio_hyper::ZincioExecutor;
     let (sender, conn) = hyper::client::conn::http2::handshake(executor, io).await?;
-    vibeio::spawn_detached(async move {
+    zincio::spawn_detached(async move {
         let _ = conn.await;
         drop(drop_guard);
     });

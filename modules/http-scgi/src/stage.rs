@@ -10,7 +10,7 @@ use ferron_observability::{
 };
 use http::Response;
 use http_body_util::BodyExt;
-use vibeio_cegla::VibeioScgiRuntime;
+use zincio_cegla::ZincioScgiRuntime;
 
 use crate::config::ScgiConfiguration;
 use crate::util::{ConnectedSocket, SendWrapBody};
@@ -276,7 +276,7 @@ impl Stage<HttpContext> for ScgiStage {
 
         let response = cegla_scgi::client::client_handle_scgi(
             request,
-            VibeioScgiRuntime,
+            ZincioScgiRuntime,
             connected_socket,
             env_builder,
         )

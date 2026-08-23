@@ -1,6 +1,6 @@
 //! Async file streaming utilities.
 //!
-//! Provides `FileStream` which wraps a `vibeio::fs::File` and implements
+//! Provides `FileStream` which wraps a `zincio::fs::File` and implements
 //! `futures_core::Stream` for position-based async reads without spawning blocking threads.
 
 use std::io;
@@ -19,10 +19,10 @@ const MAX_BUFFER_SIZE: usize = 65536;
 type ReadChunkResult = Option<Result<Bytes, io::Error>>;
 type ReadChunkFuture = ReusableBoxFuture<'static, ReadChunkResult>;
 
-/// A wrapper over `vibeio::fs::File` that implements `futures_core::Stream`.
+/// A wrapper over `zincio::fs::File` that implements `futures_core::Stream`.
 ///
 /// Uses `read_at` for position-based async reads without spawning blocking threads.
-/// `SendWrapper` ensures the non-`Send` `vibeio::fs::File` can safely cross thread boundaries
+/// `SendWrapper` ensures the non-`Send` `zincio::fs::File` can safely cross thread boundaries
 /// as long as it's only polled on the same thread (guaranteed by the single-threaded runtime).
 pub struct FileStream {
     file: Arc<SendWrapper<ReusedFile>>,
@@ -149,7 +149,7 @@ fn buffer_size_for_read(remaining: Option<u64>) -> usize {
     })
 }
 
-/// Reads a single chunk from a vibeio file at the given position.
+/// Reads a single chunk from a zincio file at the given position.
 async fn read_chunk(
     file: Arc<SendWrapper<ReusedFile>>,
     pos: u64,

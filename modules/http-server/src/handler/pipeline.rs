@@ -88,7 +88,7 @@ pub async fn execute_pipeline_stages(
     let executed_stages = match if let Some(timeout_duration) =
         timeout_duration.map(|d| d.saturating_sub(instant.elapsed()))
     {
-        vibeio::time::timeout(
+        zincio::time::timeout(
             timeout_duration,
             pipeline.execute_without_inverse_with_hooks(ctx, &mut stage_hooks),
         )

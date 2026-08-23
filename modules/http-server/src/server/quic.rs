@@ -13,7 +13,7 @@ use ferron_observability::{
 };
 use quinn::Incoming;
 use tokio_util::sync::CancellationToken;
-use vibeio_http::{Http3, Http3Options, HttpProtocol};
+use zincio_http::{Http3, Http3Options, HttpProtocol};
 
 use crate::config::ThreeStageResolver;
 use crate::server::common::{
@@ -164,7 +164,7 @@ impl QuicListenerHandle {
                 }
             };
             let quinn_runtime = Arc::new(QuinnMTRuntime::new(
-                vibeio_quinn::VibeioRuntime,
+                zincio_quinn::ZincioRuntime,
                 channels.clone(),
                 id,
             ));
@@ -288,7 +288,7 @@ async fn run_endpoint(
         let config = config.clone();
         let connection_cancel_token = cancel_token.clone();
 
-        vibeio::spawn_detached(async move {
+        zincio::spawn_detached(async move {
             let _conn_guard = ConnectionCountGuard::new();
 
             let server_config = config.load_full();
@@ -494,7 +494,7 @@ async fn handle_http3_connection(
     });
     let mut connection_future = Box::pin(
         Http3::new(
-            vibeio_http::quinn::Connection::new(conn),
+            zincio_http::quinn::Connection::new(conn),
             build_http3_options(&connection_options),
         )
         .graceful_shutdown_token(graceful_shutdown.clone())

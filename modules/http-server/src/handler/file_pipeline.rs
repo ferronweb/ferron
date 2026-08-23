@@ -19,7 +19,7 @@ use typemap_rev::TypeMap;
 use super::observability::PerStageSpanHooks;
 
 struct ResolvedHttpFile {
-    metadata: vibeio::fs::Metadata,
+    metadata: zincio::fs::Metadata,
     file_path: PathBuf,
     path_info: Option<String>,
     etag: String,
@@ -432,7 +432,7 @@ async fn apply_resolved_file_to_context(
     );
     let pipeline_result = if let Some(timeout) = timeout {
         if has_traces {
-            vibeio::time::timeout(timeout, async {
+            zincio::time::timeout(timeout, async {
                 let executed_stages = file_pipeline
                     .execute_without_inverse_with_hooks(&mut file_ctx, &mut stage_hooks)
                     .await?;
@@ -442,7 +442,7 @@ async fn apply_resolved_file_to_context(
             })
             .await
         } else {
-            vibeio::time::timeout(timeout, file_pipeline.execute(&mut file_ctx)).await
+            zincio::time::timeout(timeout, file_pipeline.execute(&mut file_ctx)).await
         }
     } else if has_traces {
         Ok(async {
@@ -673,7 +673,7 @@ async fn check_symlinks_in_path(path: &Path, root: &Path, mode: SymlinkMode) -> 
         current.push(component);
 
         // Check if this component is a symlink
-        match vibeio::fs::symlink_metadata(&current).await {
+        match zincio::fs::symlink_metadata(&current).await {
             Ok(metadata) if metadata.is_symlink() => {
                 match mode {
                     SymlinkMode::On => {
@@ -688,7 +688,7 @@ async fn check_symlinks_in_path(path: &Path, root: &Path, mode: SymlinkMode) -> 
                         let mut same_owner = false;
                         #[cfg(unix)]
                         {
-                            if let Ok(canonical_metadata) = vibeio::fs::metadata(&current).await {
+                            if let Ok(canonical_metadata) = zincio::fs::metadata(&current).await {
                                 same_owner = metadata.uid() == canonical_metadata.uid();
                             }
                         }
