@@ -62,7 +62,6 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
                 continue;
             }
 
-            // The last argument is the file path
             let Some(file_path) = entry
                 .args
                 .last()
@@ -71,7 +70,6 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
                 continue;
             };
 
-            // All preceding arguments are status codes
             let mut matches_error_code = false;
             for arg in &entry.args[..entry.args.len() - 1] {
                 let code = match arg {
@@ -92,10 +90,8 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
                 continue;
             }
 
-            // Try to open the error page file
             let path = Path::new(&file_path);
 
-            // Open file for reading
             let Ok(file) = ReusedFile::open(path).await else {
                 continue;
             };
@@ -110,8 +106,6 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
 
             let file_length = meta.len();
 
-            // If placeholders are enabled and trace context is available,
-            // read the file into memory and perform substitution
             if placeholders_enabled {
                 if let Some(ref trace_context) = ctx.trace_context {
                     if let Ok(content) = vibeio::fs::read_to_string(path).await {
@@ -160,14 +154,12 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
                 .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
                 .header(header::CONTENT_LENGTH, file_length);
 
-            // Copy over any headers from the error context (e.g., Allow for 405)
             if let Some(ref headers) = ctx.headers {
                 for (name, value) in headers.iter() {
                     builder = builder.header(name.clone(), value.clone());
                 }
             }
 
-            // For HEAD-like scenarios or zero-length files, return empty body
             if file_length == 0 {
                 let response = builder
                     .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
@@ -176,7 +168,6 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
                 return Ok(false);
             }
 
-            // Stream the file content
             let body: UnsyncBoxBody<Bytes, io::Error> =
                 StreamBody::new(FileStream::new(file, 0, Some(file_length)).map_ok(Frame::data))
                     .boxed_unsync();
@@ -185,7 +176,6 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
                 .body(body)
                 .map_err(|e| PipelineError::custom(e.to_string()))?;
 
-            // Enable zerocopy for error page responses on unix
             #[cfg(unix)]
             {
                 if let Some(fd) = raw_fd {
@@ -198,7 +188,6 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             return Ok(false);
         }
 
-        // No matching error page found — pass through
         Ok(true)
     }
 }

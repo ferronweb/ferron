@@ -55,7 +55,6 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpFileContext) -> Result<bool, PipelineError> {
-        // Skip if root is not configured
         if ctx.http.configuration.get_value("root", true).is_none() {
             return Ok(true);
         }
@@ -103,7 +102,6 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             return Ok(false);
         }
 
-        // Only handle GET and HEAD
         if method != Method::GET && method != Method::HEAD && method != Method::POST {
             let mut allow_headers = http::HeaderMap::new();
             allow_headers.insert(
@@ -118,7 +116,6 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             return Ok(false);
         }
 
-        // Check if directory listing is enabled
         if !ctx.http.configuration.get_flag("directory_listing", true) {
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::BuiltinError(403, None));
@@ -128,7 +125,6 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             return Ok(false);
         }
 
-        // Read directory contents and metadata in one blocking pass.
         let entries = vibeio::spawn_blocking({
             let dir_path = ctx.file_path.clone();
             move || read_directory_entries(dir_path)
@@ -137,7 +133,6 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         .map_err(|e| PipelineError::custom(format!("failed to spawn blocking task: {e}")))
         .and_then(|r| r.map_err(|e| PipelineError::custom(e.to_string())))?;
 
-        // Read .maindesc if present
         let maindesc_path = ctx.file_path.join(".maindesc");
         let description = vibeio::fs::read_to_string(&maindesc_path).await.ok();
 
@@ -237,7 +232,6 @@ fn generate_directory_listing(
     request_path: &str,
     description: Option<String>,
 ) -> String {
-    // Strip trailing slashes
     let mut path_without_slashes = request_path;
     while path_without_slashes.ends_with('/') {
         path_without_slashes = &path_without_slashes[..path_without_slashes.len() - 1];
@@ -347,6 +341,7 @@ fn generate_directory_listing(
 
 fn read_directory_entries(dir_path: PathBuf) -> io::Result<Vec<DirectoryListingEntry>> {
     let mut entries = Vec::new();
+    // Had to use std::fs, since vibeio::fs doesn't have read_dir...
     for entry in std::fs::read_dir(dir_path)? {
         let Ok(entry) = entry else {
             continue;

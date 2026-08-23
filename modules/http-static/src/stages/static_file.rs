@@ -136,7 +136,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             return Ok(true);
         };
 
-        // Take the file handle from context and get metadata from FD
         let Some(file) = ctx.file.take() else {
             ctx.http.req = Some(request);
             return Ok(true);
@@ -145,7 +144,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             .metadata()
             .map_err(|e| PipelineError::custom(format!("failed to get file metadata: {e}")))?;
 
-        // Only handle files
+        // How can static file serving serve FIFOs or sockets?
         if ctx.path_info.is_some() || !metadata.is_file() {
             ctx.http.req = Some(request);
             ctx.file = Some(file);
@@ -178,7 +177,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             return Ok(false);
         }
 
-        // Only handle GET and HEAD
         if method != Method::GET && method != Method::HEAD && method != Method::POST {
             let mut allow_headers = http::HeaderMap::new();
             allow_headers.insert(
@@ -196,7 +194,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         let config = &ctx.http.configuration;
 
-        // Read configuration
         let compressed = config
             .get_value("compressed", true)
             .and_then(|v| v.as_boolean())
@@ -210,10 +207,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
             .get_value("file_cache_control", true)
             .and_then(|v| v.as_str().map(|s| s.to_string()));
 
-        // Determine content type
         let content_type = get_content_type(&ctx.file_path, config);
 
-        // Check if compression is possible
         let compression_possible = compressed && {
             let file_len = metadata.len();
             let ext = ctx
@@ -248,7 +243,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
         // If-Match -> If-Unmodified-Since -> If-None-Match -> If-Modified-Since
         // (RFC 7232 compliant order)
 
-        // Handle If-Match (Ferron only emits weak ETags, so strong If-Match won't match)
+        // Ferron only emits weak ETags, so strong If-Match won't match...
         if let Some(etag) = &etag_value {
             if let Some(if_match_value) = request.headers().get(header::IF_MATCH) {
                 match if_match_value.to_str() {
@@ -313,7 +308,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
-        // Handle If-Unmodified-Since
         if let Some(if_unmodified_since) = request.headers().get(header::IF_UNMODIFIED_SINCE) {
             match if_unmodified_since
                 .to_str()
@@ -358,7 +352,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
-        // Handle If-None-Match
         if let Some(etag) = &etag_value {
             if let Some(if_none_match) = request.headers().get(header::IF_NONE_MATCH) {
                 if let Ok(val) = if_none_match.to_str() {
@@ -422,7 +415,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
-        // Handle If-Modified-Since
         if let Some(if_modified_since) = request.headers().get(header::IF_MODIFIED_SINCE) {
             match if_modified_since
                 .to_str()
@@ -476,7 +468,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
-        // Determine compression method
         let mut used_compression = Compression::Identity;
         let mut precompressed_exts: Vec<&str> = Vec::new();
 
@@ -847,17 +838,12 @@ impl Stage<HttpFileContext> for StaticFileStage {
             builder = builder.header(header::ETAG, full_etag);
         }
 
-        // Vary
         if let Some(vary) = vary_header {
             builder = builder.header(header::VARY, vary);
         }
-
-        // Content-Type
         if let Some(ref ct) = content_type {
             builder = builder.header(header::CONTENT_TYPE, ct);
         }
-
-        // Cache-Control
         if let Some(cc) = cache_control.as_deref() {
             builder = builder.header(
                 header::CACHE_CONTROL,
@@ -865,7 +851,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             );
         }
 
-        // Content-Encoding / Content-Length
         match used_compression {
             Compression::Identity => {
                 builder = builder.header(header::CONTENT_LENGTH, file_length);
@@ -919,7 +904,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
         };
 
         let body: UnsyncBoxBody<Bytes, io::Error> = if is_precompressed_file {
-            // Precompressed file — stream as-is
             StreamBody::new(FileStream::new(file, 0, Some(file_length)).map_ok(Frame::data))
                 .boxed_unsync()
         } else {
@@ -929,7 +913,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 Compression::Deflate => compress_streaming_deflate(file, Some(file_length)),
                 Compression::Gzip => compress_streaming_gzip(file, Some(file_length)),
                 Compression::Identity => {
-                    // For identity (no compression), use zerocopy if available
                     StreamBody::new(FileStream::new(file, 0, Some(file_length)).map_ok(Frame::data))
                         .boxed_unsync()
                 }
