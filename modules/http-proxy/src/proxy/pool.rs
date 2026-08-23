@@ -108,28 +108,27 @@ pub async fn try_send_with_pool(
         .await;
     }
 
-    if should_keep && item.inner().is_some()
-        && wait_for_ready(&mut item, idle_timeout).await {
-            metrics.connection_reused = true;
-            metrics.pool_hit = true;
-            let wrapper = item
-                .inner_mut()
-                .take()
-                .expect("pending item should have inner value");
-            return send_via_wrapper(
-                ctx,
-                config,
-                wrapper,
-                item,
-                proxy_url,
-                tracked_connection,
-                true,
-                upstream.proxy_unix.is_some(),
-                local_limit,
-                metrics,
-            )
-            .await;
-        }
+    if should_keep && item.inner().is_some() && wait_for_ready(&mut item, idle_timeout).await {
+        metrics.connection_reused = true;
+        metrics.pool_hit = true;
+        let wrapper = item
+            .inner_mut()
+            .take()
+            .expect("pending item should have inner value");
+        return send_via_wrapper(
+            ctx,
+            config,
+            wrapper,
+            item,
+            proxy_url,
+            tracked_connection,
+            true,
+            upstream.proxy_unix.is_some(),
+            local_limit,
+            metrics,
+        )
+        .await;
+    }
 
     establish_and_send(
         ctx,
