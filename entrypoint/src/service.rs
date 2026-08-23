@@ -2,11 +2,6 @@
 //!
 //! This module provides functionality to run the application as a Windows service,
 //! including service registration, start/stop handling, and graceful restart support.
-//!
-//! Command-line arguments can be specified when installing the service:
-//! ```cmd
-//! ferron winservice install --config config.toml --config-params "key=value"
-//! ```
 
 #![cfg_attr(not(windows), allow(dead_code, unused_imports, unused_variables))]
 
