@@ -6,10 +6,10 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RangeParseError {
     /// The syntax is invalid (e.g. missing `bytes=` prefix, non-numeric values).
-    /// Per RFC 7233 §3.1, the server SHOULD treat this as if the header were absent.
+    /// Per RFC 7233 section 3.1, the server SHOULD treat this as if the header were absent.
     InvalidSyntax,
     /// The syntax is valid but the range cannot be satisfied (e.g. `bytes=100-50`).
-    /// Per RFC 7233 §4.4, the server MUST respond with 416.
+    /// Per RFC 7233 section 4.4, the server MUST respond with 416.
     Unsatisfiable,
 }
 

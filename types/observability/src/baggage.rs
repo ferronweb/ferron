@@ -59,7 +59,7 @@ pub struct ExtractedBaggageAttr {
 /// Tracks distinct baggage values per key and hashes overflow to prevent
 /// high-cardinality metric explosion.
 ///
-/// Not `Sync` — create one per provider cache / processing task.
+/// Not `Sync`, create one per provider cache / processing task.
 pub struct DistinctValueTracker {
     /// Maps baggage key -> set of seen values.
     seen: std::collections::HashMap<String, std::collections::HashSet<String>>,

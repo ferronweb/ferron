@@ -13,7 +13,7 @@ pub enum HeaderAction {
 /// Retry budget configuration for the reverse proxy.
 #[derive(Clone)]
 pub struct RetryBudgetConfig {
-    /// Maximum retry rate as a fraction of steady-state traffic (0.0–1.0).
+    /// Maximum retry rate as a fraction of steady-state traffic (0.0-1.0).
     pub max_retry_rate: f64,
     /// Maximum number of tokens in the bucket (burst capacity).
     pub max_tokens: u64,

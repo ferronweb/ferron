@@ -1,10 +1,10 @@
 //! HTTP static file serving module for Ferron.
 //!
 //! Provides pipeline stages for:
-//! - `DirectoryIndexStage` — resolves index files (index.html, etc.) in directories
-//! - `DirectoryListingStage` — generates HTML directory listings when enabled
-//! - `StaticFileStage` — serves files with MIME types, ETags, range requests, and compression
-//! - `ErrorPageStage` — serves static HTML files for HTTP error responses
+//! - `DirectoryIndexStage`: resolves index files (index.html, etc.) in directories
+//! - `DirectoryListingStage`: generates HTML directory listings when enabled
+//! - `StaticFileStage`: serves files with MIME types, ETags, range requests, and compression
+//! - `ErrorPageStage`: serves static HTML files for HTTP error responses
 
 mod stages;
 mod util;

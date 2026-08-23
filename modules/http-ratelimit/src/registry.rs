@@ -54,7 +54,7 @@ fn now_secs() -> u64 {
 /// periodic `evict_stale` calls.
 #[derive(Clone)]
 pub struct TokenBucketRegistry {
-    /// Sharded concurrent map from key → bucket entry.
+    /// Sharded concurrent map from key -> bucket entry.
     buckets: Arc<DashMap<String, BucketEntry, FxBuildHasher>>,
     /// Parameters for creating new buckets.
     capacity: u64,
@@ -97,7 +97,7 @@ impl TokenBucketRegistry {
 
         // Try again after eviction
         if self.buckets.len() >= self.max_buckets {
-            // Still at capacity — backpressure
+            // Still at capacity (backpressure)...
             return None;
         }
 

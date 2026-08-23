@@ -1,7 +1,7 @@
 //! Token bucket algorithm for rate limiting.
 //!
 //! Each bucket has a capacity (max tokens) and a refill rate (tokens per second).
-//! Tokens are lazily refilled on access — no background timer is needed.
+//! Tokens are lazily refilled on access, no background timer is needed.
 
 use std::sync::Arc;
 use std::time::Instant;

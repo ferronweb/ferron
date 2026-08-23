@@ -466,7 +466,7 @@ fn validate_retry_budget_directives(
                             Some(r) if (0.0..=1.0).contains(&r) => {}
                             _ => {
                                 return Err(ConfigurationValidationError::from(
-                                    "Invalid `retry_budget.max_retry_rate` — must be between 0.0 and 1.0 (or 0–100 as percentage)",
+                                    "Invalid `retry_budget.max_retry_rate` — must be between 0.0 and 1.0 (or 0-100 as percentage)",
                                 )
                                 .with_span(entry_span(e)));
                             }

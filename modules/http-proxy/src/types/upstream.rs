@@ -13,11 +13,11 @@ pub enum DnsResolutionStatus {
     NotApplicable,
     /// DNS resolution succeeded (`connect_to` contains the resolved IP).
     Resolved,
-    /// DNS lookup failed — domain not found (NXDOMAIN).
+    /// DNS lookup failed: domain not found (NXDOMAIN).
     Nxdomain,
-    /// DNS lookup failed — other error (SERVFAIL, timeout, etc.).
+    /// DNS lookup failed: other error (SERVFAIL, timeout, etc.).
     DnsError,
-    /// Logical DNS mode — resolution deferred to TCP connect time.
+    /// Logical DNS mode: resolution deferred to TCP connect time.
     LogicalDns,
 }
 
@@ -155,7 +155,7 @@ pub struct SrvUpstreamData {
     pub idle_timeout: std::time::Duration,
 }
 
-/// An upstream backend — either a static URL or an SRV record.
+/// An upstream backend, either a static URL or an SRV record.
 #[derive(Clone)]
 pub enum Upstream {
     /// Static upstream with a fixed URL and configuration.

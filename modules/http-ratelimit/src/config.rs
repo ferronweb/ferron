@@ -7,17 +7,17 @@ use ferron_core::config::ServerConfigurationBlock;
 
 use crate::key_extractor::KeyExtractor;
 
-/// Identifies a rate limit zone — a sharing scope for token bucket registries.
+/// Identifies a rate limit zone, a sharing scope for token bucket registries.
 ///
 /// Zones allow multiple hostnames to share the same rate limit registries,
 /// or to isolate them into separate per-host registries.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum RateLimitZoneId {
-    /// Shared global zone — all hosts without explicit zones share registries.
+    /// Shared global zone: all hosts without explicit zones share registries.
     Global,
-    /// Named zone — hosts explicitly referencing the same name share registries.
+    /// Named zone: hosts explicitly referencing the same name share registries.
     Named(String),
-    /// Per-host zone — host has its own isolated registries.
+    /// Per-host zone: host has its own isolated registries.
     Host(String),
 }
 
@@ -151,7 +151,7 @@ pub fn parse_zone_name(block: &ServerConfigurationBlock) -> Option<String> {
 /// Check if a global `rate_limit` block exists without zone definitions.
 ///
 /// Returns `true` if the global (first) layer has a `rate_limit` block
-/// that does NOT contain any `zone` directives — meaning all hosts share
+/// that does NOT contain any `zone` directives, meaning all hosts share
 /// a global zone by default.
 pub fn has_global_zone(configuration: &ferron_core::config::layer::LayeredConfiguration) -> bool {
     // Only check the global layer (first layer), not host layers
@@ -200,15 +200,14 @@ pub fn has_own_rate_limit_block(
 /// Resolve the rate limit zone ID for a request based on configuration.
 ///
 /// Resolution order:
-/// 1. Explicit `zone "name"` in host `rate_limit` block → `Named(name)`
-/// 2. Host has its own `rate_limit` block (without zone) → `Host(hostname)` (opt-out)
-/// 3. Global `rate_limit` block without zone definitions → `Global`
-/// 4. Fallback → `Host(hostname)`
+/// 1. Explicit `zone "name"` in host `rate_limit` block -> `Named(name)`
+/// 2. Host has its own `rate_limit` block (without zone) -> `Host(hostname)` (opt-out)
+/// 3. Global `rate_limit` block without zone definitions -> `Global`
+/// 4. Fallback -> `Host(hostname)`
 pub fn resolve_zone_id(
     configuration: &ferron_core::config::layer::LayeredConfiguration,
     hostname: &Option<String>,
 ) -> RateLimitZoneId {
-    // Check for explicit zone reference in host-level rate_limit blocks
     for entry in configuration.get_entries("rate_limit", false) {
         if let Some(children) = &entry.children {
             if let Some(name) = parse_zone_name(children) {
@@ -217,7 +216,6 @@ pub fn resolve_zone_id(
         }
     }
 
-    // Check if host has its own rate_limit block (without zone) → per-host zone
     if has_own_rate_limit_block(configuration) {
         return RateLimitZoneId::Host(hostname.clone().unwrap_or_else(|| "_default".to_string()));
     }

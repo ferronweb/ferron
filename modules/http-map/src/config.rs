@@ -15,7 +15,7 @@ pub struct MapRule {
     pub source: String,
     /// The destination variable name (e.g., `category`).
     pub destination: String,
-    /// Ordered mapping entries — evaluated in priority order at runtime.
+    /// Ordered mapping entries: evaluated in priority order at runtime.
     pub entries: Vec<MapEntry>,
     /// Fallback value when no entry matches.
     pub default: Option<String>,
@@ -26,9 +26,9 @@ pub struct MapRule {
 pub enum MapEntry {
     /// Exact string match (no wildcards).
     Exact { key: String, value: String },
-    /// Wildcard match — the pattern contains `*` converted to regex.
+    /// Wildcard match: the pattern contains `*` converted to regex.
     Wildcard { regex: Regex, value: String },
-    /// Regex match — compiled at parse time.
+    /// Regex match: compiled at parse time.
     Regex { regex: Regex, value: String },
 }
 
@@ -48,7 +48,7 @@ pub fn evaluate_map_directives(
     let mut results = Vec::new();
 
     for rule in rules {
-        let source_value: String = resolve_source(&rule.source, variables).unwrap_or_default();
+        let source_value: String = variables.resolve(&rule.source).unwrap_or_default();
 
         let result_value = evaluate_entries(&source_value, &rule.entries, &rule.default);
         results.push((rule.destination, result_value));
@@ -57,16 +57,10 @@ pub fn evaluate_map_directives(
     results
 }
 
-/// Resolve the source variable from the context.
-fn resolve_source(source: &str, variables: &impl Variables) -> Option<String> {
-    variables.resolve(source)
-}
-
 /// Evaluate mapping entries against a source value, returning the matched result.
 ///
-/// Priority order: exact match → wildcard match → regex match → default.
+/// Priority order: exact match -> wildcard match -> regex match -> default.
 fn evaluate_entries(source: &str, entries: &[MapEntry], default: &Option<String>) -> String {
-    // First pass: exact matches
     for entry in entries {
         if let MapEntry::Exact { key, value } = entry {
             if source == key {
@@ -75,13 +69,11 @@ fn evaluate_entries(source: &str, entries: &[MapEntry], default: &Option<String>
         }
     }
 
-    // Second pass: wildcard matches (longest match wins)
     let mut best_wildcard: Option<&str> = None;
     let mut best_wildcard_len = 0usize;
     for entry in entries {
         if let MapEntry::Wildcard { regex, .. } = entry {
             if let Ok(true) = regex.is_match(source) {
-                // Prefer the longest-matching wildcard
                 let pattern_str = regex.as_str();
                 // Approximate: use regex pattern length as proxy for specificity
                 if pattern_str.len() > best_wildcard_len {
@@ -97,7 +89,6 @@ fn evaluate_entries(source: &str, entries: &[MapEntry], default: &Option<String>
         return value.to_string();
     }
 
-    // Third pass: regex matches (first match in declaration order wins)
     for entry in entries {
         if let MapEntry::Regex { regex, value } = entry {
             if let Ok(Some(captures)) = regex.captures(source) {
@@ -107,7 +98,6 @@ fn evaluate_entries(source: &str, entries: &[MapEntry], default: &Option<String>
         }
     }
 
-    // Fallback to default
     default.clone().unwrap_or_default()
 }
 
@@ -131,7 +121,7 @@ fn resolve_captures(value: &str, captures: &fancy_regex::Captures<'_, str>) -> S
                 if let Some(m) = captures.get(idx) {
                     result.push_str(m.as_str());
                 } else {
-                    // Capture group doesn't exist — keep reference literally
+                    // Capture group doesn't exist, keep reference literally
                     result.push('$');
                     result.push_str(&num_str);
                 }
@@ -267,7 +257,6 @@ fn wildcard_to_regex(pattern: &str) -> Option<String> {
         return None;
     }
 
-    // Escape regex special chars except `*`, then replace `*` with `.*`
     let mut result = String::new();
     for c in pattern.chars() {
         match c {

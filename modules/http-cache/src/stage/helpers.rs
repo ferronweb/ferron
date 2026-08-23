@@ -20,7 +20,7 @@ pub(super) fn active_config_generation() -> u64 {
 /// request headers, so the cache can answer `304 Not Modified` locally
 /// without an upstream round trip.
 ///
-/// Per RFC 9110 §13.1.1 and §13.1.3: `If-None-Match` takes precedence over
+/// Per RFC 9110 sections 13.1.1 and 13.1.3: `If-None-Match` takes precedence over
 /// `If-Modified-Since`, and both use weak validator comparison for GET and
 /// HEAD. When `If-None-Match` is present but does not match, the cache serves
 /// the full representation instead of evaluating `If-Modified-Since`.
@@ -69,7 +69,7 @@ pub(super) fn client_conditionals_indicate_not_modified(
     false
 }
 
-/// RFC 9110 §8.8.3.2 weak entity-tag comparison: the `W/` prefix is ignored,
+/// RFC 9110 section 8.8.3.2 weak entity-tag comparison: the `W/` prefix is ignored,
 /// and the opaque-tags must match character-for-character.
 pub(super) fn weak_etag_eq(client_etag: &str, stored_etag: &str) -> bool {
     let client_etag = client_etag.strip_prefix("W/").unwrap_or(client_etag);

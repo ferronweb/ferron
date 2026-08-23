@@ -42,7 +42,7 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let config = match ClientIpFromHeaderConfig::resolve_from_context(ctx) {
             Some(c) => c,
-            None => return Ok(true), // Directive not set — no-op
+            None => return Ok(true),
         };
 
         if !config.is_trusted_proxy(ctx.remote_address.ip()) {
@@ -50,7 +50,7 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
         }
 
         let Some(ip) = config.extract_client_ip(ctx) else {
-            // Header present but couldn't be parsed — skip silently
+            // Header present but couldn't be parsed, skip silently...
             return Ok(true);
         };
 

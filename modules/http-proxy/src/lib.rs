@@ -1,8 +1,4 @@
 //! HTTP reverse proxy module for Ferron.
-//!
-//! Provides pipeline stages for:
-//! - `ReverseProxyStage` — reverse proxying with load balancing, health checks, and connection pooling
-
 #![cfg_attr(feature = "fuzz", allow(private_interfaces))]
 
 mod config;
@@ -72,7 +68,7 @@ static GLOBAL_CONCURRENT_CONNECTIONS: AtomicUsize =
 /// across all requests to preserve connection pools, health tracking,
 /// and the load balancer algorithm (which must be shared for RoundRobin to work).
 struct ProxyState {
-    /// Connection pool manager — lazily initialized on first use so we can
+    /// Connection pool manager, lazily initialized on first use so we can
     /// read the global `concurrent_conns` limit from config first.
     conn_manager: RwLock<Option<Arc<crate::connections::ConnectionManager>>>,
     /// Circuit breaker state tracking per upstream.

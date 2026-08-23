@@ -1,4 +1,4 @@
-//! Error page stage — serves static HTML files for HTTP error responses.
+//! Error page stage: serves static HTML files for HTTP error responses.
 
 use std::io;
 use std::path::Path;

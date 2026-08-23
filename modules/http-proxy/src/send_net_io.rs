@@ -139,14 +139,14 @@ impl<S: SendableStreamPoll> SendStreamPoll<S> {
     fn populate_if_different_thread_or_marked_dropped(&mut self, dropped: bool) {
         // Fast path: when same_thread_cache is true and we're not handling a
         // drop guard firing, a single Relaxed atomic load suffices to confirm
-        // the connection is still valid on this thread — no syscall needed.
+        // the connection is still valid on this thread, no syscall needed.
         if !dropped && self.prev_inner.is_none() && self.same_thread_cache {
             if self.marked_dropped.load(Ordering::Relaxed) {
-                // Drop guard fired on the same thread — invalidate cache,
+                // Drop guard fired on the same thread, invalidate cache,
                 // fall through to the slow path which will reconstruct.
                 self.same_thread_cache = false;
             } else {
-                return; // Common case: same thread, no drop — skip entirely.
+                return; // Common case: same thread, no drop, skip entirely.
             }
         }
 

@@ -131,7 +131,7 @@ pub fn select_backend_index(
                     candidate_scores: Vec::new(),
                 };
             };
-            // Reservoir sampling among ties — avoids allocating a Vec for
+            // Reservoir sampling among ties; avoids allocating a Vec for
             // equal-scoring minima.
             let mut best_pos = 0;
             let mut min_connections: Option<(usize, u32)> = None;

@@ -77,10 +77,9 @@ impl ConsistentHashRing {
         h.write(key);
         let hash = h.finish();
 
-        // 1. O(log N) jump to the first element >= target
         let start_idx = self.nodes.partition_point(|(h, _)| *h < hash);
 
-        // 2. Linear probe forward, skipping any ID found in the exclusion set.
+        // Linear probe forward, skipping any ID found in the exclusion set.
         // This compiles down to a highly optimized loop with excellent cache locality.
         let start_idx_refined = self.nodes[start_idx..]
             .iter()
@@ -91,7 +90,6 @@ impl ConsistentHashRing {
                     .find(|&&(_, id)| !exclude_idx.contains(&id))
             });
 
-        // 3. Return the refined index if found; otherwise return None.
         start_idx_refined.map(|&(_, id)| id)
     }
 

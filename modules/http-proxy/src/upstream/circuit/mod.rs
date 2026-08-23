@@ -97,7 +97,7 @@ impl<'a> CircuitBreaker<'a> {
     /// The decision is delegated to [`Self::is_available`]: backends that
     /// are unavailable (closed-circuit cooldown, half-open slot busy) are
     /// rejected without any state transitions. Otherwise the state machine
-    /// advances (open → half-open) and the acquisition is emitted.
+    /// advances (open -> half-open) and the acquisition is emitted.
     #[inline]
     pub fn try_acquire(&self, upstream: &Arc<UpstreamInner>) -> bool {
         if !self.is_available(upstream) {
@@ -112,7 +112,6 @@ impl<'a> CircuitBreaker<'a> {
             return true;
         };
 
-        // Get a reference instead of a mutable reference for fast paths.
         let state = if let Some(state) = circuit_breaker_state.get(upstream) {
             state
         } else {
@@ -161,7 +160,7 @@ impl<'a> CircuitBreaker<'a> {
                 *state.opened_at.write() = None;
                 state.half_open_in_flight.store(true, Ordering::Relaxed);
                 state.half_open_pass_count.store(0, Ordering::Relaxed);
-                // Clear slow-start recovery timestamp — the circuit is re-entering
+                // Clear slow-start recovery timestamp; the circuit is re-entering
                 // half-open, so the slow-start penalty should not apply.
                 if let Some(ref recovery_at) = state.slow_start_recovery_at {
                     *recovery_at.write() = None;

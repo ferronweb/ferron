@@ -59,7 +59,6 @@ pub fn record_circuit_transition(
     let is_flapping = state.record_transition(window);
 
     if is_flapping && !was_flapping {
-        // Flapping just started — emit notification
         event_sink.emit(ferron_observability::Event::Log(
             ferron_observability::LogEvent {
                 level: ferron_observability::LogLevel::Warn,
@@ -78,7 +77,6 @@ pub fn record_circuit_transition(
         ));
         emit_flapping_metric(event_sink, upstream_url, 1, event_trace_context);
     } else if !is_flapping && was_flapping {
-        // Flapping resolved — emit recovery notification
         event_sink.emit(ferron_observability::Event::Log(
             ferron_observability::LogEvent {
                 level: ferron_observability::LogLevel::Info,
@@ -97,7 +95,7 @@ pub fn record_circuit_transition(
         ));
         emit_flapping_metric(event_sink, upstream_url, 0, event_trace_context);
     } else if is_flapping {
-        // Still flapping — just update the metric on each transition
+        // Still flapping...
         emit_flapping_metric(event_sink, upstream_url, 1, event_trace_context);
     }
 
@@ -161,7 +159,7 @@ mod tests {
             &event_sink,
             None,
         ));
-        // 2 transitions < threshold of 3 → not flapping
+        // 2 transitions < threshold of 3 -> not flapping
     }
 
     #[test]
@@ -188,7 +186,7 @@ mod tests {
             &event_sink,
             None,
         );
-        // 3rd transition reaches threshold → flapping
+        // 3rd transition reaches threshold -> flapping
         assert!(record_circuit_transition(
             Some(&state_map),
             &cb,
@@ -227,7 +225,7 @@ mod tests {
         // Wait for window to expire
         std::thread::sleep(Duration::from_millis(60));
 
-        // New transition after window → transitions evicted → not flapping
+        // New transition after window -> transitions evicted -? not flapping
         assert!(!record_circuit_transition(
             Some(&state_map),
             &cb,

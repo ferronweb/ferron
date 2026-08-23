@@ -45,7 +45,7 @@ pub fn canonicalize_ip(ip: std::net::IpAddr) -> String {
 ///
 /// Supports:
 /// - `request.method`, `request.uri.path`, `request.uri.query`, `request.uri`, `request.version`
-/// - `request.header.<name>` — header values (names lowercased, `_` → `-`)
+/// - `request.header.<name>`: header values (names lowercased, `_` -> `-`)
 /// - `request.host`, `request.scheme`, `request.path_info`
 /// - `server.ip`, `server.port`, `remote.ip`, `remote.port`
 /// - `auth.user`, `trace.id`, `trace.spanid`

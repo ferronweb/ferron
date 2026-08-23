@@ -248,7 +248,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             if let Some(if_match_value) = request.headers().get(header::IF_MATCH) {
                 match if_match_value.to_str() {
                     Ok(if_match) => {
-                        // "*" means any version is acceptable (RFC 7232 §3.1)
+                        // "*" means any version is acceptable (RFC 7232 section 3.1)
                         // Check wildcard first, then method, then specific ETag
                         if !split_etag_request(if_match)
                             .into_iter()
@@ -581,7 +581,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             TraceAttributeValue::Bool(is_precompressed_file),
         );
 
-        // Handle If-Range (RFC 7233 §3.2)
+        // Handle If-Range (RFC 7233 section 3.2)
         // If-Range is ignored when If-Match or If-Unmodified-Since is present
         let if_range_matches = if request.headers().contains_key(header::RANGE) {
             if let Some(if_range) = request.headers().get(header::IF_RANGE) {
@@ -810,7 +810,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                             return Ok(false);
                         }
                         Err(RangeParseError::InvalidSyntax) => {
-                            // Syntactically invalid — treat as absent, fall through to 200
+                            // Syntactically invalid: treat as absent, fall through to 200
                         }
                     }
                 }
@@ -878,7 +878,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             return Ok(false);
         }
 
-        // Full file response — streaming I/O
+        // Full file response: streaming I/O
         // Use the file handle from context (already opened during path resolution)
         // For precompressed files, the file_path may have changed, so we re-open
         let file = if is_precompressed_file {

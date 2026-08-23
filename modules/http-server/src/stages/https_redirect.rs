@@ -120,7 +120,6 @@ impl Stage<HttpContext> for HttpsRedirectStage {
         }
 
         let Some(https_url) = build_https_url(ctx) else {
-            // Cannot determine target URL — let the pipeline continue
             return Ok(true);
         };
 
@@ -129,7 +128,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
 
         ctx.res = Some(HttpResponse::Custom(
             Response::builder()
-                .status(308) // Permanent Redirect — preserves method and body
+                .status(308) // Permanent Redirect preserves method and body
                 .header(http::header::LOCATION, location)
                 .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
                 .expect("Failed to build 308 redirect response"),

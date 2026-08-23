@@ -116,7 +116,7 @@ fn emit_log(events: &CompositeEventSink, level: LogLevel, message: String, summa
     }));
 }
 
-/// `GET /health` — returns 200 OK if the server is running, or 503 during shutdown.
+/// `GET /health`: returns 200 OK if the server is running, or 503 during shutdown.
 pub async fn health_handler() -> Response<Full<Bytes>> {
     let shutdown_token = ferron_core::shutdown::SHUTDOWN_TOKEN.load();
     if shutdown_token.is_cancelled() {
@@ -134,7 +134,7 @@ pub async fn health_handler() -> Response<Full<Bytes>> {
     }
 }
 
-/// `GET /status` — returns JSON with uptime, connection counts, and reload stats.
+/// `GET /status`: returns JSON with uptime, connection counts, and reload stats.
 pub async fn status_handler() -> Response<Full<Bytes>> {
     let metrics = StatusResponse::from_global();
     http::Response::builder()
@@ -158,7 +158,7 @@ pub async fn status_handler() -> Response<Full<Bytes>> {
         .expect("invalid HTTP response state")
 }
 
-/// `GET /config` — returns the current effective configuration as sanitized JSON.
+/// `GET /config`: returns the current effective configuration as sanitized JSON.
 pub async fn config_handler(state: AdminState) -> Response<Full<Bytes>> {
     let sanitized = config::sanitize_config(&state.full_config);
     emit_log(
@@ -174,7 +174,7 @@ pub async fn config_handler(state: AdminState) -> Response<Full<Bytes>> {
         .expect("invalid HTTP response state")
 }
 
-/// `POST /reload` — triggers a configuration reload by cancelling the global reload token.
+/// `POST /reload`: triggers a configuration reload by cancelling the global reload token.
 pub async fn reload_handler(state: AdminState) -> Response<Full<Bytes>> {
     let start = std::time::Instant::now();
     {
@@ -236,7 +236,7 @@ pub async fn reload_handler(state: AdminState) -> Response<Full<Bytes>> {
     }
 }
 
-/// `GET /reload` — returns the status of the reload operation.
+/// `GET /reload`: returns the status of the reload operation.
 pub async fn reload_get_handler() -> Response<Full<Bytes>> {
     let metrics = ferron_core::admin::ADMIN_METRICS.reload_metrics.read();
     http::Response::builder()
@@ -253,7 +253,7 @@ pub async fn reload_get_handler() -> Response<Full<Bytes>> {
         .expect("invalid HTTP response state")
 }
 
-/// `GET /runtime` — returns the runtime status.
+/// `GET /runtime`: returns the runtime status.
 pub async fn runtime_handler() -> Response<Full<Bytes>> {
     let metrics = ferron_core::admin::ADMIN_METRICS.runtime_metrics.read();
     http::Response::builder()

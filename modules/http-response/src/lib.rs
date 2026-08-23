@@ -5,11 +5,11 @@
 //!
 //! ## Supported Directives
 //!
-//! - `abort true` — Immediately close the connection without a response
-//! - `block "ip" "cidr"` — Block listed IPs/CIDRs
-//! - `allow "ip" "cidr"` — Allow listed IPs/CIDRs only
-//! - `status <code> { url|regex|body|location }` — Return a custom status code
-//! - `early_hints { link "..." }` — Send 103 Early Hints with Link headers
+//! - `abort true`: Immediately close the connection without a response
+//! - `block "ip" "cidr"`: Block listed IPs/CIDRs
+//! - `allow "ip" "cidr"`: Allow listed IPs/CIDRs only
+//! - `status <code> { url|regex|body|location }`: Return a custom status code
+//! - `early_hints { link "..." }`: Send 103 Early Hints with Link headers
 
 mod config;
 mod stage;

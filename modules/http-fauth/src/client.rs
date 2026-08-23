@@ -75,9 +75,9 @@ impl SendRequestWrapper {
     /// Check readiness of the underlying connection.
     ///
     /// Returns `(is_ready, should_keep_in_pool)`:
-    /// - `(true, true)` — ready, caller should use `take_inner()` to extract
-    /// - `(false, true)` — not ready yet, keep in pool (connection is alive)
-    /// - `(_, false)` — dead/stale, discard
+    /// - `(true, true)`: ready, caller should use `take_inner()` to extract
+    /// - `(false, true)`: not ready yet, keep in pool (connection is alive)
+    /// - `(_, false)`: dead/stale, discard
     #[inline]
     pub fn check_ready(&mut self, timeout: Option<Duration>) -> (bool, bool) {
         let Some(ref inner) = self.inner else {

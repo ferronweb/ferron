@@ -113,12 +113,12 @@ pub async fn try_send_with_pool(
     }
 
     if should_keep {
-        // Connection is alive but not ready — collect for racing
+        // Connection is alive but not ready, collect for racing
         if item.inner().is_some() {
             pending_items.push(item);
         }
     } else {
-        // Connection is dead — keep the item slot for reuse in establish_and_send
+        // Connection is dead, keep the item slot for reuse in establish_and_send
         // to avoid pulling a second time.
         reusable_item = Some(item);
     }
@@ -148,7 +148,7 @@ pub async fn try_send_with_pool(
                 .await;
             }
             None => {
-                // All pending items failed — establish new connection
+                // All pending items failed, establish new connection...
             }
         }
     }
@@ -402,7 +402,7 @@ pub async fn establish_and_send(
     let is_unix = false;
 
     let wrapper_fut = async {
-        // Two small connect adapters — TCP and Unix — then one shared
+        // Two small connect adapters (TCP and Unix), then one shared
         // PROXY-header / TLS / HTTP dispatch sequence.
         if is_unix {
             #[cfg(unix)]

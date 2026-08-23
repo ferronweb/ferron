@@ -84,7 +84,7 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
             return Ok(false);
         }
 
-        // No matching token found — let the pipeline continue (will eventually 404)
+        // No matching token found, let the pipeline continue (could eventually 404)
         Ok(true)
     }
 }

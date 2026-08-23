@@ -21,10 +21,10 @@ pub const METRIC_NAME: &str = "ferron.tls.certificate_not_after";
 /// Emit a `ferron.tls.certificate_not_after` gauge for a freshly mounted
 /// certificate.
 ///
-/// - `provider` — a `&'static str` matching the TLS provider name
+/// - `provider`: a `&'static str` matching the TLS provider name
 ///   (`"manual"`, `"acme"`, `"http"`, or `"local"`).
-/// - `host` — the SNI hostname or IP literal the certificate is bound to.
-/// - `leaf` — the first (end-entity) certificate of the chain.
+/// - `host`: the SNI hostname or IP literal the certificate is bound to.
+/// - `leaf`: the first (end-entity) certificate of the chain.
 ///
 /// If the leaf cannot be parsed as an X.509 certificate the function is a
 /// silent no-op; the rest of the code path will fail to install the cert
@@ -96,12 +96,12 @@ pub const CONNECTIONS_ACTIVE_METRIC: &str = "ferron.tls.connections.active";
 
 /// Emit a `ferron.tls.handshake.duration` histogram for a TLS handshake.
 ///
-/// - `event_sink` — the per-host `CompositeEventSink`.
-/// - `host` — the SNI hostname or `"_global"` for connections without SNI.
-/// - `duration` — elapsed time for the handshake.
-/// - `protocol_version` — negotiated protocol (e.g. `"TLSv1.3"`).
-/// - `cipher_suite` — negotiated cipher suite (e.g. `"TLS_AES_256_GCM_SHA384"`).
-/// - `result` — `"success"` or `"error"`.
+/// - `event_sink`: the per-host `CompositeEventSink`.
+/// - `host`: the SNI hostname or `"_global"` for connections without SNI.
+/// - `duration`: elapsed time for the handshake.
+/// - `protocol_version`: negotiated protocol (e.g. `"TLSv1.3"`).
+/// - `cipher_suite`: negotiated cipher suite (e.g. `"TLS_AES_256_GCM_SHA384"`).
+/// - `result`: `"success"` or `"error"`.
 pub fn emit_handshake_duration(
     event_sink: &CompositeEventSink,
     host: &str,

@@ -1,9 +1,9 @@
 //! Key extraction strategies for rate limiting.
 //!
 //! Supported key types:
-//! - `remote_address` — the client's IP address
-//! - `uri` — the request URI path
-//! - `request.header.<name>` — value of a specific request header
+//! - `remote_address`: the client's IP address
+//! - `uri`: the request URI path
+//! - `request.header.<name>`: value of a specific request header
 
 use ferron_http::HttpContext;
 
@@ -22,9 +22,9 @@ impl KeyExtractor {
     /// Parse a key extractor from a configuration string.
     ///
     /// Supported formats:
-    /// - `"remote_address"` → `RemoteAddress`
-    /// - `"uri"` → `Uri`
-    /// - `"request.header.X-Api-Key"` → `Header("X-Api-Key")`
+    /// - `"remote_address"` -> `RemoteAddress`
+    /// - `"uri"` -> `Uri`
+    /// - `"request.header.X-Api-Key"` -> `Header("X-Api-Key")`
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "remote_address" => Some(Self::RemoteAddress),

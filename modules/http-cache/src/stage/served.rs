@@ -96,7 +96,7 @@ pub(super) fn serve(
 
 /// Assemble a local `304 Not Modified` response for a fresh cached entry when
 /// the client's conditional headers match the stored validators. RFC 9110
-/// §15.4.5: the 304 must carry the same validators (and other metadata) that
+/// section 15.4.5: the 304 must carry the same validators (and other metadata) that
 /// a 200 response would, so the response reuses the stored headers without a
 /// body or content length.
 pub(super) fn serve_not_modified(

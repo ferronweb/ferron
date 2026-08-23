@@ -38,7 +38,7 @@ fn read_process_state() -> Option<ProcessStateSnapshot> {
     let process = match procfs::process::Process::myself() {
         Ok(s) => s,
         Err(e) => {
-            // Log at debug level — this is expected to fail occasionally during startup
+            // Log at debug level; this is expected to fail occasionally during startup
             ferron_core::log_debug!("Failed to read process stats: {}", e);
             return None;
         }
@@ -46,7 +46,7 @@ fn read_process_state() -> Option<ProcessStateSnapshot> {
     let stat = match process.stat() {
         Ok(s) => s,
         Err(e) => {
-            // Log at debug level — this is expected to fail occasionally during startup
+            // Log at debug level; this is expected to fail occasionally during startup
             ferron_core::log_debug!("Failed to read process stats: {}", e);
             return None;
         }

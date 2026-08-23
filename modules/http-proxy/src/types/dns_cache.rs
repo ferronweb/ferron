@@ -100,7 +100,7 @@ impl StrictDnsCache {
         if self.entries.len() >= MAX_CACHE_ENTRIES {
             self.evict_expired();
             if self.entries.len() >= MAX_CACHE_ENTRIES {
-                // Still at capacity — remove oldest entry
+                // Still at capacity, remove oldest entry
                 if let Some(oldest_key) = self
                     .entries
                     .iter()
@@ -180,7 +180,7 @@ impl SrvCache {
         if self.entries.len() >= MAX_CACHE_ENTRIES {
             self.evict_expired();
             if self.entries.len() >= MAX_CACHE_ENTRIES {
-                // Still at capacity — remove oldest entry
+                // Still at capacity, remove oldest entry
                 if let Some(oldest_key) = self
                     .entries
                     .iter()

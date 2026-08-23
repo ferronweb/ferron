@@ -252,7 +252,7 @@ pub async fn request_handler(
     let request_timer = std::time::Instant::now();
 
     // Collect request headers before moving `request` into handler_inner
-    // (only needed for access logging — skip when no access sinks are configured,
+    // (only needed for access logging, skip when no access sinks are configured,
     // even if metrics/traces sinks are present)
     let request_headers: Vec<(String, String)> = if events.has_access_sinks() {
         request
@@ -536,8 +536,8 @@ async fn request_handler_inner(
         );
     }
 
-    // CONNECT requests use authority-form URI (RFC 7231 §4.3.6).
-    // Skip path-based canonicalization — the forward proxy stage will handle CONNECT.
+    // CONNECT requests use authority-form URI (RFC 7231 section 4.3.6).
+    // Skip path-based canonicalization; the forward proxy stage will handle CONNECT.
     let is_connect = request.method() == http::Method::CONNECT;
 
     // Deny CONNECT requests with path (CONNECT requests are authority-form only)

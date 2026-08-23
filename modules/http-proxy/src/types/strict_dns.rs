@@ -152,7 +152,7 @@ pub async fn resolve_strict_dns(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>>
                     );
                 }
                 Err(e) => {
-                    // NXDOMAIN or no records — not necessarily an error
+                    // NXDOMAIN or no records, not necessarily an error...
                     event_sink.emit(ferron_observability::Event::Log(
                         ferron_observability::LogEvent {
                             level: ferron_observability::LogLevel::Debug,

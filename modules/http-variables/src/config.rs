@@ -27,7 +27,7 @@ pub struct SetVarRule {
 pub struct LogFieldRule {
     /// The custom access log field name.
     pub field_name: String,
-    /// The source value — either a plain variable name or an interpolated string.
+    /// The source value: either a plain variable name or an interpolated string.
     pub source: LogFieldSource,
 }
 

@@ -49,7 +49,7 @@ pub(crate) fn entry_matches_purge(
     })
 }
 
-/// Hop-by-hop headers a proxy must not forward or store (RFC 9110 §7.6.1).
+/// Hop-by-hop headers a proxy must not forward or store (RFC 9110 section 7.6.1).
 ///
 /// A proxy consumes these headers and must not pass them on. `Connection` is
 /// handled separately because it also names additional hop-by-hop fields.

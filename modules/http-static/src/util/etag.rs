@@ -136,7 +136,7 @@ pub fn extract_etag_inner(input: &str, weak: bool) -> Option<(String, Option<Str
         }
     }
 
-    // No compression suffix found — return full trimmed value as ETag
+    // No compression suffix found, return full trimmed value as ETag
     Some((trimmed.to_string(), None, is_weak))
 }
 

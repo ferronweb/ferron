@@ -189,7 +189,7 @@ impl ReusedFile {
             });
         }
 
-        // Pool miss — open fresh
+        // Pool miss...
         let file = match zincio::fs::File::open(path.as_ref()).await {
             Ok(file) => file,
             Err(e) => {
@@ -353,7 +353,7 @@ mod tests {
                 });
         }
 
-        // Now add an expired handle — eviction should remove it
+        // Now add an expired handle; eviction should remove it
         let expired_path = dir.join("expired.txt");
         std::fs::write(&expired_path, b"expired").unwrap();
         let file = std::fs::File::open(&expired_path).unwrap();
@@ -367,7 +367,7 @@ mod tests {
                 pooled_at: Instant::now() - Duration::from_secs(1), // expired
             });
 
-        // Pool is now over capacity — eviction should remove the expired handle
+        // Pool is now over capacity; eviction should remove the expired handle
         pool.evict_if_full();
         assert!(pool.total_handles() <= FD_CACHE_MAX_ENTRIES_PREEMPTIVE);
 

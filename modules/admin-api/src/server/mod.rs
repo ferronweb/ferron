@@ -102,7 +102,7 @@ impl Module for AdminApiModule {
         // Clone the CancellationToken so the spawned task owns it
         let reload_token = (*self.reload_token.load_full()).clone();
 
-        // Spawn on secondary runtime — control plane isolation
+        // Spawn on secondary runtime (control plane isolation)
         runtime.spawn_secondary_task(async move {
             let state = AdminState {
                 full_config,

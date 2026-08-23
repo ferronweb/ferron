@@ -92,7 +92,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 // Skip host blocks that won't create any listeners
                 let effective_port = port.port.or(default_port);
                 let Some(effective_port) = effective_port else {
-                    // Both defaults disabled and no explicit port — skip
+                    // Both defaults disabled and no explicit port, skip
                     continue;
                 };
 
@@ -210,10 +210,10 @@ impl ModuleLoader for BasicHttpModuleLoader {
             let mut expanded: Vec<ServerConfigurationPort> = Vec::new();
             for port_config in &port_configs {
                 if port_config.port.is_some() {
-                    // Explicit port — use as-is (no automatic TLS expansion)
+                    // Explicit port, use as-is (no automatic TLS expansion)
                     expanded.push(port_config.clone());
                 } else {
-                    // No explicit port — expand based on default port settings
+                    // No explicit port, expand based on default port settings
                     let mut http_hosts = Vec::new();
                     let mut https_hosts = Vec::new();
 
@@ -234,7 +234,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                         }
                     }
 
-                    // HTTP listener gets all hosts (including localhost) — only if default HTTP port is enabled
+                    // HTTP listener gets all hosts (including localhost), only if default HTTP port is enabled
                     if let Some(http_port) = default_port {
                         if !http_hosts.is_empty() {
                             let mut http_config = port_config.clone();
@@ -244,7 +244,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                         }
                     }
 
-                    // HTTPS listener only gets non-localhost hosts — only if default HTTPS port is enabled
+                    // HTTPS listener only gets non-localhost hosts, only if default HTTPS port is enabled
                     if let Some(https_port) = default_https {
                         if !https_hosts.is_empty() {
                             let mut https_config = port_config.clone();
@@ -307,7 +307,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 let port = port_config.port.expect("invalid HTTP server module state");
                 let is_explicit_port = port_configs.iter().any(|pc| pc.port == Some(port));
                 let https_port = if is_explicit_port {
-                    Some(port) // Same port → redirect stage will skip
+                    Some(port) // Same port, redirect stage will skip
                 } else {
                     default_https // May be None if default_https_port false
                 };

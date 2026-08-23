@@ -110,8 +110,9 @@ pub fn parse_request_policy(headers: &HeaderMap) -> RequestCachePolicy {
     }
 
     if contains_token(cache_control, "no-store") {
-        // RFC 9111 §5.2.1.5: request `no-store` forbids storing the request
-        // and its response, but does not forbid serving a stored response.
+        // RFC 9111 section 5.2.1.5: request `no-store` forbids storing the
+        // request and its response, but does not forbid serving a stored
+        // response.
         return RequestCachePolicy {
             allow_lookup: true,
             allow_store: false,
@@ -149,9 +150,9 @@ pub fn parse_request_policy(headers: &HeaderMap) -> RequestCachePolicy {
 /// Whether a stored response with the given age and TTL satisfies the request's
 /// `max-age` and `min-fresh` directives.
 ///
-/// RFC 9111 §5.2.1.3 and §5.2.1.7: the cache must not use the stored response
-/// unless its age is at most `max-age` and at least `min-fresh` seconds of
-/// freshness remain.
+/// RFC 9111 sections 5.2.1.3 and 5.2.1.7: the cache must not use the stored
+/// response unless its age is at most `max-age` and at least `min-fresh`
+/// seconds of freshness remain.
 pub fn satisfies_freshness_constraints(
     policy: &RequestCachePolicy,
     age: Duration,
@@ -241,7 +242,7 @@ pub fn evaluate_response_policy(
         };
     };
 
-    // RFC 9111 §3.5: a shared cache may store a response to an authorized
+    // RFC 9111 section 3.5: a shared cache may store a response to an authorized
     // request when the response explicitly authorizes shared caching
     // (must-revalidate, proxy-revalidate, public, or s-maxage). When
     // LiteSpeed overrides the policy, only the LiteSpeed scope directives
@@ -370,8 +371,8 @@ pub(crate) fn parse_standard_cache_control(headers: &HeaderMap) -> StandardCache
 
 /// Extract field names from `no-cache="field-names"` directives.
 ///
-/// RFC 9111 §5.2.2.3: when the directive carries field names, the response may
-/// still be stored, but the stored copy must not include those fields. The
+/// RFC 9111 section 5.2.2.3: when the directive carries field names, the response
+/// may still be stored, but the stored copy must not include those fields. The
 /// quoted list can contain commas, so this runs before the header is split on
 /// commas. `no-cache=""` is treated like bare `no-cache`.
 fn parse_no_cache_field_names(text: &str, parsed: &mut StandardCacheControl) {
@@ -405,7 +406,7 @@ pub(crate) fn choose_ttl(
     ls_control: Option<&LiteSpeedCacheControl>,
     litespeed_overrides_response_policy: bool,
 ) -> Option<Duration> {
-    // RFC 9111 §4.2.1: freshness lifetime is the FIRST applicable directive,
+    // RFC 9111 section 4.2.1: freshness lifetime is the FIRST applicable directive,
     // not the minimum of all candidates. A shared cache uses, in order:
     // s-maxage, max-age, Expires-Date, then the heuristic.
     // `None` signals that no freshness lifetime can be derived (not storable).
@@ -440,7 +441,7 @@ pub(crate) fn choose_ttl(
         return Some(ttl);
     }
 
-    // RFC 9111 §4.2.4: a cache MUST NOT generate a heuristic freshness
+    // RFC 9111 section 4.2.4: a cache MUST NOT generate a heuristic freshness
     // lifetime when must-revalidate (or proxy-revalidate / s-maxage) is
     // present. This also suppresses the LiteSpeed fallback, which would
     // otherwise generate a lifetime the origin did not authorize.
@@ -465,8 +466,8 @@ pub(crate) fn choose_ttl(
 
 /// Recalculate freshness parameters from updated headers during 304 revalidation.
 ///
-/// Per RFC 9111 §4.3.4, the stored response's freshness must be updated from
-/// the 304 response's headers. This function re-parses Cache-Control (and
+/// Per RFC 9111 section 4.3.4, the stored response's freshness must be updated
+/// from the 304 response's headers. This function re-parses Cache-Control (and
 /// optionally LiteSpeed Cache-Control) from the merged headers and returns
 /// the new TTL, stale-while-revalidate, stale-if-error, and must-revalidate.
 pub(crate) fn recalculate_freshness(

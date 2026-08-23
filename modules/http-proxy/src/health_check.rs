@@ -261,7 +261,7 @@ async fn execute_probe_request(
         }
     };
 
-    // Use cached client — the underlying connector supports both HTTP and HTTPS
+    // Use cached client (the underlying connector supports both HTTP and HTTPS)
     let client = health_check_client(no_verification, mtls);
     let req = Request::builder()
         .method(method.to_uppercase().as_str())

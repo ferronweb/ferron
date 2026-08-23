@@ -88,7 +88,7 @@ pub(super) fn construct_proxy_request(
         parts.headers.append(name, hv);
     }
 
-    // Strip hop-by-hop headers per RFC 7230 §6.1
+    // Strip hop-by-hop headers per RFC 7230 section 6.1
     // These must not be forwarded by a proxy.
     if let Some(c) = parts.headers.remove(http::header::CONNECTION) {
         // If the connection header contains "upgrade",

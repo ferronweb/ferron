@@ -671,7 +671,7 @@ impl CacheStore {
 
 /// Merge 304 revalidation headers into the stored headers.
 ///
-/// Per RFC 9111 §4.3.4, field values received in a 304 response replace the
+/// Per RFC 9111 section 4.3.4, field values received in a 304 response replace the
 /// stored values for the same field names. Field names absent from the 304
 /// keep their stored values. `HeaderMap::extend` appends instead, which would
 /// accumulate duplicate `Cache-Control` (and other) values on every revalidation.

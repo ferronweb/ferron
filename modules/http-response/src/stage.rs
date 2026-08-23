@@ -133,7 +133,6 @@ impl HttpResponseStage {
                 continue;
             };
 
-            // Rule matched — build response
             let response = Self::build_response(rule, path_match)?;
             ctx.res = Some(response);
 
@@ -316,17 +315,14 @@ impl Stage<HttpContext> for HttpResponseStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        // 1. Check abort directive — if true, immediately abort
         if !self.evaluate_abort(ctx)? {
             return Ok(false);
         }
 
-        // 2. Check IP access control
         if !self.evaluate_ip_access(ctx)? {
             return Ok(false);
         }
 
-        // 3. Evaluate status rules
         if !self.evaluate_status_rules(ctx)? {
             return Ok(false);
         }
@@ -339,7 +335,7 @@ impl Stage<HttpContext> for HttpResponseStage {
 ///
 /// This stage evaluates the `early_hints` directive and sends a 103 Early Hints
 /// response with the configured `Link` headers before the final response is ready.
-/// The stage never short-circuits the pipeline — it always returns `Ok(true)`.
+/// The stage never short-circuits the pipelin it always returns `Ok(true)`.
 pub struct EarlyHintsStage {
     engine: Arc<ResponseEngine>,
 }

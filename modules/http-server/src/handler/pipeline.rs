@@ -76,7 +76,6 @@ pub async fn execute_pipeline_stages(
 
     let instant = std::time::Instant::now();
 
-    // Per-stage span hooks — emit StartSpan/EndSpan around each stage
     let mut stage_hooks = PerStageSpanHooks::new(
         events,
         has_traces && pipeline_span_key.is_some(),

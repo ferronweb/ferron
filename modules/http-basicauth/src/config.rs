@@ -15,7 +15,7 @@ use crate::brute_force::BruteForceConfig;
 pub struct BasicAuthConfig {
     /// Authentication realm shown in the auth dialog.
     pub realm: String,
-    /// Map of username → hashed password (Argon2, PBKDF2, or scrypt).
+    /// Map of username -> hashed password (Argon2, PBKDF2, or scrypt).
     pub users: HashMap<String, String>,
     /// Brute-force protection settings (enabled by default).
     pub brute_force: BruteForceConfig,

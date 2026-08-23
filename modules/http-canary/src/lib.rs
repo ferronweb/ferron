@@ -305,7 +305,7 @@ impl Stage<HttpContext> for CanaryStage {
         let resolution = affinity_key(&compiled.config.affinity, ctx, compiled.config.set_cookie);
         let variant_index = compiled.ring.get(resolution.value.as_bytes());
         let Some(variant) = variant_index.and_then(|i| compiled.config.variants.get(i)) else {
-            // No variants configured — nothing to branch on.
+            // No variants configured, nothing to branch on.
             return Ok(true);
         };
 

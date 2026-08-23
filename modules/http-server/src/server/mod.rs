@@ -604,7 +604,7 @@ impl BasicHttpModule {
                 if let Some(tls) = global_config.directives.get("tls") {
                     for tls1 in tls {
                         // Global `tls` directive present
-                        // Handle explicit `tls false` — skip TLS entirely
+                        // Handle explicit `tls false`, skip TLS entirely
                         if tls1
                             .args
                             .first()
@@ -627,7 +627,7 @@ impl BasicHttpModule {
                         )?;
                     }
                 } else {
-                    // No `tls` directive present — automatically select provider (ACME or Local)
+                    // No `tls` directive present, automatically select provider (ACME or Local)
 
                     let hostname = host_config.0.host.as_deref();
                     let ip = host_config.0.ip.map(|ip| ip.to_string());

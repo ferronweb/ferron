@@ -64,7 +64,7 @@
 /// ```
 #[macro_export]
 macro_rules! validate_nested {
-    // Tracking variant — marks the subdirective name as used, then delegates to the non-tracking variant.
+    // Tracking variant: marks the subdirective name as used, then delegates to the non-tracking variant.
     // Usage: validate_nested!(block, used(ctx.used_directives), name, args(1) => [Type]);
     ($block:expr, used($used:expr), $name:ident, $($rest:tt)*) => {
         {

@@ -84,7 +84,7 @@ where
     ///
     /// - If the capacity is increased, new connections can be established up to the new limit.
     /// - If the capacity is decreased, excess idle connections are evicted (dropped) to fit within the new limit.
-    ///   Outstanding (in-flight) connections are not affected — they are allowed to complete normally.
+    ///   Outstanding (in-flight) connections are not affected (they are allowed to complete normally).
     #[inline]
     pub fn update_capacity(&self, new_capacity: usize) {
         let state = unsafe { &mut *self.inner.get() };

@@ -55,23 +55,6 @@ pub(crate) fn categorize_http_method(method: &http::Method) -> &'static str {
     }
 }
 
-/// Whether the HTTP method is idempotent per RFC 9110 §9.2.2.
-///
-/// GET, HEAD, PUT, DELETE, OPTIONS, and TRACE are idempotent.
-/// POST, PATCH, CONNECT, and custom methods are not.
-#[inline]
-pub(crate) fn is_method_idempotent(method: &http::Method) -> bool {
-    matches!(
-        *method,
-        http::Method::GET
-            | http::Method::HEAD
-            | http::Method::PUT
-            | http::Method::DELETE
-            | http::Method::OPTIONS
-            | http::Method::TRACE
-    )
-}
-
 /// Main proxy execution.
 ///
 /// Returns the HTTP response and collected metrics for post-request emission.
@@ -135,7 +118,7 @@ pub async fn execute_proxy(
         ring,
     );
 
-    // Backend selection loop — retries on connection failure when retry_connection is enabled
+    // Backend selection loop, retries on connection failure when retry_connection is enabled
     loop {
         // Select upstream via load balancing (tracker already initialized inside)
         let Some(selected) = backend_set.next_backend() else {
@@ -345,7 +328,7 @@ pub async fn execute_proxy(
                         continue; // retry same upstream
                     }
 
-                    // Same-upstream retries exhausted — try another backend if enabled.
+                    // Same-upstream retries exhausted, try another backend if enabled.
                     if config.retry_connection {
                         if let Some(budget) = retry_budget {
                             if !budget.try_consume_retry_token() {
@@ -413,11 +396,11 @@ pub async fn execute_proxy(
                                 )],
                                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                             }));
-                            break; // break inner loop → outer selects next backend
+                            break; // outer select next backend
                         }
                     }
 
-                    // No retry or no more backends — return error
+                    // No retry or no more backends...
                     let status = e.http_status_hint().unwrap_or(StatusCode::BAD_GATEWAY);
                     let reason = match status {
                         StatusCode::SERVICE_UNAVAILABLE => "Service unavailable",

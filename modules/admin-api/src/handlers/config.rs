@@ -1,4 +1,4 @@
-//! `/config` endpoint — returns sanitized server configuration as JSON.
+//! `/config` endpoint: returns sanitized server configuration as JSON.
 
 use ferron_core::config::ServerConfiguration;
 use serde_json::{Map, Value};

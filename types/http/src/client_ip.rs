@@ -7,9 +7,9 @@ use crate::HttpContext;
 /// Which header to read the client IP from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ClientIpHeader {
-    /// Read from `X-Forwarded-For` — takes the first (leftmost) IP in the comma-separated chain.
+    /// Read from `X-Forwarded-For`: takes the first (leftmost) IP in the comma-separated chain.
     XForwardedFor,
-    /// Read from `Forwarded` (RFC 7239) — parses the first `for=` token.
+    /// Read from `Forwarded` (RFC 7239): parses the first `for=` token.
     Forwarded,
 }
 

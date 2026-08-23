@@ -94,7 +94,7 @@ pub(super) async fn run_forward(
 
     if method_purge {
         if !config.purge_method {
-            // PURGE not enabled — fall through to 405 from downstream stages
+            // PURGE not enabled: fall through to 405 from downstream stages
         } else {
             let is_propagated = request_headers
                 .get(&PURGE_SOURCE_HEADER)

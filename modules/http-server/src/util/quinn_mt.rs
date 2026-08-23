@@ -212,16 +212,13 @@ impl quinn::AsyncUdpSocket for QuinnMTUdpSocket {
         meta: &mut [quinn::udp::RecvMeta],
     ) -> Poll<io::Result<usize>> {
         loop {
-            // 1. First serve datagrams other endpoints forwarded to us.
-            //
             // Could have used `kanal`, but using that would cause too much packet loss...
             if let Some(dgram) = self.queue.try_recv() {
                 return Poll::Ready(Ok(self.deliver(dgram, bufs, meta)));
             }
 
-            // 2. Receive a batch from the shared underlying socket. A batch may
-            //    carry several datagrams (GRO) for different endpoints; route
-            //    each one to the endpoint that owns it.
+            // A batch may carry several datagrams (GRO) for different endpoints; route
+            // each one to the endpoint that owns it.
             let n = match self.inner.poll_recv(cx, bufs, meta) {
                 Poll::Ready(Ok(n)) => n,
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),

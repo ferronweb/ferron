@@ -5,9 +5,9 @@
 //!
 //! ## Supported Directives
 //!
-//! - `replace "search" "replacement" { once true|false }` — Replace strings in response bodies
-//! - `replace_last_modified true|false` — Whether to preserve the Last-Modified header
-//! - `replace_filter_types "mime/type" ...` — MIME types to process (default: text/html)
+//! - `replace "search" "replacement" { once true|false }`: Replace strings in response bodies
+//! - `replace_last_modified true|false`: Whether to preserve the Last-Modified header
+//! - `replace_filter_types "mime/type" ...`: MIME types to process (default: text/html)
 
 mod body_replacer;
 mod config;

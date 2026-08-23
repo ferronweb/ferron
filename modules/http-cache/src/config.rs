@@ -18,7 +18,7 @@ pub const MIN_PERSIST_INTERVAL: Duration = Duration::from_secs(1);
 /// Identifies which cache store a request belongs to.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CacheZoneId {
-    /// The global zone — used when a global `cache { max_entries = N }` block
+    /// The global zone, used when a global `cache { max_entries = N }` block
     /// exists without explicit `zone` blocks. All hosts share this store.
     Global,
     /// A named zone defined at global scope via `zone "name" { ... }`.

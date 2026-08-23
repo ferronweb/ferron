@@ -262,7 +262,7 @@ pub(super) async fn execute_http_file_pipeline(
             .await
         }
         Ok(None) => {
-            // File not found — end span with not_found outcome
+            // File not found...
             if let Some(span_key) = file_resolve_span_key {
                 ctx.events.emit(Event::Trace(TraceEvent::EndSpan {
                     key: Cow::Owned(span_key),
@@ -278,7 +278,6 @@ pub(super) async fn execute_http_file_pipeline(
             Ok(())
         }
         Err(error) => {
-            // File resolution error — end span with error outcome and inject access log fields
             let (outcome, last_candidate) = match &error {
                 FilePipelineExecutionError::Forbidden {
                     last_candidate_path,

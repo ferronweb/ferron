@@ -148,15 +148,10 @@ fn add_acme_best_practice_diagnostics(
 /// Check if a domain name uses a non-public TLD that is unlikely to be resolvable
 /// by ACME certificate authorities.
 fn is_non_public_domain(domain: &str) -> bool {
-    // 1. Strip trailing root dot and normalize to lowercase
     let normalized = domain.trim_end_matches('.').to_ascii_lowercase();
-
-    // 2. Extract the final segment after the last dot
     let extracted_tld = normalized
         .rsplit_once('.')
         .map_or(normalized.as_str(), |(_, tld)| tld);
-
-    // 3. Verify against the IANA-backed static map
     !tld::exist(extracted_tld)
 }
 

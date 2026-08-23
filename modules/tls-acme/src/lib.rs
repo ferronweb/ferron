@@ -756,7 +756,7 @@ impl ModuleLoader for TlsAcmeModuleLoader {
         let event_sink = build_composite_sink(&registry, &config.global_config, None)?;
         set_event_sink(event_sink);
 
-        // Create the module — the actual task spawning happens in start()
+        // The actual task spawning happens in start()
         let task_state = get_or_init_task_state();
         modules.push(Arc::new(TlsAcmeModule::new(task_state)));
 

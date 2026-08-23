@@ -95,13 +95,13 @@ impl RateLimitEngine {
         for config in &rules {
             let key = match config.key.extract(ctx) {
                 Some(k) => k,
-                None => continue, // Can't extract key — skip this rule
+                None => continue, // Can't extract key, skip this rule...
             };
 
             let registry = self.get_or_create_registry(config, &zone_id);
 
             let Some(bucket) = registry.get_or_create(&key) else {
-                // Registry at capacity — apply backpressure
+                // Registry at capacity, apply backpressure
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
                     target: "ferron-http-ratelimit",
@@ -260,7 +260,7 @@ impl RateLimitEngine {
                 return Some(Self::make_response(config.deny_status, retry_after));
             }
 
-            // Token consumed successfully — emit allowed counter
+            // Token consumed successfully, emit allowed counter
             ctx.events.emit(Event::Metric(MetricEvent {
                 name: "ferron.ratelimit.allowed",
                 attributes: vec![
@@ -403,7 +403,7 @@ impl Stage<HttpContext> for RateLimitStage {
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         if let Some(response) = self.engine.check_rate_limits(ctx).await {
             ctx.res = Some(response);
-            return Ok(false); // Stop pipeline — response is ready
+            return Ok(false); // response is ready
         }
 
         Ok(true) // Continue to next stage

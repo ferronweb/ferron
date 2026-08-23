@@ -176,10 +176,8 @@ fn validate_baggage_block(
             if let Some(children) = &key_entry.children {
                 let mut sub = std::collections::HashSet::new();
 
-                // `attribute` — optional string
                 validate_nested!(children, used(sub), attribute, optional args(1) => [ServerConfigurationValue::String(_, _)]);
 
-                // `signals` — optional, args are signal names
                 if let Some(signal_entries) = children.directives.get("signals") {
                     sub.insert("signals".to_string());
                     for signal_entry in signal_entries {
@@ -204,7 +202,6 @@ fn validate_baggage_block(
                     }
                 }
 
-                // `max_distinct` — optional number
                 if let Some(max_entries) = children.directives.get("max_distinct") {
                     sub.insert("max_distinct".to_string());
                     for max_entry in max_entries {

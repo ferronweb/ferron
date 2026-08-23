@@ -208,7 +208,6 @@ impl BasicAuthValidator {
             }
         }
 
-        // Validate `enabled` — optional, must be boolean
         if let Some(entries) = block.directives.get("enabled") {
             sub.insert("enabled".to_string());
             for entry in entries {
@@ -228,7 +227,6 @@ impl BasicAuthValidator {
             }
         }
 
-        // Validate `max_attempts` — optional, must be positive integer
         if let Some(entries) = block.directives.get("max_attempts") {
             sub.insert("max_attempts".to_string());
             for entry in entries {
@@ -236,7 +234,6 @@ impl BasicAuthValidator {
             }
         }
 
-        // Validate `lockout_duration` — optional, must be a duration string or number
         if let Some(entries) = block.directives.get("lockout_duration") {
             sub.insert("lockout_duration".to_string());
             for entry in entries {
@@ -244,7 +241,6 @@ impl BasicAuthValidator {
             }
         }
 
-        // Validate `window` — optional, must be a duration string or number
         if let Some(entries) = block.directives.get("window") {
             sub.insert("window".to_string());
             for entry in entries {

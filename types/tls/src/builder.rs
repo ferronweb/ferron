@@ -121,8 +121,8 @@ fn kx_group_to_rustls(kg: &TlsKxGroup) -> Option<&'static dyn rustls::crypto::Su
 /// Resolve the TLS protocol version slice from [`TlsCryptoConfig`].
 ///
 /// Returns:
-/// - Both `min_version` and `max_version` `None` → default (TLS 1.2 + 1.3)
-/// - Specific range → `[min, ..., max]`
+/// - Both `min_version` and `max_version` `None` -> default (TLS 1.2 + 1.3)
+/// - Specific range -> `[min, ..., max]`
 ///
 /// Returns an error if min > max or if a version string is unrecognized.
 pub fn resolve_protocol_versions(
@@ -152,7 +152,6 @@ pub fn resolve_protocol_versions(
 /// Falls back to the default rustls ticketer if no block is found or if setup fails.
 pub fn build_ticketer(config: &ServerConfigurationBlock) -> Option<Arc<dyn ProducesTickets>> {
     let Some(rot_config) = TicketKeyRotationConfig::from_config(config) else {
-        // No ticket_keys block — use rustls default ticketer
         return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
     };
 

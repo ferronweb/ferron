@@ -166,12 +166,12 @@ impl TlsClientAuthConfig {
     /// Parse client auth settings from a TLS configuration block.
     ///
     /// Recognized directives:
-    /// - `client_auth true|false` — enables/disables mTLS (default: `false`).
+    /// - `client_auth true|false`: enables/disables mTLS (default: `false`).
     ///   When `true`, client certs are required.
-    /// - `client_auth_ca <path|system|webpki>` — CA certificate source:
-    ///   - A file path — load a single CA cert
-    ///   - `system` — native OS trust store
-    ///   - `webpki` — Mozilla roots fallback
+    /// - `client_auth_ca <path|system|webpki>`: CA certificate source:
+    ///   - A file path: load a single CA cert
+    ///   - `system`: native OS trust store
+    ///   - `webpki`: Mozilla roots fallback
     ///
     /// If `client_auth_ca` is omitted, defaults to `webpki`.
     pub fn from_config(config: &ServerConfigurationBlock) -> Self {
@@ -247,7 +247,6 @@ impl OcspConfig {
     /// Returns `OcspConfig` with `enabled: true` by default if no block is found.
     pub fn from_config(config: &ServerConfigurationBlock) -> Self {
         let Some(ocsp_directive) = config.directives.get("ocsp") else {
-            // No `ocsp` block — enabled by default
             return Self { enabled: true };
         };
         let Some(ocsp_entry) = ocsp_directive.first() else {
@@ -262,7 +261,6 @@ impl OcspConfig {
                 .unwrap_or(true);
             Self { enabled }
         } else {
-            // Bare `ocsp` directive (no children) — treat as enabled
             Self { enabled: true }
         }
     }

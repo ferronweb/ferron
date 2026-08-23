@@ -112,10 +112,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             .req
             .as_ref()
             .map(|r| crate::proxy::categorize_http_method(r.method()));
-        let captured_idempotent = ctx
-            .req
-            .as_ref()
-            .map(|r| crate::proxy::is_method_idempotent(r.method()));
+        let captured_idempotent = ctx.req.as_ref().map(|r| r.method().is_idempotent());
 
         let retry_budget = config.retry_budget.as_ref().map(|budget_config| {
             self.state

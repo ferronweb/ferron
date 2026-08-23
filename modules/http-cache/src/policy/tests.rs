@@ -6,7 +6,7 @@ fn request_no_store_allows_lookup_but_not_store() {
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     let policy = parse_request_policy(&headers);
-    // RFC 9111 §5.2.1.5: no-store forbids storing, not serving.
+    // RFC 9111 section 5.2.1.5: no-store forbids storing, not serving.
     assert!(policy.allow_lookup);
     assert!(!policy.allow_store);
     assert_eq!(policy.reason, "request-no-store");
@@ -278,7 +278,7 @@ fn s_maxage_precedence_over_max_age() {
     );
     let decision = evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
     assert!(decision.store);
-    // RFC 9111 §4.2.1: s-maxage is the first applicable directive for a shared cache
+    // RFC 9111 section 4.2.1: s-maxage is the first applicable directive for a shared cache
     assert_eq!(decision.ttl, Some(Duration::from_secs(120)));
 }
 

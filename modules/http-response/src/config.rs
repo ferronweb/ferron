@@ -139,11 +139,9 @@ impl ResponseConfig {
 fn parse_abort_config(config: &LayeredConfiguration) -> AbortConfig {
     let abort_directive = config.get_entries("abort", true);
     for entry in &abort_directive {
-        // `abort true` — bare boolean value
         if entry.get_flag() {
             return AbortConfig { abort: true };
         }
-        // Also check inside children blocks
         if let Some(children) = &entry.children {
             if children.get_flag("abort") {
                 return AbortConfig { abort: true };
@@ -165,7 +163,7 @@ fn parse_ip_from_value(value: &ServerConfigurationValue) -> Option<IpCidr> {
 fn parse_ip_access_config(config: &LayeredConfiguration) -> IpAccessConfig {
     let mut ip_access = IpAccessConfig::new();
 
-    // Parse `block` directives — can have multiple values on a single directive
+    // Parse `block` directives, which can can have multiple values on a single directive
     // e.g. `block "10.0.0.0/8" "192.168.1.100"`
     let block_entries = config.get_entries("block", false);
     for entry in &block_entries {

@@ -311,7 +311,7 @@ impl AbuseRegistry {
             // and remove is safe because a concurrent thread hitting the same key
             // will see `count() >= threshold` and trigger another ban, but the
             // worst case is a redundant ban insert (same IP, slightly extended
-            // expiry) and a double-count of `bans_triggered` — both benign.
+            // expiry) and a double-count of `bans_triggered`, both benign.
             //
             // To reduce the window, we clear events first (making the count 0 for
             // any concurrent reader), then drop, then remove.

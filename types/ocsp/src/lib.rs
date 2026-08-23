@@ -121,7 +121,7 @@ pub fn take_ocsp_startup_state() -> Result<
 
 /// Get the global `OcspServiceHandle`.
 ///
-/// Always returns `Some` — the channel and cache are created on first access.
+/// Always returns `Some`; the channel and cache are created on first access.
 /// Certs can be queued via the returned handle even before `init_ocsp_service`
 /// spawns the background task.
 pub fn get_service_handle() -> Option<OcspServiceHandle> {
@@ -199,7 +199,7 @@ impl ResolvesServerCert for OcspStapler {
         if let Some(leaf) = original_key.cert.first() {
             let leaf_bytes: Vec<u8> = leaf.to_vec();
 
-            // Read cache — uses parking_lot::RwLock which is safe to call from
+            // Read cache, which uses parking_lot::RwLock which is safe to call from
             // any thread (including zincio primary threads).
             let cached = self.cache.read();
 
@@ -232,9 +232,9 @@ impl ResolvesServerCert for OcspStapler {
                         }));
                     }
                 }
-                // Entry exists but has no OCSP yet — return original without re-triggering
+                // Entry exists but has no OCSP yet, return original without re-triggering
             } else {
-                // Not in cache yet — trigger fetch
+                // Not in cache yet, trigger fetch
                 drop(cached);
                 let _ = self.sender.send(original_key.cert.clone());
             }

@@ -169,7 +169,7 @@ pub(crate) fn inject_upstream_state_span_attributes(
         );
     }
 
-    // Active connection count (approximate — same technique as P2C/least-conn selectors)
+    // Active connection count (approximate, same technique as P2C/least-conn selectors)
     if let Some(entry) = conn_state.get(backend) {
         let active = (Arc::strong_count(&*entry) as i64).saturating_sub(1);
         sa.insert(

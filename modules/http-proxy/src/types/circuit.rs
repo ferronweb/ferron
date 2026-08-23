@@ -43,7 +43,7 @@ pub struct CircuitBreakerState {
     pub half_open_pass_count: Arc<AtomicU32>,
     /// When the circuit breaker transitioned from HALFOPEN to CLOSED (slow-start recovery timestamp).
     /// `Some` means the upstream is in slow-start; the LB applies a decaying virtual connection penalty.
-    /// Cleared on OPEN → HALFOPEN transition.
+    /// Cleared on OPEN -> HALFOPEN transition.
     pub slow_start_recovery_at: Option<Arc<parking_lot::RwLock<Option<std::time::Instant>>>>,
 }
 
