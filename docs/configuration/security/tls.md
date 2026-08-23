@@ -115,6 +115,14 @@ api.example.com {
 > - The `system` trust store includes all OS-trusted root CAs. Use it only when you want to accept client certificates from any publicly trusted CA. This is rarely the right choice for mTLS.
 > - For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
 
+> [!tip]
+>
+> If you see client certificate handshake failures:
+>
+> - Verify the client certificate chain validates against the CA specified in `client_auth_ca`.
+> - Check that the CA certificate file is a valid PEM and has not expired.
+> - If you use `client_auth_ca system`, make sure the OS trusts the issuing CA.
+
 ## Observability
 
 ### Metrics
@@ -122,14 +130,6 @@ api.example.com {
 | Metric                             | Type  | Attributes                                                                        | Description                                  |
 | ---------------------------------- | ----- | --------------------------------------------------------------------------------- | -------------------------------------------- |
 | `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
-
-## Troubleshooting
-
-### Client certificate handshake failure
-
-- Verify the client certificate chain validates against the CA specified in `client_auth_ca`.
-- Check that the CA certificate file is a valid PEM and has not expired.
-- If you use `client_auth_ca system`, make sure the OS trusts the issuing CA.
 
 ## See also
 
