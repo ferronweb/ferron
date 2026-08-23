@@ -108,8 +108,8 @@ pub async fn try_send_with_pool(
         .await;
     }
 
-    if should_keep && item.inner().is_some() {
-        if wait_for_ready(&mut item, idle_timeout).await {
+    if should_keep && item.inner().is_some()
+        && wait_for_ready(&mut item, idle_timeout).await {
             metrics.connection_reused = true;
             metrics.pool_hit = true;
             let wrapper = item
@@ -130,7 +130,6 @@ pub async fn try_send_with_pool(
             )
             .await;
         }
-    }
 
     establish_and_send(
         ctx,
