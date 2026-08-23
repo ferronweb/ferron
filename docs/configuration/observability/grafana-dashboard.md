@@ -31,7 +31,7 @@ Top-level variables let a single dashboard adapt to any deployment without editi
 | `Rate-limit zone`  | Named rate-limit zone           | `ferron.ratelimit.zone`    |
 
 > [!warning]
-> Ferron does **not** expose a per-route (request-path) metric label. The sketch `$route` variable from generic dashboard designs has no matching signal. Filter by upstream backend or by cache/rate-limit zone instead. If you need per-route granularity, promote a bounded route attribute with [baggage promotion](/docs/v3/configuration/observability/prometheus#baggage-promotion). Add it as a variable, but cap `max_distinct` to avoid label explosion.
+> Ferron does not expose a per-route (request-path) metric label. The sketch `$route` variable from generic dashboard designs has no matching signal. Filter by upstream backend or by cache/rate-limit zone instead. If you need per-route granularity, promote a bounded route attribute with [baggage promotion](/docs/v3/configuration/observability/prometheus#baggage-promotion). Add it as a variable, but cap `max_distinct` to avoid label explosion.
 
 ## Rows
 
@@ -82,7 +82,7 @@ A CDN or PHP-accelerator operator keeps this row pinned. An API gateway user can
 
 ### Import the JSON
 
-1. In Grafana, **Dashboards → New → Import**, then upload `dashboards/ferron-3-reference.json`.
+1. In Grafana, Dashboards → New → Import, then upload `dashboards/ferron-3-reference.json`.
 2. Pick your Prometheus/Mimir datasource.
 
 ### Or provision it

@@ -17,11 +17,11 @@ This page documents the `set_var` and `log_field` directives. They set interpola
 
 #### Block sub-directives
 
-| Sub-directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `value` | `<string>` | The value to assign when the pattern matches. | `"1"` |
-| `case_insensitive` | `<bool>` | When `true`, Ferron matches the regex case-insensitively. | `false` |
-| `negate` | `<bool>` | When `true`, Ferron sets the variable when the pattern does **not** match. | `false` |
+| Sub-directive      | Arguments  | Description                                                                | Default |
+| ------------------ | ---------- | -------------------------------------------------------------------------- | ------- |
+| `value`            | `<string>` | The value to assign when the pattern matches.                              | `"1"`   |
+| `case_insensitive` | `<bool>`   | When `true`, Ferron matches the regex case-insensitively.                  | `false` |
+| `negate`           | `<bool>`   | When `true`, Ferron sets the variable when the pattern does not match. | `false` |
 
 **Configuration example:**
 
@@ -101,7 +101,7 @@ http * {
 }
 ```
 
-Ferron sets the variable `has_xff` to `"1"` when the `X-Forwarded-For` header is **not** present or is empty. This is useful for identifying direct connections versus proxied requests.
+Ferron sets the variable `has_xff` to `"1"` when the `X-Forwarded-For` header is not present or is empty. This is useful for identifying direct connections versus proxied requests.
 
 ### Custom access log fields with `log_field`
 
@@ -165,6 +165,6 @@ The `log_field` directive runs during the inverse (post-response) phase. It runs
 
 The variables stage sets the following attributes on its `ferron.stage.variables` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.variables.set` | int | Number of variables set during this stage. |
+| Attribute              | Type | Description                                |
+| ---------------------- | ---- | ------------------------------------------ |
+| `ferron.variables.set` | int  | Number of variables set during this stage. |

@@ -3,14 +3,14 @@ title: "Configuration: HTTP TLS provider"
 description: "Fetch TLS certificates from a remote HTTP endpoint, with automatic refresh and observability."
 ---
 
-This page documents the `http` TLS provider (`tls-http` module), which fetches TLS certificates from a **remote HTTP API**. It supports two modes:
+This page documents the `http` TLS provider (`tls-http` module), which fetches TLS certificates from a remote HTTP API. It supports two modes:
 
 - **Polling mode** (default): Polls a single endpoint at a configurable interval, suitable for known domains.
 - **On-demand mode** (`on_demand true`): Fetches certificates lazily on first TLS handshake for each SNI hostname, with optional approval endpoint, suitable for wildcard domains.
 
 Unlike the ACME provider, this module does not issue certificates or validate challenges. It simply fetches a certificate chain and private key in JSON format from a configured endpoint.
 
-This is useful when you have an **external certificate management service** that exposes certificates via a REST API. For example, HashiCorp Vault, a custom PKI, or a cloud certificate manager.
+This is useful when you have an external certificate management service that exposes certificates via a REST API. For example, HashiCorp Vault, a custom PKI, or a cloud certificate manager.
 
 ```ferron
 example.com {
@@ -58,7 +58,7 @@ Polling mode is the default behavior. The module fetches the certificate from th
 
 ## On-demand mode
 
-On-demand mode defers certificate fetching until the **first TLS handshake** for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when domains are not known at startup.
+On-demand mode defers certificate fetching until the first TLS handshake for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when domains are not known at startup.
 
 ```ferron
 *.example.com {
@@ -198,11 +198,11 @@ example.com {
 
 ### Change detection
 
-The module compares the newly fetched certificate chain against the currently loaded one. If the certificates are identical, the TLS configuration is **not** updated, avoiding unnecessary client reconnections.
+The module compares the newly fetched certificate chain against the currently loaded one. If the certificates are identical, the TLS configuration is not updated, avoiding unnecessary client reconnections.
 
 ### Refresh interval
 
-The `refresh_interval` directive controls how often Ferron refreshes certificates. The default is **1 hour**. Shorter intervals mean faster certificate updates but more HTTP requests. Longer intervals reduce load on the certificate service but delay certificate rotation.
+The `refresh_interval` directive controls how often Ferron refreshes certificates. The default is 1 hour. Shorter intervals mean faster certificate updates but more HTTP requests. Longer intervals reduce load on the certificate service but delay certificate rotation.
 
 ### Continuous operation
 

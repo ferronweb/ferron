@@ -146,7 +146,7 @@ This injection applies only when you do not set an explicit `index` directive. W
 
 Ferron treats a request as a CGI script when:
 
-1. The resolved path is inside a `cgi-bin` directory (case-insensitive match on the first path component after the document root), **or**
+1. The resolved path is inside a `cgi-bin` directory (case-insensitive match on the first path component after the document root), or
 2. The file extension matches one registered via the `extension` directive.
 
 When Ferron finds a matching file, it looks for an interpreter in this priority:

@@ -59,7 +59,7 @@ Text format always exposes classic bucket histograms regardless of this setting.
 
 ### Metric exemplars
 
-When a request has an active trace context (trace ID and span ID), the Prometheus module attaches **exemplars** to observations. It applies to both counter and histogram observations. Exemplars link a specific metric observation to a trace. They let you drill down from a metric spike to the specific request that caused it.
+When a request has an active trace context (trace ID and span ID), the Prometheus module attaches exemplars to observations. It applies to both counter and histogram observations. Exemplars link a specific metric observation to a trace. They let you drill down from a metric spike to the specific request that caused it.
 
 Each exemplar contains:
 

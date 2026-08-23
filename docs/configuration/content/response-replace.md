@@ -127,7 +127,7 @@ example.com {
 
 ## HTTP compression interaction
 
-String replacement **requires you to disable HTTP compression** for the affected responses. When a response has a `Content-Encoding` header, the data is already compressed with gzip, brotli, or another algorithm. Ferron skips the replacement to avoid corrupting the compressed data.
+String replacement requires you to disable HTTP compression for the affected responses. When a response has a `Content-Encoding` header, the data is already compressed with gzip, brotli, or another algorithm. Ferron skips the replacement to avoid corrupting the compressed data.
 
 If you need to replace strings in responses that gzip, brotli, or another algorithm would compress, you must disable compression:
 

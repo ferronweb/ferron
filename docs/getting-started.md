@@ -22,19 +22,19 @@ A web server listens for HTTP and HTTPS requests and returns responses.
 
 ## Which setup should you choose?
 
-Choose **static file serving** if:
+Choose static file serving if:
 
 - You have a static website, docs site, landing page, or built frontend assets.
 - You do not need app logic on every request.
 - Your content is mostly stored in a directory on disk.
 
-Choose **reverse proxying** if:
+Choose reverse proxying if:
 
 - You already have an app process listening on a port or socket.
 - You want Ferron in front for TLS, routing, access control, or observability.
 - You expose a backend service such as Node.js, Python, Go, Java, or an API gateway.
 
-Choose a **mixed setup** if:
+Choose a mixed setup if:
 
 - You serve a frontend and proxy API requests.
 - You want static assets at `/` and app traffic under `/api`.

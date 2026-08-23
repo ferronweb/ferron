@@ -3,7 +3,7 @@ title: "Configuration: OCSP stapling"
 description: OCSP stapling for TLS. Attaches signed OCSP responses during the TLS handshake.
 ---
 
-This page documents OCSP stapling configuration (`ocsp-stapler` module). OCSP stapling allows the TLS server to **attach a signed OCSP response** during the TLS handshake. This eliminates the need for clients to contact the CA OCSP responder directly. This improves:
+This page documents OCSP stapling configuration (`ocsp-stapler` module). OCSP stapling allows the TLS server to attach a signed OCSP response during the TLS handshake. This eliminates the need for clients to contact the CA OCSP responder directly. This improves:
 
 - **Privacy**. Clients no longer reveal their browsing habits to the CA.
 - **Performance**. Eliminates the extra round-trip to the OCSP responder.
@@ -13,7 +13,7 @@ OCSP stapling works with all TLS providers (`manual`, `acme`, etc.).
 
 ## Default behavior (recommended)
 
-OCSP stapling is **enabled by default**. You do not need any configuration.
+OCSP stapling is enabled by default. You do not need any configuration.
 
 ```ferron
 example.com {
@@ -83,7 +83,7 @@ example.com {
 
 ## OCSP responder URL
 
-The responder URL comes from the **Authority Information Access (AIA)** extension of the certificate. Most CA-issued certificates include this automatically.
+The responder URL comes from the Authority Information Access (AIA) extension of the certificate. Most CA-issued certificates include this automatically.
 
 If the certificate has no OCSP URL, OCSP stapling is silently skipped for that certificate. The server does not raise an error.
 

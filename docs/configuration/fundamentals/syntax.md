@@ -68,7 +68,7 @@ Ferron configuration supports these value types:
 
 ### Flags (boolean directives)
 
-Some directives accept boolean values. For convenience, you can write these as **flags** with no configured arguments, which is equivalent to `true`:
+Some directives accept boolean values. For convenience, you can write these as flags with no configured arguments, which is equivalent to `true`:
 
 ```ferron
 # This is a bare flag, equivalent to setting the value to true
@@ -163,7 +163,7 @@ Defaults:
 - If you omit the protocol, it defaults to `http`.
 - For HTTP host blocks, if you omit the port, Ferron treats it as `80`.
 
-If you specify a hostname (for example, a domain name) and give no explicit port, Ferron starts **two listeners**. One runs on the default HTTP port (80). One runs on the default HTTPS port (443) with automatic ACME TLS.
+If you specify a hostname (for example, a domain name) and give no explicit port, Ferron starts two listeners. One runs on the default HTTP port (80). One runs on the default HTTPS port (443) with automatic ACME TLS.
 
 ## Includes and snippets
 
@@ -220,7 +220,7 @@ ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferroncon
 
 ### Configuration drift hints
 
-When hot reload is off (the default), Ferron still detects a changed config source file that has not loaded. This is **configuration drift**. It signals that the running configuration may not match the file on disk.
+When hot reload is off (the default), Ferron still detects a changed config source file that has not loaded. This is configuration drift. It signals that the running configuration may not match the file on disk.
 
 Ferron detects drift with periodic mtime checks (no full parse). It emits a WARN log and sets the `ferron.admin.config_drift` gauge to a value of `1`. When the configuration reloads and drift resolves, Ferron emits an INFO log and resets the metric to `0`.
 

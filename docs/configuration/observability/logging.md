@@ -12,7 +12,7 @@ This page documents logging configuration for Ferron. It covers log signals, log
 
 ## Log signals
 
-Ferron emits two log signals: **access logs** and **application logs**.
+Ferron emits two log signals: access logs and application logs.
 
 | Signal           | What it captures                                                              |
 | ---------------- | ----------------------------------------------------------------------------- |
@@ -109,7 +109,7 @@ Use the `fields` directive to limit which fields appear in the JSON output. If y
 
 The text formatter generates each access log entry as a plain text string using a configurable pattern. Use the `logformat-text` module for this formatter.
 
-By default, it uses the **Enhanced Combined Log Format** (ECLF). Ferron extends CLF with `Host` header and trace ID fields.
+By default, it uses the Enhanced Combined Log Format (ECLF). Ferron extends CLF with `Host` header and trace ID fields.
 
 **Configuration example:**
 

@@ -3,7 +3,7 @@ title: "Configuration: HTTP basic authentication"
 description: "HTTP Basic Authentication with hashed passwords, brute-force protection, and forward proxy support."
 ---
 
-This page documents the `basic_auth` directive for HTTP Basic Authentication that requests use for access control. Ferron supports only **hashed passwords**. For security reasons, plaintext passwords cause a configuration validation error.
+This page documents the `basic_auth` directive for HTTP Basic Authentication that requests use for access control. Ferron supports only hashed passwords. For security reasons, plaintext passwords cause a configuration validation error.
 
 ## Global directives
 
@@ -15,7 +15,7 @@ This page documents the `basic_auth` directive for HTTP Basic Authentication tha
 }
 ```
 
-This is a **global-only** directive that limits the number of concurrent password verification tasks across all `basic_auth` blocks. Password hashing is computationally expensive, and this limit prevents a flood of authentication requests from exhausting server resources.
+This is a global-only directive that limits the number of concurrent password verification tasks across all `basic_auth` blocks. Password hashing is computationally expensive, and this limit prevents a flood of authentication requests from exhausting server resources.
 
 | Value type           | Description                                     | Default  |
 | -------------------- | ----------------------------------------------- | -------- |
@@ -116,7 +116,7 @@ users {
 
 ### `brute_force_protection` block
 
-Brute-force protection is **enabled by default** to protect against credential-guessing attacks.
+Brute-force protection is enabled by default to protect against credential-guessing attacks.
 
 | Nested directive   | Type         | Default | Description                                                |
 | ------------------ | ------------ | ------- | ---------------------------------------------------------- |
@@ -129,7 +129,7 @@ Duration strings accept suffixes: `30s`, `15m`, `1h`, `1d`. Ferron treats plain 
 
 ### Forward proxy (CONNECT) support
 
-When authentication fails for a CONNECT request, the stage returns a **407 Proxy Authentication Required** response instead of 401.
+When authentication fails for a CONNECT request, the stage returns a 407 Proxy Authentication Required response instead of 401.
 
 ### Brute-force protection behavior
 
@@ -137,7 +137,7 @@ When brute-force protection is active:
 
 - The stage records each failed authentication attempt per-IP with a timestamp.
 - If `max_attempts` failures occur within the `window` duration, Ferron locks the IP.
-- During lockout, the stage rejects **all** authentication attempts for that IP immediately.
+- During lockout, the stage rejects all authentication attempts for that IP immediately.
 - After `lockout_duration`, the lockout expires and the stage resets the attempt history.
 
 ## Examples

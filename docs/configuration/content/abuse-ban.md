@@ -182,7 +182,7 @@ The system stores events in a sliding time window. When the number of events wit
 - **Ban duration**: fixed duration (default 15 minutes). It is independent from the event counting window.
 - **TTL-based expiry**: bans automatically expire after the configured duration. The system needs no background eviction threads.
 - **Per-IP tracking**: the module tracks each IP address independently. It tracks different event types separately for the same IP.
-- **No persistence**: the system stores bans in memory. They are **not** preserved across server restarts.
+- **No persistence**: the system stores bans in memory. They are not preserved across server restarts.
 
 > [!tip]
 > If the system bans your IP immediately, check configured thresholds. You may have `events 1` or `events 2`, or very short `window` values (for example, 10s) that are too aggressive. Reduce the `ban_duration` to shorten ban times, or increase the `events` threshold to require more violations before banning.

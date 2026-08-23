@@ -3,7 +3,7 @@ title: Automatic TLS
 description: "Set up automatic TLS with ACME challenges (HTTP-01, TLS-ALPN-01, DNS-01)."
 ---
 
-Ferron supports automatic TLS via ACME-compatible Certificate Authorities such as **Let's Encrypt**. It supports three challenge types:
+Ferron supports automatic TLS via ACME-compatible Certificate Authorities such as Let's Encrypt. It supports three challenge types:
 
 - **HTTP-01** (default): serves a token at `/.well-known/acme-challenge/`
 - **TLS-ALPN-01**: responds with a self-signed cert during the TLS handshake

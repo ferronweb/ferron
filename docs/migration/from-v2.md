@@ -127,7 +127,7 @@ The tool handles these conversions automatically:
 
 ### Known limitations
 
-The migration tool gives you a **starting point**, not a perfect conversion. Keep these limitations in mind:
+The migration tool gives you a starting point, not a perfect conversion. Keep these limitations in mind:
 
 1. **`location` with `remove_base=#false`** - the tool generates `match` + `if` blocks that may need manual adjustment.
 2. **Match names** - generated `match` block names may be verbose. You should rename them for clarity.
@@ -173,7 +173,7 @@ globals {
 
 ### `location` behavior
 
-In Ferron 2, `location` blocks used a `remove_base` property to control whether Ferron stripped the matched prefix from the URL. In Ferron 3, the base path is **always automatically removed**. There is no `remove_base` property.
+In Ferron 2, `location` blocks used a `remove_base` property to control whether Ferron stripped the matched prefix from the URL. In Ferron 3, the base path is always automatically removed. There is no `remove_base` property.
 
 ```kdl
 // Ferron 2
@@ -430,7 +430,7 @@ Ferron 2 used `include "/path/to/*.kdl"`. Ferron 3 uses `include "/path/to/*.con
 
 ### `location` always removes the base path
 
-In Ferron 2, `location "/api" remove_base=#false` kept `/api` in the forwarded URL. In Ferron 3, the base path is **always** stripped. If your backend expects the full path, adjust the backend URL or use a rewrite rule.
+In Ferron 2, `location "/api" remove_base=#false` kept `/api` in the forwarded URL. In Ferron 3, the base path is always stripped. If your backend expects the full path, adjust the backend URL or use a rewrite rule.
 
 **Example**: If you had `location "/api" { proxy "http://backend" }` with `remove_base=#false`, the Ferron 3 equivalent is simply:
 
@@ -457,7 +457,7 @@ This is similar to Ferron 2, but the exact ordering of inherited directives may 
 
 ### ACME challenge type
 
-Ferron 2 defaulted to TLS-ALPN-01. Ferron 3 defaults to **HTTP-01**. If you rely on TLS-ALPN-01, specify it explicitly:
+Ferron 2 defaulted to TLS-ALPN-01. Ferron 3 defaults to HTTP-01. If you rely on TLS-ALPN-01, specify it explicitly:
 
 ```ferron
 example.com {
@@ -494,7 +494,7 @@ In Ferron 2, `condition` blocks used subconditions like `is_equal`, `is_not_equa
 
 If you accidentally use a Ferron 2 `condition` block in a Ferron 3 configuration, the server will fail to parse it. Similarly, when a Ferron 2 `if`/`if_not` names an old `condition`, the two systems do not connect. This happens even if a `match` block has a similar name. The `if`/`if_not` will reference the old condition name, not the new `match` block.
 
-**Example of the pitfall**. This will **not** work:
+**Example of the pitfall. This will not** work:
 
 ```ferron
 # INVALID: mixing condition (Ferron 2) with if (Ferron 3)
@@ -528,7 +528,7 @@ example.com {
 
 Even if you migrate `condition` → `match`, you must also migrate the placeholder syntax used inside subconditions. Ferron 2 used `{path}`, `{client_ip}`, `{header:name}` etc. inside `condition` blocks. Ferron 3 uses `request.uri.path`, `remote.ip`, `request.header.name` etc. inside `match` blocks.
 
-**Example of the pitfall**. This will **not** work:
+**Example of the pitfall. This will not** work:
 
 ```ferron
 # INVALID: match block using Ferron 2 placeholders

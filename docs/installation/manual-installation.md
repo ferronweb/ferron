@@ -33,7 +33,7 @@ Every release also publishes a software bill of materials (SBOM) archive. See [S
 
 - **Windows**:
 
-  Right-click on the downloaded `.zip` file and select **"Extract All..."** to extract the contents.
+  Right-click on the downloaded `.zip` file and select "Extract All..." to extract the contents.
 
 - **macOS and Linux**:
 
@@ -118,7 +118,7 @@ Open the `ferron.conf` file in a text editor. Modify it to suit your server requ
 
 By default, Ferron serves content from the `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server works.
 
-If you see a **"Ferron is installed successfully!"** message on the page, the web server works correctly.
+If you see a "Ferron is installed successfully!" message on the page, the web server works correctly.
 
 > [!tip]
 > If you cannot access the server from another machine, make sure your firewall allows incoming connections on the configured port (default: 80). If port 80 is in use, change the listen port in `ferron.conf`. Then update your firewall rules.

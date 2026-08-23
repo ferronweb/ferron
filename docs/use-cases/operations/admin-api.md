@@ -6,7 +6,7 @@ description: "Securely configure, access, and harden the Ferron admin API for se
 The admin API includes a built-in control plane with health checks, server status, configuration inspection, and remote reload capability. It runs on a separate HTTP listener from your web server. Treat it with the same security as a root shell on your server.
 
 > [!warning]
-> The admin API is **not encrypted** and has **no authentication** by default. You can enable bearer token authentication with the `auth_token` directive. All other security relies on network-level isolation (binding to `127.0.0.1` or using infrastructure firewalls).
+> The admin API is not encrypted and has no authentication by default. You can enable bearer token authentication with the `auth_token` directive. All other security relies on network-level isolation (binding to `127.0.0.1` or using infrastructure firewalls).
 
 ## Secure default configuration
 

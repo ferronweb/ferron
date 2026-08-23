@@ -31,11 +31,11 @@ When you give a hostname (for example, `example.com`) without an explicit port, 
 - One on `default_http_port` (default: 80) serves plain HTTP with no TLS
 - One on `default_https_port` (default: 443) serves HTTPS with automatic ACME TLS
 
-On the HTTPS listener, Ferron **automatically enables TLS via the ACME provider** (Let's Encrypt by default). An explicit `tls` directive overrides this behavior. The ACME provider gets and renews certificates at startup.
+On the HTTPS listener, Ferron automatically enables TLS via the ACME provider (Let's Encrypt by default). An explicit `tls` directive overrides this behavior. The ACME provider gets and renews certificates at startup.
 
 Hostnames that have **special automatic TLS behavior**:
 
-- `localhost`, `127.0.0.1`, `::1`: these loopback addresses use the **local TLS provider** instead of ACME. This gives HTTPS for development without public certificates.
+- `localhost`, `127.0.0.1`, `::1`: these loopback addresses use the local TLS provider instead of ACME. This gives HTTPS for development without public certificates.
 
 To disable automatic TLS for a specific host on the HTTPS listener, use `tls false`:
 
@@ -68,7 +68,7 @@ example.com {
 }
 ```
 
-When you specify an **explicit port** (for example, `example.com:8080`), Ferron starts only a single listener on that port. Ferron does not apply automatic ACME TLS (you must configure TLS explicitly).
+When you specify an explicit port (for example, `example.com:8080`), Ferron starts only a single listener on that port. Ferron does not apply automatic ACME TLS (you must configure TLS explicitly).
 
 > [!info]
 > See [ACME automatic TLS](/docs/v3/configuration/security/acme) for full ACME configuration details.
@@ -76,7 +76,7 @@ When you specify an **explicit port** (for example, `example.com:8080`), Ferron 
 ### HTTPS redirect
 
 - `https_redirect <bool>`
-  - This directive enables or disables automatic HTTP-to-HTTPS redirects. The redirect uses **308 Permanent Redirect**, which preserves the HTTP method and request body. Default: `https_redirect true` (when you enable TLS)
+  - This directive enables or disables automatic HTTP-to-HTTPS redirects. The redirect uses 308 Permanent Redirect, which preserves the HTTP method and request body. Default: `https_redirect true` (when you enable TLS)
 
 **Configuration example:**
 
@@ -119,7 +119,7 @@ example.com {
 
 #### `x-forwarded-for`
 
-Reads the `X-Forwarded-For` header and extracts the **first (leftmost)** IP address from the comma-separated chain.
+Reads the `X-Forwarded-For` header and extracts the first (leftmost) IP address from the comma-separated chain.
 
 #### `forwarded` (RFC 7239)
 
@@ -201,7 +201,7 @@ example.com {
 > [!note] Notes for "url_sanitize"
 >
 > - Ferron applies URL sanitization early in request processing, before configuration resolution.
-> - This directive is only read from the **global** configuration block. Per-host settings are not supported.
+> - This directive is only read from the global configuration block. Per-host settings are not supported.
 
 > [!note]
 >
@@ -214,7 +214,7 @@ example.com {
 > [!note] Notes for "url_reject_backslash"
 >
 > - Ferron applies backslash rejection early in request processing, before configuration resolution and URL sanitization.
-> - This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
+> - This directive is only read from the global configuration block. Per-host settings are not currently supported.
 > - Ferron rejects both literal backslashes (`\`) and percent-encoded backslashes (`%5C`/`%5c`).
 
 > [!warning]

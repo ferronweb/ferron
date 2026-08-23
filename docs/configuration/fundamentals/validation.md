@@ -138,7 +138,7 @@ When `valid` is `false`, the command exits with code 1.
 
 ### Best practice violation
 
-A configuration pattern is technically valid but deviates from recommended practices. This is an **advisory** diagnostic, meaning that `ferron validate` suppresses it, and `ferron doctor` reports it. The server can start with these patterns.
+A configuration pattern is technically valid but deviates from recommended practices. This is an advisory diagnostic, meaning that `ferron validate` suppresses it, and `ferron doctor` reports it. The server can start with these patterns.
 
 ```ferron
 example.com {

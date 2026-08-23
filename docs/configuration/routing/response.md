@@ -72,9 +72,9 @@ With `abort` set, Ferron terminates the connection immediately and sends no HTTP
 ### IP access control
 
 - `block <ip-or-cidr: string>...` (`http-response`)
-  - This directive specifies one or more IP addresses or CIDR ranges to block. Blocked IPs receive a **403 Forbidden** response. Default: none
+  - This directive specifies one or more IP addresses or CIDR ranges to block. Blocked IPs receive a 403 Forbidden response. Default: none
 - `allow <ip-or-cidr: string>...` (`http-response`)
-  - This directive specifies one or more IP addresses or CIDR ranges to allow. When configured, Ferron permits **only** the listed IPs/CIDRs. All other IPs receive a **403 Forbidden** response. Default: none (all allowed)
+  - This directive specifies one or more IP addresses or CIDR ranges to allow. When configured, Ferron permits only the listed IPs/CIDRs. All other IPs receive a 403 Forbidden response. Default: none (all allowed)
 
 **Configuration example:**
 
@@ -91,10 +91,10 @@ example.com {
 
 When you set both `block` and `allow`:
 
-1. If the IP matches an `allow` entry **and** a `block` entry → **blocked** (block takes precedence)
-2. If the IP matches only an `allow` entry → **allowed**
-3. If the IP matches only a `block` entry → **blocked**
-4. If the IP matches neither → **allowed** (unless the allow list is not empty, in which case Ferron denies non-listed IPs)
+1. If the IP matches an `allow` entry and a `block` entry → blocked (block takes precedence)
+2. If the IP matches only an `allow` entry → allowed
+3. If the IP matches only a `block` entry → blocked
+4. If the IP matches neither → allowed (unless the allow list is not empty, in which case Ferron denies non-listed IPs)
 
 ```ferron
 example.com {
@@ -154,7 +154,7 @@ Without this option, Ferron silently skips 103 Early Hints on HTTP/1.1 connectio
 | Metric                                | Type    | Attributes                                    | Description                                                                               |
 | ------------------------------------- | ------- | --------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `ferron.response.aborted`             | Counter | None                                          | Connections aborted via the `abort` directive                                             |
-| `ferron.response.ip_blocked`          | Counter | None                                          | Connections blocked via `block`/`allow` directives. Does **not** include raw IP addresses |
+| `ferron.response.ip_blocked`          | Counter | None                                          | Connections blocked via `block`/`allow` directives. Does not include raw IP addresses |
 | `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives                                      |
 
 ### Access log fields

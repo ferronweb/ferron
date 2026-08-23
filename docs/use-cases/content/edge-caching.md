@@ -7,7 +7,7 @@ You can deploy Ferron as an edge caching node in a content delivery network (CDN
 
 ## Automatic TLS with ACME fallback
 
-When operating at CDN scale, ACME provider availability is critical. If the primary CA is down or unreachable, certificate issuance and renewal fail. Edge nodes then lack valid TLS certificates. Ferron supports **ACME fallback providers** to handle this. If the primary provider fails, Ferron tries the next configured fallback automatically.
+When operating at CDN scale, ACME provider availability is critical. If the primary CA is down or unreachable, certificate issuance and renewal fail. Edge nodes then lack valid TLS certificates. Ferron supports ACME fallback providers to handle this. If the primary provider fails, Ferron tries the next configured fallback automatically.
 
 This is especially important for CDN deployments. A single edge node may terminate TLS for hundreds of domains and cannot afford downtime from CA outages.
 
@@ -44,7 +44,7 @@ Ferron tries providers in order: it attempts the primary first, then each `fallb
 
 ## On-demand TLS for wildcard domains
 
-Wildcard certificates normally require the **DNS-01** challenge. This means you must configure and secure DNS provider API credentials on every edge node. **On-demand mode** avoids this. It defers certificate issuance until the first TLS handshake for a hostname. This approach lets you use the simpler **HTTP-01** challenge while covering arbitrary subdomains under a wildcard.
+Wildcard certificates normally require the DNS-01 challenge. This means you must configure and secure DNS provider API credentials on every edge node. On-demand mode avoids this. It defers certificate issuance until the first TLS handshake for a hostname. This approach lets you use the simpler HTTP-01 challenge while covering arbitrary subdomains under a wildcard.
 
 ```ferron
 *.customer.example.com {
@@ -103,7 +103,7 @@ When a client triggers a purge (via `PURGE` request or `X-LiteSpeed-Purge` heade
 
 ## GeoDNS for traffic routing
 
-To direct users to the nearest edge node, use **GeoDNS** (geographic DNS) in front of your Ferron instances. A GeoDNS provider like Amazon Route 53, Google Cloud DNS, or DNS Made Easy returns different `A`/`AAAA` records. It uses the location of the requester to select the response.
+To direct users to the nearest edge node, use GeoDNS (geographic DNS) in front of your Ferron instances. A GeoDNS provider like Amazon Route 53, Google Cloud DNS, or DNS Made Easy returns different `A`/`AAAA` records. It uses the location of the requester to select the response.
 
 ```text
 us-east.example.com  A  203.0.113.10   (North America)

@@ -232,7 +232,7 @@ The `trace_sampling` directive (in the `http` block) controls which traces Ferro
 | -------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `always_on`                | Sample every trace. Useful for development.                                                                   |
 | `always_off`               | Sample no traces. This disables trace export effectively.                                                     |
-| `parentbased_always_on`    | Follow the parent sampling decision. Always sample root spans, which have no parent. **This is the default.** |
+| `parentbased_always_on`    | Follow the parent sampling decision. Always sample root spans, which have no parent. This is the default. |
 | `traceidratio`             | Sample a fixed ratio of traces based on the trace ID.                                                         |
 | `parentbased_traceidratio` | Sample root spans by ratio, and follow the parent decision for child spans. Recommended for production.       |
 | `attribute_based`          | Sample based on span attributes visible when Ferron creates the span.                                         |
@@ -311,7 +311,7 @@ Each `rule` takes 2 or 3 arguments:
 
 | Value    | Behavior                                                        |
 | -------- | --------------------------------------------------------------- |
-| `drop`   | Ferron drops spans that match no rule. **This is the default.** |
+| `drop`   | Ferron drops spans that match no rule. This is the default. |
 | `sample` | Ferron samples spans even when they match no rule.              |
 
 > [!warning]

@@ -40,9 +40,9 @@ app.example.com {
 
 The `header` directive supports three forms:
 
-- `header +Name "value"`: **add** header (appends, allows duplicates)
-- `header -Name`: **remove** all instances of the header
-- `header Name "value"`: **replace** header (removes existing, sets new value)
+- `header +Name "value"`: add header (appends, allows duplicates)
+- `header -Name`: remove all instances of the header
+- `header Name "value"`: replace header (removes existing, sets new value)
 
 ## Per-path policies
 

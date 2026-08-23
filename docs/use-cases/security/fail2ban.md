@@ -60,7 +60,7 @@ bantime  = 3600
 action   = iptables-multiport[name=ferron-404, port="http,https"]
 ```
 
-This bans IPs for **1 hour** after 20 `404` responses within 10 minutes.
+This bans IPs for 1 hour after 20 `404` responses within 10 minutes.
 
 ## Ban repeated authentication failures
 
@@ -88,7 +88,7 @@ bantime  = 7200
 action   = iptables-multiport[name=ferron-auth, port="http,https"]
 ```
 
-This bans IPs for **2 hours** after 5 failed authentication attempts within 5 minutes.
+This bans IPs for 2 hours after 5 failed authentication attempts within 5 minutes.
 
 ## Ban rate-limited clients
 
@@ -116,7 +116,7 @@ bantime  = 1800
 action   = iptables-multiport[name=ferron-ratelimit, port="http,https"]
 ```
 
-This bans IPs for **30 minutes** after 10 rate limit rejections within 10 minutes.
+This bans IPs for 30 minutes after 10 rate limit rejections within 10 minutes.
 
 ## Ban clients generating server errors
 
@@ -170,7 +170,7 @@ bantime  = 86400
 action   = iptables-multiport[name=ferron-scanner, port="http,https"]
 ```
 
-This bans IPs for **24 hours** after just 5 probe attempts within 10 minutes. Scanner traffic is almost always malicious.
+This bans IPs for 24 hours after just 5 probe attempts within 10 minutes. Scanner traffic is almost always malicious.
 
 ## Using nftables instead of iptables
 

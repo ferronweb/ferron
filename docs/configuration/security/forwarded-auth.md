@@ -35,7 +35,7 @@ example.com {
 
 > [!note]
 >
-> - When you enable `client_ip_from_header`, Ferron **appends** `X-Forwarded-For` to the existing chain rather than replacing it. Ferron removes Upgrade and Connection headers from auth requests.
+> - When you enable `client_ip_from_header`, Ferron appends `X-Forwarded-For` to the existing chain rather than replacing it. Ferron removes Upgrade and Connection headers from auth requests.
 > - The forwarded authentication module supports chaining multiple backends together. To terminate the chain, set `last` to `true`.
 
 #### Backend URL
@@ -55,7 +55,7 @@ example.com {
 ```
 
 > [!note]
-> The forwarded auth request uses the **same path and query string** as the original request. If the backend is unreachable or returns a non-2xx status, Ferron blocks the request. Ferron returns the backend's response to the client.
+> The forwarded auth request uses the same path and query string as the original request. If the backend is unreachable or returns a non-2xx status, Ferron blocks the request. Ferron returns the backend's response to the client.
 
 #### Unix socket connections
 

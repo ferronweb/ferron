@@ -90,7 +90,7 @@ example.com {
 
 ### Trust requirements
 
-Your system or browser does **not automatically trust** the local CA. You must manually import the CA certificate:
+Your system or browser does not automatically trust the local CA. You must manually import the CA certificate:
 
 1. Find the CA certificate path (logged at server startup)
 2. Import into your OS trust store or browser

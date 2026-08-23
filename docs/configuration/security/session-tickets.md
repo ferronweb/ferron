@@ -3,7 +3,7 @@ title: "Configuration: TLS session ticket keys"
 description: "Stateless TLS session resumption with automatic key rotation and file-backed persistence."
 ---
 
-This page documents TLS session ticket key management. TLS session tickets enable **stateless session resumption**, allowing clients to resume previous TLS sessions without a full handshake. This improves performance and reduces latency for returning clients.
+This page documents TLS session ticket key management. TLS session tickets enable stateless session resumption, allowing clients to resume previous TLS sessions without a full handshake. This improves performance and reduces latency for returning clients.
 
 ## Configuration
 
@@ -62,7 +62,7 @@ This configuration:
 
 The ticket key file follows a specific format:
 
-- File size must be a multiple of **80 bytes**
+- File size must be a multiple of 80 bytes
 - Each 80-byte record contains:
   - **16 bytes**: key name (unique identifier)
   - **32 bytes**: AES-256 key (encryption/decryption)

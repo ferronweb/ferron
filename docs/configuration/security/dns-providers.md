@@ -3,7 +3,7 @@ title: "Configuration: DNS providers"
 description: "Reference for all built-in DNS providers used with the ACME DNS-01 challenge."
 ---
 
-The `tls-acme` module uses DNS providers to solve the **DNS-01 ACME challenge**. This is the only challenge type that supports wildcard certificates. You configure a provider inside the `dns { }` block nested within a `tls { }` block. Select it by name with the `provider` directive.
+The `tls-acme` module uses DNS providers to solve the DNS-01 ACME challenge. This is the only challenge type that supports wildcard certificates. You configure a provider inside the `dns { }` block nested within a `tls { }` block. Select it by name with the `provider` directive.
 
 ```ferron
 *.example.com {
@@ -1165,7 +1165,7 @@ Updates DNS records on Infoblox NIOS via its WAPI REST API.
 | `password` | `<string>` | Joker password (alternative to api_key).          | none (optional) |
 
 > [!note]
-> Either `api_key` **or** the pair `username` + `password` must exist.
+> Either `api_key` or the pair `username` + `password` must exist.
 
 **Configuration example:**
 
@@ -2038,7 +2038,7 @@ If certificate issuance fails with a DNS validation error, verify that the TXT r
 
 ### RFC 2136 TSIG key format
 
-The `key_secret` value must be the raw TSIG key bytes encoded as **standard Base64** (with padding). Most DNS management tools (BIND `tsig-keygen`, `dnssec-keygen`) output the key in this format already.
+The `key_secret` value must be the raw TSIG key bytes encoded as standard Base64 (with padding). Most DNS management tools (BIND `tsig-keygen`, `dnssec-keygen`) output the key in this format already.
 
 ### Azure endpoint selection
 

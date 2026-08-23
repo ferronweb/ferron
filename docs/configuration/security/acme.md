@@ -3,13 +3,13 @@ title: "Configuration: ACME automatic TLS"
 description: "Automatic TLS certificate issuance via ACME, including HTTP-01, TLS-ALPN-01, and DNS-01 challenges."
 ---
 
-This page documents the ACME TLS provider (the `tls-acme` module). It automatically gets TLS certificates from ACME-compatible Certificate Authorities (CAs) such as **Let's Encrypt**. The provider supports both **eager** (startup-time) and **on-demand** (lazy, first-connection) certificate issuance. It offers three challenge types:
+This page documents the ACME TLS provider (the `tls-acme` module). It automatically gets TLS certificates from ACME-compatible Certificate Authorities (CAs) such as Let's Encrypt. The provider supports both eager (startup-time) and on-demand (lazy, first-connection) certificate issuance. It offers three challenge types:
 
 - **HTTP-01**: serves a token at `/.well-known/acme-challenge/` (default)
 - **TLS-ALPN-01**: responds with a self-signed cert during the TLS handshake
 - **DNS-01**: creates a TXT record at `_acme-challenge.<domain>`
 
-Ferron **caches** certificates (both in-memory and file-based) and **renews** them automatically before expiration.
+Ferron caches certificates (both in-memory and file-based) and renews them automatically before expiration.
 
 Ferron enables automatic TLS via ACME by default for public hosts:
 
@@ -120,11 +120,11 @@ example.com {
 
 ## Eager mode (recommended for known domains)
 
-Eager mode gets certificates at **server startup**, before any client traffic arrives. This is ideal for static configurations where you know all domain names in advance.
+Eager mode gets certificates at server startup, before any client traffic arrives. This is ideal for static configurations where you know all domain names in advance.
 
 ## On-demand mode
 
-On-demand mode defers certificate issuance until the **first TLS handshake** for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when you do not know the domains at startup.
+On-demand mode defers certificate issuance until the first TLS handshake for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when you do not know the domains at startup.
 
 ```ferron
 *.example.com {
@@ -189,7 +189,7 @@ The cache directory structure:
 
 ## Certificate renewal
 
-Ferron automatically renews certificates before expiration. The renewal check runs every **10 seconds** in the background. Ferron uses the ACME `renewalInfo` endpoint (RFC 9773) when available. Otherwise it falls back to a heuristic of 50% of certificate lifetime, capped at 24 hours before expiry.
+Ferron automatically renews certificates before expiration. The renewal check runs every 10 seconds in the background. Ferron uses the ACME `renewalInfo` endpoint (RFC 9773) when available. Otherwise it falls back to a heuristic of 50% of certificate lifetime, capped at 24 hours before expiry.
 
 ## External Account Binding (EAB)
 

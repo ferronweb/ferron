@@ -20,34 +20,34 @@ proxy.example.com {
 }
 ```
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `allow_domains` | `<string>...` | Allowed destination domains. Supports `*` wildcards. If empty, Ferron denies all domains (deny-by-default). | none (deny all) |
-| `allow_ports` | `<int>...` | Allowed destination ports. | `80`, `443` |
-| `deny_ips` | `<CIDR>...` | Denied destination IP ranges, applied after DNS resolution. | Loopback, RFC 1918, link-local, cloud metadata (see below) |
-| `connect_method` | `<bool>` or bare | Enable HTTP CONNECT tunneling. When disabled, Ferron rejects CONNECT requests with 403. | `true` |
-| `http_version` | `1.0` or `1.1` | HTTP version used for upstream connections. | `1.1` |
+| Nested directive | Arguments        | Description                                                                                                 | Default                                                    |
+| ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `allow_domains`  | `<string>...`    | Allowed destination domains. Supports `*` wildcards. If empty, Ferron denies all domains (deny-by-default). | none (deny all)                                            |
+| `allow_ports`    | `<int>...`       | Allowed destination ports.                                                                                  | `80`, `443`                                                |
+| `deny_ips`       | `<CIDR>...`      | Denied destination IP ranges, applied after DNS resolution.                                                 | Loopback, RFC 1918, link-local, cloud metadata (see below) |
+| `connect_method` | `<bool>` or bare | Enable HTTP CONNECT tunneling. When disabled, Ferron rejects CONNECT requests with 403.                     | `true`                                                     |
+| `http_version`   | `1.0` or `1.1`   | HTTP version used for upstream connections.                                                                 | `1.1`                                                      |
 
 ### Default denied IP ranges
 
 When you specify no `deny_ips`, Ferron denies the following ranges by default:
 
-| Range | Description |
-| --- | --- |
-| `127.0.0.0/8` | IPv4 loopback |
-| `::1/128` | IPv6 loopback |
-| `10.0.0.0/8` | RFC 1918 private network |
-| `172.16.0.0/12` | RFC 1918 private network |
-| `192.168.0.0/16` | RFC 1918 private network |
-| `169.254.0.0/16` | Link-local |
-| `100.64.0.0/10` | Shared address space (RFC 6598) |
+| Range                                               | Description                     |
+| --------------------------------------------------- | ------------------------------- |
+| `127.0.0.0/8`                                       | IPv4 loopback                   |
+| `::1/128`                                           | IPv6 loopback                   |
+| `10.0.0.0/8`                                        | RFC 1918 private network        |
+| `172.16.0.0/12`                                     | RFC 1918 private network        |
+| `192.168.0.0/16`                                    | RFC 1918 private network        |
+| `169.254.0.0/16`                                    | Link-local                      |
+| `100.64.0.0/10`                                     | Shared address space (RFC 6598) |
 | `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24` | Documentation ranges (RFC 5737) |
-| `fd00::/8` | IPv6 unique local addresses |
-| `169.254.169.254/32` | Cloud metadata endpoint |
+| `fd00::/8`                                          | IPv6 unique local addresses     |
+| `169.254.169.254/32`                                | Cloud metadata endpoint         |
 
 ### Security model
 
-The forward proxy uses a **deny-by-default** model:
+The forward proxy uses a deny-by-default model:
 
 1. **Domain control**: If you do not set `allow_domains`, Ferron denies all destination domains.
 2. **Port control**: Ferron permits only explicitly allowed ports (defaults to 80 and 443).
@@ -123,8 +123,8 @@ proxy.example.com {
 
 ### Metrics
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
+| Metric                          | Type    | Attributes                                                                                                                                              | Description                                |
+| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | `ferron.forward_proxy.requests` | Counter | `ferron.forward_proxy.mode` (`"connect"` or `"request"`), `ferron.forward_proxy.result` (outcome), `http.response.status_code`, `error.type` (optional) | Forward-proxy requests by mode and outcome |
 
 ### Logs
@@ -137,42 +137,42 @@ proxy.example.com {
 
 ### Structured logs
 
-| Description (summary) | Level | Attributes |
-|-----------------------|-------|------------|
-| Forward proxy config error | ERROR | `error.message` (string) : configuration error details |
-| Forward proxy CONNECT upgrade failed | ERROR | `forward_proxy.target` (string) : target address, `error.type` (string), `error.message` (string) |
+| Description (summary)                     | Level | Attributes                                                                                        |
+| ----------------------------------------- | ----- | ------------------------------------------------------------------------------------------------- |
+| Forward proxy config error                | ERROR | `error.message` (string) : configuration error details                                            |
+| Forward proxy CONNECT upgrade failed      | ERROR | `forward_proxy.target` (string) : target address, `error.type` (string), `error.message` (string) |
 | Forward proxy connection to target failed | ERROR | `forward_proxy.target` (string) : target address, `error.type` (string), `error.message` (string) |
-| Forward proxy CONNECT tunnel error | WARN | `forward_proxy.target` (string) : target address, `error.type` (string), `error.message` (string) |
-| Forward proxy: upstream connect failed | ERROR | `upstream.address` (string) : target address, `error.type` (string), `error.message` (string) |
-| Forward proxy: HTTP/1 handshake failed | ERROR | `error.type` (string), `error.message` (string) |
-| Forward proxy: request to backend failed | ERROR | `error.type` (string), `error.message` (string) |
-| Forward proxy: port denied by ACL | WARN | `network.destination.port` (int) : denied port, `error.type` (string) |
-| Forward proxy: domain denied by ACL | WARN | `network.destination.name` (string) : denied domain, `error.type` (string) |
-| Forward proxy: DNS resolution failed | WARN | `dns.name` (string) : hostname that failed resolution, `error.type` (string) |
-| Forward proxy: resolved IP denied | WARN | `dns.name` (string) : hostname, `error.type` (string) |
-| Forward proxy: CONNECT disabled | WARN | `error.type` (string) |
-| Forward proxy: bad CONNECT request | WARN | `error.type` (string) |
-| Forward proxy: unsupported scheme | WARN | `url.scheme` (string) : the unsupported scheme, `error.type` (string) |
-| Forward proxy: missing host | WARN | `error.type` (string) |
+| Forward proxy CONNECT tunnel error        | WARN  | `forward_proxy.target` (string) : target address, `error.type` (string), `error.message` (string) |
+| Forward proxy: upstream connect failed    | ERROR | `upstream.address` (string) : target address, `error.type` (string), `error.message` (string)     |
+| Forward proxy: HTTP/1 handshake failed    | ERROR | `error.type` (string), `error.message` (string)                                                   |
+| Forward proxy: request to backend failed  | ERROR | `error.type` (string), `error.message` (string)                                                   |
+| Forward proxy: port denied by ACL         | WARN  | `network.destination.port` (int) : denied port, `error.type` (string)                             |
+| Forward proxy: domain denied by ACL       | WARN  | `network.destination.name` (string) : denied domain, `error.type` (string)                        |
+| Forward proxy: DNS resolution failed      | WARN  | `dns.name` (string) : hostname that failed resolution, `error.type` (string)                      |
+| Forward proxy: resolved IP denied         | WARN  | `dns.name` (string) : hostname, `error.type` (string)                                             |
+| Forward proxy: CONNECT disabled           | WARN  | `error.type` (string)                                                                             |
+| Forward proxy: bad CONNECT request        | WARN  | `error.type` (string)                                                                             |
+| Forward proxy: unsupported scheme         | WARN  | `url.scheme` (string) : the unsupported scheme, `error.type` (string)                             |
+| Forward proxy: missing host               | WARN  | `error.type` (string)                                                                             |
 
 ### Access log fields
 
 The forward proxy module contributes the following field to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
+| Field                | Type   | Description                                                   |
+| -------------------- | ------ | ------------------------------------------------------------- |
 | `ferron.fproxy.mode` | string | Forward proxy mode: `tunnel` (CONNECT) or `proxy` (standard). |
 
 ### Trace spans
 
 The forward proxy stage sets the following attributes on its `ferron.stage.forward_proxy` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.fproxy.mode` | string | Proxy mode: `tunnel` (CONNECT) or `proxy` (standard). |
-| `ferron.fproxy.upstream` | string | The upstream host and port. |
-| `http.response.status_code` | int | HTTP status code returned to the client. |
-| `error.type` | string | Error type on failure, enabling trace UI highlighting. |
+| Attribute                   | Type   | Description                                            |
+| --------------------------- | ------ | ------------------------------------------------------ |
+| `ferron.fproxy.mode`        | string | Proxy mode: `tunnel` (CONNECT) or `proxy` (standard).  |
+| `ferron.fproxy.upstream`    | string | The upstream host and port.                            |
+| `http.response.status_code` | int    | HTTP status code returned to the client.               |
+| `error.type`                | string | Error type on failure, enabling trace UI highlighting. |
 
 ## Best practices
 

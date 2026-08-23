@@ -9,21 +9,21 @@ The examples assume a single WordPress-style site served through PHP-FPM over a 
 
 ## Before you start: how Ferron differs from `.htaccess`
 
-Apache evaluates `.htaccess` per directory, per request, at runtime. Ferron uses a single central configuration file (`ferron.conf`) and **validates it at startup**. There is no per-directory `.htaccess` file. Changes require a server reload.
+Apache evaluates `.htaccess` per directory, per request, at runtime. Ferron uses a single central configuration file (`ferron.conf`) and validates it at startup. There is no per-directory `.htaccess` file. Changes require a server reload.
 
-| Concept | Apache `.htaccess` | Ferron 3 |
-| --- | --- | --- |
-| Config location | One `.htaccess` per directory in the web root | One `ferron.conf` for the whole server |
-| PHP execution | `mod_php`, `mod_proxy_fcgi` + `SetHandler` | `fcgi_php` (FastCGI to PHP-FPM) |
-| URL rewriting | `RewriteRule`/`RewriteCond` | `rewrite` (regex) |
-| Path matching | Directory context + `RewriteBase` | `location` (prefix) + `match` (expressions) |
-| Access rules | `Allow`/`Deny`, `Require` | `allow`/`block` |
-| Error pages | `ErrorDocument` | `error_page` |
-| Headers | `Header` / `RequestHeader` | `header` / `request_header` |
-| Auth | `AuthType Basic` + `htpasswd` | `basic_auth` (hashed passwords) |
+| Concept         | Apache `.htaccess`                            | Ferron 3                                    |
+| --------------- | --------------------------------------------- | ------------------------------------------- |
+| Config location | One `.htaccess` per directory in the web root | One `ferron.conf` for the whole server      |
+| PHP execution   | `mod_php`, `mod_proxy_fcgi` + `SetHandler`    | `fcgi_php` (FastCGI to PHP-FPM)             |
+| URL rewriting   | `RewriteRule`/`RewriteCond`                   | `rewrite` (regex)                           |
+| Path matching   | Directory context + `RewriteBase`             | `location` (prefix) + `match` (expressions) |
+| Access rules    | `Allow`/`Deny`, `Require`                     | `allow`/`block`                             |
+| Error pages     | `ErrorDocument`                               | `error_page`                                |
+| Headers         | `Header` / `RequestHeader`                    | `header` / `request_header`                 |
+| Auth            | `AuthType Basic` + `htpasswd`                 | `basic_auth` (hashed passwords)             |
 
 > [!important]
-> Ferron deliberately does **not** read `.htaccess` files. After migration, leaving an `.htaccess` in the document root has no effect. Move every relevant rule into `ferron.conf`.
+> Ferron deliberately does not read `.htaccess` files. After migration, leaving an `.htaccess` in the document root has no effect. Move every relevant rule into `ferron.conf`.
 
 ### PHP-FPM prerequisites
 
@@ -77,7 +77,7 @@ example.com {
     match WP_ADMIN {
         request.uri ~ r"/wp-login\.php|/wp-admin(?:/|$)"
     }
-    
+
     # Protect the admin area by IP.
     if WP_ADMIN {
         allow "203.0.113.0/24"
@@ -197,7 +197,7 @@ example.com {
 
 The `{{request.uri}}` placeholder expands to the original path and query string, so `/about?ref=newsletter` on `www.example.com` becomes `https://example.com/about?ref=newsletter`.
 
-To redirect the **other** way (non-www → www), swap the host names in the two blocks.
+To redirect the other way (non-www → www), swap the host names in the two blocks.
 
 ## HTTPS redirect
 
@@ -209,7 +209,7 @@ RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 ```
 
-In Ferron, HTTPS redirection is automatic once a host name has TLS enabled. When you declare a host by name (for example, `example.com`) with no explicit port, Ferron starts two listeners. It listens on HTTP (`:80`) and HTTPS (`:443`). It issues a **308 Permanent Redirect** from HTTP to HTTPS by default. Unless you want to disable it, you do not need to configure anything:
+In Ferron, HTTPS redirection is automatic once a host name has TLS enabled. When you declare a host by name (for example, `example.com`) with no explicit port, Ferron starts two listeners. It listens on HTTP (`:80`) and HTTPS (`:443`). It issues a 308 Permanent Redirect from HTTP to HTTPS by default. Unless you want to disable it, you do not need to configure anything:
 
 ```ferron
 example.com {
@@ -240,7 +240,7 @@ Apache (current `Require`):
 Require ip 203.0.113.0/24
 ```
 
-Ferron uses `allow` and `block`. When `allow` is present, Ferron permits **only** the listed networks. Everything else gets `403 Forbidden`. Add `block` entries to deny specific addresses even within an allowed range (`block` always wins over `allow`):
+Ferron uses `allow` and `block`. When `allow` is present, Ferron permits only the listed networks. Everything else gets `403 Forbidden`. Add `block` entries to deny specific addresses even within an allowed range (`block` always wins over `allow`):
 
 ```ferron
 example.com {
@@ -387,7 +387,7 @@ AuthUserFile /etc/apache2/.htpasswd
 Require valid-user
 ```
 
-The `basic_auth` directive does **not** read `htpasswd` files. It expects **hashed** passwords (Argon2id recommended). Generate a hash with the `ferron-passwd` tool that ships with Ferron, then list the user in the config:
+The `basic_auth` directive does not read `htpasswd` files. It expects hashed passwords (Argon2id recommended). Generate a hash with the `ferron-passwd` tool that ships with Ferron, then list the user in the config:
 
 ```ferron
 example.com {
@@ -396,7 +396,7 @@ example.com {
     match WP_ADMIN {
         request.uri ~ r"/wp-login\.php|/wp-admin(?:/|$)"
     }
-    
+
     if WP_ADMIN {
         basic_auth {
             realm "Admin Area"
@@ -451,7 +451,7 @@ example.com {
     match DOWNLOADS {
         request.uri.path ~ r"^/downloads(?:/|$)"
     }
-    
+
     if DOWNLOADS {
         header +Content-Disposition "attachment"
     }
@@ -480,7 +480,7 @@ example.com {
     match ASSETS {
         request.uri.path ~ r"^/assets(?:/|$)"
     }
-    
+
     if ASSETS {
         file_cache_control "public, max-age=2592000"   # 30 days
     }

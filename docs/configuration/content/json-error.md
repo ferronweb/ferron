@@ -93,7 +93,7 @@ example.com {
 
 ## Interaction with error pages
 
-When you enable `json_errors`, the JSON error stage runs **before** the `error_page` stage, which serves custom HTML error pages. This means:
+When you enable `json_errors`, the JSON error stage runs before the `error_page` stage, which serves custom HTML error pages. This means:
 
 - JSON errors take precedence over `error_page` file-based error pages
 - With JSON errors enabled, Ferron never reaches the built-in HTML error page fallback

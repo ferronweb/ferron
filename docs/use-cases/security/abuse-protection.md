@@ -26,7 +26,7 @@ example.com {
 }
 ```
 
-With defaults, Ferron bans an IP for **15 minutes** if:
+With defaults, Ferron bans an IP for 15 minutes if:
 
 - 5 rate limit breaches occur within 5 minutes, OR
 - 3 brute force failures occur within 2 minutes
@@ -64,7 +64,7 @@ auth.example.com {
 }
 ```
 
-This bans an IP for **30 minutes** if:
+This bans an IP for 30 minutes if:
 
 - 3 rate limit breaches occur within 60 seconds, OR
 - 2 brute force failures occur within 120 seconds
@@ -93,7 +93,7 @@ api.example.com {
 }
 ```
 
-This bans an IP for **5 minutes** only after:
+This bans an IP for 5 minutes only after:
 
 - 10 rate limit breaches within 10 minutes, OR
 - 10 brute force failures within 10 minutes
@@ -147,7 +147,7 @@ The flow works as follows:
 1. The rate limiter throttles individual clients that exceed their token bucket.
 2. Ferron records each rate limit breach as an abuse event.
 3. If the client accumulates enough breaches within the window, Ferron bans the client IP.
-4. While banned, the client receives a **403 Forbidden** response with a `Retry-After` header.
+4. While banned, the client receives a 403 Forbidden response with a `Retry-After` header.
 
 ## Detecting automated scans by URL pattern
 
@@ -200,7 +200,7 @@ example.com {
 }
 ```
 
-Ferron bans an IP for **15 minutes** after enough error responses. The threshold is 10 or more `404 Not Found` or `403 Forbidden` responses within 60 seconds. The threshold counts all matching status codes together. For example, 6 responses with 404 and 4 with 403 within the window would trigger the ban.
+Ferron bans an IP for 15 minutes after enough error responses. The threshold is 10 or more `404 Not Found` or `403 Forbidden` responses within 60 seconds. The threshold counts all matching status codes together. For example, 6 responses with 404 and 4 with 403 within the window would trigger the ban.
 
 **Stricter threshold for vulnerability scanners:**
 
@@ -220,7 +220,7 @@ example.com {
 }
 ```
 
-Ferron bans an IP for **1 hour** after just 5 error responses within 30 seconds. The count includes `405 Method Not Allowed` responses.
+Ferron bans an IP for 1 hour after just 5 error responses within 30 seconds. The count includes `405 Method Not Allowed` responses.
 
 ## Disabling abuse protection
 
@@ -250,22 +250,22 @@ The sidecar parses lines matching this pattern:
 
 - The `[trace=...]` block is optional. It appears only when tracing is on.
 - The IP address follows `IP `.
-- The reason follows ` - ` and varies by event source:
+- The reason follows `-` and varies by event source:
 
-| Source | Example reason |
-|--------|----------------|
-| Rate limiting | `Rate limit 10 req/s exceeded` |
-| Basic authentication | `Brute-force failure for user admin` |
+| Source                         | Example reason                       |
+| ------------------------------ | ------------------------------------ |
+| Rate limiting                  | `Rate limit 10 req/s exceeded`       |
+| Basic authentication           | `Brute-force failure for user admin` |
 | Custom `abuse_event` directive | `Custom abuse event: wordpress_scan` |
-| Error rate threshold | `Error rate: 404 responses` |
+| Error rate threshold           | `Error rate: 404 responses`          |
 
 ### Reason-to-category mapping
 
-| Reason prefix | AbuseIPDB category | Category ID |
-|---|---|---|
-| `Rate limit` | Web App Attack | 14 |
-| `Brute-force` | Brute-Force | 21 |
-| `Custom abuse event:` | Web App Attack (default) | 14 |
+| Reason prefix         | AbuseIPDB category       | Category ID |
+| --------------------- | ------------------------ | ----------- |
+| `Rate limit`          | Web App Attack           | 14          |
+| `Brute-force`         | Brute-Force              | 21          |
+| `Custom abuse event:` | Web App Attack (default) | 14          |
 
 ### Sample script
 

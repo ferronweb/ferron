@@ -27,7 +27,7 @@ example.com {
 }
 ```
 
-When you configure `allow`, only the listed IPs/CIDRs receive permission. All others receive a **403 Forbidden** response.
+When you configure `allow`, only the listed IPs/CIDRs receive permission. All others receive a 403 Forbidden response.
 
 > [!important]
 > If Ferron is behind a reverse proxy/load balancer, configure `client_ip_from_header`. This makes sure IP-based rules use the client IP instead of the proxy IP. See [HTTP host directives](/docs/v3/configuration/server/host).
@@ -36,10 +36,10 @@ When you configure `allow`, only the listed IPs/CIDRs receive permission. All ot
 
 When you configure both `block` and `allow`:
 
-1. If the IP matches an `allow` entry **and** a `block` entry → **blocked** (block takes precedence)
-2. If the IP matches only an `allow` entry → **allowed**
-3. If the IP matches only a `block` entry → **blocked**
-4. If the IP matches neither → **allowed** (unless the allow list is non-empty)
+1. If the IP matches an `allow` entry and a `block` entry → blocked (block takes precedence)
+2. If the IP matches only an `allow` entry → allowed
+3. If the IP matches only a `block` entry → blocked
+4. If the IP matches neither → allowed (unless the allow list is non-empty)
 
 ```ferron
 example.com {
@@ -87,16 +87,16 @@ example.com {
 }
 ```
 
-Ferron supports only **hashed passwords**. Ferron accepts the following hash formats:
+Ferron supports only hashed passwords. Ferron accepts the following hash formats:
 
-| Prefix | Algorithm |
-| --- | --- |
-| `$argon2id$` | Argon2id (recommended) |
-| `$argon2i$` | Argon2i |
-| `$argon2d$` | Argon2d |
-| `$pbkdf2$` | PBKDF2 |
-| `$pbkdf2-sha256$` | PBKDF2-SHA256 |
-| `$scrypt$` | scrypt |
+| Prefix            | Algorithm              |
+| ----------------- | ---------------------- |
+| `$argon2id$`      | Argon2id (recommended) |
+| `$argon2i$`       | Argon2i                |
+| `$argon2d$`       | Argon2d                |
+| `$pbkdf2$`        | PBKDF2                 |
+| `$pbkdf2-sha256$` | PBKDF2-SHA256          |
+| `$scrypt$`        | scrypt                 |
 
 > [!important]
 > For Basic Auth, always use TLS. The `Authorization` header sends credentials on every request.

@@ -96,7 +96,7 @@ Run your custom server with a configuration file:
 
 ## How it works
 
-Ferron uses a **module profile** system. The `ferron-entrypoint` crate contains the CLI logic and runtime management. It does not know the specific modules until you register them in the `Vec<Box<dyn ModuleLoader>>` passed to its `main` function.
+Ferron uses a module profile system. The `ferron-entrypoint` crate contains the CLI logic and runtime management. It does not know the specific modules until you register them in the `Vec<Box<dyn ModuleLoader>>` passed to its `main` function.
 
 - `ferron_entrypoint::init()`: Sets up `malloc-best-effort` and crash reporting.
 - `ferron_entrypoint::default_profile()`: Returns a list of all loaders for modules bundled with Ferron.

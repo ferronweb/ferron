@@ -43,7 +43,7 @@ This page documents directives that belong in top-level global blocks:
 > - When a host does not specify an explicit port, Ferron starts an HTTP listener on `default_http_port` and an HTTPS listener on `default_https_port`.
 > - The redirect stage constructs `https://` URLs using this port (omitting it when the value is `443`).
 > - Setting `default_http_port false` disables the automatic HTTP listener, and `default_https_port false` disables the automatic HTTPS listener and HTTP-to-HTTPS redirects.
-> - If you set **both** directives to `false`, host blocks without explicit ports create no listeners, and Ferron logs a warning.
+> - If you set both directives to `false`, host blocks without explicit ports create no listeners, and Ferron logs a warning.
 
 **Disable default HTTP listener (HTTPS only):**
 
@@ -348,11 +348,11 @@ The admin API is a built-in HTTP interface for server health checks, status moni
 
 ### Security considerations
 
-The admin API is a **privileged control plane** with full server configuration access and reload capability. It has no encryption and no authentication by default. You can enable bearer token authentication with the `auth_token` directive. Treat it with the same security posture as a root shell on your server.
+The admin API is a privileged control plane with full server configuration access and reload capability. It has no encryption and no authentication by default. You can enable bearer token authentication with the `auth_token` directive. Treat it with the same security posture as a root shell on your server.
 
 #### Risks of binding to `0.0.0.0`
 
-Setting `listen "0.0.0.0:<port>"` makes the admin API **completely open to any client that can reach the host**. Omitting the bind address defaults to all interfaces and has the same effect. This can happen accidentally in containerized environments (for example, Docker with bridge networking) or misconfigured networks.
+Setting `listen "0.0.0.0:<port>"` makes the admin API completely open to any client that can reach the host. Omitting the bind address defaults to all interfaces and has the same effect. This can happen accidentally in containerized environments (for example, Docker with bridge networking) or misconfigured networks.
 
 Consequences of an open admin API:
 

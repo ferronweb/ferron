@@ -17,13 +17,13 @@ When a client sends an `Accept-Encoding` header, Ferron selects the best compres
 3. **gzip**: the most universally supported compression algorithm.
 4. **Deflate**: similar to gzip but without the CRC checksum overhead. Less common in practice.
 
-The server iterates through the `Accept-Encoding` header values that the client sends. It selects the **first** algorithm that matches the preference order. For example, if a client sends:
+The server iterates through the `Accept-Encoding` header values that the client sends. It selects the first algorithm that matches the preference order. For example, if a client sends:
 
 ```text
 Accept-Encoding: gzip, br, zstd
 ```
 
-The server selects **Zstandard** because it appears first in the preference order, even though the client listed gzip first.
+The server selects Zstandard because it appears first in the preference order, even though the client listed gzip first.
 
 If the client does not send an `Accept-Encoding` header, the server serves the response without compression (`identity`). The same applies when none of the supported algorithms appear in the header.
 

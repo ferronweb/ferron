@@ -33,7 +33,7 @@ Ferron uses OpenTelemetry metric types. Understanding the type helps you write c
 
 ## Exponential histograms
 
-When using the OTLP observability backend, all histogram metrics use **Base2 Exponential Histograms** instead of fixed linear buckets by default. This provides multiple advantages for latency-sensitive workloads:
+When using the OTLP observability backend, all histogram metrics use Base2 Exponential Histograms instead of fixed linear buckets by default. This provides multiple advantages for latency-sensitive workloads:
 
 - **Automatic bucket allocation**. The SDK computes bucket boundaries using a base-2 exponential formula. You do not need to tune bucket boundaries.
 - **High resolution across orders of magnitude**. The default configuration uses 160 buckets from sub-millisecond to 100 seconds with less than 5% relative error. This preserves tail-latency outliers (p99, p99.9) that coarse fixed buckets would mask.
@@ -46,14 +46,14 @@ The Prometheus observability backend also supports native exponential histograms
 
 ## Metric exemplars
 
-Ferron supports **metric exemplars** in Prometheus and OTLP observability backends. When a request carries an active trace context (W3C trace ID and span ID), the observability module attaches an exemplar to the observation. The exemplar links the observation to the specific trace.
+Ferron supports metric exemplars in Prometheus and OTLP observability backends. When a request carries an active trace context (W3C trace ID and span ID), the observability module attaches an exemplar to the observation. The exemplar links the observation to the specific trace.
 
 Each exemplar contains:
 
 - `trace_id`: the W3C trace ID of the request
 - `span_id`: the W3C span ID of the request
 
-Exemplars are available for **all counter metrics** by default. For Prometheus histograms, exemplars are active only when `endpoint_native_histograms` is `false` (the default), since native histograms and exemplars are mutually exclusive for this module. When you enable native histograms, histogram metrics no longer carry exemplars.
+Exemplars are available for all counter metrics by default. For Prometheus histograms, exemplars are active only when `endpoint_native_histograms` is `false` (the default), since native histograms and exemplars are mutually exclusive for this module. When you enable native histograms, histogram metrics no longer carry exemplars.
 
 > [!note]
 >

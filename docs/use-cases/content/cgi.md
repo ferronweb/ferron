@@ -103,18 +103,18 @@ This allows Ferron to handle PHP files via shebang lines (`#!/usr/bin/env php`) 
 
 When no custom `interpreter` directive matches, Ferron uses these built-in defaults:
 
-| Extension | Default interpreter |
-| --- | --- |
-| `.pl` | `perl` |
-| `.py` | `python` |
-| `.sh` | `bash` |
-| `.ksh` | `ksh` |
-| `.csh` | `csh` |
-| `.rb` | `ruby` |
-| `.php` | `php-cgi` |
-| `.exe` (Windows) | *(direct execution)* |
-| `.bat` (Windows) | `cmd /c` |
-| `.vbs` (Windows) | `cscript` |
+| Extension        | Default interpreter  |
+| ---------------- | -------------------- |
+| `.pl`            | `perl`               |
+| `.py`            | `python`             |
+| `.sh`            | `bash`               |
+| `.ksh`           | `ksh`                |
+| `.csh`           | `csh`                |
+| `.rb`            | `ruby`               |
+| `.php`           | `php-cgi`            |
+| `.exe` (Windows) | _(direct execution)_ |
+| `.bat` (Windows) | `cmd /c`             |
+| `.vbs` (Windows) | `cscript`            |
 
 On Unix systems, Ferron parses scripts with a shebang line (for example `#!/usr/bin/env python3`) and derives the interpreter from the shebang. On Windows, Ferron executes `.exe` files directly.
 
@@ -139,27 +139,27 @@ example.com {
 > - Values support interpolation (for example `{{env.VAR}}` for environment variable substitution).
 > - Ferron always sets the following CGI environment variables automatically:
 
-| Variable | Description |
-| --- | --- |
-| `SERVER_SOFTWARE` | Always `Ferron`. |
-| `SERVER_NAME` | Server hostname. |
-| `SERVER_ADDR` | Local server address. |
-| `SERVER_PORT` | Server port. |
-| `REQUEST_METHOD` | HTTP method. |
-| `REQUEST_URI` | Original request URI. |
-| `QUERY_STRING` | Query string (empty string if none). |
-| `PATH_INFO` | Path info extracted from the request. |
-| `SCRIPT_NAME` | The script path relative to the document root. |
-| `AUTH_TYPE` | Authentication type from the `Authorization` header. |
-| `REMOTE_USER` | Authenticated username, if available. |
-| `SERVER_ADMIN` | Server administrator email (from `admin_email` configuration). |
-| `HTTPS` | Ferron sets this to `on` when the connection uses encryption. |
+| Variable          | Description                                                    |
+| ----------------- | -------------------------------------------------------------- |
+| `SERVER_SOFTWARE` | Always `Ferron`.                                               |
+| `SERVER_NAME`     | Server hostname.                                               |
+| `SERVER_ADDR`     | Local server address.                                          |
+| `SERVER_PORT`     | Server port.                                                   |
+| `REQUEST_METHOD`  | HTTP method.                                                   |
+| `REQUEST_URI`     | Original request URI.                                          |
+| `QUERY_STRING`    | Query string (empty string if none).                           |
+| `PATH_INFO`       | Path info extracted from the request.                          |
+| `SCRIPT_NAME`     | The script path relative to the document root.                 |
+| `AUTH_TYPE`       | Authentication type from the `Authorization` header.           |
+| `REMOTE_USER`     | Authenticated username, if available.                          |
+| `SERVER_ADMIN`    | Server administrator email (from `admin_email` configuration). |
+| `HTTPS`           | Ferron sets this to `on` when the connection uses encryption.  |
 
 ## Security considerations
 
 ### File upload safety
 
-Keep upload and download directories **outside** `cgi-bin` and outside any extension-registered directories. Otherwise, a user could upload a malicious script and execute it as CGI.
+Keep upload and download directories outside `cgi-bin` and outside any extension-registered directories. Otherwise, a user could upload a malicious script and execute it as CGI.
 
 Example safe configuration:
 
@@ -198,9 +198,9 @@ When you enable CGI and you do not configure an explicit `index` directive, Ferr
 If you register additional extensions via the `extension` directive, Ferron also prepends corresponding index files to the front of the list:
 
 | Registered extension | Prepend to index list |
-| --- | --- |
-| `.cgi` | `index.cgi` |
-| `.php` | `index.php` |
+| -------------------- | --------------------- |
+| `.cgi`               | `index.cgi`           |
+| `.php`               | `index.php`           |
 
 For example, with `extension ".php"` configured, the injection order becomes: `index.php`, `index.html`, `index.htm`, `index.xhtml`.
 
