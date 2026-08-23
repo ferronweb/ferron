@@ -29,33 +29,33 @@ example.com {
 
 You can place the `abuse_protection` block inside an HTTP host block.
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `ban_duration` | `<duration>` | How long to ban an IP. | `"15m"` (15 minutes) |
-| `rate_limit_threshold` | block | Ban after N rate limit events in window. | 5 in 300s |
-| `brute_force_threshold` | block | Ban after N brute force failures in window. | 3 in 120s |
-| `custom_threshold` | block | Ban after N custom events in window. | none |
-| `error_rate_threshold` | block | Ban after N error responses (for example, 404, 403) in window. | none |
-| `allowlist` | `<string> [<string> ...]` | IP addresses or CIDR ranges exempt from bans. You can specify this directive multiple times. | none |
+| Nested directive        | Arguments                 | Description                                                                                  | Default              |
+| ----------------------- | ------------------------- | -------------------------------------------------------------------------------------------- | -------------------- |
+| `ban_duration`          | `<duration>`              | How long to ban an IP.                                                                       | `"15m"` (15 minutes) |
+| `rate_limit_threshold`  | block                     | Ban after N rate limit events in window.                                                     | 5 in 300s            |
+| `brute_force_threshold` | block                     | Ban after N brute force failures in window.                                                  | 3 in 120s            |
+| `custom_threshold`      | block                     | Ban after N custom events in window.                                                         | none                 |
+| `error_rate_threshold`  | block                     | Ban after N error responses (for example, 404, 403) in window.                               | none                 |
+| `allowlist`             | `<string> [<string> ...]` | IP addresses or CIDR ranges exempt from bans. You can specify this directive multiple times. | none                 |
 
 ### Threshold blocks
 
 Each threshold block (`rate_limit_threshold`, `brute_force_threshold`, `custom_threshold`) configures when a specific event type triggers a ban:
 
-| Nested directive | Arguments | Description |
-| --- | --- | --- |
-| `events` | `<int>` | Number of events required to trigger a ban (required). |
-| `window` | `<duration>` | Time window for counting events (required). |
+| Nested directive | Arguments    | Description                                            |
+| ---------------- | ------------ | ------------------------------------------------------ |
+| `events`         | `<int>`      | Number of events required to trigger a ban (required). |
+| `window`         | `<duration>` | Time window for counting events (required).            |
 
 ### Error rate threshold block
 
 The `error_rate_threshold` block configures when error response patterns trigger a ban:
 
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `events` | `<int>` | Number of error responses required to trigger a ban. | 50 |
-| `window` | `<duration>` | Time window for counting error responses. | `"60s"` |
-| `status_codes` | `<string> [<string> ...]` | HTTP status codes that count as errors (for example, `"404"`, `"403"`). | `"404"` |
+| Nested directive | Arguments                 | Description                                                             | Default |
+| ---------------- | ------------------------- | ----------------------------------------------------------------------- | ------- |
+| `events`         | `<int>`                   | Number of error responses required to trigger a ban.                    | 50      |
+| `window`         | `<duration>`              | Time window for counting error responses.                               | `"60s"` |
+| `status_codes`   | `<string> [<string> ...]` | HTTP status codes that count as errors (for example, `"404"`, `"403"`). | `"404"` |
 
 **Configuration example, stricter thresholds:**
 
@@ -190,17 +190,6 @@ The system stores events in a sliding time window. When the number of events wit
 > [!warning]
 > For manual unbanning, you must wait for the ban to expire naturally.
 
-### Request flow
-
-1. Client sends a request.
-2. The abuse protection stage runs early in the pipeline (after `client_ip_from_header`, before `rate_limit` and `basicauth`).
-3. The stage checks if the system currently bans the client IP.
-4. If banned: returns **403 Forbidden** with a `Retry-After` header indicating seconds until ban expiry.
-5. If not banned: request continues through the pipeline normally.
-6. When other modules detect abuse (rate limit breach, brute force attempt), they emit events to the abuse registry.
-7. If an event exceeds a threshold, the system immediately bans the IP.
-8. After the pipeline completes, the `run_inverse` method of the abuse protection stage observes the response status code. If it matches a configured `error_rate_threshold` status code, the stage records an error rate event.
-
 ### Allowlist behavior
 
 The stage skips any IP that matches an entry in the `allowlist` before it runs ban checks. This allows you to protect internal services, monitoring systems, or known-trusted infrastructure from accidental bans.
@@ -234,9 +223,9 @@ example.com {
 
 The abuse protection module emits the following metrics:
 
-| Metric | Type | Attributes | Description |
-|--------|------|------------|-------------|
-| `ferron.abuseban.rejected` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) | Requests rejected due to IP ban |
+| Metric                      | Type    | Attributes                                                                 | Description                       |
+| --------------------------- | ------- | -------------------------------------------------------------------------- | --------------------------------- |
+| `ferron.abuseban.rejected`  | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`)                 | Requests rejected due to IP ban   |
 | `ferron.abuseban.triggered` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`, `"error_rate"`) | Requests that triggered an IP ban |
 
 ### Logs
@@ -246,31 +235,31 @@ The abuse protection module emits the following metrics:
 
 ### Structured logs
 
-| Description (summary) | Level | Attributes |
-|-----------------------|-------|------------|
+| Description (summary) | Level | Attributes                                                                                                                                                                |
+| --------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Ban rejection         | DEBUG | `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
-| Ban triggered         | WARN  | `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`) |
+| Ban triggered         | WARN  | `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`)                                                                          |
 
 ### Access log fields
 
 The abuse protection module contributes the following fields to the HTTP access log line:
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `ferron.abuseban.action` | string | Action taken: `skip` (not banned) or `rejected` (banned). |
-| `ferron.abuseban.reason` | string | Ban reason (rejection only). |
-| `ferron.abuseban.remaining_secs` | int | Seconds remaining on ban (rejection only). |
+| Field                            | Type   | Description                                               |
+| -------------------------------- | ------ | --------------------------------------------------------- |
+| `ferron.abuseban.action`         | string | Action taken: `skip` (not banned) or `rejected` (banned). |
+| `ferron.abuseban.reason`         | string | Ban reason (rejection only).                              |
+| `ferron.abuseban.remaining_secs` | int    | Seconds remaining on ban (rejection only).                |
 
 ### Trace spans
 
 The abuse protection stage sets the following attributes on its `ferron.stage.abuse_protection` span:
 
-| Attribute | Type | Description |
-| --- | --- | --- |
-| `ferron.abuseban.action` | string | Action taken: `skip` (not banned) or `rejected` (banned). |
-| `ferron.abuseban.reason` | string | The reason for the ban, when rejected. |
-| `ferron.abuseban.remaining_secs` | int | Remaining ban duration in seconds, when rejected. |
-| `error.type` | string | Set to `ip_banned` when Ferron rejects the request, enabling trace UI highlighting. |
+| Attribute                        | Type   | Description                                                                         |
+| -------------------------------- | ------ | ----------------------------------------------------------------------------------- |
+| `ferron.abuseban.action`         | string | Action taken: `skip` (not banned) or `rejected` (banned).                           |
+| `ferron.abuseban.reason`         | string | The reason for the ban, when rejected.                                              |
+| `ferron.abuseban.remaining_secs` | int    | Remaining ban duration in seconds, when rejected.                                   |
+| `error.type`                     | string | Set to `ip_banned` when Ferron rejects the request, enabling trace UI highlighting. |
 
 ## See also
 
