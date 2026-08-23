@@ -136,20 +136,10 @@ Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 
 ## Security considerations
 
-### Do's
-
-- Enable `auto_rotate` for production deployments
-- Set restrictive file permissions (`chmod 600`)
-- Rotate keys regularly (recommended: every 12–24 hours)
-- Keep 2–3 keys during rotation for smooth transition
-
-### Don'ts
-
-- **Never log key content**: Ferron never logs key bytes
-- **Do not use predictable values**: no hardcoded or weak keys
-- **Do not expose files**: avoid world-readable permissions
-- **Do not rotate all keys at once**: keep old keys for overlap during rotation
-- **Do not commit keys to version control**: add to `.gitignore`
+- **Enable `auto_rotate` for production deployments**: this makes sure session tickets are rotated regularly, which reduces the risk of a single key being compromised.
+- **Rotate keys regularly**: this is to make sure key compromises are less effective (recommended: every 12-24 hours)
+- **Do not expose keys publicly**: this would cause key compromise, which causes attackers to be able to decrypt TLS sessions using the keys. This includes logging the keys, world-readable permissions, or committing them to version control.
+- **Do not use predictable values**: doing so would make it easier for attackers to compromise TLS sessions.
 
 ## See also
 
