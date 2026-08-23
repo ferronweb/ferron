@@ -197,8 +197,6 @@ fn parse_trusted_proxy_allowlist(
 mod tests {
     use super::*;
 
-    // ── Helper tests ──
-
     #[test]
     fn client_ip_header_from_str_valid() {
         assert_eq!(

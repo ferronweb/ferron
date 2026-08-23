@@ -188,8 +188,6 @@ mod tests {
         ctx
     }
 
-    // ── X-Forwarded-For tests ──
-
     #[tokio::test]
     async fn extracts_single_ip_from_x_forwarded_for() {
         let mut ctx = make_test_context(
@@ -279,8 +277,6 @@ mod tests {
         assert!(result);
         assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
     }
-
-    // ── Forwarded (RFC 7239) tests ──
 
     #[tokio::test]
     async fn extracts_ip_from_forwarded_for() {
