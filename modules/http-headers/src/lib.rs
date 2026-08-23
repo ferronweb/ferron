@@ -43,10 +43,9 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
     }
 
     fn constraints(&self) -> Vec<ferron_core::StageConstraint> {
-        vec![
-            ferron_core::StageConstraint::Before("reverse_proxy".to_string()),
-            ferron_core::StageConstraint::Before("static_file".to_string()),
-        ]
+        vec![ferron_core::StageConstraint::Before(
+            "reverse_proxy".to_string(),
+        )]
     }
 
     fn is_applicable(

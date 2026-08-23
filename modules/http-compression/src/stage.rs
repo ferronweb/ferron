@@ -188,7 +188,6 @@ impl Stage<HttpContext> for DynamicCompressionStage {
 
     fn constraints(&self) -> Vec<CoreStageConstraint> {
         vec![
-            CoreStageConstraint::Before("static_file".to_string()),
             CoreStageConstraint::Before("reverse_proxy".to_string()),
             CoreStageConstraint::After("headers".to_string()),
             CoreStageConstraint::After("acme_http01".to_string()),

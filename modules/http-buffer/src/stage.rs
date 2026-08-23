@@ -132,7 +132,6 @@ impl Stage<HttpContext> for HttpBufferStage {
             StageConstraint::Before("basicauth".to_string()),
             StageConstraint::Before("cache".to_string()),
             StageConstraint::Before("reverse_proxy".to_string()),
-            StageConstraint::Before("static_file".to_string()),
             StageConstraint::Before("forward_proxy".to_string()),
         ]
     }

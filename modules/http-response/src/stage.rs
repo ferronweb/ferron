@@ -298,7 +298,6 @@ impl Stage<HttpContext> for HttpResponseStage {
             StageConstraint::After("client_ip_from_header".to_string()),
             StageConstraint::After("https_redirect".to_string()),
             StageConstraint::Before("reverse_proxy".to_string()),
-            StageConstraint::Before("static_file".to_string()),
         ]
     }
 
@@ -356,7 +355,6 @@ impl Stage<HttpContext> for EarlyHintsStage {
         vec![
             StageConstraint::After("http_response".to_string()),
             StageConstraint::Before("reverse_proxy".to_string()),
-            StageConstraint::Before("static_file".to_string()),
         ]
     }
 

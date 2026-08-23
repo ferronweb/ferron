@@ -301,7 +301,6 @@ impl Stage<HttpContext> for HttpCacheStage {
             StageConstraint::After("basicauth".to_string()),
             StageConstraint::Before("forward_proxy".to_string()),
             StageConstraint::Before("reverse_proxy".to_string()),
-            StageConstraint::Before("static_file".to_string()),
         ]
     }
 
