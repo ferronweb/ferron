@@ -761,7 +761,7 @@ pub fn spawn_health_check_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::health::{ExpectedStatusCodes, HealthCheckMethod, HealthCheckState};
+    use crate::types::health::{HealthCheckMethod, HealthCheckState};
     use dashmap::DashMap;
     use rustc_hash::FxBuildHasher;
 
