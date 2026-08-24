@@ -9,7 +9,7 @@ use std::str::FromStr;
     target_os = "solaris"
 ))]
 unsafe extern "C" {
-    fn inet_aton(source: *const i8, ip: *mut libc::in_addr) -> bool;
+    fn inet_aton(source: *const u8, ip: *mut libc::in_addr) -> bool;
 }
 
 /// Tries to convert string to IP address, including alternative representations.
@@ -29,7 +29,7 @@ pub fn convert(source: &str) -> Option<std::net::IpAddr> {
         // inet_aton accepts null-terminated C string, not Rust &str, so convert it
         if let Ok(source_c) = CString::new(source) {
             // SAFETY: pointer to in_addr is valid.
-            if unsafe { inet_aton(source_c.as_ptr(), ip.as_mut_ptr()) } {
+            if unsafe { inet_aton(source_c.as_ptr() as *const u8, ip.as_mut_ptr()) } {
                 // SAFETY: conversion is successful and in_addr is initialized.
                 let ip = unsafe { ip.assume_init() };
                 // in_addr.s_addr is in network byte order (big-endian),
