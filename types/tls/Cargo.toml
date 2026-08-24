@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 aws-lc-rs = { version = "1", features = ["bindgen"] }
-getrandom = "0.4"
 rustls = { version = "0.23.37", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
 rustls-pki-types = "1"
 rustls-native-certs = "0.8"
@@ -19,6 +18,7 @@ num-bigint = { version = "0.4", optional = true }
 ferron-observability = { path = "../../types/observability", optional = true }
 ferron-core = { path = "../../core" }
 tokio = { version = "1.53.1", features = ["io-util"] }
+rand = "0.10.2"
 
 [features]
 default = []

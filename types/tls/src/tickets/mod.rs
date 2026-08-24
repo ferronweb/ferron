@@ -13,7 +13,7 @@
 //! Custom key loading will be fully supported when rustls exposes the necessary
 //! APIs or when we implement a custom `ProducesTickets` trait.
 //!
-//! # Key File Format (for future use)
+//! # Key file format
 //!
 //! The key file will consist of one or more 80-byte records. Each record contains:
 //! - 16 bytes: Key Name (identifier)
@@ -23,14 +23,14 @@
 //! The first key in the file will be used for encryption (issuing new tickets),
 //! while all keys will be used for decryption (resuming existing tickets).
 //!
-//! # Key Rotation (for future use)
+//! # Key rotation
 //!
 //! To rotate keys:
 //! 1. Generate a new 80-byte key
 //! 2. Prepend it to the key file (keeping 1-2 older keys for overlap)
 //! 3. Trigger a configuration reload (e.g., via SIGHUP)
 //!
-//! # Security Considerations
+//! # Security considerations
 //!
 //! - Key files should be readable only by the server user (e.g., `chmod 600`)
 //! - Keys must be generated externally using cryptographically secure randomness
@@ -41,6 +41,7 @@ use aws_lc_rs::cipher::{
 };
 use aws_lc_rs::hmac::{self, Key as HmacKey};
 use aws_lc_rs::iv::FixedLength;
+use rand::RngExt;
 use rustls::server::ProducesTickets;
 use rustls_pki_types::UnixTime;
 use std::collections::HashMap;
@@ -163,7 +164,7 @@ pub type TicketKeyComponents = ([u8; 16], [u8; 32], [u8; 32]);
 ///
 /// # Security Notes
 ///
-/// - Uses system CSPRNG via `getrandom`
+/// - Uses CSPRNG via `rand`
 /// - Never log the returned key bytes
 /// - Store generated keys securely with restrictive permissions
 ///
@@ -177,7 +178,7 @@ pub type TicketKeyComponents = ([u8; 16], [u8; 32], [u8; 32]);
 /// ```
 pub fn generate_ticket_key() -> [u8; TICKET_KEY_RECORD_SIZE] {
     let mut key = [0u8; TICKET_KEY_RECORD_SIZE];
-    getrandom::fill(&mut key).expect("failed to generate random bytes for ticket key");
+    rand::rng().fill(&mut key);
     key
 }
 
