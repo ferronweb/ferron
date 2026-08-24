@@ -69,11 +69,11 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
 # Use a Debian base image for the final image
 FROM debian:trixie
 
-# Install CA certificates
+# Install CA certificates and curl (for Unix socket E2E)
 RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     --mount=type=cache,sharing=private,target=/var/lib/apt \
     apt update && \
-    apt install -y ca-certificates && \
+    apt install -y ca-certificates curl && \
     apt clean && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*

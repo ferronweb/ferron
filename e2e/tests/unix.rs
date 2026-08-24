@@ -1,95 +1,100 @@
 use std::io::Write;
-use std::path::Path;
-use std::time::Duration;
 
 use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
+    ContainerAsync, GenericImage, ImageExt,
     core::{ContainerPort, Mount, WaitFor},
     runners::AsyncRunner,
 };
 
 mod common;
 
-async fn http_get_via_unix(
-    socket_path: &Path,
+async fn exec_curl_unix(
+    container: &ContainerAsync<GenericImage>,
+    socket_path: &str,
     host: &str,
     uri: &str,
-) -> Result<(u16, String), Box<dyn std::error::Error>> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    let mut stream = tokio::net::UnixStream::connect(socket_path).await?;
-    let request = format!(
-        "GET {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
-        uri, host
-    );
-    stream.write_all(request.as_bytes()).await?;
-    stream.flush().await?;
-    let mut response = Vec::new();
-    stream.read_to_end(&mut response).await?;
-    let response_str = String::from_utf8_lossy(&response);
-    let status_line = response_str.lines().next().unwrap_or("");
-    let status: u16 = status_line
-        .split_whitespace()
-        .nth(1)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
-    // Split header/body
-    let parts: Vec<&str> = response_str.splitn(2, "\r\n\r\n").collect();
-    let body = parts.get(1).unwrap_or(&"").to_string();
-    Ok((status, body))
+) -> Result<(i64, String, String), Box<dyn std::error::Error>> {
+    use testcontainers::core::ExecCommand;
+
+    let url = format!("http://{host}{uri}");
+    let exec = ExecCommand::new(vec![
+        "curl",
+        "-s",
+        "-S",
+        "-w",
+        "\n%{http_code}",
+        "--unix-socket",
+        socket_path,
+        &url,
+    ]);
+
+    let mut result = container.exec(exec).await?;
+    let stdout = result.stdout_to_vec().await?;
+    let stderr = result.stderr_to_vec().await?;
+    let _exit_code = result.exit_code().await?.unwrap_or(-1);
+
+    let stdout_str = String::from_utf8_lossy(&stdout).to_string();
+    let stderr_str = String::from_utf8_lossy(&stderr).to_string();
+
+    // curl -w prints http_code on last line
+    let mut lines: Vec<&str> = stdout_str.lines().collect();
+    let code_str = lines.pop().unwrap_or("0");
+    let code: i64 = code_str.parse().unwrap_or(0);
+    let body = lines.join("\n");
+
+    // Also consider exit_code, but http_code is more reliable
+    Ok((code, body, stderr_str))
 }
 
-async fn wait_for_socket(path: &Path, timeout: Duration) -> bool {
+async fn exec_test_socket_exists(
+    container: &ContainerAsync<GenericImage>,
+    socket_path: &str,
+) -> bool {
+    use testcontainers::core::ExecCommand;
+    let exec = ExecCommand::new(vec!["test", "-S", socket_path]);
+    match container.exec(exec).await {
+        Ok(r) => r.exit_code().await.unwrap_or(Some(-1)).unwrap_or(-1) == 0,
+        Err(_) => false,
+    }
+}
+
+async fn wait_for_socket_in_container(
+    container: &ContainerAsync<GenericImage>,
+    socket_path: &str,
+    timeout: std::time::Duration,
+) -> bool {
     let start = std::time::Instant::now();
     while start.elapsed() < timeout {
-        if path.exists() {
-            // Also check it's a socket
-            if let Ok(meta) = std::fs::metadata(path) {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::FileTypeExt;
-                    if meta.file_type().is_socket() {
-                        return true;
-                    }
-                }
-                #[cfg(not(unix))]
-                return true;
-            }
+        if exec_test_socket_exists(container, socket_path).await {
+            return true;
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
     false
 }
 
-#[cfg(unix)]
-async fn create_ferron_unix_container(
-    webroot_dir: &Path,
-    config_file: &Path,
-    host_socket_dir: &Path,
-    container_socket_dir: &str,
-) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
-    let ferron_image = self::common::build_ferron_image().await?;
-    ferron_image
-        .with_wait_for(WaitFor::seconds(2))
-        .with_network("bridge")
-        .with_mount(Mount::bind_mount(
-            webroot_dir.to_string_lossy(),
-            "/var/www/ferron",
-        ))
-        .with_mount(Mount::bind_mount(
-            config_file.to_string_lossy(),
-            "/etc/ferron.conf",
-        ))
-        .with_mount(Mount::bind_mount(
-            host_socket_dir.to_string_lossy(),
-            container_socket_dir,
-        ))
-        .with_cmd(vec![
-            "/bin/sh",
-            "-c",
-            "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; wait $(cat /tmp/ferron.pid)",
-        ])
-        .start()
-        .await
+async fn exec_curl_tcp_should_fail(
+    container: &ContainerAsync<GenericImage>,
+    port: u16,
+) -> bool {
+    use testcontainers::core::ExecCommand;
+    let url = format!("http://127.0.0.1:{}/", port);
+    let exec = ExecCommand::new(vec![
+        "curl",
+        "-s",
+        "--connect-timeout",
+        "2",
+        &url,
+    ]);
+    match container.exec(exec).await {
+        Ok(r) => {
+            let code = r.exit_code().await.unwrap_or(Some(-1)).unwrap_or(-1);
+            // curl exit 7 = Failed to connect, 28 = timeout, 0 = success
+            // If TCP is disabled, we expect non-zero.
+            code != 0
+        }
+        Err(_) => true,
+    }
 }
 
 #[tokio::test]
@@ -108,7 +113,6 @@ async fn test_unix_absolute() {
 
         let webroot_dir = common::create_temp_dir();
         let mut config_file = common::create_temp_file();
-        let host_socket_dir = common::create_temp_dir();
 
         common::write_file(
             webroot_dir.path().join("index.html"),
@@ -116,8 +120,6 @@ async fn test_unix_absolute() {
         )
         .unwrap();
 
-        // Ferron config: absolute Unix socket, no TCP port needed
-        // When unix is configured, TCP/QUIC listeners are disabled.
         let container_socket_path = "/tmp/unix/ferron.sock";
         let config_content = format!(
             r#"{{
@@ -133,38 +135,59 @@ async fn test_unix_absolute() {
             .write_all(config_content.as_bytes())
             .unwrap();
 
-        let container = create_ferron_unix_container(
-            webroot_dir.path(),
-            config_file.path(),
-            host_socket_dir.path(),
-            "/tmp/unix",
-        )
-        .await
-        .unwrap();
+        let ferron_image = common::build_ferron_image().await.unwrap();
+        let container = ferron_image
+            .with_wait_for(WaitFor::seconds(2))
+            .with_network("bridge")
+            .with_mount(Mount::bind_mount(
+                webroot_dir.path().to_string_lossy(),
+                "/var/www/ferron",
+            ))
+            .with_mount(Mount::bind_mount(
+                config_file.path().to_string_lossy(),
+                "/etc/ferron.conf",
+            ))
+            .with_cmd(vec![
+                "/bin/sh",
+                "-c",
+                "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; wait $(cat /tmp/ferron.pid)",
+            ])
+            .start()
+            .await
+            .unwrap();
 
-        let host_socket_path = host_socket_dir.path().join("ferron.sock");
         assert!(
-            wait_for_socket(&host_socket_path, Duration::from_secs(10)).await,
-            "Unix socket file should appear at {:?}",
-            host_socket_path
+            wait_for_socket_in_container(&container, container_socket_path, std::time::Duration::from_secs(10)).await,
+            "Unix socket should appear at {} inside container",
+            container_socket_path
         );
 
-        // Verify TCP is disabled: no exposed port 80 should be reachable
-        // The container was not exposed with 80, so get_host_port should fail or connection should fail
-        let tcp_result = container.get_host_port_ipv4(ContainerPort::Tcp(80)).await;
+        // Verify TCP 80 is disabled: container should not expose port 80,
+        // and curl to 127.0.0.1:80 inside container should fail
+        let tcp_exposed = container
+            .get_host_port_ipv4(ContainerPort::Tcp(80))
+            .await
+            .is_ok();
         assert!(
-            tcp_result.is_err(),
+            !tcp_exposed,
             "TCP port 80 should not be exposed when Unix socket is configured"
         );
+        assert!(
+            exec_curl_tcp_should_fail(&container, 80).await,
+            "curl to 127.0.0.1:80 inside container should fail when Unix is enabled"
+        );
 
-        // Also try raw TCP connect to ensure no listener (if we had exposed, it would fail)
-        // For completeness, try to connect via reqwest to the host port if it were there — but we expect no port.
+        // HTTP over Unix socket
+        let (code, body, stderr) =
+            exec_curl_unix(&container, container_socket_path, "example.com", "/index.html")
+                .await
+                .expect("exec curl over Unix socket should succeed");
 
-        let (status, body) = http_get_via_unix(&host_socket_path, "example.com", "/index.html")
-            .await
-            .expect("HTTP over Unix socket should succeed");
-
-        assert_eq!(status, 200, "Expected 200 over Unix socket, got {}", status);
+        assert_eq!(
+            code, 200,
+            "Expected 200 over Unix socket, got {} stderr={}",
+            code, stderr
+        );
         assert!(
             body.contains("hello from unix absolute"),
             "Body mismatch: {}",
@@ -172,8 +195,6 @@ async fn test_unix_absolute() {
         );
 
         container.stop().await.unwrap();
-        // Socket should be cleaned up after stop (best-effort)
-        // Host file may still exist until container is removed, but we check it was created.
     }
 }
 
@@ -193,9 +214,6 @@ async fn test_unix_relative() {
 
         let webroot_dir = common::create_temp_dir();
         let mut config_file = common::create_temp_file();
-        // For relative path, Ferron resolves relative to its WORKDIR (/var/log/ferron inside container)
-        // We'll mount host_socket_dir to /var/log/ferron to capture the relative socket.
-        let host_socket_dir = common::create_temp_dir();
 
         common::write_file(
             webroot_dir.path().join("index.html"),
@@ -203,10 +221,9 @@ async fn test_unix_relative() {
         )
         .unwrap();
 
-        // Relative path: will be resolved relative to /var/log/ferron inside container.
-        // The container's WORKDIR is /var/log/ferron (from Dockerfile.test).
-        // So "ferron.sock" becomes "/var/log/ferron/ferron.sock".
-        // We mount host_socket_dir to /var/log/ferron to expose it.
+        // Relative path: resolved against server's WORKDIR (/var/log/ferron in Dockerfile.test)
+        // So "ferron.sock" becomes "/var/log/ferron/ferron.sock" after canonicalization (if parent exists)
+        // The file does not exist beforehand, so it stays relative, then socket2 creates it relative to CWD.
         let config_content = r#"{
   unix "ferron.sock"
 }
@@ -219,9 +236,6 @@ async fn test_unix_relative() {
             .write_all(config_content.as_bytes())
             .unwrap();
 
-        // Need custom container creation that mounts host_socket_dir to /var/log/ferron
-        // (instead of /tmp/unix). Note that /var/log/ferron is also where Ferron logs go,
-        // but mounting a tmpfs there is okay for test.
         let ferron_image = common::build_ferron_image().await.unwrap();
         let container = ferron_image
             .with_wait_for(WaitFor::seconds(2))
@@ -234,10 +248,6 @@ async fn test_unix_relative() {
                 config_file.path().to_string_lossy(),
                 "/etc/ferron.conf",
             ))
-            .with_mount(Mount::bind_mount(
-                host_socket_dir.path().to_string_lossy(),
-                "/var/log/ferron",
-            ))
             .with_cmd(vec![
                 "/bin/sh",
                 "-c",
@@ -247,25 +257,32 @@ async fn test_unix_relative() {
             .await
             .unwrap();
 
-        let host_socket_path = host_socket_dir.path().join("ferron.sock");
+        // Relative socket should appear at /var/log/ferron/ferron.sock inside container
+        let container_socket_path = "/var/log/ferron/ferron.sock";
         assert!(
-            wait_for_socket(&host_socket_path, Duration::from_secs(10)).await,
-            "Relative Unix socket should be canonicalized and appear at {:?}",
-            host_socket_path
+            wait_for_socket_in_container(&container, container_socket_path, std::time::Duration::from_secs(10)).await,
+            "Relative Unix socket should be canonicalized and appear at {}",
+            container_socket_path
         );
 
-        let tcp_result = container.get_host_port_ipv4(ContainerPort::Tcp(80)).await;
-        assert!(
-            tcp_result.is_err(),
-            "TCP should be disabled when Unix socket (even relative) is configured"
-        );
+        // Also check that the relative name without prefix works via curl's --unix-socket
+        // (curl resolves relative to its CWD, but we use absolute inside container)
+        let (code, body, _) =
+            exec_curl_unix(&container, container_socket_path, "example.com", "/index.html")
+                .await
+                .expect("HTTP over relative Unix socket should succeed");
 
-        let (status, body) = http_get_via_unix(&host_socket_path, "example.com", "/index.html")
-            .await
-            .expect("HTTP over relative Unix socket should succeed");
-
-        assert_eq!(status, 200);
+        assert_eq!(code, 200);
         assert!(body.contains("hello from unix relative"));
+
+        // TCP should still be disabled
+        assert!(
+            container
+                .get_host_port_ipv4(ContainerPort::Tcp(80))
+                .await
+                .is_err(),
+            "TCP should be disabled for relative unix socket"
+        );
 
         container.stop().await.unwrap();
     }
@@ -287,7 +304,6 @@ async fn test_unix_tcp_disabled() {
 
         let webroot_dir = common::create_temp_dir();
         let mut config_file = common::create_temp_file();
-        let host_socket_dir = common::create_temp_dir();
 
         common::write_file(webroot_dir.path().join("index.html"), b"unix disables tcp").unwrap();
 
@@ -303,31 +319,51 @@ async fn test_unix_tcp_disabled() {
             .write_all(config_content.as_bytes())
             .unwrap();
 
-        let container = create_ferron_unix_container(
-            webroot_dir.path(),
-            config_file.path(),
-            host_socket_dir.path(),
-            "/tmp/unix",
-        )
-        .await
-        .unwrap();
-
-        let host_socket_path = host_socket_dir.path().join("ferron.sock");
-        assert!(wait_for_socket(&host_socket_path, Duration::from_secs(10)).await);
-
-        // Verify that even if we try to expose TCP 80, it's not listening.
-        // The container was started without with_exposed_port(80), so any
-        // attempt to connect via TCP should fail. As an extra check, try
-        // to start a second client that would use TCP if it were available:
-        // we ensure the Unix socket still works while TCP is gone.
-        let (status, _) = http_get_via_unix(&host_socket_path, "example.com", "/index.html")
+        let ferron_image = common::build_ferron_image().await.unwrap();
+        let container = ferron_image
+            .with_wait_for(WaitFor::seconds(2))
+            .with_network("bridge")
+            .with_mount(Mount::bind_mount(
+                webroot_dir.path().to_string_lossy(),
+                "/var/www/ferron",
+            ))
+            .with_mount(Mount::bind_mount(
+                config_file.path().to_string_lossy(),
+                "/etc/ferron.conf",
+            ))
+            .with_cmd(vec![
+                "/bin/sh",
+                "-c",
+                "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; wait $(cat /tmp/ferron.pid)",
+            ])
+            .start()
             .await
             .unwrap();
-        assert_eq!(status, 200);
 
-        // Explicitly verify that the Ferron logs mention disabling TCP/QUIC
-        // (we can't easily read container logs here without exec, but the
-        // absence of TCP port is sufficient for E2E).
+        let container_socket_path = "/tmp/unix/ferron.sock";
+        assert!(
+            wait_for_socket_in_container(&container, container_socket_path, std::time::Duration::from_secs(10)).await,
+            "Unix socket should exist"
+        );
+
+        // Unix should work
+        let (code, _, _) = exec_curl_unix(&container, container_socket_path, "example.com", "/index.html")
+            .await
+            .unwrap();
+        assert_eq!(code, 200);
+
+        // TCP must be disabled: exec curl to 127.0.0.1:80 should fail
+        assert!(
+            exec_curl_tcp_should_fail(&container, 80).await,
+            "TCP 80 should be disabled when Unix is enabled"
+        );
+        // Also host-side mapping should not exist
+        assert!(
+            container
+                .get_host_port_ipv4(ContainerPort::Tcp(80))
+                .await
+                .is_err()
+        );
 
         container.stop().await.unwrap();
     }
