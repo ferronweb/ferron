@@ -114,9 +114,7 @@ impl BasicAuthStage {
 
     /// Build a lockout response (IP temporarily locked due to brute-force protection).
     fn make_lockout_response(ctx: &HttpContext, engine: &BruteForceEngine) -> HttpResponse {
-        let retry_after = ctx
-            .remote_address
-            .and_then(|a| engine.retry_after(a.ip()));
+        let retry_after = ctx.remote_address.and_then(|a| engine.retry_after(a.ip()));
         let mut header_map = HeaderMap::new();
         if let Some(duration) = retry_after {
             header_map.insert(
@@ -208,9 +206,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                 return Ok(false);
             }
         };
-        let ip = ctx
-            .remote_address
-            .map(|a| a.ip().to_canonical());
+        let ip = ctx.remote_address.map(|a| a.ip().to_canonical());
 
         // Only apply IP-based brute-force protection when a client IP is known
         // (e.g. not for Unix socket listeners, which have no remote address).
@@ -334,10 +330,7 @@ impl Stage<HttpContext> for BasicAuthStage {
                 target: "ferron-http-basicauth",
                 attributes: vec![
                     ("user.name", LogAttributeValue::String(username.clone())),
-                    (
-                        "client.address",
-                        LogAttributeValue::String(client_ip_str),
-                    ),
+                    ("client.address", LogAttributeValue::String(client_ip_str)),
                     ("ferron.basicauth.locked", LogAttributeValue::Bool(locked)),
                 ],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),

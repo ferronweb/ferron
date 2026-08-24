@@ -236,26 +236,24 @@ where
     S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     G: 'static,
 {
-        if let Some(proxy_header_version) = config.proxy_header {
-            // The PROXY protocol header requires both local and remote
-            // addresses; skip it when either is unknown (Unix socket listeners).
-            if let (Some(cip), Some(local_addr), Some(remote_addr)) =
-                (client_ip, ctx.local_address, ctx.remote_address)
-            {
-                let header_bytes = build_proxy_protocol_header(
-                    proxy_header_version,
-                    cip,
-                    local_addr.ip(),
-                    remote_addr.port(),
-                    local_addr.port(),
-                )?;
-                stream.write_all(&header_bytes).await.map_err(|e| {
-                    ProxyError::ProxyProtocolWriteFailed(format!(
-                        "PROXY header write failed: {e}"
-                    ))
-                })?;
-            }
+    if let Some(proxy_header_version) = config.proxy_header {
+        // The PROXY protocol header requires both local and remote
+        // addresses; skip it when either is unknown (Unix socket listeners).
+        if let (Some(cip), Some(local_addr), Some(remote_addr)) =
+            (client_ip, ctx.local_address, ctx.remote_address)
+        {
+            let header_bytes = build_proxy_protocol_header(
+                proxy_header_version,
+                cip,
+                local_addr.ip(),
+                remote_addr.port(),
+                local_addr.port(),
+            )?;
+            stream.write_all(&header_bytes).await.map_err(|e| {
+                ProxyError::ProxyProtocolWriteFailed(format!("PROXY header write failed: {e}"))
+            })?;
         }
+    }
 
     if is_https {
         let connector = TlsConnector::from(cached_tls_config(

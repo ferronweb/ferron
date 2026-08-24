@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use crate::config::{ResponseConfig, StatusRule};
 use bytes::Bytes;
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
@@ -21,7 +22,6 @@ use http::header::LOCATION;
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
 use rustc_hash::FxBuildHasher;
-use crate::config::{ResponseConfig, StatusRule};
 
 const LOG_TARGET: &str = "ferron-http-response";
 

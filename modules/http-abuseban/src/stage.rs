@@ -34,9 +34,7 @@ impl AbuseProtectionStage {
             .extensions
             .insert::<AbuseRegistryConfig>(config.registry_config.clone());
 
-        let client_ip = context
-            .remote_address
-            .map(|a| a.ip().to_canonical());
+        let client_ip = context.remote_address.map(|a| a.ip().to_canonical());
 
         // Without a client IP (e.g. Unix socket listeners) we cannot apply
         // IP-based abuse bans; allow the request through.

@@ -429,10 +429,7 @@ impl AbuseRecorder for AbuseRegistry {
             ctx.events.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Warn,
-                    message: format!(
-                        "Ban triggered: IP {} - {}",
-                        event.ip, event.reason
-                    ),
+                    message: format!("Ban triggered: IP {} - {}", event.ip, event.reason),
                     summary: "Ban triggered".into(),
                     target: "ferron-http-abuseban",
                     attributes: vec![

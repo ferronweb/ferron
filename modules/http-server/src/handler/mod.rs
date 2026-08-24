@@ -15,7 +15,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use rustc_hash::FxHashMap;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::access_log::{CustomAccessLogField, CustomAccessLogFields};
@@ -31,6 +30,7 @@ use ferron_observability::{
 use http::{HeaderValue, Response};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty};
+use rustc_hash::FxHashMap;
 
 use crate::config::ThreeStageResolver;
 use crate::util::canonicalize_url::canonicalize_path;

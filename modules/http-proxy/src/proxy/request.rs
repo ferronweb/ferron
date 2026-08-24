@@ -112,7 +112,10 @@ pub(super) fn construct_proxy_request(
     let proto = if ctx.encrypted { "https" } else { "http" };
 
     let client_ip_from_header_enabled = ClientIpFromHeaderConfig::resolve_from_context(ctx)
-        .is_some_and(|s| ctx.remote_address.is_some_and(|a| s.is_trusted_proxy(a.ip())));
+        .is_some_and(|s| {
+            ctx.remote_address
+                .is_some_and(|a| s.is_trusted_proxy(a.ip()))
+        });
 
     // Only inject client/forwarded headers when both local and remote addresses
     // are known (not the case for Unix socket listeners).
