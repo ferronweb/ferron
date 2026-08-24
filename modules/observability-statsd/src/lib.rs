@@ -13,6 +13,7 @@ use ferron_core::providers::Provider;
 use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::shutdown::RELOAD_TOKEN;
 use ferron_core::{config_validator_scoped_key, log_warn, Module};
+use ferron_observability::baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet};
 use ferron_observability::{
     Event, EventSink, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
     ObservabilityContext,
@@ -164,10 +165,13 @@ fn sanitize_tag_value(s: &str) -> String {
 /// Render the metric attributes as DogStatsD tags (`|#key:value,key:value`).
 ///
 /// Returns `None` when there are no attributes. Control plane metadata is
-/// included with the `ferron_control_plane_` key prefix.
+/// included with the `ferron_control_plane_` key prefix. Promoted W3C Baggage
+/// keys are added as tags using `tracker` to cap distinct values.
 fn format_tags(
     event: &MetricEvent,
     control_plane_metadata: &Option<Arc<BTreeMap<String, String>>>,
+    promotions: &[BaggageKeyPromotion],
+    tracker: &mut DistinctValueTracker,
 ) -> Option<String> {
     let mut tags: Vec<(String, String)> = Vec::new();
 
@@ -186,6 +190,25 @@ fn format_tags(
             MetricAttributeValue::F64(f) => f.to_string(),
         };
         tags.push((key.to_string(), sanitize_tag_value(&rendered)));
+    }
+
+    if let Some(baggage_str) = event
+        .trace_context
+        .as_ref()
+        .and_then(|c| c.baggage.as_deref())
+    {
+        let extracted = baggage::extract_promoted_keys(baggage_str, promotions, SignalSet::METRICS);
+        for attr in extracted {
+            let max_distinct = promotions
+                .iter()
+                .find(|p| p.effective_attribute_name() == attr.attribute_name)
+                .and_then(|p| p.max_distinct);
+            let Some(value) = tracker.canonicalize(&attr.attribute_name, &attr.value, max_distinct)
+            else {
+                continue;
+            };
+            tags.push((attr.attribute_name, sanitize_tag_value(&value)));
+        }
     }
 
     if let Some(metadata) = control_plane_metadata {
@@ -221,6 +244,7 @@ fn format_metric_datagram(
     event: &MetricEvent,
     config: &StatsdBackendConfig,
     control_plane_metadata: &Option<Arc<BTreeMap<String, String>>>,
+    tracker: &mut DistinctValueTracker,
 ) -> Option<String> {
     let name = format_metric_name(event, config);
 
@@ -250,7 +274,12 @@ fn format_metric_datagram(
     let mut datagram = format!("{}:{}|{}", name, value, type_suffix);
 
     if config.datadog {
-        if let Some(tags) = format_tags(event, control_plane_metadata) {
+        if let Some(tags) = format_tags(
+            event,
+            control_plane_metadata,
+            &config.baggage_promotions,
+            tracker,
+        ) {
             datagram.push_str(&tags);
         }
     }
@@ -296,6 +325,7 @@ async fn run_statsd_consumer(
 ) {
     let reload_token = RELOAD_TOKEN.load_full();
     let mut sender: Option<(String, u16, tokio::net::UdpSocket, SocketAddr)> = None;
+    let mut baggage_tracker = DistinctValueTracker::new();
 
     while let Some(msg) = tokio::select! {
         result = async {
@@ -361,9 +391,12 @@ async fn run_statsd_consumer(
             continue;
         };
 
-        let Some(datagram) =
-            format_metric_datagram(metric_event, &config, &msg.control_plane_metadata)
-        else {
+        let Some(datagram) = format_metric_datagram(
+            metric_event,
+            &config,
+            &msg.control_plane_metadata,
+            &mut baggage_tracker,
+        ) else {
             continue;
         };
 
@@ -513,6 +546,17 @@ impl ModuleLoader for StatsdObservabilityModuleLoader {
                     subblock_link: None,
                 },
                 DirectiveSubblock::custom("observability"),
+            )
+            .register(
+                Directive {
+                    name: "baggage",
+                    usage: "baggage { ... }",
+                    description: "This directive configures baggage key promotion for StatsD. Contains key blocks with attribute and max_distinct. Promoted keys are rendered as DogStatsD tags.",
+                    applicable_protocols: None,
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("observability"),
             );
     }
 
@@ -546,6 +590,7 @@ mod tests {
             port: 8125,
             prefix: prefix.map(|s| s.to_string()),
             datadog,
+            baggage_promotions: Vec::new(),
         }
     }
 
@@ -576,7 +621,13 @@ mod tests {
             Some("{request}"),
             vec![],
         );
-        let datagram = format_metric_datagram(&event, &config(None, false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "ferron.http.server.request_count:1|c");
     }
 
@@ -589,7 +640,13 @@ mod tests {
             None,
             vec![],
         );
-        let datagram = format_metric_datagram(&event, &config(None, false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "ferron.test.counter:1.5|c");
     }
 
@@ -602,7 +659,13 @@ mod tests {
             None,
             vec![],
         );
-        let datagram = format_metric_datagram(&event, &config(None, false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "ferron.admin.connections_active:42|g");
     }
 
@@ -615,7 +678,13 @@ mod tests {
             None,
             vec![],
         );
-        let datagram = format_metric_datagram(&pos, &config(None, false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &pos,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "ferron.test.updown:+3|g");
 
         let neg = metric(
@@ -625,7 +694,13 @@ mod tests {
             None,
             vec![],
         );
-        let datagram = format_metric_datagram(&neg, &config(None, false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &neg,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "ferron.test.updown:-3|g");
 
         let zero = metric(
@@ -635,7 +710,13 @@ mod tests {
             None,
             vec![],
         );
-        let datagram = format_metric_datagram(&zero, &config(None, false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &zero,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "ferron.test.updown:0|g");
     }
 
@@ -648,7 +729,13 @@ mod tests {
             Some("s"),
             vec![],
         );
-        let datagram = format_metric_datagram(&event, &config(None, false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "http.server.request.duration:250|ms");
     }
 
@@ -661,7 +748,13 @@ mod tests {
             None,
             vec![],
         );
-        let datagram = format_metric_datagram(&event, &config(None, false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "ferron.test.histogram:12.5|ms");
     }
 
@@ -674,7 +767,13 @@ mod tests {
             Some("s"),
             vec![],
         );
-        let datagram = format_metric_datagram(&event, &config(None, true), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, true),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "http.server.request.duration:0.25|h");
     }
 
@@ -687,8 +786,13 @@ mod tests {
             None,
             vec![],
         );
-        let datagram =
-            format_metric_datagram(&event, &config(Some("myapp"), false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(Some("myapp"), false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "myapp.ferron.http.server.request_count:1|c");
     }
 
@@ -701,7 +805,13 @@ mod tests {
             None,
             vec![],
         );
-        assert!(format_metric_datagram(&nan, &config(None, false), &None).is_none());
+        assert!(format_metric_datagram(
+            &nan,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new()
+        )
+        .is_none());
 
         let inf = metric(
             "ferron.test.gauge",
@@ -710,7 +820,13 @@ mod tests {
             None,
             vec![],
         );
-        assert!(format_metric_datagram(&inf, &config(None, false), &None).is_none());
+        assert!(format_metric_datagram(
+            &inf,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new()
+        )
+        .is_none());
     }
 
     #[test]
@@ -722,7 +838,13 @@ mod tests {
             None,
             vec![("ferron.host", MetricAttributeValue::StaticStr("localhost"))],
         );
-        let datagram = format_metric_datagram(&event, &config(None, false), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, false),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "ferron.test.counter:1|c");
     }
 
@@ -739,7 +861,13 @@ mod tests {
                 ("ferron.upstream.is_tls", MetricAttributeValue::Bool(true)),
             ],
         );
-        let datagram = format_metric_datagram(&event, &config(None, true), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, true),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(
             datagram,
             "ferron.test.counter:1|c|#ferron.host:localhost,http.response.status_code:200,ferron.upstream.is_tls:true"
@@ -758,7 +886,13 @@ mod tests {
         let mut metadata = BTreeMap::new();
         metadata.insert("region".to_string(), "eu-west".to_string());
         let metadata = Some(Arc::new(metadata));
-        let datagram = format_metric_datagram(&event, &config(None, true), &metadata).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, true),
+            &metadata,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(
             datagram,
             "ferron.test.counter:1|c|#ferron_control_plane_region:eu-west"
@@ -777,8 +911,89 @@ mod tests {
                 MetricAttributeValue::String("a,b#c:d".to_string()),
             )],
         );
-        let datagram = format_metric_datagram(&event, &config(None, true), &None).unwrap();
+        let datagram = format_metric_datagram(
+            &event,
+            &config(None, true),
+            &None,
+            &mut DistinctValueTracker::new(),
+        )
+        .unwrap();
         assert_eq!(datagram, "ferron.test.counter:1|c|#ferron.host:a?b?c?d");
+    }
+
+    #[test]
+    fn baggage_keys_promoted_to_tags_in_datadog_mode() {
+        use ferron_observability::baggage::{BaggageKeyPromotion, SignalSet};
+
+        let cfg = StatsdBackendConfig {
+            host: "127.0.0.1".to_string(),
+            port: 8125,
+            prefix: None,
+            datadog: true,
+            baggage_promotions: vec![BaggageKeyPromotion {
+                baggage_key: "tenant.id".to_string(),
+                attribute_name: None,
+                signals: Some(SignalSet::METRICS),
+                max_distinct: None,
+            }],
+        };
+
+        let mut event = metric(
+            "ferron.test.counter",
+            MetricType::Counter,
+            MetricValue::U64(1),
+            None,
+            vec![("ferron.host", MetricAttributeValue::StaticStr("localhost"))],
+        );
+        event.trace_context = Some(ferron_observability::EventTraceContext {
+            trace_id: [0; 32],
+            span_id: [0; 16],
+            baggage: Some("tenant.id=acme,other=skip".to_string()),
+            sampled: None,
+        });
+
+        let mut tracker = DistinctValueTracker::new();
+        let datagram = format_metric_datagram(&event, &cfg, &None, &mut tracker).unwrap();
+        assert_eq!(
+            datagram,
+            "ferron.test.counter:1|c|#ferron.host:localhost,tenant.id:acme"
+        );
+    }
+
+    #[test]
+    fn baggage_promotion_ignored_without_datadog() {
+        use ferron_observability::baggage::{BaggageKeyPromotion, SignalSet};
+
+        let cfg = StatsdBackendConfig {
+            host: "127.0.0.1".to_string(),
+            port: 8125,
+            prefix: None,
+            datadog: false,
+            baggage_promotions: vec![BaggageKeyPromotion {
+                baggage_key: "tenant.id".to_string(),
+                attribute_name: None,
+                signals: Some(SignalSet::METRICS),
+                max_distinct: None,
+            }],
+        };
+
+        let mut event = metric(
+            "ferron.test.counter",
+            MetricType::Counter,
+            MetricValue::U64(1),
+            None,
+            vec![],
+        );
+        event.trace_context = Some(ferron_observability::EventTraceContext {
+            trace_id: [0; 32],
+            span_id: [0; 16],
+            baggage: Some("tenant.id=acme".to_string()),
+            sampled: None,
+        });
+
+        let mut tracker = DistinctValueTracker::new();
+        let datagram = format_metric_datagram(&event, &cfg, &None, &mut tracker).unwrap();
+        assert_eq!(datagram, "ferron.test.counter:1|c");
     }
 
     #[tokio::test]

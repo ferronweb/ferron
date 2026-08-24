@@ -30,6 +30,7 @@ observability {
 | `port`     | `<number>`   | UDP port of the StatsD server. Must be between 1 and 65535.             | `8125`        |
 | `prefix`   | `<string>`   | Prefix prepended to every metric name with a `.` separator.             | none          |
 | `datadog`  | `<bool>`     | Enable DogStatsD extensions: metric tags and the histogram metric type. | `false`       |
+| `baggage`  | `{ ... }`    | Promote W3C Baggage keys into DogStatsD tags.                           | none          |
 
 The server sends each metric as a separate UDP datagram. The module does not wait for acknowledgments, so a missing or slow StatsD server does not slow down Ferron.
 
@@ -70,6 +71,35 @@ Set `datadog true` to enable DogStatsD extensions:
 Tag values are sanitized for the DogStatsD tag syntax. The reserved characters `,`, `#`, and `:` become `?`. This prevents tag injection.
 
 Without `datadog`, the module does not add tags and sends all histogram metrics as `ms` timers.
+
+## Baggage promotion
+
+The `baggage` sub-directive promotes specific W3C Baggage keys into DogStatsD tags. This is useful for adding request-scoped context (such as tenant IDs or user roles) to your metrics without custom instrumentation. Promoted keys are only emitted when `datadog` is enabled, because vanilla StatsD has no tag syntax.
+
+```ferron
+observability {
+    provider statsd
+    datadog true
+
+    baggage {
+        key "tenant.id" {
+            attribute "tenant.id"
+            max_distinct 100
+        }
+    }
+}
+```
+
+Each `key` entry configures one baggage key to promote:
+
+| Nested directive | Arguments           | Description                                                                              | Default                 |
+| ---------------- | ------------------- | ---------------------------------------------------------------------------------------- | ----------------------- |
+| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                | none                    |
+| `attribute`      | `<string>`          | The DogStatsD tag name to use.                                                           | same as the baggage key |
+| `max_distinct`   | `<number> \| false` | Maximum distinct tag values before dropping. Prevents high-cardinality tag explosion.    | 100                     |
+
+> [!warning]
+> StatsD tags with high-cardinality values can cause significant performance issues in the receiving backend. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are dropped.
 
 ## Example
 

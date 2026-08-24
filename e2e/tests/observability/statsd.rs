@@ -212,3 +212,92 @@ async fn test_statsd_vanilla_mode() {
     statsd.stop().await.unwrap();
     ferron.stop().await.unwrap();
 }
+
+/// With `datadog` and a `baggage` promotion, a W3C Baggage key from the
+/// request is emitted as a DogStatsD tag on metric datagrams.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_statsd_baggage_promotion() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let mut files = create_test_files();
+    files
+        .config
+        .as_file_mut()
+        .write_all(
+            r#"*:80 {
+  root "/var/www/ferron"
+  observability {
+    provider statsd
+    host "statsd"
+    port 8125
+    datadog true
+    baggage {
+      key "tenant.id" {
+        attribute "tenant.id"
+      }
+    }
+  }
+}
+"#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    crate::common::write_file(files.webroot.path().join("basic.txt"), b"hello").unwrap();
+
+    let network = "e2e-test-statsd-baggage";
+    let statsd = create_statsd_container(network).await.unwrap();
+    let ferron = create_ferron_container(network, files.webroot.path(), files.config.path())
+        .await
+        .unwrap();
+
+    let http_port = ferron
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+    let statsd_http_port = statsd
+        .get_host_port_ipv4(ContainerPort::Tcp(8080))
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::new();
+
+    // Send requests carrying a W3C Baggage header.
+    for _ in 0..3 {
+        let _ = client
+            .get(format!("http://localhost:{}/basic.txt", http_port))
+            .header("baggage", "tenant.id=acme,other=skip")
+            .send()
+            .await
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    }
+
+    let received_url = format!("http://localhost:{}/received", statsd_http_port);
+
+    let payload = wait_for_datagram(&client, &received_url, "tenant.id:acme")
+        .await
+        .expect("StatsD mock did not receive the promoted baggage tag");
+
+    let items = payload["items"].as_array().unwrap();
+    let joined = items
+        .iter()
+        .filter_map(|i| i.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // The promoted key becomes a tag; unrelated baggage is not promoted.
+    assert!(
+        joined.contains("tenant.id:acme"),
+        "promoted baggage tag not found, got:\n{}",
+        joined
+    );
+    assert!(
+        !joined.contains("other:skip"),
+        "unpromoted baggage leaked as a tag, got:\n{}",
+        joined
+    );
+
+    statsd.stop().await.unwrap();
+    ferron.stop().await.unwrap();
+}
