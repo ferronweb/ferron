@@ -46,13 +46,13 @@ impl RewriteValidator {
             .with_span(entry_span(entry)));
         }
 
-        if !matches!(
-            &entry.args[0],
-            ServerConfigurationValue::String(_, _)
-                | ServerConfigurationValue::InterpolatedString(_, _)
-        ) {
+        // Compiling full regex just to validate it... :')
+        if entry.args[0]
+            .as_string_with_interpolations(&std::collections::HashMap::new())
+            .is_none_or(|ref re| fancy_regex::Regex::new(re).is_err())
+        {
             return Err(ConfigurationValidationError::from(
-                "Invalid `rewrite` — the regular expression must be a string",
+                "Invalid `rewrite` — the regular expression must be a valid regular expression string",
             )
             .with_span(entry_span(entry)));
         }
