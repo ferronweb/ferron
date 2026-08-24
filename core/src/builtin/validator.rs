@@ -150,7 +150,6 @@ fn validate_control_plane_directives(
                             }
                         }
                     }
-                    // Validate span_id format (16 hex chars)
                     if let Some(sid_d) = link_children.directives.get("span_id") {
                         for sid_e in sid_d {
                             let Some(sid_val) = sid_e.get_value() else {
@@ -173,7 +172,6 @@ fn validate_control_plane_directives(
                             }
                         }
                     }
-                    // Validate sampled is a boolean if present
                     if let Some(sampled_entries) = link_children.directives.get("sampled") {
                         if let Some(sampled_entry) = sampled_entries.first() {
                             if !matches!(

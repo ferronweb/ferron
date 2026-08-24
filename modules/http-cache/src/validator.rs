@@ -585,7 +585,6 @@ fn validate_global_zone_block(
         ctx.scope.clone()
     );
 
-    // Validate max_entries if present
     if let Some(entries) = children.directives.get("max_entries") {
         for entry in entries {
             validate_single_non_negative_integer(entry, "max_entries")?;

@@ -44,7 +44,6 @@ impl ConfigurationValidator for PrometheusObservabilityConfigurationValidator {
             }
         }
 
-        // Validate `baggage { key "..." { ... } }` block
         if let Some(baggage_entries) = config.directives.get("baggage") {
             validator_ctx.used_directives.insert("baggage".to_string());
             for baggage_entry in baggage_entries {

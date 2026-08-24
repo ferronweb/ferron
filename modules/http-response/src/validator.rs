@@ -117,7 +117,6 @@ impl ConfigurationValidator for HttpResponseValidator {
                         }
                     }
 
-                    // Validate regex if present
                     if let Some(regex_entries) = children.directives.get("regex") {
                         for regex_entry in regex_entries {
                             if let Some(regex_str) =

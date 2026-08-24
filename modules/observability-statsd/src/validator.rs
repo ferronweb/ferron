@@ -20,7 +20,6 @@ impl ConfigurationValidator for StatsdObservabilityConfigurationValidator {
         validate_directive!(config, validator_ctx.used_directives, prefix, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
         validate_directive!(config, validator_ctx.used_directives, datadog, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {});
 
-        // Validate the port range (1-65535)
         if let Some(port_value) = config.get_value("port") {
             if let Some(port) = port_value.as_number() {
                 if !(1..=65535).contains(&port) {
@@ -38,7 +37,6 @@ impl ConfigurationValidator for StatsdObservabilityConfigurationValidator {
             }
         }
 
-        // Validate that the prefix does not contain StatsD reserved characters
         if let Some(prefix_value) = config.get_value("prefix") {
             if let Some(prefix) = prefix_value.as_str() {
                 if let Some(bad) = prefix.chars().find(|c| INVALID_NAME_CHARS.contains(c)) {
