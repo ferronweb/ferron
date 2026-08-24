@@ -5,10 +5,10 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use cidr::IpCidr;
-use fancy_regex::Regex;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::ServerConfigurationValue;
 use ferron_http::HttpContext;
+use regex::Regex;
 
 use crate::ResponseEngine;
 

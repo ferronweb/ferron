@@ -49,7 +49,7 @@ impl RewriteValidator {
         // Compiling full regex just to validate it... :')
         if entry.args[0]
             .as_string_with_interpolations(&std::collections::HashMap::new())
-            .is_none_or(|ref re| fancy_regex::Regex::new(re).is_err())
+            .is_none_or(|ref re| regex::Regex::new(re).is_err())
         {
             return Err(ConfigurationValidationError::from(
                 "Invalid `rewrite` — the regular expression must be a valid regular expression string",

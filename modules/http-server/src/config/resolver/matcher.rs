@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use fancy_regex::Regex;
 use ferron_core::config::{
     ServerConfigurationMatcherExpr, ServerConfigurationMatcherOperand,
     ServerConfigurationMatcherOperator,
 };
 use ferron_http::variables::resolve_variable;
 use ferron_http::HttpContext;
+use regex::Regex;
 
 /// A matcher expression with pre-compiled regex patterns for efficient evaluation.
 ///
@@ -82,10 +82,10 @@ pub fn evaluate_matcher_condition(compiled_expr: &CompiledMatcherExpr, ctx: &Htt
         ServerConfigurationMatcherOperator::Regex => {
             if let Some(left) = left_val {
                 if let Some(regex) = &compiled_expr.compiled_regex {
-                    regex.is_match(&left).unwrap_or(false)
+                    regex.is_match(&left)
                 } else if let Some(right) = right_val {
                     match Regex::new(&right) {
-                        Ok(regex) => regex.is_match(&left).unwrap_or(false),
+                        Ok(regex) => regex.is_match(&left),
                         Err(_) => false,
                     }
                 } else {
@@ -98,10 +98,10 @@ pub fn evaluate_matcher_condition(compiled_expr: &CompiledMatcherExpr, ctx: &Htt
         ServerConfigurationMatcherOperator::NotRegex => {
             if let Some(left) = left_val {
                 if let Some(regex) = &compiled_expr.compiled_regex {
-                    !regex.is_match(&left).unwrap_or(false)
+                    !regex.is_match(&left)
                 } else if let Some(right) = right_val {
                     match Regex::new(&right) {
-                        Ok(regex) => !regex.is_match(&left).unwrap_or(false),
+                        Ok(regex) => !regex.is_match(&left),
                         Err(_) => true,
                     }
                 } else {

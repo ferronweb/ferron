@@ -27,7 +27,7 @@ const LOG_TARGET: &str = "ferron-http-response";
 
 /// Shared state for the http-response module.
 pub struct ResponseEngine {
-    pub compiled_regexes: DashMap<String, Arc<fancy_regex::Regex>, FxBuildHasher>,
+    pub compiled_regexes: DashMap<String, Arc<regex::Regex>, FxBuildHasher>,
 }
 
 impl ResponseEngine {
@@ -189,11 +189,11 @@ impl HttpResponseStage {
                 }
             }
             // Only regex: regex match
-            (None, Some(regex)) => regex.find(path).ok().flatten().map(|m| m.as_str()),
+            (None, Some(regex)) => regex.find(path).map(|m| m.as_str()),
             // Both url and regex: both must match
             (Some(url), Some(regex)) => {
                 if url == path {
-                    regex.find(path).ok().flatten().map(|m| m.as_str())
+                    regex.find(path).map(|m| m.as_str())
                 } else {
                     None
                 }

@@ -66,7 +66,7 @@ impl VariablesValidator {
         }
 
         if let ServerConfigurationValue::String(pattern, span) = &entry.args[1] {
-            if let Err(e) = fancy_regex::Regex::new(pattern) {
+            if let Err(e) = regex::Regex::new(pattern) {
                 return Err(ConfigurationValidationError::from(format!(
                     "Invalid `set_var` — failed to compile regular expression: {e}"
                 ))

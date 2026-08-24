@@ -30,7 +30,7 @@ use crate::validator::RewriteValidator;
 
 /// Shared state for the http-response module.
 pub struct RewriteEngine {
-    pub compiled_regexes: DashMap<String, Arc<fancy_regex::Regex>, FxBuildHasher>,
+    pub compiled_regexes: DashMap<String, Arc<regex::Regex>, FxBuildHasher>,
 }
 
 impl RewriteEngine {

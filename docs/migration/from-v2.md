@@ -444,6 +444,10 @@ example.com {
 
 Ferron strips the `/api` prefix from the request URL before proxying. The backend still receives `/api` from the proxy URL.
 
+### Backtracking regular expressions
+
+In Ferron 3, backtracking regex patterns (which could be used with Ferron 2) are no longer supported. If you were using syntax such as `(?= ...)`, `(?! ...)`, `(?<= ...)`, `(?<! ...)`, or `\1`, you need to rewrite the regexes.
+
 ### Handler execution order
 
 Ferron 3 processes directives in a more defined order:
