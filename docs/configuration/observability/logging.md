@@ -240,7 +240,9 @@ Structured error logs include contextual attributes to aid troubleshooting:
 | `error.type`     | Error category (e.g. `bad_request`, `timeout`, `tcp_connection_error`, `tcp_tls_handshake_error`) |
 | `error.message`  | The human-readable error description                                                              |
 | `client.address` | The client IP address, when available                                                             |
-| `server.address` | The server IP address, when available                                                             |
+| `client.port`    | The client port, when available                                                                   |
+| `server.address` | The server IP or Unix socket address, when available                                              |
+| `server.port`    | The server port, when available                                                                   |
 
 Ferron includes the `client.address` and `server.address` attributes in:
 

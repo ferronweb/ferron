@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::io;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -8,10 +9,12 @@ use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::HttpErrorContext;
 use ferron_observability::{
-    CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue, TraceAttributeValue, TraceEvent,
+    CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderValue, Response};
+
+use crate::handler::observability::get_error_log_attributes;
 
 use super::observability::next_span_key;
 use super::request_utils::{
@@ -21,8 +24,9 @@ use super::ResponseBody;
 
 pub async fn bad_request_handler(
     is_timeout: bool,
-    local_address: SocketAddr,
-    remote_address: SocketAddr,
+    local_address: Option<SocketAddr>,
+    remote_address: Option<SocketAddr>,
+    unix_socket_path: Option<PathBuf>,
     error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     events: CompositeEventSink,
     control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
@@ -64,20 +68,13 @@ pub async fn bad_request_handler(
                 "bad request"
             }
         ),
-        vec![
-            (
-                "error.type",
-                LogAttributeValue::String(error_type.to_string()),
-            ),
-            (
-                "client.address",
-                LogAttributeValue::String(remote_address.ip().to_canonical().to_string()),
-            ),
-            (
-                "server.address",
-                LogAttributeValue::String(local_address.ip().to_string()),
-            ),
-        ],
+        get_error_log_attributes(
+            error_type,
+            None,
+            local_address,
+            remote_address,
+            unix_socket_path,
+        ),
     );
     events.emit(Event::Metric(MetricEvent {
         name: "ferron.http.server.pre_handler_request_count",

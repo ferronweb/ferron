@@ -130,7 +130,7 @@ impl ThreeStageResolver {
     #[inline]
     pub fn resolve(
         &self,
-        ip: IpAddr,
+        ip: Option<IpAddr>,
         hostname: &str,
         path: &str,
         ctx: &HttpContext,
@@ -148,7 +148,7 @@ impl ThreeStageResolver {
     #[inline]
     pub fn resolve_error_scoped(
         &self,
-        ip: IpAddr,
+        ip: Option<IpAddr>,
         hostname: &str,
         path: &str,
         error_code: u16,
@@ -378,7 +378,7 @@ impl ThreeStageResolver {
     #[inline]
     fn resolve_base(
         &self,
-        ip: IpAddr,
+        ip: Option<IpAddr>,
         hostname: &str,
         path: &str,
         ctx: &HttpContext,
@@ -428,7 +428,7 @@ impl ThreeStageResolver {
         Some(BaseResolution {
             configuration,
             location_path: ResolvedLocationPath {
-                ip: Some(ip),
+                ip,
                 hostname_segments,
                 path_segments: matched_path_segments,
                 conditionals: matched_conditionals,
@@ -441,12 +441,12 @@ impl ThreeStageResolver {
     #[inline]
     fn resolve_host_matches(
         &self,
-        ip: IpAddr,
+        ip: Option<IpAddr>,
         hostname: &str,
         ctx: &HttpContext,
     ) -> Vec<ResolvedBlockMatch> {
         let generic_request_key = Self::request_hostname_lookup_key(hostname);
-        let scoped_request_key = Self::scoped_host_lookup_key(ip, Some(hostname));
+        let scoped_request_key = ip.map(|ip| Self::scoped_host_lookup_key(ip, Some(hostname)));
 
         let generic_matches = self
             .generic_hosts
@@ -454,12 +454,13 @@ impl ThreeStageResolver {
             .into_iter()
             .map(Self::owned_lookup_match)
             .collect::<Vec<_>>();
-        let scoped_matches = self
-            .scoped_hosts
-            .get(&scoped_request_key, ctx)
-            .into_iter()
-            .map(Self::owned_lookup_match)
-            .collect::<Vec<_>>();
+        let scoped_matches = scoped_request_key.map(|srk| {
+            self.scoped_hosts
+                .get(&srk, ctx)
+                .into_iter()
+                .map(Self::owned_lookup_match)
+                .collect::<Vec<_>>()
+        });
 
         let mut matches = Vec::new();
 
@@ -470,24 +471,28 @@ impl ThreeStageResolver {
             matches.push(default_match.clone());
         }
 
-        matches.extend(
-            scoped_matches
-                .iter()
-                .filter(|matched| !Self::has_hostname_keys(&matched.matched_keys))
-                .cloned(),
-        );
+        if let Some(scoped_matches) = &scoped_matches {
+            matches.extend(
+                scoped_matches
+                    .iter()
+                    .filter(|matched| !Self::has_hostname_keys(&matched.matched_keys))
+                    .cloned(),
+            );
+        }
         matches.extend(
             generic_matches
                 .iter()
                 .filter(|matched| Self::has_hostname_keys(&matched.matched_keys))
                 .cloned(),
         );
-        matches.extend(
-            scoped_matches
-                .iter()
-                .filter(|matched| Self::has_hostname_keys(&matched.matched_keys))
-                .cloned(),
-        );
+        if let Some(scoped_matches) = &scoped_matches {
+            matches.extend(
+                scoped_matches
+                    .iter()
+                    .filter(|matched| Self::has_hostname_keys(&matched.matched_keys))
+                    .cloned(),
+            );
+        }
 
         matches
     }

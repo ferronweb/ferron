@@ -772,8 +772,9 @@ async fn handle_http1_connection_zerocopy<S>(
         config_resolver,
         connection_observability,
         observability_resolver,
-        local_address,
-        remote_address,
+        local_address: Some(local_address),
+        remote_address: Some(remote_address),
+        unix_socket_path: None,
         hinted_hostname,
         encrypted,
         https_port,
@@ -821,13 +822,41 @@ async fn handle_http1_connection_zerocopy<S>(
                 (
                     "client.address",
                     LogAttributeValue::String(
-                        handler_state.remote_address.ip().to_canonical().to_string(),
+                        handler_state
+                            .remote_address
+                            .expect("TCP should set local address")
+                            .ip()
+                            .to_canonical()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "client.port",
+                    LogAttributeValue::I64(
+                        handler_state
+                            .remote_address
+                            .expect("TCP should set local address")
+                            .port() as i64,
                     ),
                 ),
                 (
                     "server.address",
                     LogAttributeValue::String(
-                        handler_state.local_address.ip().to_canonical().to_string(),
+                        handler_state
+                            .local_address
+                            .expect("TCP should set server address")
+                            .ip()
+                            .to_canonical()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "server.port",
+                    LogAttributeValue::I64(
+                        handler_state
+                            .local_address
+                            .expect("TCP should set server address")
+                            .port() as i64,
                     ),
                 ),
             ],
@@ -877,8 +906,9 @@ async fn handle_http1_connection<S>(
         config_resolver,
         connection_observability,
         observability_resolver,
-        local_address,
-        remote_address,
+        local_address: Some(local_address),
+        remote_address: Some(remote_address),
+        unix_socket_path: None,
         hinted_hostname,
         encrypted,
         https_port,
@@ -925,13 +955,41 @@ async fn handle_http1_connection<S>(
                 (
                     "client.address",
                     LogAttributeValue::String(
-                        handler_state.remote_address.ip().to_canonical().to_string(),
+                        handler_state
+                            .remote_address
+                            .expect("TCP should set remote address")
+                            .ip()
+                            .to_canonical()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "client.port",
+                    LogAttributeValue::I64(
+                        handler_state
+                            .remote_address
+                            .expect("TCP should set remote address")
+                            .port() as i64,
                     ),
                 ),
                 (
                     "server.address",
                     LogAttributeValue::String(
-                        handler_state.local_address.ip().to_canonical().to_string(),
+                        handler_state
+                            .local_address
+                            .expect("TCP should set local address")
+                            .ip()
+                            .to_canonical()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "server.port",
+                    LogAttributeValue::I64(
+                        handler_state
+                            .local_address
+                            .expect("TCP should set local address")
+                            .port() as i64,
                     ),
                 ),
             ],
@@ -981,8 +1039,9 @@ async fn handle_http2_connection<S>(
         config_resolver,
         connection_observability,
         observability_resolver,
-        local_address,
-        remote_address,
+        local_address: Some(local_address),
+        remote_address: Some(remote_address),
+        unix_socket_path: None,
         hinted_hostname,
         encrypted,
         https_port,
@@ -1029,13 +1088,41 @@ async fn handle_http2_connection<S>(
                 (
                     "client.address",
                     LogAttributeValue::String(
-                        handler_state.remote_address.ip().to_canonical().to_string(),
+                        handler_state
+                            .remote_address
+                            .expect("TCP should set remote address")
+                            .ip()
+                            .to_canonical()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "client.port",
+                    LogAttributeValue::I64(
+                        handler_state
+                            .remote_address
+                            .expect("TCP should set remote address")
+                            .port() as i64,
                     ),
                 ),
                 (
                     "server.address",
                     LogAttributeValue::String(
-                        handler_state.local_address.ip().to_canonical().to_string(),
+                        handler_state
+                            .local_address
+                            .expect("TCP should set local address")
+                            .ip()
+                            .to_canonical()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "server.port",
+                    LogAttributeValue::I64(
+                        handler_state
+                            .local_address
+                            .expect("TCP should set local address")
+                            .port() as i64,
                     ),
                 ),
             ],
@@ -1080,6 +1167,7 @@ fn build_bad_request_handler(
                 is_timeout,
                 state.local_address,
                 state.remote_address,
+                state.unix_socket_path.clone(),
                 state.error_pipeline.clone(),
                 request_observability,
                 state.host_control_plane_metadata.clone(),

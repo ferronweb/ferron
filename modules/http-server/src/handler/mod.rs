@@ -11,6 +11,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -24,8 +25,8 @@ use ferron_http::{
     trace_context, HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse,
 };
 use ferron_observability::{
-    CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue, TraceAttributeValue, TraceEvent,
+    CompositeEventSink, Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderValue, Response};
 use http_body_util::combinators::UnsyncBoxBody;
@@ -59,8 +60,9 @@ pub async fn request_handler(
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     config_resolver: Arc<ThreeStageResolver>,
-    local_address: SocketAddr,
-    remote_address: SocketAddr,
+    local_address: Option<SocketAddr>,
+    remote_address: Option<SocketAddr>,
+    unix_socket_path: Option<PathBuf>,
     hostname: Option<String>,
     encrypted: bool,
     http3_alt_svc: bool,
@@ -97,10 +99,18 @@ pub async fn request_handler(
             .map_or_else(|| request.uri().path().to_string(), |pq| pq.to_string())
     });
     let version = has_events.then(|| http_version_access_string(request.version()));
-    let server_ip = has_events.then(|| local_address.ip().to_string());
-    let server_port = has_events.then_some(local_address.port());
-    let server_ip_canonical = has_events.then(|| canonicalize_ip(local_address.ip()));
-    let initial_client_ip_canonical = has_events.then(|| canonicalize_ip(remote_address.ip()));
+    let server_ip = has_events
+        .then(|| local_address.map(|a| a.ip().to_string()))
+        .flatten();
+    let server_port = has_events
+        .then_some(local_address.map(|a| a.port()))
+        .flatten();
+    let server_ip_canonical = has_events
+        .then(|| local_address.map(|a| canonicalize_ip(a.ip())))
+        .flatten();
+    let initial_client_ip_canonical = has_events
+        .then(|| remote_address.map(|a| canonicalize_ip(a.ip())))
+        .flatten();
 
     let (request_trace_context, external_parent) = {
         let global_config = config_resolver.global();
@@ -161,14 +171,9 @@ pub async fn request_handler(
             let path = path
                 .as_ref()
                 .expect("trace events require request metadata to be initialized");
-            let server_ip = server_ip
-                .as_ref()
-                .expect("trace events require request metadata to be initialized");
-            let server_port =
-                server_port.expect("trace events require request metadata to be initialized");
-            let initial_client_ip_canonical = initial_client_ip_canonical
-                .as_ref()
-                .expect("trace events require request metadata to be initialized");
+            let server_ip = server_ip.as_ref();
+            let server_port = server_port;
+            let initial_client_ip_canonical = initial_client_ip_canonical.as_ref();
 
             let mut builder_attributes = vec![
                 (
@@ -183,23 +188,25 @@ pub async fn request_handler(
                     Cow::Borrowed("url.scheme"),
                     TraceAttributeValue::StaticStr(scheme),
                 ),
-                (
+            ];
+            if let Some(server_ip) = server_ip_canonical.clone().or_else(|| server_ip.cloned()) {
+                builder_attributes.push((
                     Cow::Borrowed("server.address"),
-                    TraceAttributeValue::String(
-                        server_ip_canonical
-                            .clone()
-                            .unwrap_or_else(|| server_ip.clone()),
-                    ),
-                ),
-                (
+                    TraceAttributeValue::String(server_ip.clone()),
+                ));
+            }
+            if let Some(server_port) = server_port {
+                builder_attributes.push((
                     Cow::Borrowed("server.port"),
                     TraceAttributeValue::I64(server_port as i64),
-                ),
-                (
+                ));
+            }
+            if let Some(initial_client_ip_canonical) = initial_client_ip_canonical {
+                builder_attributes.push((
                     Cow::Borrowed("client.address"),
                     TraceAttributeValue::String(initial_client_ip_canonical.clone()),
-                ),
-            ];
+                ));
+            }
             if let Some(ref tls) = tls_params {
                 builder_attributes.push((
                     Cow::Borrowed("tls.protocol.version"),
@@ -283,6 +290,7 @@ pub async fn request_handler(
         config_resolver,
         local_address,
         remote_address,
+        unix_socket_path,
         hostname.clone(),
         encrypted,
         https_port,
@@ -300,12 +308,6 @@ pub async fn request_handler(
         let duration_secs = request_timer.elapsed().as_secs_f64();
         let timestamp = chrono::Local::now();
 
-        // Use the potentially modified remote_address (e.g. from X-Forwarded-For stage)
-        // for access log fields, falling back to the original if not provided.
-        let effective_remote = final_remote_address.unwrap_or(remote_address);
-        let client_ip = effective_remote.ip().to_string();
-        let client_port = effective_remote.port();
-        let client_ip_canonical = canonicalize_ip(effective_remote.ip());
         let (status_code, content_length) = match &response_result {
             Ok(r) => {
                 let status = r.status().as_u16();
@@ -377,6 +379,12 @@ pub async fn request_handler(
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
         }));
 
+        // Use the potentially modified remote_address (e.g. from X-Forwarded-For stage)
+        // for access log fields, falling back to the original if not provided.
+        let effective_remote = final_remote_address.or(remote_address);
+        let client_ip = effective_remote.map(|er| er.ip().to_string());
+        let client_port = effective_remote.map(|er| er.port());
+        let client_ip_canonical = effective_remote.map(|er| canonicalize_ip(er.ip()));
         events.emit(Event::Access(Arc::new(HttpAccessLog {
             path: path.expect("request metadata should be initialized when events are enabled"),
             path_and_query: path_and_query
@@ -392,12 +400,9 @@ pub async fn request_handler(
             client_ip,
             client_port,
             client_ip_canonical,
-            server_ip: server_ip
-                .expect("request metadata should be initialized when events are enabled"),
-            server_port: server_port
-                .expect("request metadata should be initialized when events are enabled"),
-            server_ip_canonical: server_ip_canonical
-                .expect("request metadata should be initialized when events are enabled"),
+            server_ip: server_ip,
+            server_port: server_port,
+            server_ip_canonical: server_ip_canonical,
             auth_user,
             status: status_code,
             content_length,
@@ -440,7 +445,7 @@ pub async fn request_handler(
         add_http3_alt_svc_header(
             response.headers_mut(),
             if http3_alt_svc && encrypted {
-                Some(https_port.unwrap_or(local_address.port()))
+                https_port.or(local_address.map(|la| la.port()))
             } else {
                 None
             },
@@ -461,8 +466,9 @@ async fn request_handler_inner(
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     config_resolver: Arc<ThreeStageResolver>,
-    local_address: SocketAddr,
-    remote_address: SocketAddr,
+    local_address: Option<SocketAddr>,
+    remote_address: Option<SocketAddr>,
+    unix_socket_path: Option<PathBuf>,
     hostname: Option<String>,
     encrypted: bool,
     https_port: Option<u16>,
@@ -489,21 +495,13 @@ async fn request_handler_inner(
             &events,
             format!("Host header normalization error: {}", e),
             request_log_trace_context.clone(),
-            vec![
-                (
-                    "error.type",
-                    LogAttributeValue::String("host_header_error".into()),
-                ),
-                ("error.message", LogAttributeValue::String(e.to_string())),
-                (
-                    "client.address",
-                    LogAttributeValue::String(remote_address.ip().to_canonical().to_string()),
-                ),
-                (
-                    "server.address",
-                    LogAttributeValue::String(local_address.ip().to_string()),
-                ),
-            ],
+            get_error_log_attributes(
+                "host_header_error",
+                Some(e.to_string()),
+                local_address,
+                remote_address,
+                unix_socket_path,
+            ),
         );
         if let Some(response) = execute_error_pipeline(
             error_pipeline.as_ref(),
@@ -550,20 +548,13 @@ async fn request_handler_inner(
             &events,
             "CONNECT requests must use authority-form URI",
             request_log_trace_context.clone(),
-            vec![
-                (
-                    "error.type",
-                    LogAttributeValue::String("connect_path_error".into()),
-                ),
-                (
-                    "client.address",
-                    LogAttributeValue::String(remote_address.ip().to_canonical().to_string()),
-                ),
-                (
-                    "server.address",
-                    LogAttributeValue::String(local_address.ip().to_string()),
-                ),
-            ],
+            get_error_log_attributes(
+                "connect_path_error",
+                None,
+                local_address,
+                remote_address,
+                unix_socket_path,
+            ),
         );
         return (
             Ok(builtin_error_response(
@@ -605,21 +596,13 @@ async fn request_handler_inner(
                 &events,
                 format!("Invalid request URL: {}", e),
                 request_log_trace_context.clone(),
-                vec![
-                    (
-                        "error.type",
-                        LogAttributeValue::String("url_backslash_error".into()),
-                    ),
-                    ("error.message", LogAttributeValue::String(e.to_string())),
-                    (
-                        "client.address",
-                        LogAttributeValue::String(remote_address.ip().to_canonical().to_string()),
-                    ),
-                    (
-                        "server.address",
-                        LogAttributeValue::String(local_address.ip().to_string()),
-                    ),
-                ],
+                get_error_log_attributes(
+                    "url_backslash_error",
+                    Some(e.to_string()),
+                    local_address,
+                    remote_address,
+                    unix_socket_path,
+                ),
             );
             if let Some(response) = execute_error_pipeline(
                 error_pipeline.as_ref(),
@@ -665,23 +648,13 @@ async fn request_handler_inner(
                             &events,
                             format!("URL sanitization error: {}", e),
                             request_log_trace_context.clone(),
-                            vec![
-                                (
-                                    "error.type",
-                                    LogAttributeValue::String("url_sanitize_error".into()),
-                                ),
-                                ("error.message", LogAttributeValue::String(e.to_string())),
-                                (
-                                    "client.address",
-                                    LogAttributeValue::String(
-                                        remote_address.ip().to_canonical().to_string(),
-                                    ),
-                                ),
-                                (
-                                    "server.address",
-                                    LogAttributeValue::String(local_address.ip().to_string()),
-                                ),
-                            ],
+                            get_error_log_attributes(
+                                "url_sanitize_error",
+                                Some(e.to_string()),
+                                local_address,
+                                remote_address,
+                                unix_socket_path,
+                            ),
                         );
                         if let Some(response) = execute_error_pipeline(
                             error_pipeline.as_ref(),
@@ -726,23 +699,13 @@ async fn request_handler_inner(
                     &events,
                     format!("Invalid request URL pathname: {}", e),
                     request_log_trace_context.clone(),
-                    vec![
-                        (
-                            "error.type",
-                            LogAttributeValue::String("url_path_error".into()),
-                        ),
-                        ("error.message", LogAttributeValue::String(e.to_string())),
-                        (
-                            "client.address",
-                            LogAttributeValue::String(
-                                remote_address.ip().to_canonical().to_string(),
-                            ),
-                        ),
-                        (
-                            "server.address",
-                            LogAttributeValue::String(local_address.ip().to_string()),
-                        ),
-                    ],
+                    get_error_log_attributes(
+                        "url_path_error",
+                        Some(e.to_string()),
+                        local_address,
+                        remote_address,
+                        unix_socket_path,
+                    ),
                 );
                 if let Some(response) = execute_error_pipeline(
                     error_pipeline.as_ref(),
@@ -791,8 +754,8 @@ async fn request_handler_inner(
     ctx.hostname = hostname.clone();
     ctx.routing_uri = routing_str.parse().ok();
     ctx.encrypted = encrypted;
-    ctx.local_address = Some(local_address);
-    ctx.remote_address = Some(remote_address);
+    ctx.local_address = local_address;
+    ctx.remote_address = remote_address;
     ctx.https_port = https_port;
 
     // Attach parsed or generated trace context to the HttpContext extensions so stages/modules can access it.
@@ -807,7 +770,7 @@ async fn request_handler_inner(
 
     // When starting the top-level request span later, prefer external_parent if available
     let resolution = config_resolver.resolve(
-        local_address.ip(),
+        local_address.map(|la| la.ip()),
         hostname.as_deref().unwrap_or(""),
         &routing_str,
         &ctx,
@@ -926,7 +889,7 @@ async fn request_handler_inner(
                 // Preserve the request for error resolution
                 ctx.req = Some(req);
                 let error_resolution = config_resolver.resolve_error_scoped(
-                    local_address.ip(),
+                    local_address.map(|la| la.ip()),
                     hostname.as_deref().unwrap_or(""),
                     &routing_str,
                     status,

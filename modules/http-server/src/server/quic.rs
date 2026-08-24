@@ -480,8 +480,9 @@ async fn handle_http3_connection(
         config_resolver,
         connection_observability,
         observability_resolver,
-        local_address,
-        remote_address,
+        local_address: Some(local_address),
+        remote_address: Some(remote_address),
+        unix_socket_path: None,
         hinted_hostname,
         encrypted,
         https_port,
@@ -528,13 +529,41 @@ async fn handle_http3_connection(
                 (
                     "client.address",
                     LogAttributeValue::String(
-                        handler_state.remote_address.ip().to_canonical().to_string(),
+                        handler_state
+                            .remote_address
+                            .expect("QUIC should set remote address")
+                            .ip()
+                            .to_canonical()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "client.port",
+                    LogAttributeValue::I64(
+                        handler_state
+                            .remote_address
+                            .expect("QUIC should set remote address")
+                            .port() as i64,
                     ),
                 ),
                 (
                     "server.address",
                     LogAttributeValue::String(
-                        handler_state.local_address.ip().to_canonical().to_string(),
+                        handler_state
+                            .local_address
+                            .expect("QUIC should set local address")
+                            .ip()
+                            .to_canonical()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "server.port",
+                    LogAttributeValue::I64(
+                        handler_state
+                            .local_address
+                            .expect("QUIC should set local address")
+                            .port() as i64,
                     ),
                 ),
             ],

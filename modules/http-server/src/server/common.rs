@@ -1,5 +1,6 @@
 use std::io;
 use std::net::{IpAddr, SocketAddr};
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -44,8 +45,9 @@ pub struct RequestHandlerState {
     pub connection_observability: CompositeEventSink,
     /// Kept for virtual-hosting lookups when request Host header differs from SNI.
     pub observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
-    pub local_address: SocketAddr,
-    pub remote_address: SocketAddr,
+    pub local_address: Option<SocketAddr>,
+    pub remote_address: Option<SocketAddr>,
+    pub unix_socket_path: Option<PathBuf>,
     /// Pre-normalized hostname from TLS SNI (available for per-request Host header overrides).
     pub hinted_hostname: Option<String>,
     pub encrypted: bool,
@@ -213,39 +215,6 @@ pub fn resolve_observability_sink(
     )
 }
 
-/// Optimized variant that accepts a pre-normalized hostname.
-/// When the hostname matches the connection's SNI, returns the connection-level
-/// sink directly without any radix tree lookup. Otherwise performs a fresh lookup.
-#[inline]
-fn resolve_observability_sink_with_normalized(
-    observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
-    connection_observability: &CompositeEventSink,
-    ip: IpAddr,
-    hostname: Option<&str>,
-) -> CompositeEventSink {
-    match hostname {
-        Some(hostname) => {
-            // Slow path: hostname differs from SNI, need to lookup
-            let entries = observability_resolver.lookup_ip_and_hostname(ip, hostname);
-            let sinks = entries
-                .map(|e| initialize_sinks_from_providers(&e))
-                .unwrap_or_default();
-            if sinks.is_empty() {
-                connection_observability.clone()
-            } else {
-                CompositeEventSink::with_sampler(
-                    sinks,
-                    connection_observability.trace_sampler().cloned(),
-                )
-            }
-        }
-        None => {
-            // Fast path: no hostname, return connection-level sink
-            connection_observability.clone()
-        }
-    }
-}
-
 /// Core implementation that performs the radix tree lookup with pre-normalized values.
 #[inline]
 fn resolve_observability_sink_with_normalized_and_resolver(
@@ -347,11 +316,11 @@ pub fn build_request_handler(
             // Host header differs from the SNI hostname (virtual hosting on the same connection).
             let request_observability = match hostname.as_deref() {
                 Some(host) if state.hinted_hostname.as_deref() != Some(host) => {
-                    resolve_observability_sink_with_normalized(
+                    resolve_observability_sink_with_normalized_and_resolver(
                         &state.observability_resolver,
-                        &state.connection_observability,
-                        state.local_address.ip(),
+                        state.local_address.map(|addr| addr.ip()),
                         Some(host),
+                        &state.connection_observability,
                     )
                 }
                 _ => state.connection_observability.clone(),
@@ -366,6 +335,7 @@ pub fn build_request_handler(
                 state.config_resolver.clone(),
                 state.local_address,
                 state.remote_address,
+                state.unix_socket_path.clone(),
                 hostname,
                 state.encrypted,
                 state.http3_alt_svc,

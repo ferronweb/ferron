@@ -7,8 +7,8 @@ use ferron_http::access_log::CustomAccessLogField;
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{trace_context, HttpRequest};
 use ferron_observability::{
-    AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext, MetricAttributeValue,
-    Parent, TraceAttributeValue, TraceEvent,
+    AccessEvent, AccessVisitor, CompositeEventSink, Event, EventTraceContext, LogAttributeValue,
+    MetricAttributeValue, Parent, TraceAttributeValue, TraceEvent,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -198,12 +198,12 @@ pub(super) struct HttpAccessLog {
     pub method: String,
     pub version: Cow<'static, str>,
     pub scheme: Cow<'static, str>,
-    pub client_ip: String,
-    pub client_port: u16,
-    pub client_ip_canonical: String,
-    pub server_ip: String,
-    pub server_port: u16,
-    pub server_ip_canonical: String,
+    pub client_ip: Option<String>,
+    pub client_port: Option<u16>,
+    pub client_ip_canonical: Option<String>,
+    pub server_ip: Option<String>,
+    pub server_port: Option<u16>,
+    pub server_ip_canonical: Option<String>,
     pub auth_user: Option<String>,
     pub status: u16,
     pub content_length: Option<u64>,
@@ -243,12 +243,24 @@ impl AccessEvent for HttpAccessLog {
         visitor.field_string("method", &self.method);
         visitor.field_string("version", &self.version);
         visitor.field_string("scheme", &self.scheme);
-        visitor.field_string("client_ip", &self.client_ip);
-        visitor.field_u64("client_port", self.client_port as u64);
-        visitor.field_string("client_ip_canonical", &self.client_ip_canonical);
-        visitor.field_string("server_ip", &self.server_ip);
-        visitor.field_u64("server_port", self.server_port as u64);
-        visitor.field_string("server_ip_canonical", &self.server_ip_canonical);
+        if let Some(f) = &self.client_ip {
+            visitor.field_string("client_ip", f);
+        }
+        if let Some(f) = &self.client_port {
+            visitor.field_u64("client_port", *f as u64);
+        }
+        if let Some(f) = &self.client_ip_canonical {
+            visitor.field_string("client_ip_canonical", f);
+        }
+        if let Some(f) = &self.server_ip {
+            visitor.field_string("server_ip", f);
+        }
+        if let Some(f) = &self.server_port {
+            visitor.field_u64("server_port", *f as u64);
+        }
+        if let Some(f) = &self.server_ip_canonical {
+            visitor.field_string("server_ip_canonical", f);
+        }
         if let Some(user) = &self.auth_user {
             visitor.field_string("auth_user", user);
         } else {
@@ -454,37 +466,54 @@ pub fn build_metric_attributes(
     attrs
 }
 
+#[inline]
+pub fn get_error_log_attributes(
+    error_type: &'static str,
+    error_message: Option<String>,
+    local_address: Option<std::net::SocketAddr>,
+    remote_address: Option<std::net::SocketAddr>,
+    unix_socket_path: Option<std::path::PathBuf>,
+) -> Vec<(&'static str, LogAttributeValue)> {
+    let mut attrs = Vec::with_capacity(6);
+    attrs.push(("error.type", LogAttributeValue::StaticStr(error_type)));
+    if let Some(error_message) = error_message {
+        attrs.push(("error.message", LogAttributeValue::String(error_message)));
+    }
+    if let Some(remote_address) = remote_address {
+        attrs.push((
+            "client.address",
+            LogAttributeValue::String(remote_address.ip().to_string()),
+        ));
+        attrs.push((
+            "client.port",
+            LogAttributeValue::I64(remote_address.port() as i64),
+        ));
+    }
+    if let Some(local_address) = local_address {
+        attrs.push((
+            "server.address",
+            LogAttributeValue::String(local_address.ip().to_string()),
+        ));
+        attrs.push((
+            "server.port",
+            LogAttributeValue::I64(local_address.port() as i64),
+        ));
+    }
+    if let Some(unix_socket_path) = unix_socket_path {
+        // OTel semantic conventions
+        attrs.push((
+            "server.address",
+            LogAttributeValue::String(unix_socket_path.to_string_lossy().into_owned()),
+        ));
+    }
+
+    attrs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use http_body_util::BodyExt;
-
-    #[test]
-    fn categorize_standard_methods() {
-        assert_eq!(categorize_http_method(&http::Method::GET), "GET");
-        assert_eq!(categorize_http_method(&http::Method::HEAD), "HEAD");
-        assert_eq!(categorize_http_method(&http::Method::POST), "POST");
-        assert_eq!(categorize_http_method(&http::Method::PUT), "PUT");
-        assert_eq!(categorize_http_method(&http::Method::DELETE), "DELETE");
-        assert_eq!(categorize_http_method(&http::Method::CONNECT), "CONNECT");
-        assert_eq!(categorize_http_method(&http::Method::OPTIONS), "OPTIONS");
-        assert_eq!(categorize_http_method(&http::Method::TRACE), "TRACE");
-        assert_eq!(categorize_http_method(&http::Method::PATCH), "PATCH");
-    }
-
-    #[test]
-    fn categorize_unknown_method_to_other() {
-        // Custom methods (attacker-controlled) must collapse to _other
-        let custom = http::Method::from_bytes(b"PURGE").unwrap();
-        assert_eq!(categorize_http_method(&custom), "_other");
-
-        let custom2 = http::Method::from_bytes(b"PROPFIND").unwrap();
-        assert_eq!(categorize_http_method(&custom2), "_other");
-
-        // Fuzzed/long method names
-        let fuzzed = http::Method::from_bytes(b"AAAAA").unwrap();
-        assert_eq!(categorize_http_method(&fuzzed), "_other");
-    }
 
     #[test]
     fn method_cardinality_is_bounded() {

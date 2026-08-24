@@ -40,6 +40,12 @@ test = false
 doc = false
 
 [[bin]]
+name = "fuzz_http_pipeline_unix"
+path = "fuzz_targets/fuzz_http_pipeline_unix.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "fuzz_canonicalize_path"
 path = "fuzz_targets/fuzz_canonicalize_path.rs"
 test = false

@@ -82,7 +82,7 @@ fn layers_generic_ip_and_exact_host_blocks_by_specificity() {
     let resolver = ThreeStageResolver::from_prepared(prepared);
     let result = resolver
         .resolve(
-            "127.0.0.1".parse().unwrap(),
+            Some("127.0.0.1".parse().unwrap()),
             "example.com",
             "/",
             &make_test_context(empty_request(), "example.com"),
@@ -126,7 +126,7 @@ fn resolves_wildcard_hosts_using_lookup_tree_keys() {
     let resolver = ThreeStageResolver::from_prepared(prepared);
     let wildcard = resolver
         .resolve(
-            "127.0.0.1".parse().unwrap(),
+            Some("127.0.0.1".parse().unwrap()),
             "deep.api.example.com",
             "/",
             &make_test_context(empty_request(), "deep.api.example.com"),
@@ -169,7 +169,7 @@ fn layers_multiple_matching_locations_additively() {
     let resolver = ThreeStageResolver::from_prepared(prepared);
     let result = resolver
         .resolve(
-            "127.0.0.1".parse().unwrap(),
+            Some("127.0.0.1".parse().unwrap()),
             "example.com",
             "/api/users",
             &make_test_context(empty_request(), "example.com"),
@@ -224,7 +224,7 @@ fn layers_multiple_matching_conditionals_additively() {
     let resolver = ThreeStageResolver::from_prepared(prepared);
     let result = resolver
         .resolve(
-            "127.0.0.1".parse().unwrap(),
+            Some("127.0.0.1".parse().unwrap()),
             "example.com",
             "/",
             &make_test_context(empty_request(), "example.com"),
@@ -280,7 +280,7 @@ fn resolves_nested_location_inside_a_conditional_scope() {
 
     let result = resolver
         .resolve(
-            "127.0.0.1".parse().unwrap(),
+            Some("127.0.0.1".parse().unwrap()),
             "example.com",
             "/admin/panel",
             &make_test_context(request, "example.com"),
@@ -330,7 +330,7 @@ fn layers_error_handlers_from_matching_scopes() {
     let resolver = ThreeStageResolver::from_prepared(prepared);
     let result = resolver
         .resolve_error_scoped(
-            "127.0.0.1".parse().unwrap(),
+            Some("127.0.0.1".parse().unwrap()),
             "example.com",
             "/api/users",
             404,
