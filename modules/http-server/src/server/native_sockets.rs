@@ -177,10 +177,7 @@ fn connection_error_attrs(
     error_type: &'static str,
 ) -> Vec<(&'static str, LogAttributeValue)> {
     let mut attrs = vec![
-        (
-            "error.type",
-            LogAttributeValue::String(error_type.into()),
-        ),
+        ("error.type", LogAttributeValue::String(error_type.into())),
         (
             "error.message",
             LogAttributeValue::String(error.to_string()),
@@ -193,9 +190,7 @@ fn connection_error_attrs(
         } => {
             attrs.push((
                 "client.address",
-                LogAttributeValue::String(
-                    remote_address.ip().to_canonical().to_string(),
-                ),
+                LogAttributeValue::String(remote_address.ip().to_canonical().to_string()),
             ));
             attrs.push((
                 "client.port",
@@ -203,9 +198,7 @@ fn connection_error_attrs(
             ));
             attrs.push((
                 "server.address",
-                LogAttributeValue::String(
-                    local_address.ip().to_canonical().to_string(),
-                ),
+                LogAttributeValue::String(local_address.ip().to_canonical().to_string()),
             ));
             attrs.push((
                 "server.port",
@@ -292,7 +285,10 @@ pub(crate) async fn handle_http1_connection<S>(
                 format!("HTTP/1 connection error: {error}")
             }
             ConnectionAddr::Unix { unix_socket_path } => {
-                format!("HTTP/1 connection error on unix:{}: {error}", unix_socket_path.display())
+                format!(
+                    "HTTP/1 connection error on unix:{}: {error}",
+                    unix_socket_path.display()
+                )
             }
         };
         emit_error(
@@ -423,7 +419,10 @@ pub(crate) async fn handle_http1_connection_zerocopy<S>(
                 format!("HTTP/1 connection error: {error}")
             }
             ConnectionAddr::Unix { unix_socket_path } => {
-                format!("HTTP/1 connection error on unix:{}: {error}", unix_socket_path.display())
+                format!(
+                    "HTTP/1 connection error on unix:{}: {error}",
+                    unix_socket_path.display()
+                )
             }
         };
         emit_error(
@@ -504,7 +503,10 @@ pub(crate) async fn handle_http2_connection<S>(
                 format!("HTTP/2 connection error: {error}")
             }
             ConnectionAddr::Unix { unix_socket_path } => {
-                format!("HTTP/2 connection error on unix:{}: {error}", unix_socket_path.display())
+                format!(
+                    "HTTP/2 connection error on unix:{}: {error}",
+                    unix_socket_path.display()
+                )
             }
         };
         emit_error(
