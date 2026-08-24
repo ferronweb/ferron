@@ -74,14 +74,11 @@ pub fn parse_rate_limit_config(
     let entries = config.get_entries("rate_limit", true);
 
     for entry in entries {
-        // If the entry has children (block form), parse from children
         if let Some(children) = &entry.children {
             if let Some(rule) = parse_rate_limit_block(children) {
                 rules.push(rule);
             }
         }
-        // If no children, the directive might have args (shorthand form),
-        // but we only support block form for now.
     }
 
     rules
