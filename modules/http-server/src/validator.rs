@@ -148,6 +148,11 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         validate_directive!(config, ctx.used_directives, root, args(1) => [
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
+        validate_directive!(config, ctx.used_directives, disable_symlinks, optional args(1) => [
+            ServerConfigurationValue::Boolean(_, _) | ServerConfigurationValue::String(_, _)
+        ] | args(0) => [
+            ServerConfigurationValue::Boolean(_, _)
+        ], {});
 
         // Server administrator's email address
         validate_directive!(config, ctx.used_directives, admin_email, args(1) => [

@@ -377,6 +377,15 @@ fn register_http_server_base_directives(registry: &mut DirectiveRegistry) {
         None,
         d,
     );
+    reg(
+        registry,
+        "disable_symlinks",
+        "disable_symlinks <false|true|disable_not_owner>",
+        "This directive specifies whether to disable following symlinks in static file serving.",
+        false,
+        None,
+        d,
+    );
     reg(registry, "admin_email", "admin_email <email>", "This directive specifies the server administrator's email address. Used in built-in error responses. Interpolation is supported.", false, None, d);
     reg(
         registry,
