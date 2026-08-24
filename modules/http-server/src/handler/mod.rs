@@ -171,8 +171,6 @@ pub async fn request_handler(
             let path = path
                 .as_ref()
                 .expect("trace events require request metadata to be initialized");
-            let server_ip = server_ip.as_ref();
-            let server_port = server_port;
             let initial_client_ip_canonical = initial_client_ip_canonical.as_ref();
 
             let mut builder_attributes = vec![
@@ -189,7 +187,7 @@ pub async fn request_handler(
                     TraceAttributeValue::StaticStr(scheme),
                 ),
             ];
-            if let Some(server_ip) = server_ip_canonical.clone().or_else(|| server_ip.cloned()) {
+            if let Some(server_ip) = server_ip_canonical.clone().or_else(|| server_ip.clone()) {
                 builder_attributes.push((
                     Cow::Borrowed("server.address"),
                     TraceAttributeValue::String(server_ip.clone()),
@@ -400,9 +398,9 @@ pub async fn request_handler(
             client_ip,
             client_port,
             client_ip_canonical,
-            server_ip: server_ip,
-            server_port: server_port,
-            server_ip_canonical: server_ip_canonical,
+            server_ip,
+            server_port,
+            server_ip_canonical,
             auth_user,
             status: status_code,
             content_length,
