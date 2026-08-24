@@ -290,7 +290,7 @@ impl TcpListenerHandle {
                         );
 
                         if let Some(tls_resolver) = &server_config.tls_resolver {
-                            let start_handshake = match tokio_rustls::LazyConfigAcceptor::new(Acceptor::default(), socket).await {
+                            let start_handshake = match tokio_rustls::LazyConfigAcceptor::new(Acceptor::default(), socket.into()).await {
                                 Ok(start_handshake) => start_handshake,
                                 Err(e) => {
                                   emit_error(

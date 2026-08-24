@@ -9,7 +9,7 @@ use ferron_core::providers::Provider;
 use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::builder::build_server_config_builder;
 use ferron_tls::config::TlsServerConfig;
-use ferron_tls::{TcpTlsContext, TcpTlsResolver};
+use ferron_tls::{TlsContext, TlsResolver};
 use rustls::ServerConfig;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -17,14 +17,14 @@ use tokio_util::sync::CancellationToken;
 use crate::config::{TlsHttpConfig, TlsHttpOnDemandConfigData};
 use crate::fetch::{
     fetch_tls_cert_loop, run_tls_http_background_task, CertifiedKeyLock, ErrorMessageLock,
-    SniCertLock, TlsHttpOnDemandResolver, TlsHttpResolver,
+    SniCertLock,
 };
 
 mod config;
 mod fetch;
 mod validator;
 
-type TcpTlsHttpTaskData = (
+type TlsHttpTaskData = (
     TlsHttpConfig,
     CertifiedKeyLock,
     ErrorMessageLock,
@@ -93,13 +93,13 @@ impl GlobalTaskState {
 static GLOBAL_TASK_STATE: std::sync::LazyLock<GlobalTaskState> =
     std::sync::LazyLock::new(GlobalTaskState::new);
 
-pub struct TcpTlsHttpResolver {
+pub struct TlsHttpResolver {
     config: Arc<ServerConfig>,
     error_message: ErrorMessageLock,
 }
 
 #[async_trait::async_trait(?Send)]
-impl TcpTlsResolver for TcpTlsHttpResolver {
+impl TlsResolver for TlsHttpResolver {
     #[inline]
     fn get_tls_config(&self) -> Arc<ServerConfig> {
         self.config.clone()
@@ -111,16 +111,16 @@ impl TcpTlsResolver for TcpTlsHttpResolver {
     }
 }
 
-/// TcpTlsResolver for on-demand mode.
+/// TlsResolver for on-demand mode.
 ///
 /// Wraps a ServerConfig with the SNI-aware TlsHttpOnDemandResolver.
-pub struct TcpTlsHttpOnDemandResolver {
+pub struct TlsHttpOnDemandResolver {
     config: Arc<ServerConfig>,
     error_message: ErrorMessageLock,
 }
 
 #[async_trait::async_trait(?Send)]
-impl TcpTlsResolver for TcpTlsHttpOnDemandResolver {
+impl TlsResolver for TlsHttpOnDemandResolver {
     #[inline]
     fn get_tls_config(&self) -> Arc<ServerConfig> {
         self.config.clone()
@@ -132,16 +132,16 @@ impl TcpTlsResolver for TcpTlsHttpOnDemandResolver {
     }
 }
 
-pub struct TcpTlsHttpProvider {
-    tx: async_channel::Sender<TcpTlsHttpTaskData>,
+pub struct TlsHttpProvider {
+    tx: async_channel::Sender<TlsHttpTaskData>,
 }
 
-impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
+impl<'a> Provider<TlsContext<'a>> for TlsHttpProvider {
     fn name(&self) -> &str {
         "http"
     }
 
-    fn execute(&self, ctx: &mut TcpTlsContext) -> Result<(), Box<dyn std::error::Error>> {
+    fn execute(&self, ctx: &mut TlsContext) -> Result<(), Box<dyn std::error::Error>> {
         let tls_config = TlsServerConfig::from_config(ctx.config)
             .map_err(|e| std::io::Error::other(format!("Invalid TLS configuration: {e}")))?;
         let http_config = TlsHttpConfig::from_config(ctx.config)
@@ -183,7 +183,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
                 .blocking_write()
                 .push(on_demand_data);
 
-            let on_demand_resolver = TlsHttpOnDemandResolver::new(
+            let on_demand_resolver = crate::fetch::TlsHttpOnDemandResolver::new(
                 task_state.sni_cert_lock.clone(),
                 task_state.on_demand_tx.clone(),
                 port,
@@ -210,13 +210,13 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
 
             let config = Arc::new(config_with_tickets);
 
-            ctx.resolver = Some(Arc::new(TcpTlsHttpOnDemandResolver {
+            ctx.resolver = Some(Arc::new(TlsHttpOnDemandResolver {
                 config,
                 error_message,
             }));
         } else {
             let certified_key = Arc::new(parking_lot::RwLock::new(None));
-            let resolver = TlsHttpResolver::new(certified_key.clone());
+            let resolver = crate::fetch::TlsHttpResolver::new(certified_key.clone());
 
             let mut config_with_tickets = config_builder.with_cert_resolver(Arc::new(resolver));
 
@@ -238,7 +238,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
 
             let config = Arc::new(config_with_tickets);
 
-            ctx.resolver = Some(Arc::new(TcpTlsHttpResolver {
+            ctx.resolver = Some(Arc::new(TlsHttpResolver {
                 config,
                 error_message: error_message.clone(),
             }));
@@ -256,12 +256,12 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsHttpProvider {
     }
 }
 
-pub struct TcpTlsHttpModule {
-    rx: async_channel::Receiver<TcpTlsHttpTaskData>,
+pub struct TlsHttpModule {
+    rx: async_channel::Receiver<TlsHttpTaskData>,
     event_sink: Arc<CompositeEventSink>,
 }
 
-impl ferron_core::Module for TcpTlsHttpModule {
+impl ferron_core::Module for TlsHttpModule {
     fn name(&self) -> &str {
         "tls-http"
     }
@@ -311,8 +311,8 @@ impl ferron_core::Module for TcpTlsHttpModule {
 
 #[derive(Clone)]
 pub struct TlsHttpModuleLoader {
-    tx: async_channel::Sender<TcpTlsHttpTaskData>,
-    rx: async_channel::Receiver<TcpTlsHttpTaskData>,
+    tx: async_channel::Sender<TlsHttpTaskData>,
+    rx: async_channel::Receiver<TlsHttpTaskData>,
     loaded_module: Option<Arc<dyn ferron_core::Module>>,
 }
 
@@ -333,9 +333,8 @@ impl ModuleLoader for TlsHttpModuleLoader {
         registry: ferron_core::registry::RegistryBuilder,
     ) -> ferron_core::registry::RegistryBuilder {
         let tx = self.tx.clone();
-        registry.with_provider::<TcpTlsContext, _>(move || {
-            Arc::new(TcpTlsHttpProvider { tx: tx.clone() })
-        })
+        registry
+            .with_provider::<TlsContext, _>(move || Arc::new(TlsHttpProvider { tx: tx.clone() }))
     }
 
     fn register_modules(
@@ -350,7 +349,7 @@ impl ModuleLoader for TlsHttpModuleLoader {
         GLOBAL_TASK_STATE.set_event_sink(event_sink.clone());
 
         if self.loaded_module.is_none() {
-            let module = Arc::new(TcpTlsHttpModule {
+            let module = Arc::new(TlsHttpModule {
                 rx: self.rx.clone(),
                 event_sink,
             });

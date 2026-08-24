@@ -16,7 +16,7 @@ use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{
     ObservabilityConfigExtractor, ObservabilityContext, TraceSamplingConfig,
 };
-use ferron_tls::{TcpTlsContext, TcpTlsResolver};
+use ferron_tls::{TlsContext, TlsResolver};
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 
@@ -337,7 +337,7 @@ fn lookup_tls(
     tls_resolver: &TlsResolverRadixTree,
     ip: Option<IpAddr>,
     host: Option<&str>,
-) -> Option<Arc<dyn TcpTlsResolver>> {
+) -> Option<Arc<dyn TlsResolver>> {
     match (ip, host) {
         (Some(ip), Some(host)) => tls_resolver.lookup_ip_and_hostname(ip, host),
         (Some(ip), None) => tls_resolver.lookup_ip(ip),
@@ -796,13 +796,13 @@ impl BasicHttpModule {
                 format_location(None, tls1.span.as_ref())
             ))?;
 
-        if let Some(tls_registry) = registry.get_provider_registry::<TcpTlsContext>() {
+        if let Some(tls_registry) = registry.get_provider_registry::<TlsContext>() {
             let tls_provider = tls_registry.get(tls_provider_name).ok_or(anyhow::anyhow!(
                 "TLS provider '{tls_provider_name}' not found ({})",
                 format_location(None, tls1.span.as_ref())
             ))?;
 
-            let mut tls_resolver_ctx = TcpTlsContext {
+            let mut tls_resolver_ctx = TlsContext {
                 // SAFETY: We know that the lifetime of the config is longer
                 //         than the lifetime of the resolver. but "'static"
                 //         is the only lifetime we can use here. This

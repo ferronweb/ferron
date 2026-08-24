@@ -7,17 +7,17 @@ use ferron_core::providers::Provider;
 use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::builder::build_server_config_builder;
 use ferron_tls::config::TlsServerConfig;
-use ferron_tls::{observability, validate_tls_common, TcpTlsContext, TcpTlsResolver};
+use ferron_tls::{observability, validate_tls_common, TlsContext, TlsResolver};
 use rustls::ServerConfig;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
 /// Global event sink for the `tls-manual` module, populated from
 /// [`TlsManualModuleLoader::register_modules`] and read by
-/// [`TcpTlsManualProvider::execute`].
+/// [`TlsManualProvider::execute`].
 static EVENT_SINK: OnceLock<Arc<CompositeEventSink>> = OnceLock::new();
 
-fn resolve_host(ctx: &TcpTlsContext<'_>) -> String {
+fn resolve_host(ctx: &TlsContext<'_>) -> String {
     ctx.domain
         .host
         .clone()
@@ -39,26 +39,26 @@ fn build_certified_key(
     Some(rustls::sign::CertifiedKey::new(certs.to_vec(), signing_key))
 }
 
-pub struct TcpTlsManualResolver {
+pub struct TlsManualResolver {
     config: Arc<ServerConfig>,
 }
 
 #[async_trait::async_trait(?Send)]
-impl TcpTlsResolver for TcpTlsManualResolver {
+impl TlsResolver for TlsManualResolver {
     #[inline]
     fn get_tls_config(&self) -> Arc<ServerConfig> {
         self.config.clone()
     }
 }
 
-pub struct TcpTlsManualProvider;
+pub struct TlsManualProvider;
 
-impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
+impl<'a> Provider<TlsContext<'a>> for TlsManualProvider {
     fn name(&self) -> &str {
         "manual"
     }
 
-    fn execute(&self, ctx: &mut TcpTlsContext) -> Result<(), Box<dyn std::error::Error>> {
+    fn execute(&self, ctx: &mut TlsContext) -> Result<(), Box<dyn std::error::Error>> {
         let tls_config = TlsServerConfig::from_config(ctx.config)
             .map_err(|e| std::io::Error::other(format!("Invalid TLS configuration: {e}")))?;
 
@@ -134,7 +134,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
 
         let config = Arc::new(config_with_tickets);
 
-        ctx.resolver = Some(Arc::new(TcpTlsManualResolver { config }));
+        ctx.resolver = Some(Arc::new(TlsManualResolver { config }));
 
         Ok(())
     }
@@ -183,7 +183,7 @@ impl ModuleLoader for TlsManualModuleLoader {
         &mut self,
         registry: ferron_core::registry::RegistryBuilder,
     ) -> ferron_core::registry::RegistryBuilder {
-        registry.with_provider::<TcpTlsContext, _>(|| Arc::new(TcpTlsManualProvider))
+        registry.with_provider::<TlsContext, _>(|| Arc::new(TlsManualProvider))
     }
 
     fn register_scoped_configuration_validators(

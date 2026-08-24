@@ -2012,6 +2012,7 @@ dependencies = [
  "rustls-native-certs",
  "rustls-pki-types",
  "tempfile",
+ "tokio",
  "tokio-rustls",
  "webpki-roots",
  "zincio",

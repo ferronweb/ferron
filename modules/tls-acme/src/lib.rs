@@ -43,14 +43,14 @@ use ferron_observability::{
     build_composite_sink, CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel,
     MetricAttributeValue, MetricEvent, MetricType, MetricValue,
 };
-use ferron_tls::TcpTlsContext;
+use ferron_tls::TlsContext;
 use instant_acme::ChallengeType;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::{parse_acme_config, AcmeConfigOrOnDemand, SniResolverLock};
 use crate::on_demand::{check_ask_endpoint, get_cached_domains, OnDemandRequest};
-use crate::resolver::{AcmeResolverInner, TcpTlsAcmeResolver};
+use crate::resolver::{AcmeResolverInner, TlsAcmeResolver};
 
 /// Shared state for the ACME background task.
 pub struct AcmeTaskState {
@@ -155,15 +155,15 @@ fn get_or_init_task_state() -> Arc<AcmeTaskState> {
 
 /// ACME TLS provider.
 ///
-/// Implements `Provider<TcpTlsContext>` to handle `tls { provider acme; ... }` blocks.
-pub struct TcpTlsAcmeProvider;
+/// Implements `Provider<TlsContext>` to handle `tls { provider acme; ... }` blocks.
+pub struct TlsAcmeProvider;
 
-impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
+impl Provider<TlsContext<'_>> for TlsAcmeProvider {
     fn name(&self) -> &str {
         "acme"
     }
 
-    fn execute(&self, ctx: &mut TcpTlsContext) -> Result<(), Box<dyn std::error::Error>> {
+    fn execute(&self, ctx: &mut TlsContext) -> Result<(), Box<dyn std::error::Error>> {
         let domain = ctx
             .domain
             .host
@@ -210,7 +210,7 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                 let ocsp_handle = crate::resolver::get_ocsp_handle_if_enabled(&ocsp_config);
                 let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
 
-                let acme_resolver = TcpTlsAcmeResolver::new(
+                let acme_resolver = TlsAcmeResolver::new(
                     AcmeResolverInner::Eager(certified_key_lock),
                     tls_alpn_resolvers,
                     alpn_protocols,
@@ -246,7 +246,7 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                 let ocsp_handle = crate::resolver::get_ocsp_handle_if_enabled(&ocsp_config);
                 let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
 
-                let acme_resolver = TcpTlsAcmeResolver::new(
+                let acme_resolver = TlsAcmeResolver::new(
                     AcmeResolverInner::OnDemand(sni_resolver_lock),
                     tls_alpn_resolvers,
                     alpn_protocols,
@@ -734,7 +734,7 @@ pub struct TlsAcmeModuleLoader;
 
 impl ModuleLoader for TlsAcmeModuleLoader {
     fn register_providers(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
-        registry.with_provider::<TcpTlsContext<'_>, _>(|| Arc::new(TcpTlsAcmeProvider))
+        registry.with_provider::<TlsContext<'_>, _>(|| Arc::new(TlsAcmeProvider))
     }
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {

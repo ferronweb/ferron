@@ -118,7 +118,7 @@ impl<T: Clone> Default for RadixTree<T> {
 }
 
 // Type alias for the common TLS resolver use case
-pub type TlsResolverRadixTree = RadixTree<Arc<dyn ferron_tls::TcpTlsResolver>>;
+pub type TlsResolverRadixTree = RadixTree<Arc<dyn ferron_tls::TlsResolver>>;
 
 #[cfg(test)]
 mod tests {

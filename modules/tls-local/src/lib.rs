@@ -9,7 +9,7 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::builder::build_server_config_builder;
 use ferron_tls::config::TlsServerConfig;
-use ferron_tls::{TcpTlsContext, TcpTlsResolver};
+use ferron_tls::{TlsContext, TlsResolver};
 use rustls::server::ResolvesServerCert;
 use rustls::sign::CertifiedKey;
 use rustls::ServerConfig;
@@ -25,7 +25,7 @@ use crate::provision::provision_local_cert;
 
 /// Global event sink for the `tls-local` module, populated from
 /// [`LocalTlsModuleLoader::register_modules`] and read by
-/// [`TcpTlsLocalProvider::execute`].
+/// [`TlsLocalProvider::execute`].
 static EVENT_SINK: OnceLock<Arc<CompositeEventSink>> = OnceLock::new();
 
 /// Set the event sink for the `tls-local` module. Call during module
@@ -47,23 +47,23 @@ impl ResolvesServerCert for LocalSingleCertResolver {
     }
 }
 
-pub struct TcpTlsLocalResolver {
+pub struct TlsLocalResolver {
     config: Arc<ServerConfig>,
 }
 
 #[async_trait]
-impl TcpTlsResolver for TcpTlsLocalResolver {
+impl TlsResolver for TlsLocalResolver {
     #[inline]
     fn get_tls_config(&self) -> Arc<ServerConfig> {
         self.config.clone()
     }
 }
 
-pub struct TcpTlsLocalProvider {
+pub struct TlsLocalProvider {
     cache: Arc<LocalTlsCache>,
 }
 
-impl TcpTlsLocalProvider {
+impl TlsLocalProvider {
     pub fn new(cache_path: PathBuf) -> Self {
         Self {
             cache: Arc::new(LocalTlsCache::new(cache_path)),
@@ -71,12 +71,12 @@ impl TcpTlsLocalProvider {
     }
 }
 
-impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsLocalProvider {
+impl<'a> Provider<TlsContext<'a>> for TlsLocalProvider {
     fn name(&self) -> &str {
         "local"
     }
 
-    fn execute(&self, ctx: &mut TcpTlsContext) -> Result<(), Box<dyn std::error::Error>> {
+    fn execute(&self, ctx: &mut TlsContext) -> Result<(), Box<dyn std::error::Error>> {
         // Parse TLS configuration from the config block
         // We reuse the standard TlsServerConfig for crypto/mTLS settings
         let tls_config = TlsServerConfig::from_config(ctx.config)
@@ -112,7 +112,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsLocalProvider {
                 Arc::new(ferron_ocsp::OcspStapler::new(inner_resolver, &ocsp_handle));
         }
 
-        ctx.resolver = Some(Arc::new(TcpTlsLocalResolver {
+        ctx.resolver = Some(Arc::new(TlsLocalResolver {
             config: Arc::new(config_with_tickets),
         }));
 
@@ -145,8 +145,8 @@ impl ModuleLoader for LocalTlsModuleLoader {
             })
             .unwrap_or_else(|| PathBuf::from(".ferron-local-tls"));
 
-        registry = registry.with_provider::<TcpTlsContext, _>(move || {
-            Arc::new(TcpTlsLocalProvider::new(cache_path.clone()))
+        registry = registry.with_provider::<TlsContext, _>(move || {
+            Arc::new(TlsLocalProvider::new(cache_path.clone()))
         });
         registry
     }

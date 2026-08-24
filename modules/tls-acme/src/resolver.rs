@@ -2,18 +2,17 @@
 //!
 //! Provides:
 //! - `AcmeResolver`: Resolves the certified key obtained via ACME.
-//! - `TcpTlsAcmeResolver`: Wraps an `AcmeResolver` and optionally TLS-ALPN-01
-//!   challenge locks to implement `TcpTlsResolver`.
+//! - `TlsAcmeResolver`: Wraps an `AcmeResolver` and optionally TLS-ALPN-01
+//!   challenge locks to implement `TlsResolver`.
 
 use std::sync::Arc;
 
-use ferron_tls::TcpTlsResolver;
+use ferron_tls::TlsResolver;
 use rustls::server::{ResolvesServerCert, ServerConfig};
 use rustls::sign::CertifiedKey;
 use tokio::sync::RwLock;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::StartHandshake;
-use zincio::net::PollTcpStream;
 
 use crate::challenge::ACME_TLS_ALPN_NAME;
 use crate::config::SniResolverLock;
@@ -30,7 +29,7 @@ pub enum AcmeResolverInner {
 
 /// An ACME resolver that resolves a single certified key.
 ///
-/// Used as the inner resolver in `TcpTlsAcmeResolver`.
+/// Used as the inner resolver in `TlsAcmeResolver`.
 #[derive(Debug)]
 pub struct AcmeResolver {
     pub(crate) certified_key_lock: AcmeResolverInner,
@@ -77,12 +76,12 @@ impl ResolvesServerCert for AcmeResolver {
 
 use ferron_tls::config::OcspConfig;
 
-/// A `TcpTlsResolver` implementation for ACME-managed TLS.
+/// A `TlsResolver` implementation for ACME-managed TLS.
 ///
 /// Uses `LazyConfigAcceptor` to inspect the ClientHello before committing to a
 /// `ServerConfig`. If the client sends the `acme-tls/1` ALPN, the resolver looks
 /// up the matching challenge certificate from the shared TLS-ALPN-01 locks.
-pub struct TcpTlsAcmeResolver {
+pub struct TlsAcmeResolver {
     /// The main resolver for the ACME-obtained certificate.
     acme_resolver: Arc<AcmeResolver>,
     /// Optional shared list of TLS-ALPN-01 data locks.
@@ -102,8 +101,8 @@ pub struct TcpTlsAcmeResolver {
 /// OCSP service handle type alias.
 type OcspHandle = Option<ferron_ocsp::OcspServiceHandle>;
 
-impl TcpTlsAcmeResolver {
-    /// Creates a new `TcpTlsAcmeResolver`.
+impl TlsAcmeResolver {
+    /// Creates a new `TlsAcmeResolver`.
     ///
     /// # Arguments
     /// * `certified_key_lock` - Lock for the ACME-obtained certified key.
@@ -192,15 +191,15 @@ impl TcpTlsAcmeResolver {
 }
 
 #[async_trait::async_trait(?Send)]
-impl TcpTlsResolver for TcpTlsAcmeResolver {
+impl TlsResolver for TlsAcmeResolver {
     fn get_tls_config(&self) -> Arc<ServerConfig> {
         Arc::new(self.build_normal_config())
     }
 
     async fn handshake(
         &self,
-        io: StartHandshake<PollTcpStream>,
-    ) -> Result<Option<TlsStream<PollTcpStream>>, std::io::Error> {
+        io: StartHandshake<ferron_tls::TlsInnerSocket>,
+    ) -> Result<Option<TlsStream<ferron_tls::TlsInnerSocket>>, std::io::Error> {
         let client_hello = io.client_hello();
 
         let is_acme_challenge = self.tls_alpn_01_resolvers.is_some()

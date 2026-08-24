@@ -4,7 +4,7 @@ use std::sync::Arc;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
-use ferron_tls::TcpTlsContext;
+use ferron_tls::TlsContext;
 
 /// Result of automatic TLS provider selection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,11 +24,11 @@ pub fn select_auto_tls_provider(
     ip: Option<&str>,
 ) -> TlsAutoSelection {
     let local_available = registry
-        .get_provider_registry::<TcpTlsContext>()
+        .get_provider_registry::<TlsContext>()
         .is_some_and(|r| r.get("local").is_some());
 
     let acme_available = registry
-        .get_provider_registry::<TcpTlsContext>()
+        .get_provider_registry::<TlsContext>()
         .is_some_and(|r| r.get("acme").is_some());
 
     let is_localhost = host.is_some_and(|h| h == "localhost")
@@ -80,16 +80,16 @@ mod tests {
         let registry = Registry::new();
 
         if local_available {
-            registry.register_provider::<TcpTlsContext<'static>, _>(|| {
+            registry.register_provider::<TlsContext<'static>, _>(|| {
                 use ferron_core::providers::Provider;
                 struct MockLocalProvider;
-                impl Provider<TcpTlsContext<'static>> for MockLocalProvider {
+                impl Provider<TlsContext<'static>> for MockLocalProvider {
                     fn name(&self) -> &str {
                         "local"
                     }
                     fn execute(
                         &self,
-                        _ctx: &mut TcpTlsContext<'static>,
+                        _ctx: &mut TlsContext<'static>,
                     ) -> Result<(), Box<dyn std::error::Error>> {
                         Ok(())
                     }
@@ -99,16 +99,16 @@ mod tests {
         }
 
         if acme_available {
-            registry.register_provider::<TcpTlsContext<'static>, _>(|| {
+            registry.register_provider::<TlsContext<'static>, _>(|| {
                 use ferron_core::providers::Provider;
                 struct MockAcmeProvider;
-                impl Provider<TcpTlsContext<'static>> for MockAcmeProvider {
+                impl Provider<TlsContext<'static>> for MockAcmeProvider {
                     fn name(&self) -> &str {
                         "acme"
                     }
                     fn execute(
                         &self,
-                        _ctx: &mut TcpTlsContext<'static>,
+                        _ctx: &mut TlsContext<'static>,
                     ) -> Result<(), Box<dyn std::error::Error>> {
                         Ok(())
                     }
