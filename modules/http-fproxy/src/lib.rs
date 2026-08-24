@@ -7,6 +7,7 @@
 
 mod config;
 pub mod error;
+mod inet_aton;
 mod proxy;
 mod validator;
 

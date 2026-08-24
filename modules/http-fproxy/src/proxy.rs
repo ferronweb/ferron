@@ -551,7 +551,7 @@ async fn resolve_and_validate_ip(
     deny_ips: &[ipnet::IpNet],
 ) -> Result<Option<Vec<IpAddr>>, ForwardProxyError> {
     // First check if the host is already an IP address
-    if let Ok(ip) = IpAddr::from_str(host) {
+    if let Some(ip) = crate::inet_aton::convert(host) {
         if ip_denied(deny_ips, ip) {
             return Err(ForwardProxyError::DnsDeniedIp {
                 host: host.to_string(),

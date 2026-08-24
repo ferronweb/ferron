@@ -46,6 +46,10 @@
 
 - **High-cardinality metric removed**: the `ferron.proxy.lb.selections` with high-cardinality `ferron.proxy.lb.score` attribute has been removed to prevent exhaustion of metric storage.
 
+#### Forward proxy
+
+- **Fixed `deny_ips` bypass using non-canonical IP representations**: previously, `deny_ips` could be bypassed using non-canonical IP address representations (such as `0x7f.0.0.1` or `2130706433`). This has been fixed to normalize the IP addresses first.
+
 ## Ferron 3.0.0-beta.9
 
 **Released in August 16, 2026**

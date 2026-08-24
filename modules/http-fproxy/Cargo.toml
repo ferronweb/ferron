@@ -17,3 +17,11 @@ ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
 tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time", "net"] }
 ipnet = "2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.189"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Networking_WinSock",
+] }
