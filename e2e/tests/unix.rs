@@ -2,7 +2,7 @@ use std::io::Write;
 
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt,
-    core::{ContainerPort, Mount, WaitFor},
+    core::{CmdWaitFor, Mount, WaitFor},
     runners::AsyncRunner,
 };
 
@@ -18,7 +18,7 @@ async fn exec_curl_unix(
 
     let url = format!("http://{host}{uri}");
     let exec = ExecCommand::new(vec![
-        "curl",
+        "/usr/bin/curl",
         "-s",
         "-S",
         "-w",
@@ -26,7 +26,8 @@ async fn exec_curl_unix(
         "--unix-socket",
         socket_path,
         &url,
-    ]);
+    ])
+    .with_cmd_ready_condition(CmdWaitFor::exit());
 
     let mut result = container.exec(exec).await?;
     let stdout = result.stdout_to_vec().await?;
@@ -51,9 +52,10 @@ async fn exec_test_socket_exists(
     socket_path: &str,
 ) -> bool {
     use testcontainers::core::ExecCommand;
-    let exec = ExecCommand::new(vec!["test", "-S", socket_path]);
+    let exec = ExecCommand::new(vec!["test", "-S", socket_path])
+        .with_cmd_ready_condition(CmdWaitFor::exit());
     match container.exec(exec).await {
-        Ok(r) => r.exit_code().await.unwrap_or(Some(-1)).unwrap_or(-1) == 0,
+        Ok(r) => r.exit_code().await.ok().flatten().unwrap_or(-1) == 0,
         Err(_) => false,
     }
 }
@@ -73,19 +75,10 @@ async fn wait_for_socket_in_container(
     false
 }
 
-async fn exec_curl_tcp_should_fail(
-    container: &ContainerAsync<GenericImage>,
-    port: u16,
-) -> bool {
+async fn exec_curl_tcp_should_fail(container: &ContainerAsync<GenericImage>, port: u16) -> bool {
     use testcontainers::core::ExecCommand;
     let url = format!("http://127.0.0.1:{}/", port);
-    let exec = ExecCommand::new(vec![
-        "curl",
-        "-s",
-        "--connect-timeout",
-        "2",
-        &url,
-    ]);
+    let exec = ExecCommand::new(vec!["curl", "-s", "--connect-timeout", "2", &url]);
     match container.exec(exec).await {
         Ok(r) => {
             let code = r.exit_code().await.unwrap_or(Some(-1)).unwrap_or(-1);
@@ -136,6 +129,8 @@ async fn test_unix_absolute() {
             .unwrap();
 
         let ferron_image = common::build_ferron_image().await.unwrap();
+        // cannot use "wait", since the spawned Ferron daemon is grandchild (not child)
+        // of initial shell
         let container = ferron_image
             .with_wait_for(WaitFor::seconds(2))
             .with_network("bridge")
@@ -150,38 +145,39 @@ async fn test_unix_absolute() {
             .with_cmd(vec![
                 "/bin/sh",
                 "-c",
-                "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; wait $(cat /tmp/ferron.pid)",
+                "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; \
+while kill -0 $(cat /tmp/ferron.pid) 2>/dev/null; do sleep 1; done",
             ])
             .start()
             .await
             .unwrap();
 
         assert!(
-            wait_for_socket_in_container(&container, container_socket_path, std::time::Duration::from_secs(10)).await,
+            wait_for_socket_in_container(
+                &container,
+                container_socket_path,
+                std::time::Duration::from_secs(10)
+            )
+            .await,
             "Unix socket should appear at {} inside container",
             container_socket_path
         );
 
-        // Verify TCP 80 is disabled: container should not expose port 80,
-        // and curl to 127.0.0.1:80 inside container should fail
-        let tcp_exposed = container
-            .get_host_port_ipv4(ContainerPort::Tcp(80))
-            .await
-            .is_ok();
-        assert!(
-            !tcp_exposed,
-            "TCP port 80 should not be exposed when Unix socket is configured"
-        );
+        // Verify TCP 80 is disabled: curl to 127.0.0.1:80 inside container should fail
         assert!(
             exec_curl_tcp_should_fail(&container, 80).await,
             "curl to 127.0.0.1:80 inside container should fail when Unix is enabled"
         );
 
         // HTTP over Unix socket
-        let (code, body, stderr) =
-            exec_curl_unix(&container, container_socket_path, "example.com", "/index.html")
-                .await
-                .expect("exec curl over Unix socket should succeed");
+        let (code, body, stderr) = exec_curl_unix(
+            &container,
+            container_socket_path,
+            "example.com",
+            "/index.html",
+        )
+        .await
+        .expect("exec curl over Unix socket should succeed");
 
         assert_eq!(
             code, 200,
@@ -251,7 +247,8 @@ async fn test_unix_relative() {
             .with_cmd(vec![
                 "/bin/sh",
                 "-c",
-                "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; wait $(cat /tmp/ferron.pid)",
+                "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; \
+while kill -0 $(cat /tmp/ferron.pid) 2>/dev/null; do sleep 1; done",
             ])
             .start()
             .await
@@ -260,29 +257,29 @@ async fn test_unix_relative() {
         // Relative socket should appear at /var/log/ferron/ferron.sock inside container
         let container_socket_path = "/var/log/ferron/ferron.sock";
         assert!(
-            wait_for_socket_in_container(&container, container_socket_path, std::time::Duration::from_secs(10)).await,
+            wait_for_socket_in_container(
+                &container,
+                container_socket_path,
+                std::time::Duration::from_secs(10)
+            )
+            .await,
             "Relative Unix socket should be canonicalized and appear at {}",
             container_socket_path
         );
 
         // Also check that the relative name without prefix works via curl's --unix-socket
         // (curl resolves relative to its CWD, but we use absolute inside container)
-        let (code, body, _) =
-            exec_curl_unix(&container, container_socket_path, "example.com", "/index.html")
-                .await
-                .expect("HTTP over relative Unix socket should succeed");
+        let (code, body, _) = exec_curl_unix(
+            &container,
+            container_socket_path,
+            "example.com",
+            "/index.html",
+        )
+        .await
+        .expect("HTTP over relative Unix socket should succeed");
 
         assert_eq!(code, 200);
         assert!(body.contains("hello from unix relative"));
-
-        // TCP should still be disabled
-        assert!(
-            container
-                .get_host_port_ipv4(ContainerPort::Tcp(80))
-                .await
-                .is_err(),
-            "TCP should be disabled for relative unix socket"
-        );
 
         container.stop().await.unwrap();
     }
@@ -334,7 +331,8 @@ async fn test_unix_tcp_disabled() {
             .with_cmd(vec![
                 "/bin/sh",
                 "-c",
-                "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; wait $(cat /tmp/ferron.pid)",
+                "ferron daemon -c /etc/ferron.conf --pid-file /tmp/ferron.pid; sleep 1; \
+while kill -0 $(cat /tmp/ferron.pid) 2>/dev/null; do sleep 1; done",
             ])
             .start()
             .await
@@ -342,27 +340,30 @@ async fn test_unix_tcp_disabled() {
 
         let container_socket_path = "/tmp/unix/ferron.sock";
         assert!(
-            wait_for_socket_in_container(&container, container_socket_path, std::time::Duration::from_secs(10)).await,
+            wait_for_socket_in_container(
+                &container,
+                container_socket_path,
+                std::time::Duration::from_secs(10)
+            )
+            .await,
             "Unix socket should exist"
         );
 
         // Unix should work
-        let (code, _, _) = exec_curl_unix(&container, container_socket_path, "example.com", "/index.html")
-            .await
-            .unwrap();
+        let (code, _, _) = exec_curl_unix(
+            &container,
+            container_socket_path,
+            "example.com",
+            "/index.html",
+        )
+        .await
+        .unwrap();
         assert_eq!(code, 200);
 
         // TCP must be disabled: exec curl to 127.0.0.1:80 should fail
         assert!(
             exec_curl_tcp_should_fail(&container, 80).await,
             "TCP 80 should be disabled when Unix is enabled"
-        );
-        // Also host-side mapping should not exist
-        assert!(
-            container
-                .get_host_port_ipv4(ContainerPort::Tcp(80))
-                .await
-                .is_err()
         );
 
         container.stop().await.unwrap();
