@@ -8,53 +8,20 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
 use ferron_core::{log_error, log_info, log_warn};
-use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
-use ferron_observability::{
-    CompositeEventSink, Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue, TraceSampler,
-};
+use ferron_observability::{CompositeEventSink, LogAttributeValue, TraceSampler};
 use ferron_tls::observability::{
     emit_connections_active, emit_handshake_duration, emit_handshake_total,
 };
 use ferron_tls::TlsConnectionParams;
 use rustls::server::Acceptor;
 use tokio_util::sync::CancellationToken;
-use zincio_http::{Http1, Http1Options, Http2, Http2Options, HttpProtocol};
 
-use crate::config::ThreeStageResolver;
-use crate::handler::bad_request_handler;
 use crate::server::tls_resolve::RadixTree;
 
 use super::common::*;
-
-#[inline]
-fn emit_connection_error_metric(
-    observability: &CompositeEventSink,
-    transport: &'static str,
-    stage: &'static str,
-) {
-    observability.emit(Event::Metric(MetricEvent {
-        name: "ferron.http.server.connection_errors",
-        attributes: vec![
-            (
-                "network.transport",
-                MetricAttributeValue::StaticStr(transport),
-            ),
-            (
-                "ferron.connection.stage",
-                MetricAttributeValue::StaticStr(stage),
-            ),
-        ],
-        ty: MetricType::Counter,
-        value: MetricValue::U64(1),
-        unit: Some("{error}"),
-        description: Some("Number of connection lifecycle errors by transport and stage."),
-        trace_context: None,
-    }));
-}
+use super::native_sockets::*;
 
 #[derive(Clone, Debug)]
 pub struct UnixListenerOptions {
@@ -296,9 +263,9 @@ impl UnixListenerHandle {
                                             cipher_suite: cipher_suite_str,
                                         };
                                         if negotiated_protocol.as_deref() == Some(b"h2".as_slice()) {
-                                            handle_unix_http2_connection(
+                                            handle_http2_connection(
                                                 tls_stream,
-                                                unix_path_clone.clone(),
+                                                ConnectionAddr::Unix { unix_socket_path: unix_path_clone.clone() },
                                                 server_config.pipeline.clone(),
                                                 server_config.file_pipeline.clone(),
                                                 server_config.error_pipeline.clone(),
@@ -317,9 +284,9 @@ impl UnixListenerHandle {
                                             )
                                             .await;
                                         } else if connection_options.protocols.http1 {
-                                            handle_unix_http1_connection(
+                                            handle_http1_connection(
                                                 tls_stream,
-                                                unix_path_clone.clone(),
+                                                ConnectionAddr::Unix { unix_socket_path: unix_path_clone.clone() },
                                                 server_config.pipeline.clone(),
                                                 server_config.file_pipeline.clone(),
                                                 server_config.error_pipeline.clone(),
@@ -380,9 +347,9 @@ impl UnixListenerHandle {
                                     None,
                                 );
                                 if connection_options.protocols.http2_cleartext {
-                                handle_unix_http2_connection(
+                                handle_http2_connection(
                                     socket,
-                                    unix_path_clone,
+                                    ConnectionAddr::Unix { unix_socket_path: unix_path_clone.clone() },
                                     server_config.pipeline.clone(),
                                     server_config.file_pipeline.clone(),
                                     server_config.error_pipeline.clone(),
@@ -401,9 +368,9 @@ impl UnixListenerHandle {
                                 )
                                 .await;
                                 } else if connection_options.protocols.http1 {
-                                handle_unix_http1_connection_zerocopy(
+                                handle_http1_connection_zerocopy(
                                     socket,
-                                    unix_path_clone,
+                                    ConnectionAddr::Unix { unix_socket_path: unix_path_clone.clone() },
                                     server_config.pipeline.clone(),
                                     server_config.file_pipeline.clone(),
                                     server_config.error_pipeline.clone(),
@@ -705,392 +672,4 @@ pub(crate) fn resolve_http_connection_options_opt(
         (None, None) => resolver.root_data(),
     };
     opt.or_else(|| resolver.root_data()).unwrap_or_default()
-}
-
-#[cfg(target_os = "linux")]
-#[allow(clippy::too_many_arguments)]
-async fn handle_unix_http1_connection_zerocopy<S>(
-    socket: S,
-    unix_socket_path: PathBuf,
-    pipeline: Arc<Pipeline<HttpContext>>,
-    file_pipeline: Arc<Pipeline<HttpFileContext>>,
-    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
-    config_resolver: Arc<ThreeStageResolver>,
-    hinted_hostname: Option<String>,
-    encrypted: bool,
-    https_port: Option<u16>,
-    connection_options: HttpConnectionOptions,
-    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
-    connection_observability: CompositeEventSink,
-    shutdown_token: CancellationToken,
-    reload_token: CancellationToken,
-    http3_alt_svc: bool,
-    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
-) where
-    for<'a> S: tokio::io::AsyncRead
-        + tokio::io::AsyncWrite
-        + zincio::io::AsInnerRawHandle<'a>
-        + Unpin
-        + 'static,
-{
-    let graceful_shutdown = CancellationToken::new();
-    let host_control_plane_metadata = resolve_host_control_plane_metadata(
-        &observability_resolver,
-        None,
-        hinted_hostname.as_deref(),
-    );
-    let host_control_plane_span_links = resolve_host_control_plane_span_links(
-        &observability_resolver,
-        None,
-        hinted_hostname.as_deref(),
-    );
-    let handler_state = Arc::new(RequestHandlerState {
-        pipeline,
-        file_pipeline,
-        error_pipeline,
-        config_resolver,
-        connection_observability,
-        observability_resolver,
-        local_address: None,
-        remote_address: None,
-        unix_socket_path: Some(unix_socket_path.clone()),
-        hinted_hostname,
-        encrypted,
-        https_port,
-        http3_alt_svc,
-        timeout_duration: connection_options.timeout,
-        peer_identity,
-        tls_params: None,
-        host_control_plane_metadata,
-        host_control_plane_span_links,
-    });
-    let mut connection_future = Box::pin(
-        Http1::new(socket, build_http1_options(&connection_options))
-            .graceful_shutdown_token(graceful_shutdown.clone())
-            .zerocopy()
-            .handle_with_error_fn(
-                build_request_handler(handler_state.clone()),
-                build_bad_request_handler(handler_state.clone()),
-            ),
-    );
-    let connection_result = tokio::select! {
-        result = &mut connection_future => result,
-        _ = shutdown_token.cancelled() => {
-            graceful_shutdown.cancel();
-            connection_future.await
-        }
-        _ = reload_token.cancelled() => {
-            graceful_shutdown.cancel();
-            connection_future.await
-        }
-    };
-    if let Err(error) = connection_result {
-        emit_error(
-            &handler_state.connection_observability,
-            format!(
-                "HTTP/1 connection error on unix:{}: {error}",
-                unix_socket_path.display()
-            ),
-            vec![
-                (
-                    "error.type",
-                    LogAttributeValue::String("unix_connection_error".into()),
-                ),
-                (
-                    "error.message",
-                    LogAttributeValue::String(error.to_string()),
-                ),
-                (
-                    "server.address",
-                    LogAttributeValue::String(unix_socket_path.display().to_string()),
-                ),
-            ],
-        );
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-#[allow(clippy::too_many_arguments)]
-async fn handle_unix_http1_connection_zerocopy<S>(
-    socket: S,
-    unix_socket_path: PathBuf,
-    pipeline: Arc<Pipeline<HttpContext>>,
-    file_pipeline: Arc<Pipeline<HttpFileContext>>,
-    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
-    config_resolver: Arc<ThreeStageResolver>,
-    hinted_hostname: Option<String>,
-    encrypted: bool,
-    https_port: Option<u16>,
-    connection_options: HttpConnectionOptions,
-    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
-    connection_observability: CompositeEventSink,
-    shutdown_token: CancellationToken,
-    reload_token: CancellationToken,
-    http3_alt_svc: bool,
-    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
-) where
-    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
-{
-    handle_unix_http1_connection(
-        socket,
-        unix_socket_path,
-        pipeline,
-        file_pipeline,
-        error_pipeline,
-        config_resolver,
-        hinted_hostname,
-        encrypted,
-        https_port,
-        connection_options,
-        observability_resolver,
-        connection_observability,
-        shutdown_token,
-        reload_token,
-        http3_alt_svc,
-        peer_identity,
-        None,
-    )
-    .await
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn handle_unix_http1_connection<S>(
-    socket: S,
-    unix_socket_path: PathBuf,
-    pipeline: Arc<Pipeline<HttpContext>>,
-    file_pipeline: Arc<Pipeline<HttpFileContext>>,
-    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
-    config_resolver: Arc<ThreeStageResolver>,
-    hinted_hostname: Option<String>,
-    encrypted: bool,
-    https_port: Option<u16>,
-    connection_options: HttpConnectionOptions,
-    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
-    connection_observability: CompositeEventSink,
-    shutdown_token: CancellationToken,
-    reload_token: CancellationToken,
-    http3_alt_svc: bool,
-    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
-    tls_params: Option<TlsConnectionParams>,
-) where
-    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
-{
-    let graceful_shutdown = CancellationToken::new();
-    let host_control_plane_metadata = resolve_host_control_plane_metadata(
-        &observability_resolver,
-        None,
-        hinted_hostname.as_deref(),
-    );
-    let host_control_plane_span_links = resolve_host_control_plane_span_links(
-        &observability_resolver,
-        None,
-        hinted_hostname.as_deref(),
-    );
-    let handler_state = Arc::new(RequestHandlerState {
-        pipeline,
-        file_pipeline,
-        error_pipeline,
-        config_resolver,
-        connection_observability,
-        observability_resolver,
-        local_address: None,
-        remote_address: None,
-        unix_socket_path: Some(unix_socket_path.clone()),
-        hinted_hostname,
-        encrypted,
-        https_port,
-        http3_alt_svc,
-        timeout_duration: connection_options.timeout,
-        peer_identity,
-        tls_params,
-        host_control_plane_metadata,
-        host_control_plane_span_links,
-    });
-    let mut connection_future = Box::pin(
-        Http1::new(socket, build_http1_options(&connection_options))
-            .graceful_shutdown_token(graceful_shutdown.clone())
-            .handle_with_error_fn(
-                build_request_handler(handler_state.clone()),
-                build_bad_request_handler(handler_state.clone()),
-            ),
-    );
-    let connection_result = tokio::select! {
-        result = &mut connection_future => result,
-        _ = shutdown_token.cancelled() => {
-            graceful_shutdown.cancel();
-            connection_future.await
-        }
-        _ = reload_token.cancelled() => {
-            graceful_shutdown.cancel();
-            connection_future.await
-        }
-    };
-    if let Err(error) = connection_result {
-        emit_error(
-            &handler_state.connection_observability,
-            format!(
-                "HTTP/1 connection error on unix:{}: {error}",
-                unix_socket_path.display()
-            ),
-            vec![
-                (
-                    "error.type",
-                    LogAttributeValue::String("unix_connection_error".into()),
-                ),
-                (
-                    "error.message",
-                    LogAttributeValue::String(error.to_string()),
-                ),
-                (
-                    "server.address",
-                    LogAttributeValue::String(unix_socket_path.display().to_string()),
-                ),
-            ],
-        );
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn handle_unix_http2_connection<S>(
-    socket: S,
-    unix_socket_path: PathBuf,
-    pipeline: Arc<Pipeline<HttpContext>>,
-    file_pipeline: Arc<Pipeline<HttpFileContext>>,
-    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
-    config_resolver: Arc<ThreeStageResolver>,
-    hinted_hostname: Option<String>,
-    encrypted: bool,
-    https_port: Option<u16>,
-    connection_options: HttpConnectionOptions,
-    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
-    connection_observability: CompositeEventSink,
-    shutdown_token: CancellationToken,
-    reload_token: CancellationToken,
-    http3_alt_svc: bool,
-    peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
-    tls_params: Option<TlsConnectionParams>,
-) where
-    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
-{
-    let graceful_shutdown = CancellationToken::new();
-    let host_control_plane_metadata = resolve_host_control_plane_metadata(
-        &observability_resolver,
-        None,
-        hinted_hostname.as_deref(),
-    );
-    let host_control_plane_span_links = resolve_host_control_plane_span_links(
-        &observability_resolver,
-        None,
-        hinted_hostname.as_deref(),
-    );
-    let handler_state = Arc::new(RequestHandlerState {
-        pipeline,
-        file_pipeline,
-        error_pipeline,
-        config_resolver,
-        connection_observability,
-        observability_resolver,
-        local_address: None,
-        remote_address: None,
-        unix_socket_path: Some(unix_socket_path.clone()),
-        hinted_hostname,
-        encrypted,
-        https_port,
-        http3_alt_svc,
-        timeout_duration: connection_options.timeout,
-        peer_identity,
-        tls_params,
-        host_control_plane_metadata,
-        host_control_plane_span_links,
-    });
-    let mut connection_future = Box::pin(
-        Http2::new(socket, build_http2_options(&connection_options))
-            .graceful_shutdown_token(graceful_shutdown.clone())
-            .handle_with_error_fn(
-                build_request_handler(handler_state.clone()),
-                build_bad_request_handler(handler_state.clone()),
-            ),
-    );
-    let connection_result = tokio::select! {
-        result = &mut connection_future => result,
-        _ = shutdown_token.cancelled() => {
-            graceful_shutdown.cancel();
-            connection_future.await
-        }
-        _ = reload_token.cancelled() => {
-            graceful_shutdown.cancel();
-            connection_future.await
-        }
-    };
-    if let Err(error) = connection_result {
-        emit_error(
-            &handler_state.connection_observability,
-            format!(
-                "HTTP/2 connection error on unix:{}: {error}",
-                unix_socket_path.display()
-            ),
-            vec![
-                (
-                    "error.type",
-                    LogAttributeValue::String("unix_connection_error".into()),
-                ),
-                (
-                    "error.message",
-                    LogAttributeValue::String(error.to_string()),
-                ),
-                (
-                    "server.address",
-                    LogAttributeValue::String(unix_socket_path.display().to_string()),
-                ),
-            ],
-        );
-    }
-}
-
-#[inline]
-fn build_http1_options(connection_options: &HttpConnectionOptions) -> Http1Options {
-    Http1Options::default().enable_early_hints(connection_options.h1_enable_early_hints)
-}
-
-#[inline]
-fn build_http2_options(connection_options: &HttpConnectionOptions) -> Http2Options {
-    let mut options = Http2Options::default();
-    if let Some(v) = connection_options.h2.initial_window_size {
-        options = options.initial_connection_window_size(v);
-        options = options.initial_stream_window_size(v);
-    }
-    if let Some(v) = connection_options.h2.max_frame_size {
-        options = options.max_frame_size(v);
-    }
-    if let Some(v) = connection_options.h2.max_concurrent_streams {
-        options = options.max_concurrent_streams(v);
-    }
-    if let Some(v) = connection_options.h2.max_header_list_size {
-        options = options.max_header_list_size(v);
-    }
-    options = options.enable_connect_protocol(connection_options.h2.enable_connect_protocol);
-    options
-}
-
-#[inline]
-fn build_bad_request_handler(
-    state: Arc<RequestHandlerState>,
-) -> impl Fn(bool) -> crate::server::common::RequestHandlerFuture {
-    move |is_timeout: bool| {
-        let state = Arc::clone(&state);
-        Box::pin(async move {
-            let request_observability = state.connection_observability.clone();
-            bad_request_handler(
-                is_timeout,
-                state.local_address,
-                state.remote_address,
-                state.unix_socket_path.clone(),
-                state.error_pipeline.clone(),
-                request_observability,
-                state.host_control_plane_metadata.clone(),
-                state.host_control_plane_span_links.clone(),
-            )
-            .await
-        })
-    }
 }

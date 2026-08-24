@@ -49,6 +49,7 @@ use crate::server::sni::CustomSniResolver;
 use crate::server::tls_resolve::{RadixTree, TlsResolverRadixTree};
 
 mod common;
+mod native_sockets;
 mod quic;
 mod sni;
 mod tcp;
