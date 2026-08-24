@@ -1301,7 +1301,6 @@ dependencies = [
  "http-body-util",
  "rustc-hash",
  "tokio",
- "typemap_rev",
  "zincio",
 ]
 
@@ -1318,7 +1317,6 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "rustc-hash",
  "tokio",
  "typemap_rev",
 ]
@@ -1370,7 +1368,6 @@ dependencies = [
  "http-body-util",
  "parking_lot",
  "rand 0.10.2",
- "rustc-hash",
  "tokio",
  "typemap_rev",
 ]
@@ -1521,9 +1518,7 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
- "rustc-hash",
  "tokio",
- "typemap_rev",
 ]
 
 [[package]]
@@ -1579,7 +1574,6 @@ dependencies = [
  "parking_lot",
  "rustc-hash",
  "tokio",
- "typemap_rev",
  "zincio",
 ]
 
@@ -1598,7 +1592,6 @@ dependencies = [
  "http-body-util",
  "memchr",
  "pin-project-lite",
- "rustc-hash",
  "tokio",
  "typemap_rev",
 ]
@@ -1619,7 +1612,6 @@ dependencies = [
  "http-body-util",
  "rustc-hash",
  "tokio",
- "typemap_rev",
  "zincio-http",
 ]
 
@@ -1638,7 +1630,6 @@ dependencies = [
  "http-body-util",
  "rustc-hash",
  "tokio",
- "typemap_rev",
  "zincio",
 ]
 
@@ -1689,7 +1680,6 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util",
- "typemap_rev",
  "urlencoding",
  "xxhash-rust",
  "zincio",
@@ -1751,9 +1741,7 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
- "rustc-hash",
  "tokio",
- "typemap_rev",
 ]
 
 [[package]]
@@ -2059,7 +2047,6 @@ dependencies = [
  "urlencoding",
  "webpki-roots",
  "xxhash-rust",
- "zincio",
 ]
 
 [[package]]

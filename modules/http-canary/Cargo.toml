@@ -9,7 +9,6 @@ ahash = "0.8"
 http = "1"
 parking_lot = "0.12"
 rand = "0.10"
-rustc-hash = "2.1.2"
 typemap_rev = "0.4"
 
 ferron-core = { path = "../../core" }

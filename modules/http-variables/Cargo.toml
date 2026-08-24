@@ -13,8 +13,6 @@ ferron-observability = { path = "../../types/observability" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
-typemap_rev = "0.4"
 bytes = "1"
 http-body-util = "0.1.3"
 http = "1"
-rustc-hash = "2"

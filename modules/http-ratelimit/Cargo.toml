@@ -25,5 +25,4 @@ tokio = { version = "1", features = ["sync"] }
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
 ferron-observability = { path = "../../types/observability" }
-typemap_rev = "0.4"
 futures-executor = "0.3.32"

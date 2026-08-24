@@ -21,4 +21,3 @@ dashmap = "6.1.0"
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
 ferron-observability = { path = "../../types/observability" }
-typemap_rev = "0.4"

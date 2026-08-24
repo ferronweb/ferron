@@ -748,7 +748,6 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util",
- "typemap_rev",
  "urlencoding",
  "xxhash-rust",
  "zincio",
