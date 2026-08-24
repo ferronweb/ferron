@@ -478,14 +478,16 @@ async fn emit_metric(
     {
         let extracted = baggage::extract_promoted_keys(baggage_str, promotions, SignalSet::METRICS);
         for attr in extracted {
-            let value = tracker.canonicalize(
+            let Some(value) = tracker.canonicalize(
                 &attr.attribute_name,
                 &attr.value,
                 promotions
                     .iter()
                     .find(|p| p.effective_attribute_name() == attr.attribute_name)
                     .and_then(|p| p.max_distinct),
-            );
+            ) else {
+                continue;
+            };
             attrs.push((attr.attribute_name.replace('.', "_"), value));
         }
     }

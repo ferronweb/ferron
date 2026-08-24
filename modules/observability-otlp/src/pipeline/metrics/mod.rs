@@ -641,7 +641,7 @@ fn attributes_for(
     {
         let extracted = extract_promoted_keys(baggage_str, promotions, SignalSet::METRICS);
         for attribute in extracted {
-            let value = tracker.canonicalize(
+            let Some(value) = tracker.canonicalize(
                 &attribute.attribute_name,
                 &attribute.value,
                 promotions
@@ -650,7 +650,9 @@ fn attributes_for(
                         promotion.effective_attribute_name() == attribute.attribute_name
                     })
                     .and_then(|promotion| promotion.max_distinct),
-            );
+            ) else {
+                continue;
+            };
             attributes.push(kv(attribute.attribute_name, any_string(value)));
         }
     }

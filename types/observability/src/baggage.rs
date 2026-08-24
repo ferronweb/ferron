@@ -30,7 +30,7 @@ pub struct BaggageKeyPromotion {
     pub attribute_name: Option<String>,
     /// Which signals to emit this attribute on. Defaults to `ALL` if not set.
     pub signals: Option<SignalSet>,
-    /// Maximum distinct values for metrics before hashing. None means no cap.
+    /// Maximum distinct values for metrics before dropping. None means no cap.
     pub max_distinct: Option<usize>,
 }
 
@@ -75,23 +75,28 @@ impl DistinctValueTracker {
     /// Canonicalize a baggage value for use as a metric label.
     ///
     /// If `max_distinct` is set and the number of distinct values for this key
-    /// has reached the cap, the value is replaced with a deterministic hash.
+    /// has reached the cap, the value is dropped.
     /// All values also go through control-character sanitization.
-    pub fn canonicalize(&mut self, key: &str, value: &str, max_distinct: Option<usize>) -> String {
+    pub fn canonicalize(
+        &mut self,
+        key: &str,
+        value: &str,
+        max_distinct: Option<usize>,
+    ) -> Option<String> {
         let sanitized = sanitize_value(value);
 
         if let Some(cap) = max_distinct {
             let entry = self.seen.entry(key.to_string()).or_default();
             if !entry.contains(&sanitized) {
                 if entry.len() >= cap {
-                    // Cap reached: hash new values
-                    return hash_value(&sanitized);
+                    // Cap reached: drop new values
+                    return None;
                 }
                 entry.insert(sanitized.clone());
             }
         }
 
-        sanitized
+        Some(sanitized)
     }
 }
 
@@ -107,15 +112,6 @@ fn sanitize_value(s: &str) -> String {
     s.chars()
         .map(|c| if c.is_control() { '?' } else { c })
         .collect()
-}
-
-/// Hash a value deterministically.
-fn hash_value(s: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    format!("hash_{:x}", hasher.finish())
 }
 
 /// Parse a raw W3C Baggage header value into key-value pairs.
@@ -300,26 +296,43 @@ mod tests {
     #[test]
     fn tracker_no_cap_passes_through() {
         let mut tracker = DistinctValueTracker::new();
-        assert_eq!(tracker.canonicalize("key", "value1", None), "value1");
-        assert_eq!(tracker.canonicalize("key", "value2", None), "value2");
+        assert_eq!(
+            tracker.canonicalize("key", "value1", None),
+            Some("value1".into())
+        );
+        assert_eq!(
+            tracker.canonicalize("key", "value2", None),
+            Some("value2".into())
+        );
     }
 
     #[test]
     fn tracker_respects_cap() {
         let mut tracker = DistinctValueTracker::new();
-        assert_eq!(tracker.canonicalize("key", "v1", Some(2)), "v1");
-        assert_eq!(tracker.canonicalize("key", "v2", Some(2)), "v2");
-        // Third distinct value should be hashed
-        let result = tracker.canonicalize("key", "v3", Some(2));
-        assert!(result.starts_with("hash_"));
+        assert_eq!(
+            tracker.canonicalize("key", "v1", Some(2)),
+            Some("v1".into())
+        );
+        assert_eq!(
+            tracker.canonicalize("key", "v2", Some(2)),
+            Some("v2".into())
+        );
+        // Third distinct value should be dropped
+        assert_eq!(tracker.canonicalize("key", "v3", Some(2)), None);
     }
 
     #[test]
     fn tracker_same_value_not_hashed() {
         let mut tracker = DistinctValueTracker::new();
-        assert_eq!(tracker.canonicalize("key", "v1", Some(1)), "v1");
-        // Same value again should not be hashed
-        assert_eq!(tracker.canonicalize("key", "v1", Some(1)), "v1");
+        assert_eq!(
+            tracker.canonicalize("key", "v1", Some(1)),
+            Some("v1".into())
+        );
+        // Same value again should not be dropped
+        assert_eq!(
+            tracker.canonicalize("key", "v1", Some(1)),
+            Some("v1".into())
+        );
     }
 
     #[test]
@@ -327,16 +340,25 @@ mod tests {
         let mut tracker = DistinctValueTracker::new();
         assert_eq!(
             tracker.canonicalize("key", "hello\x00world", None),
-            "hello?world"
+            Some("hello?world".into())
         );
     }
 
     #[test]
     fn tracker_independent_per_key() {
         let mut tracker = DistinctValueTracker::new();
-        assert_eq!(tracker.canonicalize("key1", "v1", Some(1)), "v1");
-        assert_eq!(tracker.canonicalize("key2", "v1", Some(1)), "v1");
+        assert_eq!(
+            tracker.canonicalize("key1", "v1", Some(1)),
+            Some("v1".into())
+        );
+        assert_eq!(
+            tracker.canonicalize("key2", "v1", Some(1)),
+            Some("v1".into())
+        );
         // key2's v1 should not be affected by key1's cap
-        assert_eq!(tracker.canonicalize("key2", "v1", Some(1)), "v1");
+        assert_eq!(
+            tracker.canonicalize("key2", "v1", Some(1)),
+            Some("v1".into())
+        );
     }
 }

@@ -90,14 +90,14 @@ observability {
 
 Each `key` entry configures one baggage key to promote:
 
-| Nested directive | Arguments           | Description                                                                              | Default                 |
-| ---------------- | ------------------- | ---------------------------------------------------------------------------------------- | ----------------------- |
-| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                | none                    |
-| `attribute`      | `<string>`          | The Prometheus label name to use.                                                        | same as the baggage key |
-| `max_distinct`   | `<number> \| false` | Maximum distinct label values before hashing. Prevents high-cardinality label explosion. | 100                     |
+| Nested directive | Arguments           | Description                                                                               | Default                 |
+| ---------------- | ------------------- | ----------------------------------------------------------------------------------------- | ----------------------- |
+| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                 | none                    |
+| `attribute`      | `<string>`          | The Prometheus label name to use.                                                         | same as the baggage key |
+| `max_distinct`   | `<number> \| false` | Maximum distinct label values before dropping. Prevents high-cardinality label explosion. | 100                     |
 
 > [!warning]
-> Prometheus metrics with high-cardinality labels can cause significant performance issues and memory consumption. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are automatically hashed to a deterministic `hash_<hex>` string.
+> Prometheus metrics with high-cardinality labels can cause significant performance issues and memory consumption. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are dropped.
 
 ## Metrics endpoint
 

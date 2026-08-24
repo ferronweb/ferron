@@ -39,6 +39,7 @@
 #### Observability
 
 - **Server and client port in error logs**: the `client.port` and `server.port` attributes are now included in error log messages, so you can easily identify which client and server ports are involved in a given error.
+- **Baggage key promotion max cap more effective**: when baggage values exceed the maximum distinct value cap, they are dropped instead of being hashed (cardinality would be the same when hashed, except for hash collisions).
 
 #### Reverse proxy
 

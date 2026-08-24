@@ -174,4 +174,4 @@ The table below maps core metrics to practical alerting thresholds. Adjust thres
 
 Observability sinks may drop events under high load. Ferron exposes `ferron.admin.observability_events_dropped` and `ferron.admin.observability_event_queue_len` to help detect and tune exporter queues.
 
-When using Prometheus or OTLP with baggage promotion, monitor label cardinality. High-cardinality labels can cause significant performance degradation and memory use in Prometheus. Examples include user IDs or request IDs used as metric labels. Use `max_distinct` on baggage keys to cap distinct label values and prevent label explosion. Values exceeding the distinct cap are automatically hashed to a deterministic string.
+When using Prometheus or OTLP with baggage promotion, monitor label cardinality. High-cardinality labels can cause significant performance degradation and memory use in Prometheus. Examples include user IDs or request IDs used as metric labels. Use `max_distinct` on baggage keys to cap distinct label values and prevent label explosion. Values exceeding the distinct cap are dropped.
