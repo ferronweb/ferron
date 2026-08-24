@@ -1039,33 +1039,14 @@ impl UnixHttpModule {
         // Build a synthetic port config that merges all hosts; use port 0 sentinel
         // and enable TLS processing (is_unix=true) so any host's TLS is registered.
         let port_config = ferron_core::config::ServerConfigurationPort {
-            port: Some(0),
+            port: None,
             hosts: all_hosts,
-        };
-        let https_port = match global_config
-            .directives
-            .get("default_https_port")
-            .and_then(|e| e.first())
-            .and_then(|v| v.args.first())
-        {
-            Some(v) => {
-                if let Some(b) = v.as_boolean() {
-                    if b {
-                        Some(443)
-                    } else {
-                        None
-                    }
-                } else {
-                    v.as_number().and_then(|n| u16::try_from(n).ok())
-                }
-            }
-            None => Some(443),
         };
         let cfg = BasicHttpModule::build_config_inner(
             registry,
             &port_config,
             global_config.clone(),
-            https_port,
+            None,
             false,
             true,
         )?;
