@@ -379,20 +379,10 @@ impl UnixListenerHandle {
                                     None,
                                     None,
                                 );
-                                if !connection_options.protocols.http1 {
-                                    emit_error(
-                                        &ip_observability,
-                                        "Unix listener requires HTTP/1.x support",
-                                        vec![
-                                            ("error.type", LogAttributeValue::String("unix_http1_required".into())),
-                                            ("server.address", LogAttributeValue::String(unix_path_clone.display().to_string())),
-                                        ],
-                                    );
-                                    return;
-                                }
-                                handle_unix_http1_connection_zerocopy(
+                                if connection_options.protocols.http2_cleartext {
+                                handle_unix_http2_connection(
                                     socket,
-                                    unix_path_clone.clone(),
+                                    unix_path_clone,
                                     server_config.pipeline.clone(),
                                     server_config.file_pipeline.clone(),
                                     server_config.error_pipeline.clone(),
@@ -407,8 +397,39 @@ impl UnixListenerHandle {
                                     server_config.reload_token.clone(),
                                     http3_alt_svc,
                                     None,
+                                    None
                                 )
                                 .await;
+                                } else if connection_options.protocols.http1 {
+                                handle_unix_http1_connection_zerocopy(
+                                    socket,
+                                    unix_path_clone,
+                                    server_config.pipeline.clone(),
+                                    server_config.file_pipeline.clone(),
+                                    server_config.error_pipeline.clone(),
+                                    server_config.config_resolver.clone(),
+                                    None,
+                                    false,
+                                    server_config.https_port,
+                                    connection_options,
+                                    server_config.observability_resolver.clone(),
+                                    ip_observability,
+                                    (*connection_cancel_token).clone(),
+                                    server_config.reload_token.clone(),
+                                    http3_alt_svc,
+                                    None
+                                )
+                                .await;
+                                } else {
+                                    emit_error(
+                                        &ip_observability,
+                                        "Unix listener requires HTTP/1.x or h2c support",
+                                        vec![
+                                            ("error.type", LogAttributeValue::String("unix_http1_required".into())),
+                                            ("server.address", LogAttributeValue::String(unix_path_clone.display().to_string())),
+                                        ],
+                                    );
+                                }
                             }
                         });
                     }

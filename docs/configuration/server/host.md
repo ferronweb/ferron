@@ -131,7 +131,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Ferron support
 ### HTTP protocol settings
 
 - `protocols <protocols: string>...`
-  - This directive specifies the enabled HTTP protocols. Supported values are `h1` (HTTP/1.1), `h2` (HTTP/2), and `h3` (HTTP/3). Default: `protocols h1 h2 h3`
+  - This directive specifies the enabled HTTP protocols. Supported values are `h1` (HTTP/1.1), `h2` (HTTP/2), `h2c` (HTTP/2 over cleartext with prior knowledge), and `h3` (HTTP/3). Default: `protocols h1 h2 h3`
 
 - `options_allowed_methods <methods: string>`
   - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). Ferron returns the methods as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`

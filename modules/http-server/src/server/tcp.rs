@@ -554,27 +554,29 @@ impl TcpListenerHandle {
                                 local_addr.ip(),
                                 None,
                             );
-                            if !connection_options.protocols.http1 {
-                                emit_error(
-                                    &ip_observability,
-                                    "Plain TCP listener requires HTTP/1.x support",
-                                    vec![
-                                        (
-                                            "error.type",
-                                            LogAttributeValue::String("tcp_http1_required".into()),
-                                        ),
-                                        (
-                                            "client.address",
-                                            LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
-                                        ),
-                                        (
-                                            "server.address",
-                                            LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
-                                        ),
-                                    ],
-                                );
-                                return;
-                            }
+                            if connection_options.protocols.http2_cleartext {
+                            handle_http2_connection(
+                                socket,
+                                remote_addr,
+                                server_config.pipeline.clone(),
+                                server_config.file_pipeline.clone(),
+                                server_config.error_pipeline.clone(),
+                                server_config.config_resolver.clone(),
+                                local_addr,
+                                None,
+                                false,
+                                server_config.https_port,
+                                connection_options,
+                                server_config.observability_resolver.clone(),
+                                ip_observability,
+                                (*connection_cancel_token).clone(),
+                                server_config.reload_token.clone(),
+                                http3_alt_svc,
+                                None,
+                                None
+                            )
+                            .await;
+                            } else if connection_options.protocols.http1 {
                             handle_http1_connection_zerocopy(
                                 socket,
                                 remote_addr,
@@ -595,6 +597,35 @@ impl TcpListenerHandle {
                                 None
                             )
                             .await;
+                            } else {
+
+                                emit_error(
+                                    &ip_observability,
+                                    "Plain TCP listener requires HTTP/1.x or h2c support",
+                                    vec![
+                                        (
+                                            "error.type",
+                                            LogAttributeValue::String("tcp_http1_required".into()),
+                                        ),
+                                        (
+                                            "client.address",
+                                            LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
+                                        ),
+                                        (
+                                            "client.port",
+                                            LogAttributeValue::I64(remote_addr.port() as i64)
+                                        ),
+                                        (
+                                            "server.address",
+                                            LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
+                                        ),
+                                        (
+                                            "server.port",
+                                            LogAttributeValue::I64(local_addr.port() as i64)
+                                        ),
+                                    ],
+                                );
+                            }
                         }
                     });
                 }

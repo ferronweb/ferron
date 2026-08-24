@@ -304,13 +304,16 @@ fn resolve_http_protocols(
         match protocol {
             "h1" => protocols.http1 = true,
             "h2" => protocols.http2 = true,
+            "h2c" => protocols.http2_cleartext = true,
             "h3" => protocols.http3 = true,
             unsupported => anyhow::bail!("Unsupported HTTP protocol '{unsupported}'"),
         }
     }
 
-    if !protocols.http1 && !protocols.http2 {
+    if !protocols.http1 && !protocols.http2 && !protocols.http2_cleartext && !protocols.http3 {
         anyhow::bail!("http.protocols must enable at least one supported protocol");
+    } else if protocols.http1 && protocols.http2_cleartext {
+        anyhow::bail!("Plaintext HTTP/1.x and HTTP/2 over cleartext are mutually exclusive")
     }
 
     Ok(protocols)

@@ -78,6 +78,7 @@ pub type ObservabilityProviderEntry = (
 pub(crate) struct HttpProtocols {
     pub http1: bool,
     pub http2: bool,
+    pub http2_cleartext: bool,
     pub http3: bool,
 }
 
@@ -86,6 +87,7 @@ impl HttpProtocols {
         Self {
             http1: false,
             http2: false,
+            http2_cleartext: false,
             http3: false,
         }
     }
@@ -110,6 +112,7 @@ impl Default for HttpProtocols {
         Self {
             http1: true,
             http2: true,
+            http2_cleartext: false,
             http3: true,
         }
     }

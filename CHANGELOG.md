@@ -13,6 +13,7 @@
 #### HTTP server core
 
 - **Unix domain socket listeners (Unix only)**: added support for listening on Unix sockets for HTTP server, which can be configured using global `unix` directive. If Unix sockets are configured, Ferron disables TCP and QUIC listeners.
+- **Support for h2c listeners**: added support for h2c (HTTP/2 cleartext) listeners on top of the existing HTTP/1 and HTTP/2 implementations.
 
 #### Reverse proxy
 
