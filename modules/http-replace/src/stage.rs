@@ -237,10 +237,8 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Full};
-    use rustc_hash::FxHashMap;
     use std::collections::HashMap;
     use std::sync::Arc;
-    use typemap_rev::TypeMap;
 
     fn make_value_string(s: &str) -> ServerConfigurationValue {
         ServerConfigurationValue::String(s.to_string(), None)
@@ -276,23 +274,15 @@ mod tests {
             )
             .unwrap();
 
-        HttpContext {
-            req: Some(req),
-            res,
-            events: CompositeEventSink::new(Vec::new()),
-            configuration: make_layered_config(directives),
-            hostname: None,
-            variables: FxHashMap::default(),
-            previous_error: None,
-            original_uri: None,
-            routing_uri: None,
-            encrypted: false,
-            local_address: "127.0.0.1:80".parse().unwrap(),
-            remote_address: "127.0.0.1:12345".parse().unwrap(),
-            auth_user: None,
-            https_port: None,
-            extensions: TypeMap::new(),
-        }
+        let mut ctx = HttpContext::default();
+        ctx.req = Some(req);
+        ctx.res = res;
+        ctx.events = CompositeEventSink::new(Vec::new());
+        ctx.configuration = make_layered_config(directives);
+        ctx.encrypted = false;
+        ctx.local_address = Some("127.0.0.1:80".parse().unwrap());
+        ctx.remote_address = Some("127.0.0.1:12345".parse().unwrap());
+        ctx
     }
 
     fn make_response_with_body(

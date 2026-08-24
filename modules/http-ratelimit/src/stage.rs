@@ -211,10 +211,13 @@ impl RateLimitEngine {
 
                 // Emit abuse event so the abuse protection module can track
                 // repeated rate limit violations and potentially ban the IP.
-                if let Some(recorder) = get_global_abuse_recorder() {
+                if let (Some(recorder), Some(ip)) = (
+                    get_global_abuse_recorder(),
+                    ctx.remote_address.map(|a| a.ip()),
+                ) {
                     let abuse_event = AbuseEvent::new(
                         AbuseEventType::RateLimitExceeded,
-                        ctx.remote_address.ip(),
+                        ip,
                         format!("Rate limit {} req/s exceeded", config.rate),
                         50,
                     );
@@ -422,9 +425,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use rustc_hash::FxHashMap;
     use std::collections::HashMap as StdHashMap;
-    use typemap_rev::TypeMap;
 
     fn make_test_context(
         remote_address: &str,
@@ -435,23 +436,14 @@ mod tests {
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .unwrap();
 
-        HttpContext {
-            req: Some(req),
-            res: None,
-            events: CompositeEventSink::new(Vec::new()),
-            configuration: config.unwrap_or_default(),
-            hostname: None,
-            variables: FxHashMap::default(),
-            previous_error: None,
-            original_uri: None,
-            routing_uri: None,
-            encrypted: false,
-            local_address: "0.0.0.0:80".parse().unwrap(),
-            remote_address: remote_address.parse().unwrap(),
-            auth_user: None,
-            https_port: None,
-            extensions: TypeMap::new(),
-        }
+        let mut ctx = HttpContext::default();
+        ctx.req = Some(req);
+        ctx.events = CompositeEventSink::new(Vec::new());
+        ctx.configuration = config.unwrap_or_default();
+        ctx.encrypted = false;
+        ctx.local_address = Some("0.0.0.0:80".parse().unwrap());
+        ctx.remote_address = Some(remote_address.parse().unwrap());
+        ctx
     }
 
     fn make_rate_limit_config(rate: u64, burst: u64) -> LayeredConfiguration {

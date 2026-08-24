@@ -257,14 +257,12 @@ pub(super) async fn execute_error_pipeline(
         }));
     }
 
-    let mut error_ctx = HttpErrorContext {
-        error_code,
-        headers,
-        configuration,
-        trace_context,
-        res: None,
-        variables,
-    };
+    let mut error_ctx = HttpErrorContext::default();
+    error_ctx.error_code = error_code;
+    error_ctx.headers = headers;
+    error_ctx.configuration = configuration;
+    error_ctx.trace_context = trace_context;
+    error_ctx.variables = variables;
 
     if let Err(error) = error_pipeline.execute_without_inverse(&mut error_ctx).await {
         emit_error(
@@ -324,6 +322,30 @@ pub(super) fn add_http3_alt_svc_header(headers: &mut HeaderMap, http3_alt_port: 
             headers.insert(http::header::ALT_SVC, header_value);
         }
     }
+}
+
+/// Convert control plane span link configs into `SpanLink` instances for trace events.
+pub(super) fn convert_control_plane_span_links(
+    span_links: &Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
+) -> Vec<SpanLink> {
+    let Some(links) = span_links else {
+        return Vec::new();
+    };
+    links
+        .iter()
+        .map(|link| SpanLink {
+            trace_id: link.trace_id.clone(),
+            span_id: link.span_id.clone(),
+            sampled: Some(link.sampled),
+            attributes: link
+                .attributes
+                .iter()
+                .map(|(k, v)| -> (String, TraceAttributeValue) {
+                    (k.clone(), TraceAttributeValue::String(v.clone()))
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -387,28 +409,4 @@ mod tests {
         // No Host header should be added from authority when authority is absent
         assert!(!request.headers().contains_key(http::header::HOST));
     }
-}
-
-/// Convert control plane span link configs into `SpanLink` instances for trace events.
-pub(super) fn convert_control_plane_span_links(
-    span_links: &Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
-) -> Vec<SpanLink> {
-    let Some(links) = span_links else {
-        return Vec::new();
-    };
-    links
-        .iter()
-        .map(|link| SpanLink {
-            trace_id: link.trace_id.clone(),
-            span_id: link.span_id.clone(),
-            sampled: Some(link.sampled),
-            attributes: link
-                .attributes
-                .iter()
-                .map(|(k, v)| -> (String, TraceAttributeValue) {
-                    (k.clone(), TraceAttributeValue::String(v.clone()))
-                })
-                .collect(),
-        })
-        .collect()
 }

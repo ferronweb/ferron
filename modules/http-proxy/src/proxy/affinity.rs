@@ -36,7 +36,7 @@ pub fn extract_affinity_key(
             let header_value = req.headers().get(header_name)?;
             header_value.as_bytes().to_vec()
         }
-        AffinityType::Ip => ctx.remote_address.ip().to_string().into_bytes(),
+        AffinityType::Ip => ctx.remote_address?.ip().to_string().into_bytes(),
         AffinityType::Hash { variable, .. } => {
             // For hash affinity, use the variable value as the key
             // Variables are resolved from the request context

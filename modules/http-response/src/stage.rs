@@ -21,9 +21,6 @@ use http::header::LOCATION;
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
 use rustc_hash::FxBuildHasher;
-#[cfg(test)]
-use rustc_hash::FxHashMap;
-
 use crate::config::{ResponseConfig, StatusRule};
 
 const LOG_TARGET: &str = "ferron-http-response";
@@ -85,7 +82,10 @@ impl HttpResponseStage {
 
     fn evaluate_ip_access(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let config = ResponseConfig::from_config(&ctx.configuration, &self.engine);
-        if config.ip_access.is_blocked(ctx.remote_address.ip()) {
+        let Some(remote) = ctx.remote_address else {
+            return Ok(true);
+        };
+        if config.ip_access.is_blocked(remote.ip()) {
             ctx.res = Some(HttpResponse::BuiltinError(403, None));
             ctx.events.emit(Event::Metric(MetricEvent {
                 name: "ferron.response.ip_blocked",
@@ -412,7 +412,6 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use std::collections::HashMap;
-    use typemap_rev::TypeMap;
 
     fn make_value_number(n: i64) -> ServerConfigurationValue {
         ServerConfigurationValue::Number(n, None)
@@ -436,23 +435,14 @@ mod tests {
             )
             .unwrap();
 
-        HttpContext {
-            req: Some(req),
-            res: None,
-            events: CompositeEventSink::new(Vec::new()),
-            configuration: LayeredConfiguration::default(),
-            hostname: None,
-            variables: FxHashMap::default(),
-            previous_error: None,
-            original_uri: None,
-            routing_uri: None,
-            encrypted: false,
-            local_address: "0.0.0.0:80".parse().unwrap(),
-            remote_address: "192.168.1.50:12345".parse().unwrap(),
-            auth_user: None,
-            https_port: None,
-            extensions: TypeMap::new(),
-        }
+        let mut ctx = HttpContext::default();
+        ctx.req = Some(req);
+        ctx.events = CompositeEventSink::new(Vec::new());
+        ctx.configuration = LayeredConfiguration::default();
+        ctx.encrypted = false;
+        ctx.local_address = Some("0.0.0.0:80".parse().unwrap());
+        ctx.remote_address = Some("192.168.1.50:12345".parse().unwrap());
+        ctx
     }
 
     fn make_config_with_layer(

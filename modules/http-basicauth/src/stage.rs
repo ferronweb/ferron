@@ -114,7 +114,9 @@ impl BasicAuthStage {
 
     /// Build a lockout response (IP temporarily locked due to brute-force protection).
     fn make_lockout_response(ctx: &HttpContext, engine: &BruteForceEngine) -> HttpResponse {
-        let retry_after = engine.retry_after(ctx.remote_address.ip());
+        let retry_after = ctx
+            .remote_address
+            .and_then(|a| engine.retry_after(a.ip()));
         let mut header_map = HeaderMap::new();
         if let Some(duration) = retry_after {
             header_map.insert(
@@ -206,29 +208,35 @@ impl Stage<HttpContext> for BasicAuthStage {
                 return Ok(false);
             }
         };
-        let ip = ctx.remote_address.ip().to_canonical();
+        let ip = ctx
+            .remote_address
+            .map(|a| a.ip().to_canonical());
 
-        if engine.is_locked(ip) {
-            ctx.events.emit(Event::Log(LogEvent {
-                level: LogLevel::Warn,
-                message: format!("basicauth: IP '{ip}' locked (brute-force protection)"),
-                summary: "Basic auth client locked".into(),
-                target: "ferron-http-basicauth",
-                attributes: vec![("client.address", LogAttributeValue::String(ip.to_string()))],
-                trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-            }));
-            ctx.res = Some(Self::make_lockout_response(ctx, &engine));
-            ctx.get_span_attributes().insert(
-                "ferron.basicauth.result",
-                TraceAttributeValue::StaticStr("failure"),
-            );
-            ctx.get_span_attributes()
-                .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
-            custom_access_log_fields(ctx).insert(
-                "ferron.basicauth.result".into(),
-                CustomAccessLogField::String("failure".into()),
-            );
-            return Ok(false);
+        // Only apply IP-based brute-force protection when a client IP is known
+        // (e.g. not for Unix socket listeners, which have no remote address).
+        if let Some(ip) = ip {
+            if engine.is_locked(ip) {
+                ctx.events.emit(Event::Log(LogEvent {
+                    level: LogLevel::Warn,
+                    message: format!("basicauth: IP '{ip}' locked (brute-force protection)"),
+                    summary: "Basic auth client locked".into(),
+                    target: "ferron-http-basicauth",
+                    attributes: vec![("client.address", LogAttributeValue::String(ip.to_string()))],
+                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                }));
+                ctx.res = Some(Self::make_lockout_response(ctx, &engine));
+                ctx.get_span_attributes().insert(
+                    "ferron.basicauth.result",
+                    TraceAttributeValue::StaticStr("failure"),
+                );
+                ctx.get_span_attributes()
+                    .insert("error.type", TraceAttributeValue::StaticStr("auth_failed"));
+                custom_access_log_fields(ctx).insert(
+                    "ferron.basicauth.result".into(),
+                    CustomAccessLogField::String("failure".into()),
+                );
+                return Ok(false);
+            }
         }
 
         let stored_hash = match config.users.get(&username) {
@@ -237,15 +245,17 @@ impl Stage<HttpContext> for BasicAuthStage {
                 // Verify a fake hash to thwart user enumeration
                 let _ = Self::verify_password("test", FAKE_HASH).await;
 
-                engine.record_failure(ip);
-                if let Some(recorder) = get_global_abuse_recorder() {
-                    let abuse_event = AbuseEvent::new(
-                        AbuseEventType::BruteForceFailure,
-                        ip,
-                        format!("Brute-force failure for unknown user '{}'", username),
-                        60,
-                    );
-                    recorder.record_event(&abuse_event, ctx);
+                if let Some(ip) = ip {
+                    engine.record_failure(ip);
+                    if let Some(recorder) = get_global_abuse_recorder() {
+                        let abuse_event = AbuseEvent::new(
+                            AbuseEventType::BruteForceFailure,
+                            ip,
+                            format!("Brute-force failure for unknown user '{}'", username),
+                            60,
+                        );
+                        recorder.record_event(&abuse_event, ctx);
+                    }
                 }
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
@@ -296,23 +306,26 @@ impl Stage<HttpContext> for BasicAuthStage {
             Ok(true)
         } else {
             // Authentication failed
-            let locked = engine.record_failure(ctx.remote_address.ip());
-            if let Some(recorder) = get_global_abuse_recorder() {
-                let abuse_event = AbuseEvent::new(
-                    AbuseEventType::BruteForceFailure,
-                    ctx.remote_address.ip(),
-                    format!("Brute-force failure for user '{}'", username),
-                    60,
-                );
-                recorder.record_event(&abuse_event, ctx);
+            let locked = ip.is_some_and(|ip| engine.record_failure(ip));
+            if let Some(ip) = ip {
+                if let Some(recorder) = get_global_abuse_recorder() {
+                    let abuse_event = AbuseEvent::new(
+                        AbuseEventType::BruteForceFailure,
+                        ip,
+                        format!("Brute-force failure for user '{}'", username),
+                        60,
+                    );
+                    recorder.record_event(&abuse_event, ctx);
+                }
             }
+            let client_ip_str = ip.map(|ip| ip.to_string()).unwrap_or_default();
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Warn,
                 message: format!(
                     "basicauth: authentication failed for user '{}'{}",
                     username,
                     if locked {
-                        format!(" (client {ip} now locked)")
+                        format!(" (client {client_ip_str} now locked)")
                     } else {
                         "".to_string()
                     }
@@ -321,7 +334,10 @@ impl Stage<HttpContext> for BasicAuthStage {
                 target: "ferron-http-basicauth",
                 attributes: vec![
                     ("user.name", LogAttributeValue::String(username.clone())),
-                    ("client.address", LogAttributeValue::String(ip.to_string())),
+                    (
+                        "client.address",
+                        LogAttributeValue::String(client_ip_str),
+                    ),
                     ("ferron.basicauth.locked", LogAttributeValue::Bool(locked)),
                 ],
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
@@ -361,10 +377,8 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use rustc_hash::FxHashMap;
     use std::collections::HashMap as StdHashMap;
     use std::sync::Arc;
-    use typemap_rev::TypeMap;
 
     fn make_test_context_with_auth_header(
         auth_header: Option<&str>,
@@ -378,23 +392,14 @@ mod tests {
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .unwrap();
 
-        HttpContext {
-            req: Some(req),
-            res: None,
-            events: CompositeEventSink::new(Vec::new()),
-            configuration: config.unwrap_or_default(),
-            hostname: None,
-            variables: FxHashMap::default(),
-            previous_error: None,
-            original_uri: None,
-            routing_uri: None,
-            encrypted: false,
-            local_address: "0.0.0.0:80".parse().unwrap(),
-            remote_address: "192.0.2.1:12345".parse().unwrap(),
-            auth_user: None,
-            https_port: None,
-            extensions: TypeMap::new(),
-        }
+        let mut ctx = HttpContext::default();
+        ctx.req = Some(req);
+        ctx.events = CompositeEventSink::new(Vec::new());
+        ctx.configuration = config.unwrap_or_default();
+        ctx.encrypted = false;
+        ctx.local_address = Some("0.0.0.0:80".parse().unwrap());
+        ctx.remote_address = Some("192.0.2.1:12345".parse().unwrap());
+        ctx
     }
 
     fn make_basicauth_config(users: Vec<(&str, &str)>) -> LayeredConfiguration {

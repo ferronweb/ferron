@@ -38,7 +38,8 @@ fn build_https_url(ctx: &HttpContext) -> Option<String> {
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
         .or_else(|| ctx.hostname.clone())
-        .unwrap_or_else(|| ctx.local_address.ip().to_string());
+        .or_else(|| ctx.local_address.map(|a| a.ip().to_string()))
+        .unwrap_or_default();
     let host = if let Some((host_split, port)) = host_req.rsplit_once(":") {
         if port.parse::<u16>().is_ok() {
             host_split.to_string()
@@ -93,7 +94,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
             Some(p) => p,
             None => return Ok(true),
         };
-        if ctx.encrypted || ctx.local_address.port() == https_port {
+        if ctx.encrypted || ctx.local_address.is_some_and(|a| a.port() == https_port) {
             return Ok(true);
         }
 
@@ -169,10 +170,8 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::Empty;
-    use rustc_hash::FxHashMap;
     use std::collections::HashMap as StdHashMap;
     use std::sync::Arc;
-    use typemap_rev::TypeMap;
 
     fn make_test_context(
         host_header: Option<&str>,
@@ -188,23 +187,16 @@ mod tests {
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .unwrap();
 
-        HttpContext {
-            req: Some(req),
-            res: None,
-            events: CompositeEventSink::new(Vec::new()),
-            configuration: LayeredConfiguration::default(),
-            hostname,
-            variables: FxHashMap::default(),
-            previous_error: None,
-            original_uri: None,
-            routing_uri: None,
-            encrypted,
-            local_address: "0.0.0.0:80".parse().unwrap(),
-            remote_address: "127.0.0.1:12345".parse().unwrap(),
-            auth_user: None,
-            https_port,
-            extensions: TypeMap::new(),
-        }
+        let mut ctx = HttpContext::default();
+        ctx.req = Some(req);
+        ctx.events = CompositeEventSink::new(Vec::new());
+        ctx.configuration = LayeredConfiguration::default();
+        ctx.hostname = hostname;
+        ctx.encrypted = encrypted;
+        ctx.local_address = Some("0.0.0.0:80".parse().unwrap());
+        ctx.remote_address = Some("127.0.0.1:12345".parse().unwrap());
+        ctx.https_port = https_port;
+        ctx
     }
 
     #[tokio::test]
@@ -343,7 +335,7 @@ mod tests {
         // Simulates explicit port config where no separate HTTPS listener exists
         let mut ctx = make_test_context(Some("example.com"), false, Some(8080), None);
         // local_address port is 8080 (same as https_port)
-        ctx.local_address = "0.0.0.0:8080".parse().unwrap();
+        ctx.local_address = Some("0.0.0.0:8080".parse().unwrap());
         let stage = HttpsRedirectStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(

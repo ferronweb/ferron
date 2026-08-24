@@ -32,6 +32,8 @@ pub enum HttpResponse {
     Abort,
 }
 
+#[derive(Default)]
+#[non_exhaustive]
 pub struct HttpContext {
     pub req: Option<HttpRequest>,
     pub res: Option<HttpResponse>,
@@ -43,12 +45,13 @@ pub struct HttpContext {
     pub original_uri: Option<Uri>,
     pub routing_uri: Option<Uri>,
     pub encrypted: bool,
-    pub local_address: SocketAddr,
-    pub remote_address: SocketAddr,
+    pub local_address: Option<SocketAddr>,
+    pub remote_address: Option<SocketAddr>,
     pub auth_user: Option<String>,
     // For example, Some(443) for encrypted port 443
     // or Some(443) for implicit default HTTP non-encrypted port
     pub https_port: Option<u16>,
+    pub hide_server: bool,
     pub extensions: TypeMap,
 }
 
@@ -87,6 +90,8 @@ impl HttpContext {
     }
 }
 
+#[derive(Default)]
+#[non_exhaustive]
 pub struct HttpFileContext {
     pub http: HttpContext,
     pub file_path: std::path::PathBuf,
@@ -97,6 +102,8 @@ pub struct HttpFileContext {
     pub file: Option<ReusedFile>,
 }
 
+#[derive(Default)]
+#[non_exhaustive]
 pub struct HttpErrorContext {
     pub error_code: u16,
     pub headers: Option<HeaderMap>,

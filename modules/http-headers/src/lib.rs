@@ -177,6 +177,11 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
             for (i, action) in header_ctx.config.header_actions.iter().enumerate() {
                 match action {
                     config::HeaderAction::Remove(name) => {
+                        if name == http::header::SERVER {
+                            // Server header is added inside HTTP server itself,
+                            // so mark hide_server as true
+                            ctx.hide_server = true;
+                        }
                         headers.remove(name);
                     }
                     config::HeaderAction::Replace(name, _) => {
@@ -212,6 +217,9 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
             for (i, action) in header_ctx.config.header_actions.iter().enumerate() {
                 match action {
                     config::HeaderAction::Remove(name) => {
+                        if name == http::header::SERVER {
+                            ctx.hide_server = true;
+                        }
                         headers.remove(name);
                     }
                     config::HeaderAction::Replace(name, _) => {

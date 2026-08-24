@@ -530,9 +530,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use rustc_hash::FxHashMap;
     use std::collections::HashMap as StdHashMap;
-    use typemap_rev::TypeMap;
 
     fn make_test_context(path: &str, config: Option<LayeredConfiguration>) -> HttpContext {
         let req: HttpRequest = Request::builder()
@@ -540,23 +538,14 @@ mod tests {
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .unwrap();
 
-        HttpContext {
-            req: Some(req),
-            res: None,
-            events: CompositeEventSink::new(Vec::new()),
-            configuration: config.unwrap_or_default(),
-            hostname: None,
-            variables: FxHashMap::default(),
-            previous_error: None,
-            original_uri: None,
-            routing_uri: None,
-            encrypted: false,
-            local_address: "0.0.0.0:80".parse().unwrap(),
-            remote_address: "192.0.2.1:12345".parse().unwrap(),
-            auth_user: None,
-            https_port: None,
-            extensions: TypeMap::new(),
-        }
+        let mut ctx = HttpContext::default();
+        ctx.req = Some(req);
+        ctx.events = CompositeEventSink::new(Vec::new());
+        ctx.configuration = config.unwrap_or_default();
+        ctx.encrypted = false;
+        ctx.local_address = Some("0.0.0.0:80".parse().unwrap());
+        ctx.remote_address = Some("192.0.2.1:12345".parse().unwrap());
+        ctx
     }
 
     fn make_value_string(s: &str) -> ServerConfigurationValue {

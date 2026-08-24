@@ -13,8 +13,6 @@ use ferron_observability::{
     TraceEvent,
 };
 use http_body_util::BodyExt;
-use rustc_hash::FxHashMap;
-use typemap_rev::TypeMap;
 
 use super::observability::PerStageSpanHooks;
 
@@ -394,32 +392,22 @@ async fn apply_resolved_file_to_context(
         ctx.variables.remove("request.path_info");
     }
 
-    let placeholder = HttpContext {
-        req: None,
-        res: None,
-        events: ctx.events.clone(),
-        configuration: ctx.configuration.clone(),
-        hostname: ctx.hostname.clone(),
-        variables: FxHashMap::default(),
-        previous_error: None,
-        original_uri: None,
-        routing_uri: None,
-        encrypted: ctx.encrypted,
-        local_address: ctx.local_address,
-        remote_address: ctx.remote_address,
-        auth_user: None,
-        https_port: ctx.https_port,
-        extensions: TypeMap::new(),
-    };
+    let mut placeholder = HttpContext::default();
+    placeholder.events = ctx.events.clone();
+    placeholder.configuration = ctx.configuration.clone();
+    placeholder.hostname = ctx.hostname.clone();
+    placeholder.encrypted = ctx.encrypted;
+    placeholder.local_address = ctx.local_address;
+    placeholder.remote_address = ctx.remote_address;
+    placeholder.https_port = ctx.https_port;
     let http_ctx = std::mem::replace(ctx, placeholder);
-    let mut file_ctx = HttpFileContext {
-        http: http_ctx,
-        file_path: resolved_file.file_path.clone(),
-        path_info: resolved_file.path_info.clone(),
-        file_root: root_path,
-        etag: resolved_file.etag.clone(),
-        file: Some(resolved_file.file),
-    };
+    let mut file_ctx = HttpFileContext::default();
+    file_ctx.http = http_ctx;
+    file_ctx.file_path = resolved_file.file_path.clone();
+    file_ctx.path_info = resolved_file.path_info.clone();
+    file_ctx.file_root = root_path;
+    file_ctx.etag = resolved_file.etag.clone();
+    file_ctx.file = Some(resolved_file.file);
 
     let has_traces = parent_span_key.is_some() && ctx.events.has_trace_sinks();
     let mut stage_hooks = PerStageSpanHooks::new(

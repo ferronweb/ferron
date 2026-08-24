@@ -431,8 +431,7 @@ impl AbuseRecorder for AbuseRegistry {
                     level: ferron_observability::LogLevel::Warn,
                     message: format!(
                         "Ban triggered: IP {} - {}",
-                        ctx.remote_address.ip(),
-                        event.reason
+                        event.ip, event.reason
                     ),
                     summary: "Ban triggered".into(),
                     target: "ferron-http-abuseban",
@@ -440,7 +439,7 @@ impl AbuseRecorder for AbuseRegistry {
                         (
                             "client.address",
                             ferron_observability::LogAttributeValue::String(
-                                ctx.remote_address.ip().to_canonical().to_string(),
+                                event.ip.to_canonical().to_string(),
                             ),
                         ),
                         (

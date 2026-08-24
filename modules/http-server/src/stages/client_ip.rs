@@ -45,7 +45,11 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
             None => return Ok(true),
         };
 
-        if !config.is_trusted_proxy(ctx.remote_address.ip()) {
+        let Some(remote) = ctx.remote_address else {
+            return Ok(true);
+        };
+
+        if !config.is_trusted_proxy(remote.ip()) {
             return Ok(true);
         }
 
@@ -55,9 +59,9 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
         };
 
         // Preserve the original remote port; only replace the IP.
-        let original_ip = ctx.remote_address.ip();
-        let original_port = ctx.remote_address.port();
-        ctx.remote_address = SocketAddr::new(ip, original_port);
+        let original_ip = remote.ip();
+        let original_port = remote.port();
+        ctx.remote_address = Some(SocketAddr::new(ip, original_port));
         ctx.events.emit(Event::Metric(MetricEvent {
             name: "ferron.http.server.client_ip_rewrites",
             attributes: vec![(
@@ -97,10 +101,8 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use rustc_hash::FxHashMap;
     use std::collections::HashMap as StdHashMap;
     use std::sync::Arc;
-    use typemap_rev::TypeMap;
 
     fn make_test_context(
         x_forwarded_for: Option<&str>,
@@ -123,23 +125,13 @@ mod tests {
             )
             .unwrap();
 
-        let mut ctx = HttpContext {
-            req: Some(req),
-            res: None,
-            events: CompositeEventSink::new(Vec::new()),
-            configuration: LayeredConfiguration::default(),
-            hostname: None,
-            variables: FxHashMap::default(),
-            previous_error: None,
-            original_uri: None,
-            routing_uri: None,
-            encrypted: false,
-            local_address: "0.0.0.0:80".parse().unwrap(),
-            remote_address: "10.0.0.1:12345".parse().unwrap(),
-            auth_user: None,
-            https_port: None,
-            extensions: TypeMap::new(),
-        };
+        let mut ctx = HttpContext::default();
+        ctx.req = Some(req);
+        ctx.events = CompositeEventSink::new(Vec::new());
+        ctx.configuration = LayeredConfiguration::default();
+        ctx.encrypted = false;
+        ctx.local_address = Some("0.0.0.0:80".parse().unwrap());
+        ctx.remote_address = Some("10.0.0.1:12345".parse().unwrap());
 
         if let Some(directive) = config_directive {
             let mut directives = StdHashMap::new();
@@ -199,8 +191,8 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "192.0.2.1");
-        assert_eq!(ctx.remote_address.port(), 12345); // original port preserved
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "192.0.2.1");
+        assert_eq!(ctx.remote_address.unwrap().port(), 12345); // original port preserved
     }
 
     #[tokio::test]
@@ -214,7 +206,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "192.0.2.1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "192.0.2.1");
     }
 
     #[tokio::test]
@@ -228,7 +220,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "2001:db8::1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "2001:db8::1");
     }
 
     #[tokio::test]
@@ -238,7 +230,7 @@ mod tests {
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
         // remote_address should be unchanged
-        assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "10.0.0.1");
     }
 
     #[tokio::test]
@@ -247,7 +239,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "10.0.0.1");
     }
 
     #[tokio::test]
@@ -261,7 +253,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "10.0.0.1");
     }
 
     #[tokio::test]
@@ -275,7 +267,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "10.0.0.1");
     }
 
     #[tokio::test]
@@ -289,7 +281,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "192.0.2.60");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "192.0.2.60");
     }
 
     #[tokio::test]
@@ -303,7 +295,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "192.0.2.60");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "192.0.2.60");
     }
 
     #[tokio::test]
@@ -317,7 +309,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "2001:db8::1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "2001:db8::1");
     }
 
     #[tokio::test]
@@ -331,7 +323,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "192.0.2.60");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "192.0.2.60");
     }
 
     #[tokio::test]
@@ -340,7 +332,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "10.0.0.1");
     }
 
     #[tokio::test]
@@ -354,7 +346,7 @@ mod tests {
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
-        assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "10.0.0.1");
     }
 
     #[tokio::test]
@@ -369,6 +361,6 @@ mod tests {
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
         // "_hidden" is not an IP, so the stage should skip
-        assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
+        assert_eq!(ctx.remote_address.unwrap().ip().to_string(), "10.0.0.1");
     }
 }

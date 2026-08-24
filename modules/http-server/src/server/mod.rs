@@ -689,11 +689,11 @@ impl BasicHttpModule {
         let file_pipeline = registry
             .get_stage_registry::<HttpFileContext>()
             .map(|registry| registry.build_with_config(merged_config))
-            .unwrap_or_else(Pipeline::new);
+            .unwrap_or_default();
         let error_pipeline = registry
             .get_stage_registry::<HttpErrorContext>()
             .map(|registry| registry.build_with_config(merged_config))
-            .unwrap_or_else(Pipeline::new);
+            .unwrap_or_default();
 
         Ok(HttpServerConfig {
             pipeline: Arc::new(pipeline),

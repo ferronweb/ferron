@@ -15,6 +15,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use rustc_hash::FxHashMap;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::access_log::{CustomAccessLogField, CustomAccessLogFields};
@@ -30,8 +31,6 @@ use ferron_observability::{
 use http::{HeaderValue, Response};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty};
-use rustc_hash::FxHashMap;
-use typemap_rev::TypeMap;
 
 use crate::config::ThreeStageResolver;
 use crate::util::canonicalize_url::canonicalize_path;
@@ -275,6 +274,7 @@ pub async fn request_handler(
         final_remote_address,
         custom_fields,
         resolved_control_plane_metadata,
+        hide_server,
     ) = request_handler_inner(
         request,
         pipeline,
@@ -445,9 +445,11 @@ pub async fn request_handler(
                 None
             },
         );
-        response
-            .headers_mut()
-            .insert(http::header::SERVER, HeaderValue::from_static("Ferron"));
+        if !hide_server {
+            response
+                .headers_mut()
+                .insert(http::header::SERVER, HeaderValue::from_static("Ferron"));
+        }
     }
     response_result
 }
@@ -476,6 +478,7 @@ async fn request_handler_inner(
     Option<SocketAddr>,
     Option<FxHashMap<String, CustomAccessLogField>>,
     Option<Arc<std::collections::BTreeMap<String, String>>>,
+    bool,
 ) {
     // Normalize "Host" header
     let request_log_trace_context = request_trace_context
@@ -515,7 +518,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None, None, None, None);
+            return (Ok(response), None, None, None, None, false);
         }
         return (
             Ok(builtin_error_response(
@@ -533,6 +536,7 @@ async fn request_handler_inner(
             None,
             None,
             None,
+            false,
         );
     }
 
@@ -577,6 +581,7 @@ async fn request_handler_inner(
             None,
             None,
             None,
+            false,
         );
     }
 
@@ -629,7 +634,7 @@ async fn request_handler_inner(
             )
             .await
             {
-                return (Ok(response), None, None, None, None);
+                return (Ok(response), None, None, None, None, false);
             }
             return (
                 Ok(builtin_error_response(
@@ -647,6 +652,7 @@ async fn request_handler_inner(
                 None,
                 None,
                 None,
+                false,
             );
         }
 
@@ -690,7 +696,7 @@ async fn request_handler_inner(
                         )
                         .await
                         {
-                            return (Ok(response), None, None, None, None);
+                            return (Ok(response), None, None, None, None, false);
                         }
                         return (
                             Ok(builtin_error_response(
@@ -709,6 +715,7 @@ async fn request_handler_inner(
                             None,
                             None,
                             None,
+                            false,
                         );
                     }
                 }
@@ -750,7 +757,7 @@ async fn request_handler_inner(
                 )
                 .await
                 {
-                    return (Ok(response), None, None, None, None);
+                    return (Ok(response), None, None, None, None, false);
                 }
                 return (
                     Ok(builtin_error_response(
@@ -768,6 +775,7 @@ async fn request_handler_inner(
                     None,
                     None,
                     None,
+                    false,
                 );
             }
         }
@@ -776,23 +784,16 @@ async fn request_handler_inner(
     // Create a partial HttpContext for variable resolution during config resolution.
     // This enables all interpolation variables (request.*, server.*, remote.*) to be
     // resolved dynamically from the context rather than pre-populated in a HashMap.
-    let mut ctx = HttpContext {
-        req: Some(request),
-        res: None,
-        events: events.clone(),
-        configuration: LayeredConfiguration::default(),
-        hostname: hostname.clone(),
-        variables: FxHashMap::default(),
-        previous_error: None,
-        original_uri: None,
-        routing_uri: routing_str.parse().ok(),
-        encrypted,
-        local_address,
-        remote_address,
-        auth_user: None,
-        https_port,
-        extensions: TypeMap::new(),
-    };
+    let mut ctx = HttpContext::default();
+    ctx.req = Some(request);
+    ctx.events = events.clone();
+    ctx.configuration = LayeredConfiguration::default();
+    ctx.hostname = hostname.clone();
+    ctx.routing_uri = routing_str.parse().ok();
+    ctx.encrypted = encrypted;
+    ctx.local_address = Some(local_address);
+    ctx.remote_address = Some(remote_address);
+    ctx.https_port = https_port;
 
     // Attach parsed or generated trace context to the HttpContext extensions so stages/modules can access it.
     if let Some(ref tc) = request_trace_context {
@@ -826,7 +827,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None, None, None, None);
+            return (Ok(response), None, None, None, None, ctx.hide_server);
         }
         return (
             Ok(builtin_error_response(
@@ -844,6 +845,7 @@ async fn request_handler_inner(
             None,
             None,
             None,
+            ctx.hide_server,
         );
     };
 
@@ -873,7 +875,7 @@ async fn request_handler_inner(
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .expect("failed to build OPTIONS * response");
 
-        return (Ok(response), None, None, None, None);
+        return (Ok(response), None, None, None, None, ctx.hide_server);
     }
 
     let request = ctx.req.take().expect("invalid HTTP context state");
@@ -1000,8 +1002,9 @@ async fn request_handler_inner(
             HttpResponse::Abort => Err(io::Error::other("Aborted")),
         },
         auth_user,
-        Some(final_remote),
+        final_remote,
         custom_fields,
         resolved_control_plane_metadata,
+        ctx.hide_server,
     )
 }

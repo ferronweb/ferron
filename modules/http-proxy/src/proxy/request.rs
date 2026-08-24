@@ -107,33 +107,39 @@ pub(super) fn construct_proxy_request(
     parts.headers.remove("proxy-authorization");
     parts.headers.remove("proxy-authenticate");
 
-    let client_ip = ctx.remote_address.ip();
-    let local_ip = ctx.local_address.ip();
+    let client_ip = ctx.remote_address.map(|a| a.ip());
+    let local_ip = ctx.local_address.map(|a| a.ip());
     let proto = if ctx.encrypted { "https" } else { "http" };
 
-    // Format IP addresses into stack-allocated buffers to avoid heap allocation
-    let mut client_ip_buf = ArrayString::<45>::new();
-    let _ = write!(client_ip_buf, "{}", client_ip);
-    let mut local_ip_buf = ArrayString::<45>::new();
-    let _ = write!(local_ip_buf, "{}", local_ip);
-
     let client_ip_from_header_enabled = ClientIpFromHeaderConfig::resolve_from_context(ctx)
-        .is_some_and(|s| s.is_trusted_proxy(ctx.remote_address.ip()));
-    if client_ip_from_header_enabled {
-        append_x_forwarded_for(&mut parts.headers, &client_ip_buf);
-        append_forwarded(&mut parts.headers, &client_ip_buf, proto, &local_ip_buf);
-    } else {
-        set_x_forwarded_for(&mut parts.headers, &client_ip_buf);
-        set_forwarded(&mut parts.headers, &client_ip_buf, proto, &local_ip_buf);
+        .is_some_and(|s| ctx.remote_address.is_some_and(|a| s.is_trusted_proxy(a.ip())));
+
+    // Only inject client/forwarded headers when both local and remote addresses
+    // are known (not the case for Unix socket listeners).
+    if let (Some(client_ip), Some(local_ip)) = (client_ip, local_ip) {
+        // Format IP addresses into stack-allocated buffers to avoid heap allocation
+        let mut client_ip_buf = ArrayString::<45>::new();
+        let _ = write!(client_ip_buf, "{}", client_ip);
+        let mut local_ip_buf = ArrayString::<45>::new();
+        let _ = write!(local_ip_buf, "{}", local_ip);
+
+        if client_ip_from_header_enabled {
+            append_x_forwarded_for(&mut parts.headers, &client_ip_buf);
+            append_forwarded(&mut parts.headers, &client_ip_buf, proto, &local_ip_buf);
+        } else {
+            set_x_forwarded_for(&mut parts.headers, &client_ip_buf);
+            set_forwarded(&mut parts.headers, &client_ip_buf, proto, &local_ip_buf);
+        }
+
+        parts.headers.insert(
+            HeaderName::from_static("x-real-ip"),
+            HeaderValue::from_str(&client_ip_buf)?,
+        );
     }
 
     parts.headers.insert(
         HeaderName::from_static("x-forwarded-proto"),
         HeaderValue::from_static(proto),
-    );
-    parts.headers.insert(
-        HeaderName::from_static("x-real-ip"),
-        HeaderValue::from_str(&client_ip_buf)?,
     );
 
     parts.version = http::Version::default();

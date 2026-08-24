@@ -29,8 +29,10 @@ impl ForwardedAuthenticationStage {
     }
 
     fn client_ip_from_header_enabled(ctx: &HttpContext) -> bool {
-        ClientIpFromHeaderConfig::resolve_from_context(ctx)
-            .is_some_and(|s| s.is_trusted_proxy(ctx.remote_address.ip()))
+        ClientIpFromHeaderConfig::resolve_from_context(ctx).is_some_and(|s| {
+            ctx.remote_address
+                .is_some_and(|a| s.is_trusted_proxy(a.ip()))
+        })
     }
 
     fn set_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: &str) {
@@ -130,17 +132,21 @@ impl ForwardedAuthenticationStage {
             headers.insert(name.clone(), value.clone());
         }
 
-        let client_ip = ctx.remote_address.ip();
-        let local_ip = ctx.local_address.ip();
+        let client_ip = ctx.remote_address.map(|a| a.ip());
+        let local_ip = ctx.local_address.map(|a| a.ip());
         let proto = if ctx.encrypted { "https" } else { "http" };
-        let client_ip_str = client_ip.to_string();
-        let local_ip_str = local_ip.to_string();
-        if Self::client_ip_from_header_enabled(ctx) {
-            Self::append_x_forwarded_for(headers, &client_ip_str);
-            Self::append_forwarded(headers, &client_ip_str, proto, &local_ip_str);
-        } else {
-            Self::set_x_forwarded_for(headers, &client_ip_str);
-            Self::set_forwarded(headers, &client_ip_str, proto, &local_ip_str);
+        // Only inject forwarded headers when both local and remote addresses
+        // are known (not the case for Unix socket listeners).
+        if let (Some(client_ip), Some(local_ip)) = (client_ip, local_ip) {
+            let client_ip_str = client_ip.to_string();
+            let local_ip_str = local_ip.to_string();
+            if Self::client_ip_from_header_enabled(ctx) {
+                Self::append_x_forwarded_for(headers, &client_ip_str);
+                Self::append_forwarded(headers, &client_ip_str, proto, &local_ip_str);
+            } else {
+                Self::set_x_forwarded_for(headers, &client_ip_str);
+                Self::set_forwarded(headers, &client_ip_str, proto, &local_ip_str);
+            }
         }
         headers.insert(
             http::header::HeaderName::from_static("x-forwarded-proto"),

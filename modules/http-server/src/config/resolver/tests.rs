@@ -10,8 +10,6 @@ use ferron_core::config::{
 use ferron_http::{HttpContext, HttpRequest};
 use ferron_observability::CompositeEventSink;
 use http_body_util::{BodyExt, Empty};
-use rustc_hash::FxHashMap;
-use typemap_rev::TypeMap;
 
 use super::super::prepare::{
     PreparedConfiguration, PreparedHostConfigurationBlock, PreparedHostConfigurationErrorConfig,
@@ -21,23 +19,15 @@ use super::resolver::*;
 use crate::config::prepare::HostConfigs;
 
 fn make_test_context(req: HttpRequest, hostname: &str) -> HttpContext {
-    HttpContext {
-        req: Some(req),
-        res: None,
-        events: CompositeEventSink::new(Vec::new()),
-        configuration: LayeredConfiguration::default(),
-        hostname: Some(hostname.to_string()),
-        variables: FxHashMap::default(),
-        previous_error: None,
-        original_uri: None,
-        routing_uri: None,
-        encrypted: false,
-        local_address: "127.0.0.1:80".parse().unwrap(),
-        remote_address: "127.0.0.1:12345".parse().unwrap(),
-        auth_user: None,
-        https_port: None,
-        extensions: TypeMap::new(),
-    }
+    let mut ctx = HttpContext::default();
+    ctx.req = Some(req);
+    ctx.events = CompositeEventSink::new(Vec::new());
+    ctx.configuration = LayeredConfiguration::default();
+    ctx.hostname = Some(hostname.to_string());
+    ctx.encrypted = false;
+    ctx.local_address = Some("127.0.0.1:80".parse().unwrap());
+    ctx.remote_address = Some("127.0.0.1:12345".parse().unwrap());
+    ctx
 }
 
 fn empty_request() -> HttpRequest {

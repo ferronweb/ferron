@@ -151,3 +151,10 @@ impl CompositeEventSink {
         true
     }
 }
+
+impl Default for CompositeEventSink {
+    #[inline]
+    fn default() -> Self {
+        Self::new(vec![])
+    }
+}

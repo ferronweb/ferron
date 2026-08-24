@@ -34,7 +34,15 @@ impl AbuseProtectionStage {
             .extensions
             .insert::<AbuseRegistryConfig>(config.registry_config.clone());
 
-        let client_ip = context.remote_address.ip().to_canonical();
+        let client_ip = context
+            .remote_address
+            .map(|a| a.ip().to_canonical());
+
+        // Without a client IP (e.g. Unix socket listeners) we cannot apply
+        // IP-based abuse bans; allow the request through.
+        let Some(client_ip) = client_ip else {
+            return Ok(true);
+        };
 
         if let Some(remaining) = self
             .registry
@@ -154,10 +162,13 @@ impl AbuseProtectionStage {
             return Ok(true);
         };
 
-        if let Some(recorder) = get_global_abuse_recorder() {
+        if let (Some(recorder), Some(ip)) = (
+            get_global_abuse_recorder(),
+            ctx.remote_address.map(|a| a.ip()),
+        ) {
             let abuse_event = AbuseEvent::new(
                 AbuseEventType::Custom,
-                ctx.remote_address.ip(),
+                ip,
                 format!("Custom abuse event: {abuse_event_type}"),
                 40,
             );
@@ -194,10 +205,13 @@ impl AbuseProtectionStage {
             return Ok(());
         }
 
-        if let Some(recorder) = get_global_abuse_recorder() {
+        if let (Some(recorder), Some(ip)) = (
+            get_global_abuse_recorder(),
+            ctx.remote_address.map(|a| a.ip()),
+        ) {
             let abuse_event = AbuseEvent::with_status_code(
                 AbuseEventType::ErrorRate,
-                ctx.remote_address.ip(),
+                ip,
                 format!("Error rate: {status_code} responses"),
                 40,
                 status_code,
@@ -262,8 +276,6 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use rustc_hash::FxHashMap;
-    use typemap_rev::TypeMap;
 
     use crate::registry::{AbuseRegistry, AbuseRegistryConfig, EventThreshold};
     use ferron_http::abuse::{AbuseEvent, AbuseEventType};
@@ -274,23 +286,15 @@ mod tests {
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .unwrap();
 
-        HttpContext {
-            req: Some(req),
-            res: None,
-            events: CompositeEventSink::new(Vec::new()),
-            configuration: config,
-            hostname: Some("example.com".to_string()),
-            variables: FxHashMap::default(),
-            previous_error: None,
-            original_uri: None,
-            routing_uri: None,
-            encrypted: false,
-            local_address: "0.0.0.0:80".parse().unwrap(),
-            remote_address: remote_addr,
-            auth_user: None,
-            https_port: None,
-            extensions: TypeMap::new(),
-        }
+        let mut ctx = HttpContext::default();
+        ctx.req = Some(req);
+        ctx.events = CompositeEventSink::new(Vec::new());
+        ctx.configuration = config;
+        ctx.hostname = Some("example.com".to_string());
+        ctx.encrypted = false;
+        ctx.local_address = Some("0.0.0.0:80".parse().unwrap());
+        ctx.remote_address = Some(remote_addr);
+        ctx
     }
 
     fn make_config_with_abuse() -> LayeredConfiguration {

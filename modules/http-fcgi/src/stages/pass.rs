@@ -132,9 +132,14 @@ impl Stage<HttpContext> for FcgiPassStage {
 
         env_builder = env_builder
             .server("Ferron".to_string())
-            .server_address(ctx.local_address)
-            .client_address(ctx.remote_address)
             .request_uri(original_request_uri);
+
+        if let Some(addr) = ctx.local_address {
+            env_builder = env_builder.server_address(addr);
+        }
+        if let Some(addr) = ctx.remote_address {
+            env_builder = env_builder.client_address(addr);
+        }
 
         if let Some(hostname) = ctx.hostname.clone() {
             env_builder = env_builder.server(hostname);

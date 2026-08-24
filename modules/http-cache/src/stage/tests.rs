@@ -24,23 +24,16 @@ fn test_context(path: &str) -> HttpContext {
         )
         .unwrap();
 
-    HttpContext {
-        req: Some(request),
-        res: None,
-        events: CompositeEventSink::new(Vec::new()),
-        configuration: LayeredConfiguration::default(),
-        hostname: Some("example.com".to_string()),
-        variables: rustc_hash::FxHashMap::default(),
-        previous_error: None,
-        original_uri: None,
-        routing_uri: None,
-        encrypted: true,
-        local_address: "127.0.0.1:443".parse::<SocketAddr>().unwrap(),
-        remote_address: "127.0.0.2:12345".parse::<SocketAddr>().unwrap(),
-        auth_user: None,
-        https_port: Some(443),
-        extensions: typemap_rev::TypeMap::new(),
-    }
+    let mut ctx = HttpContext::default();
+    ctx.req = Some(request);
+    ctx.events = CompositeEventSink::new(Vec::new());
+    ctx.configuration = LayeredConfiguration::default();
+    ctx.hostname = Some("example.com".to_string());
+    ctx.encrypted = true;
+    ctx.local_address = Some("127.0.0.1:443".parse::<SocketAddr>().unwrap());
+    ctx.remote_address = Some("127.0.0.2:12345".parse::<SocketAddr>().unwrap());
+    ctx.https_port = Some(443);
+    ctx
 }
 
 #[test]

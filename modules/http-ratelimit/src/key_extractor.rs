@@ -48,7 +48,7 @@ impl KeyExtractor {
     /// Returns `None` if the key cannot be extracted (e.g., header not present).
     pub fn extract(&self, ctx: &HttpContext) -> Option<String> {
         match self {
-            KeyExtractor::RemoteAddress => Some(ctx.remote_address.ip().to_string()),
+            KeyExtractor::RemoteAddress => ctx.remote_address.map(|a| a.ip().to_string()),
             KeyExtractor::Uri => match &ctx.routing_uri {
                 Some(uri) => Some(uri.path().to_string()),
                 None => ctx.req.as_ref().map(|r| r.uri().path().to_string()),

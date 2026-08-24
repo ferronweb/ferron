@@ -162,27 +162,16 @@ mod tests {
     use ferron_core::config::ServerConfigurationMatcherExpr;
     use ferron_http::HttpRequest;
     use ferron_observability::CompositeEventSink;
-    use rustc_hash::FxHashMap;
-    use typemap_rev::TypeMap;
 
     fn make_test_context() -> HttpContext {
-        HttpContext {
-            req: Some(HttpRequest::default()),
-            res: None,
-            events: CompositeEventSink::new(Vec::new()),
-            configuration: LayeredConfiguration::default(),
-            hostname: None,
-            variables: FxHashMap::default(),
-            previous_error: None,
-            original_uri: None,
-            routing_uri: None,
-            encrypted: false,
-            local_address: "0.0.0.0:80".parse().unwrap(),
-            remote_address: "127.0.0.1:12345".parse().unwrap(),
-            auth_user: None,
-            https_port: None,
-            extensions: TypeMap::new(),
-        }
+        let mut ctx = HttpContext::default();
+        ctx.req = Some(HttpRequest::default());
+        ctx.events = CompositeEventSink::new(Vec::new());
+        ctx.configuration = LayeredConfiguration::default();
+        ctx.encrypted = false;
+        ctx.local_address = Some("0.0.0.0:80".parse().unwrap());
+        ctx.remote_address = Some("127.0.0.1:12345".parse().unwrap());
+        ctx
     }
 
     #[test]

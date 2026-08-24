@@ -86,10 +86,26 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
         }),
         var::REQUEST_HOST => Some(ctx.hostname.clone().unwrap_or_default()),
         var::REQUEST_SCHEME => Some(if ctx.encrypted { "https" } else { "http" }.to_string()),
-        var::SERVER_IP => Some(canonicalize_ip(ctx.local_address.ip())),
-        var::SERVER_PORT => Some(ctx.local_address.port().to_string()),
-        var::REMOTE_IP => Some(canonicalize_ip(ctx.remote_address.ip())),
-        var::REMOTE_PORT => Some(ctx.remote_address.port().to_string()),
+        var::SERVER_IP => Some(
+            ctx.local_address
+                .map(|addr| canonicalize_ip(addr.ip()))
+                .unwrap_or_default(),
+        ),
+        var::SERVER_PORT => Some(
+            ctx.local_address
+                .map(|addr| addr.port().to_string())
+                .unwrap_or_default(),
+        ),
+        var::REMOTE_IP => Some(
+            ctx.remote_address
+                .map(|addr| canonicalize_ip(addr.ip()))
+                .unwrap_or_default(),
+        ),
+        var::REMOTE_PORT => Some(
+            ctx.remote_address
+                .map(|addr| addr.port().to_string())
+                .unwrap_or_default(),
+        ),
         var::AUTH_USER => Some(ctx.auth_user.clone().unwrap_or_default()),
         var::TRACE_ID => Some(
             crate::trace_context::current_event_trace_context(ctx)

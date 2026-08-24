@@ -174,10 +174,15 @@ impl Stage<HttpFileContext> for CgiStage {
 
         env_builder = env_builder
             .server("Ferron".to_string())
-            .server_address(ctx.http.local_address)
-            .client_address(ctx.http.remote_address)
             .script_path(file_path, file_root, ctx.path_info.clone())
             .request_uri(original_request_uri);
+
+        if let Some(addr) = ctx.http.local_address {
+            env_builder = env_builder.server_address(addr);
+        }
+        if let Some(addr) = ctx.http.remote_address {
+            env_builder = env_builder.client_address(addr);
+        }
 
         if let Some(hostname) = ctx.http.hostname.clone() {
             env_builder = env_builder.server(hostname);
