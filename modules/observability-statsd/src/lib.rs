@@ -27,10 +27,6 @@ static FAILED_DATAGRAM_SEND: Once = Once::new();
 /// safely below the typical 1500-byte MTU even with IP and UDP headers.
 const MAX_DATAGRAM_LEN: usize = 1432;
 
-/// Maximum length of a tag value before it is hashed to prevent telemetry
-/// poisoning.
-const MAX_TAG_VALUE_LEN: usize = 128;
-
 /// Wrapper that carries an event with its configuration through the channel
 struct ConfiguredEvent {
     event: Option<Arc<Event>>,
@@ -149,8 +145,7 @@ fn format_value(value: MetricValue, signed_delta: bool) -> Option<String> {
 /// Sanitize a tag value for the DogStatsD tag syntax.
 ///
 /// Control characters and the DogStatsD reserved characters (`,`, `#`, `:`)
-/// are replaced with `?`. Values longer than 128 characters are replaced with
-/// their hash to prevent high-cardinality telemetry poisoning.
+/// are replaced with `?`.
 fn sanitize_tag_value(s: &str) -> String {
     let s = s.trim();
     let cleaned: String = s
@@ -163,15 +158,7 @@ fn sanitize_tag_value(s: &str) -> String {
             }
         })
         .collect();
-    if cleaned.len() <= MAX_TAG_VALUE_LEN {
-        cleaned
-    } else {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut hasher = DefaultHasher::new();
-        cleaned.hash(&mut hasher);
-        format!("hash_{:x}", hasher.finish())
-    }
+    cleaned
 }
 
 /// Render the metric attributes as DogStatsD tags (`|#key:value,key:value`).
@@ -792,20 +779,6 @@ mod tests {
         );
         let datagram = format_metric_datagram(&event, &config(None, true), &None).unwrap();
         assert_eq!(datagram, "ferron.test.counter:1|c|#ferron.host:a?b?c?d");
-    }
-
-    #[test]
-    fn long_tag_values_are_hashed() {
-        let long = "x".repeat(200);
-        let event = metric(
-            "ferron.test.counter",
-            MetricType::Counter,
-            MetricValue::U64(1),
-            None,
-            vec![("ferron.host", MetricAttributeValue::String(long))],
-        );
-        let datagram = format_metric_datagram(&event, &config(None, true), &None).unwrap();
-        assert!(datagram.starts_with("ferron.test.counter:1|c|#ferron.host:hash_"));
     }
 
     #[tokio::test]

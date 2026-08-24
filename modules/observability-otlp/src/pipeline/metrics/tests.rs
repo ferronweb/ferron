@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferron_observability::{MetricAttributeValue, MetricEvent};
+use ferron_observability::MetricEvent;
 use tokio::sync::Mutex;
 
 use super::*;
@@ -514,50 +514,6 @@ async fn zero_trace_ids_do_not_produce_exemplars() {
     let metrics = &requests[0].resource_metrics[0].scope_metrics[0].metrics;
     let point = first_sum_point(metrics, "hits");
     assert!(point.exemplars.is_empty());
-}
-
-#[tokio::test]
-async fn sanitizes_string_attributes_on_the_wire() {
-    let mock = mock_exporter();
-    let (pipeline, cancel) = spawn_pipeline(mock.clone(), Duration::from_secs(3600));
-
-    let mut e = event("g", MetricType::Gauge, MetricValue::F64(1.0));
-    e.attributes = vec![
-        (
-            "user_agent",
-            MetricAttributeValue::String("GET\r\nX".to_string()),
-        ),
-        ("long", MetricAttributeValue::String("A".repeat(200))),
-    ];
-    pipeline
-        .store
-        .record(&e, &[], &mut DistinctValueTracker::new());
-
-    cancel.cancel();
-    pipeline.wait_done().await;
-
-    let requests = mock.requests.lock().await;
-    let metrics = &requests[0].resource_metrics[0].scope_metrics[0].metrics;
-    let crate::proto::opentelemetry::proto::metrics::v1::metric::Data::Gauge(gauge) =
-        metrics[0].data.as_ref().unwrap()
-    else {
-        panic!("g is not a gauge");
-    };
-    let attrs: HashMap<_, _> = gauge.data_points[0]
-        .attributes
-        .iter()
-        .map(|attribute| (attribute.key.as_str(), attribute.value.as_ref().unwrap()))
-        .collect();
-    assert_eq!(
-        attrs["user_agent"].value,
-        Some(any_value::Value::StringValue("GET??X".into()))
-    );
-    let crate::proto::opentelemetry::proto::common::v1::any_value::Value::StringValue(long) =
-        attrs["long"].value.clone().unwrap()
-    else {
-        panic!("long is not a string");
-    };
-    assert!(long.starts_with("hash_"));
 }
 
 #[tokio::test]

@@ -901,33 +901,10 @@ fn sanitize_label_value_control_chars_replaced() {
 }
 
 #[test]
-fn sanitize_label_value_long_string_hashed() {
-    let long = "A".repeat(200);
-    let result = sanitize_label_value(&long);
-    assert!(result.starts_with("hash_"));
-    assert!(result.len() < 50, "hash should be shorter than input");
-}
-
-#[test]
 fn sanitize_label_value_exact_128_chars_preserved() {
     let exact = "B".repeat(128);
     let result = sanitize_label_value(&exact);
     assert_eq!(result, exact);
-}
-
-#[test]
-fn sanitize_label_value_129_chars_hashed() {
-    let over = "C".repeat(129);
-    let result = sanitize_label_value(&over);
-    assert!(result.starts_with("hash_"));
-}
-
-#[test]
-fn sanitize_label_value_deterministic_hash() {
-    let input = "D".repeat(200);
-    let r1 = sanitize_label_value(&input);
-    let r2 = sanitize_label_value(&input);
-    assert_eq!(r1, r2, "hash should be deterministic");
 }
 
 #[test]
@@ -944,13 +921,11 @@ fn sanitize_label_value_only_control_chars() {
 
 #[test]
 fn metric_key_values_preserves_types_and_sanitizes_strings() {
-    let long = "A".repeat(1000);
     let attrs = metric_key_values(&[
         (
             "http.request.method",
             MetricAttributeValue::String("GET\r\nX-Injected: true".to_string()),
         ),
-        ("user_agent", MetricAttributeValue::String(long.clone())),
         ("static", MetricAttributeValue::StaticStr("plain")),
         ("flag", MetricAttributeValue::Bool(true)),
         ("count", MetricAttributeValue::I64(-7)),
@@ -961,8 +936,6 @@ fn metric_key_values_preserves_types_and_sanitizes_strings() {
         str_value(find_attr(&attrs, "http.request.method").unwrap()).unwrap(),
         "GET??X-Injected: true"
     );
-    let ua = str_value(find_attr(&attrs, "user_agent").unwrap()).unwrap();
-    assert!(ua.starts_with("hash_"));
     assert_eq!(
         str_value(find_attr(&attrs, "static").unwrap()).unwrap(),
         "plain"

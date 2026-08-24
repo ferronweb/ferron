@@ -23,13 +23,13 @@ observability {
 
 ### Configuration directives
 
-| Directive | Arguments          | Description                                                                                      | Default        |
-| --------- | ------------------ | ------------------------------------------------------------------------------------------------ | -------------- |
-| `provider` | `"statsd"`        | Specifies the StatsD observability provider. Required.                                          | none           |
-| `host`    | `<hostname>`       | Hostname or IP address of the StatsD server.                                                     | `"127.0.0.1"`  |
-| `port`    | `<number>`         | UDP port of the StatsD server. Must be between 1 and 65535.                                      | `8125`         |
-| `prefix`  | `<string>`         | Prefix prepended to every metric name with a `.` separator.                                      | none           |
-| `datadog` | `<bool>`           | Enable DogStatsD extensions: metric tags and the histogram metric type.                          | `false`        |
+| Directive  | Arguments    | Description                                                             | Default       |
+| ---------- | ------------ | ----------------------------------------------------------------------- | ------------- |
+| `provider` | `"statsd"`   | Specifies the StatsD observability provider. Required.                  | none          |
+| `host`     | `<hostname>` | Hostname or IP address of the StatsD server.                            | `"127.0.0.1"` |
+| `port`     | `<number>`   | UDP port of the StatsD server. Must be between 1 and 65535.             | `8125`        |
+| `prefix`   | `<string>`   | Prefix prepended to every metric name with a `.` separator.             | none          |
+| `datadog`  | `<bool>`     | Enable DogStatsD extensions: metric tags and the histogram metric type. | `false`       |
 
 The server sends each metric as a separate UDP datagram. The module does not wait for acknowledgments, so a missing or slow StatsD server does not slow down Ferron.
 
@@ -49,12 +49,12 @@ Without a `prefix` directive, the module sends metric names as-is. Ferron metric
 
 Ferron emits OpenTelemetry-style metric events. The module maps them to StatsD types:
 
-| Ferron metric type | StatsD type | Value semantics                                |
-| ------------------ | ----------- | ---------------------------------------------- |
-| `Counter`          | `c`         | Increment delta                                |
-| `Gauge`            | `g`         | Absolute value                                 |
-| `UpDownCounter`    | `g`         | Signed delta (`+3\|g` or `-3\|g`)              |
-| `Histogram`        | `ms` or `h` | Single observation (see below)                 |
+| Ferron metric type | StatsD type | Value semantics                   |
+| ------------------ | ----------- | --------------------------------- |
+| `Counter`          | `c`         | Increment delta                   |
+| `Gauge`            | `g`         | Absolute value                    |
+| `UpDownCounter`    | `g`         | Signed delta (`+3\|g` or `-3\|g`) |
+| `Histogram`        | `ms` or `h` | Single observation (see below)    |
 
 Histogram metrics become timers with the `ms` type. When the metric unit is seconds, the module converts the value to milliseconds. This matches the StatsD timer convention.
 
@@ -67,7 +67,7 @@ Set `datadog true` to enable DogStatsD extensions:
 - **Metric tags**. The module renders metric attributes as DogStatsD tags, for example `|#ferron.host:localhost,http.response.status_code:200`. Control plane metadata becomes tags with the `ferron_control_plane_` key prefix.
 - **Histogram metric type**. Histogram metrics use the DogStatsD histogram type `h`.
 
-Tag values are sanitized for the DogStatsD tag syntax. The reserved characters `,`, `#`, and `:` become `?`. Values longer than 128 characters are replaced with a deterministic hash. This prevents tag injection and high-cardinality tag explosion.
+Tag values are sanitized for the DogStatsD tag syntax. The reserved characters `,`, `#`, and `:` become `?`. This prevents tag injection.
 
 Without `datadog`, the module does not add tags and sends all histogram metrics as `ms` timers.
 

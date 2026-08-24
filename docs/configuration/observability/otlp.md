@@ -121,12 +121,12 @@ The `baggage` sub-directive promotes specific W3C Baggage keys into telemetry at
 
 Each `key` entry configures one baggage key to promote:
 
-| Nested directive | Arguments           | Description                                                                                    | Default                 |
-| ---------------- | ------------------- | ---------------------------------------------------------------------------------------------- | ----------------------- |
-| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                      | none                    |
-| `attribute`      | `<string>`          | The OpenTelemetry attribute name to use.                                                       | same as the baggage key |
-| `signals`        | `<string>...`       | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`.                   | all signals             |
-| `max_distinct`   | `<number> \| false` | Maximum distinct values for metrics before hashing. Prevents high-cardinality label explosion. | 100                     |
+| Nested directive | Arguments           | Description                                                                                     | Default                 |
+| ---------------- | ------------------- | ----------------------------------------------------------------------------------------------- | ----------------------- |
+| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                       | none                    |
+| `attribute`      | `<string>`          | The OpenTelemetry attribute name to use.                                                        | same as the baggage key |
+| `signals`        | `<string>...`       | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`.                    | all signals             |
+| `max_distinct`   | `<number> \| false` | Maximum distinct values for metrics before dropping. Prevents high-cardinality label explosion. | 100                     |
 
 > [!tip]
 > Ferron parses the `baggage` header and attaches it to spans automatically. Use the `baggage` sub-directive to promote specific keys into telemetry attributes.

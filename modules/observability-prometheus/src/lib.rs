@@ -437,17 +437,9 @@ async fn emit_metric(
 ) {
     fn sanitize_label_value(s: &str) -> String {
         let s = s.trim();
-        if s.len() <= 128 {
-            s.chars()
-                .map(|c| if c.is_control() { '?' } else { c })
-                .collect()
-        } else {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            let mut hasher = DefaultHasher::new();
-            s.hash(&mut hasher);
-            format!("hash_{:x}", hasher.finish())
-        }
+        s.chars()
+            .map(|c| if c.is_control() { '?' } else { c })
+            .collect()
     }
 
     let mut attrs: Vec<(String, String)> = event
