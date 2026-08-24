@@ -107,6 +107,7 @@ pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
         let entry = entry.unwrap();
         let dest = entry.file_name().unwrap().to_str().unwrap().to_string();
         if dest != "target"
+            && dest != "fuzz"
             && dest != "e2e"
             && dest != ".git"
             && dest != "Dockerfile"
