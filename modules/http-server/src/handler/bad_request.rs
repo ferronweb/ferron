@@ -22,6 +22,7 @@ use super::request_utils::{
 };
 use super::ResponseBody;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn bad_request_handler(
     is_timeout: bool,
     local_address: Option<SocketAddr>,

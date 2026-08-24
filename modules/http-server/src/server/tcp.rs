@@ -7,7 +7,7 @@ use std::os::fd::{AsRawFd, BorrowedFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, BorrowedSocket};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
@@ -121,7 +121,7 @@ impl TcpListenerHandle {
                 };
 
                 #[cfg(unix)]
-                let mut handle_exhaustion_backoff = Duration::from_millis(10);
+                let mut handle_exhaustion_backoff = std::time::Duration::from_millis(10);
                 loop {
                     let accept_result = tokio::select! {
                         res = listener.accept() => res,
@@ -133,7 +133,7 @@ impl TcpListenerHandle {
                         Ok(socket) => {
                             #[cfg(unix)]
                             {
-                                handle_exhaustion_backoff = Duration::from_millis(10);
+                                handle_exhaustion_backoff = std::time::Duration::from_millis(10);
                             }
                             socket
                         }
@@ -155,8 +155,8 @@ impl TcpListenerHandle {
                                 zincio::time::sleep(handle_exhaustion_backoff).await;
                                 handle_exhaustion_backoff =
                                     handle_exhaustion_backoff.saturating_mul(2);
-                                if handle_exhaustion_backoff > Duration::from_secs(1) {
-                                    handle_exhaustion_backoff = Duration::from_secs(1);
+                                if handle_exhaustion_backoff > std::time::Duration::from_secs(1) {
+                                    handle_exhaustion_backoff = std::time::Duration::from_secs(1);
                                 }
                             }
                             continue;

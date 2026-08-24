@@ -42,6 +42,20 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
                     ctx.scope.clone()
                 );
             });
+
+            #[cfg(unix)]
+            {
+                validate_unix_directives(config, ctx)?;
+            }
+            #[cfg(not(unix))]
+            {
+                if let Some(unix_entry) = config.directives.get("unix").and_then(|d| d.first()) {
+                    return Err(ConfigurationValidationError::from(
+                        "Unix socket listeners cannot be used with non-Unix systems.",
+                    )
+                    .with_span(unix_entry.span.clone()));
+                }
+            }
         }
 
         validate_observability_directives(config, ctx)?;
@@ -310,4 +324,113 @@ fn entry_span(entry: &ServerConfigurationDirectiveEntry) -> Option<ServerConfigu
             | ServerConfigurationValue::InterpolatedString(_, span) => span.clone(),
         })
     })
+}
+
+#[cfg(unix)]
+fn validate_unix_directives(
+    config: &ServerConfigurationBlock,
+    ctx: &mut crate::config::validator::ConfigurationValidatorContext,
+) -> Result<(), ConfigurationValidationError> {
+    validate_directive!(config, ctx.used_directives, unix, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {
+        let mut sub = std::collections::HashSet::new();
+        validate_nested!(unix, used(sub), backlog, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+        validate_nested!(unix, used(sub), mode, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _) | ServerConfigurationValue::Number(_, _)]);
+        validate_nested!(unix, used(sub), owner, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _) | ServerConfigurationValue::Number(_, _)]);
+        validate_nested!(unix, used(sub), group, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _) | ServerConfigurationValue::Number(_, _)]);
+        crate::check_unused_subdirectives!(
+            unix,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
+    });
+
+    // Validate unix paths and subdirective values (outside validate_directive! to avoid per-entry duplication)
+    {
+        let mut seen_unix_paths = std::collections::HashSet::new();
+        for unix_entry in config.directives.get("unix").unwrap_or(&Vec::new()) {
+            if let Some(val) = unix_entry.args.first() {
+                if let Some(s) = val.as_str() {
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() {
+                        ctx.diagnostics.push(ctx.create_diagnostic(
+                            crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                            "unix socket path cannot be empty",
+                            unix_entry.span.clone(),
+                        ));
+                    } else if trimmed.contains('\0') {
+                        ctx.diagnostics.push(ctx.create_diagnostic(
+                            crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                            "unix socket path contains NUL byte",
+                            unix_entry.span.clone(),
+                        ));
+                    } else if trimmed.len() >= 108 {
+                        ctx.diagnostics.push(ctx.create_diagnostic(
+                            crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                            format!("unix socket path too long ({} >= 108)", trimmed.len()),
+                            unix_entry.span.clone(),
+                        ));
+                    } else if !seen_unix_paths.insert(trimmed.to_string()) {
+                        ctx.diagnostics.push(ctx.create_diagnostic(
+                            crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                            format!("duplicate unix socket path '{trimmed}'"),
+                            unix_entry.span.clone(),
+                        ));
+                    }
+                }
+            }
+            if let Some(children) = unix_entry.children.as_ref() {
+                if let Some(mode_entries) = children.directives.get("mode") {
+                    for mode_entry in mode_entries {
+                        let Some(val) = mode_entry.args.first() else {
+                            continue;
+                        };
+                        let is_valid = match val {
+                            ServerConfigurationValue::InterpolatedString(_, _) => {
+                                // Interpolated strings are validated at runtime, skip static check
+                                true
+                            }
+                            ServerConfigurationValue::String(s, _) => {
+                                // Octal string like "0660" or "0o660" or decimal octal digits
+                                let trimmed = s.trim();
+                                let octal_str =
+                                    if trimmed.starts_with("0o") || trimmed.starts_with("0O") {
+                                        &trimmed[2..]
+                                    } else {
+                                        trimmed
+                                    };
+                                !octal_str.is_empty()
+                                    && octal_str.chars().all(|c| c.is_ascii_digit() && c <= '7')
+                                    && u32::from_str_radix(octal_str, 8).is_ok_and(|v| v <= 0o777)
+                            }
+                            ServerConfigurationValue::Number(n, _) => *n >= 0 && *n <= 0o777,
+                            _ => false,
+                        };
+                        if !is_valid {
+                            ctx.diagnostics.push(ctx.create_diagnostic(
+                                crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                                "unix `mode` must be an octal permission like \"0660\" (0..0o777) or a number 0..511",
+                                mode_entry.span.clone(),
+                            ));
+                        }
+                    }
+                }
+                if let Some(backlog_entries) = children.directives.get("backlog") {
+                    for be in backlog_entries {
+                        if let Some(ServerConfigurationValue::Number(n, _)) = be.args.first() {
+                            if *n < -1 {
+                                ctx.diagnostics.push(ctx.create_diagnostic(
+                                    crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                                    "unix `backlog` must be >= -1",
+                                    be.span.clone(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

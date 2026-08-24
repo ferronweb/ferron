@@ -11,6 +11,8 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_http::HttpContext;
 
 use crate::server::BasicHttpModule;
+#[cfg(unix)]
+use crate::server::UnixHttpModule;
 use crate::stages::{ClientIpFromHeaderStage, HttpsRedirectStage};
 use crate::validator::HttpConfigurationValidator;
 
@@ -73,6 +75,8 @@ fn resolve_default_https_port(config: &ferron_core::config::ServerConfiguration)
 #[derive(Default)]
 pub struct BasicHttpModuleLoader {
     cache: HashMap<u16, Arc<BasicHttpModule>>,
+    #[cfg(unix)]
+    unix_cache: Option<Arc<UnixHttpModule>>,
 }
 
 impl ModuleLoader for BasicHttpModuleLoader {
@@ -199,7 +203,44 @@ impl ModuleLoader for BasicHttpModuleLoader {
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut new_cache = HashMap::new();
+        #[cfg(unix)]
+        let has_unix = config
+            .global_config
+            .directives
+            .get("unix")
+            .is_some_and(|v| !v.is_empty());
         if let Some(port_configs) = config.ports.get("http").cloned() {
+            // Handle global Unix socket listeners (Unix only)
+            #[cfg(unix)]
+            {
+                if has_unix {
+                    // Merge all hosts from all http ports for Unix resolver
+                    let mut all_hosts = Vec::new();
+                    if let Some(port_configs) = config.ports.get("http") {
+                        for pc in port_configs {
+                            all_hosts.extend(pc.hosts.clone());
+                        }
+                    }
+                    if let Some(cached) = self.unix_cache.take() {
+                        cached.reload(&registry, config.global_config.clone(), all_hosts)?;
+                        modules.push(cached.clone());
+                        self.unix_cache = Some(cached);
+                    } else {
+                        let unix_module = Arc::new(UnixHttpModule::new(
+                            &registry,
+                            config.global_config.clone(),
+                            all_hosts,
+                        )?);
+                        modules.push(unix_module.clone());
+                        self.unix_cache = Some(unix_module);
+                    }
+                    self.cache.clear();
+                    return Ok(());
+                } else {
+                    self.unix_cache = None;
+                }
+            }
+
             let mut port_configs_new: Vec<ServerConfigurationPort> = Vec::new();
 
             let default_port = resolve_default_http_port(&config);
@@ -337,6 +378,11 @@ impl ModuleLoader for BasicHttpModuleLoader {
             }
         }
         self.cache = new_cache;
+        #[cfg(unix)]
+        {
+            self.unix_cache = None; // Handled in a separate `#[cfg(unix)]` branch
+        }
+
         Ok(())
     }
 }

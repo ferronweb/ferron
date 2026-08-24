@@ -21,6 +21,7 @@ impl ModuleLoader for BuiltinModuleLoader {
     fn register_directives(&mut self, registry: &mut crate::directives::DirectiveRegistry) {
         register_runtime_directives(registry);
         register_tcp_directives(registry);
+        register_unix_directives(registry);
         register_observability_directives(registry);
         register_control_plane_directives(registry);
     }
@@ -54,13 +55,76 @@ fn register_runtime_directives(registry: &mut crate::directives::DirectiveRegist
         );
 }
 
+fn register_unix_directives(registry: &mut crate::directives::DirectiveRegistry) {
+    registry
+    .register(
+        Directive {
+            name: "unix",
+            usage: "unix <unix_socket_addr>",
+            description: "This directive specifies global Unix socket listener address.",
+            applicable_protocols: None,
+            global_only: true,
+            subblock_link: Some(DirectiveSubblock::custom("unix")),
+        },
+        DirectiveSubblock::default(),
+    )
+    .register(
+        Directive {
+            name: "backlog",
+            usage: "backlog <size>",
+            description: "This directive specifies the maximum number of pending \
+            connections allowed on the Unix socket. Default: -1 (unlimited)",
+            applicable_protocols: None,
+            global_only: true,
+            subblock_link: None,
+        },
+        DirectiveSubblock::custom("unix"),
+    )
+    .register(
+        Directive {
+            name: "mode",
+            usage: "mode <mode>",
+            description: "This directive specifies the file mode for the Unix socket. \
+            Must be an octal string like \"0660\" or a number. Default: OS default (respecting umask)",
+            applicable_protocols: None,
+            global_only: true,
+            subblock_link: None,
+        },
+        DirectiveSubblock::custom("unix"),
+    )
+    .register(
+        Directive {
+            name: "owner",
+            usage: "owner <user>",
+            description: "This directive specifies the owner for the Unix socket. \
+            Accepts a user name or numeric uid.",
+            applicable_protocols: None,
+            global_only: true,
+            subblock_link: None,
+        },
+        DirectiveSubblock::custom("unix"),
+    )
+    .register(
+        Directive {
+            name: "group",
+            usage: "group <group>",
+            description: "This directive specifies the group for the Unix socket. \
+            Accepts a group name or numeric gid.",
+            applicable_protocols: None,
+            global_only: true,
+            subblock_link: None,
+        },
+        DirectiveSubblock::custom("unix"),
+    );
+}
+
 fn register_tcp_directives(registry: &mut crate::directives::DirectiveRegistry) {
     registry
         .register(
             Directive {
                 name: "tcp",
                 usage: "tcp { ... }",
-                description: "This directive specifies global TCP settings for HTTP \
+                description: "This directive specifies global TCP settings for \
                 listeners.",
                 applicable_protocols: None,
                 global_only: true,

@@ -1,4 +1,27 @@
 //! HTTP server implementation
+//!
+//! # Why two HTTP modules?
+//!
+//! `server/` is split into two `Module` implementations that share `HttpServerConfig`
+//! construction but have different lifecycles:
+//!
+//! * `BasicHttpModule`: TCP (and QUIC) per-port. One instance per `ServerConfigurationPort`
+//!   (e.g. `:80` and `:443`). Each instance owns its `HttpServerConfig` built from that
+//!   port's hosts, its `TcpListenerHandle`/`QuicListenerHandle`, and its `port`/`https_port`.
+//!   Port-scoped state makes reload/merge logic simple (`loader.rs` expands `*:80`/`*:443`).
+//!
+//! * `UnixHttpModule` (`#[cfg(unix)]` only): global Unix domain sockets. Exactly one
+//!   instance for the whole server, built from the *merged* host list of all `http` ports
+//!   (`loader.rs` collects `all_hosts`). It has no TCP port and owns only
+//!   `UnixListenerHandle`s. Remaining Unix-specific concerns — path validation, `sun_path`
+//!   length, duplicate detection, `mode`/`owner`/`group` (octal string), stale-socket
+//!   unlink, parent-dir creation via `socket2` — live in `unix.rs`.
+//!
+//! Both call `BasicHttpModule::build_config_inner(..., is_unix)` so TLS, observability and
+//! connection options are resolved identically. `is_unix` only relaxes the
+//! `port == https_port` gate for explicit TLS and requires `https_port.is_some()` for
+//! implicit (ACME/local) TLS. This keeps TCP port-selection logic out of the Unix path
+//! while reusing the common `TlsResolver`/`observability`/`ThreeStageResolver` machinery.
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
@@ -30,6 +53,8 @@ mod quic;
 mod sni;
 mod tcp;
 mod tls_resolve;
+#[cfg(unix)]
+mod unix;
 
 type ObservabilityProviderEntry = (
     Arc<dyn ferron_core::providers::Provider<ObservabilityContext>>,
@@ -384,6 +409,8 @@ fn implicit_tls_applicable(
     arc.is_some()
 }
 
+/// TCP/QUIC HTTP listener — one instance per TCP port.
+/// See module-level docs for why this is separate from `UnixHttpModule`.
 pub struct BasicHttpModule {
     config: ConfigArcSwap,
     listeners: Mutex<Vec<tcp::TcpListenerHandle>>,
@@ -400,6 +427,24 @@ impl BasicHttpModule {
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
         https_port: Option<u16>,
         explicit_port: bool,
+    ) -> Result<HttpServerConfig, Box<dyn std::error::Error>> {
+        Self::build_config_inner(
+            registry,
+            port_config,
+            global_config,
+            https_port,
+            explicit_port,
+            false,
+        )
+    }
+
+    pub(crate) fn build_config_inner(
+        registry: &ferron_core::registry::Registry,
+        port_config: &ferron_core::config::ServerConfigurationPort,
+        global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
+        https_port: Option<u16>,
+        explicit_port: bool,
+        is_unix: bool,
     ) -> Result<HttpServerConfig, Box<dyn std::error::Error>> {
         let mut enable_tls = false;
         let mut http_connection_options_resolver = RadixTree::new();
@@ -487,7 +532,8 @@ impl BasicHttpModule {
             // Only process TLS directives on the HTTPS listener.
             // The plaintext HTTP listener (port != https_port) ignores all `tls` directives,
             // including explicit configurations and automatic ACME.
-            if https_port.is_some() && port_config.port == https_port {
+            // Unix listeners (is_unix) always process TLS if present.
+            if is_unix || (https_port.is_some() && port_config.port == https_port) {
                 if let Some(tls) = host_config.1.directives.get("tls") {
                     for tls1 in tls {
                         if tls1
@@ -587,8 +633,7 @@ impl BasicHttpModule {
         // Another loop pass, for implicit TLS
         for host_config in &port_config.hosts {
             if https_port.is_some()
-                && port_config.port == https_port
-                && !explicit_port
+                && (is_unix || (port_config.port == https_port && !explicit_port))
                 && host_config.1.directives.get("tls").is_none()
                 && implicit_tls_applicable(&tls_resolver, &host_config.0)
             {
@@ -971,6 +1016,140 @@ impl Drop for BasicHttpModule {
         }
         for quic_listener in &*self.quic_listeners.lock() {
             quic_listener.cancel();
+        }
+    }
+}
+
+/// Global Unix domain socket HTTP listener — one instance for the whole server
+/// (Unix only, merged hosts). See module-level docs for why this is separate
+/// from `BasicHttpModule`.
+#[cfg(unix)]
+pub struct UnixHttpModule {
+    config: ConfigArcSwap,
+    listeners: Mutex<Vec<unix::UnixListenerHandle>>,
+}
+
+#[cfg(unix)]
+impl UnixHttpModule {
+    pub fn new(
+        registry: &ferron_core::registry::Registry,
+        global_config: Arc<ServerConfigurationBlock>,
+        all_hosts: Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Build a synthetic port config that merges all hosts; use port 0 sentinel
+        // and enable TLS processing (is_unix=true) so any host's TLS is registered.
+        let port_config = ferron_core::config::ServerConfigurationPort {
+            port: Some(0),
+            hosts: all_hosts,
+        };
+        let https_port = match global_config
+            .directives
+            .get("default_https_port")
+            .and_then(|e| e.first())
+            .and_then(|v| v.args.first())
+        {
+            Some(v) => {
+                if let Some(b) = v.as_boolean() {
+                    if b {
+                        Some(443)
+                    } else {
+                        None
+                    }
+                } else {
+                    v.as_number().and_then(|n| u16::try_from(n).ok())
+                }
+            }
+            None => Some(443),
+        };
+        let cfg = BasicHttpModule::build_config_inner(
+            registry,
+            &port_config,
+            global_config.clone(),
+            https_port,
+            false,
+            true,
+        )?;
+        Ok(Self {
+            config: Arc::new(ArcSwap::new(Arc::new(cfg))),
+            listeners: Mutex::new(Vec::new()),
+        })
+    }
+
+    pub fn reload(
+        &self,
+        registry: &ferron_core::registry::Registry,
+        global_config: Arc<ServerConfigurationBlock>,
+        all_hosts: Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let old_config = self.config.load();
+        let port_config = ferron_core::config::ServerConfigurationPort {
+            port: Some(0),
+            hosts: all_hosts,
+        };
+        let https_port = match global_config
+            .directives
+            .get("default_https_port")
+            .and_then(|e| e.first())
+            .and_then(|v| v.args.first())
+        {
+            Some(v) => {
+                if let Some(b) = v.as_boolean() {
+                    if b {
+                        Some(443)
+                    } else {
+                        None
+                    }
+                } else {
+                    v.as_number().and_then(|n| u16::try_from(n).ok())
+                }
+            }
+            None => Some(443),
+        };
+        let new_cfg = BasicHttpModule::build_config_inner(
+            registry,
+            &port_config,
+            global_config.clone(),
+            https_port,
+            false,
+            true,
+        )?;
+        self.config.store(Arc::new(new_cfg));
+        old_config.reload_token.cancel();
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+impl Module for UnixHttpModule {
+    fn name(&self) -> &str {
+        "http-server-unix"
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
+        let config = self.config.load();
+        let unix_options = unix::resolve_unix_listener_options(&config.global_config)?;
+        for opt in unix_options {
+            let path = opt.path.clone();
+            let handle = unix::UnixListenerHandle::new(opt, false, self.config.clone(), runtime)
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to start HTTP server on unix:{}: {e}",
+                        path.display()
+                    )
+                })?;
+            self.listeners.lock().push(handle);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+impl Drop for UnixHttpModule {
+    fn drop(&mut self) {
+        for ul in &*self.listeners.lock() {
+            ul.cancel();
         }
     }
 }

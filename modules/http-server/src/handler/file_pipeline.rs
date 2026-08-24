@@ -672,18 +672,18 @@ async fn check_symlinks_in_path(path: &Path, root: &Path, mode: SymlinkMode) -> 
                     SymlinkMode::IfNotOwner => {
                         // The UID check is Unix-specific, skip it on other platforms
                         // Based on NGINX disable_symlinks if_not_owner (UID comparison basically)
-                        let mut same_owner = false;
                         #[cfg(unix)]
                         {
+                            let mut same_owner = false;
                             if let Ok(canonical_metadata) = zincio::fs::metadata(&current).await {
                                 same_owner = metadata.uid() == canonical_metadata.uid();
                             }
-                        }
-                        if !same_owner {
-                            return Err(io::Error::new(
-                                io::ErrorKind::PermissionDenied,
-                                "different-owner symlinks not allowed",
-                            ));
+                            if !same_owner {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::PermissionDenied,
+                                    "different-owner symlinks not allowed",
+                                ));
+                            }
                         }
                     }
                     SymlinkMode::Off => {} // Already checked above

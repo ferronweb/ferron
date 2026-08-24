@@ -39,6 +39,9 @@ ferron-observability = { path = "../../types/observability" }
 ferron-http = { path = "../../types/http", features = ["util", "mtls"] }
 ferron-tls = { path = "../../types/tls", features = ["observability"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [features]
 fuzz = []
 fips = ["rustls/fips", "ferron-tls/fips"]

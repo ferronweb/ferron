@@ -107,6 +107,53 @@ This page documents directives that belong in top-level global blocks:
 }
 ```
 
+### Unix domain sockets (Unix only)
+
+- `unix <path: string> { ... }`
+  - This directive creates a Unix domain socket listener. You can repeat it to listen on multiple sockets. Each directive accepts a filesystem path and an optional block with `backlog`, `mode`, `owner`, and `group` subdirectives. The path can be absolute (`/run/ferron.sock`) or relative (`ferron.sock`, `tmp/ferron.sock`). Relative paths are resolved against the server's current working directory and canonicalized when the target exists, otherwise kept as-is. Default: none
+
+The `unix` directive also supports the subdirectives below:
+
+| Directive | Arguments                  | Description                     | Default                       |
+| --------- | -------------------------- | ------------------------------- | ----------------------------- |
+| `backlog` | `<size: integer>`          | Maximum pending connections     | `-1` (unlimited)              |
+| `mode`    | `<mode: string\|integer>`  | File permissions for the socket | OS default respecting `umask` |
+| `owner`   | `<user: string\|integer>`  | Owner of the socket             | Process user                  |
+| `group`   | `<group: string\|integer>` | Group of the socket             | Process group                 |
+
+> [!note]
+> When at least one `unix` directive is present, Ferron disables all TCP and QUIC (for HTTP/3) listeners and serves HTTP only over Unix sockets. Host blocks are then served via the Unix sockets no matter what are their port assignments, meaning `Host` header and TLS SNI still select the virtual host. To serve both TCP and Unix at once, do not use `unix` (run a separate TCP terminator or reverse proxy in front of the Unix socket instead).
+
+> [!important]
+>
+> - `unix` is available only on Unix-like systems. The validator rejects it on Windows.
+> - Socket paths must be shorter than 108 bytes (`sun_path` limit), must not contain `NUL`, and must not already exist as a non-socket file.
+> - Parent directories are created automatically. Stale socket files from a previous run are removed if they are sockets; otherwise startup fails.
+
+**Configuration example:**
+
+```ferron
+{
+    unix "/run/ferron.sock" {
+        backlog 128
+        mode "0660"
+        owner ferron
+        group ferron
+    }
+
+    # Relative path (resolved against the server's working directory)
+    # (for example, /var/log/ferron when using the default Docker image).
+    unix "ferron.sock" {
+        mode "0660"
+    }
+
+    # Multiple sockets (see above)
+    unix "/run/ferron-api.sock" {
+        mode "0660"
+    }
+}
+```
+
 ### PROXY protocol
 
 - `protocol_proxy [bool]`
