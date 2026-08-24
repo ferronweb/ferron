@@ -12,10 +12,20 @@ use std::process;
 /// A password tool for Ferron
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Args;
+struct Args {
+    /// Read passwords from stdin (one password per line) instead of prompting the user.
+    #[arg(short, long)]
+    stdin: bool,
+}
 
 fn main() {
-    Args::parse();
+    let args = Args::parse();
+    if args.stdin {
+        for password in std::io::stdin().lines() {
+            println!("{}", generate_hash(password.unwrap_or_default()));
+        }
+        return;
+    }
 
     let password = match prompt_password("Password: ") {
         Ok(pass) => pass,
