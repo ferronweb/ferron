@@ -4,7 +4,7 @@
 //! enabling stateless session resumption across multiple server instances and
 //! surviving configuration reloads.
 //!
-//! # Current Implementation
+//! # Current implementation
 //!
 //! Due to limitations in rustls 0.23's public API, this module currently provides:
 //! - Validation utilities for key file formats
@@ -539,10 +539,6 @@ fn parse_ticket_key_record(
         ));
     }
 
-    // Extract components according to the format:
-    // - 16 bytes: Key Name
-    // - 32 bytes: AES-256-GCM Key
-    // - 32 bytes: HMAC-SHA256 Key
     let mut key_name = [0u8; 16];
     let mut aes_key = [0u8; 32];
     let mut hmac_key = [0u8; 32];
@@ -657,15 +653,12 @@ impl CustomTicketEncryptor {
             return None;
         }
 
-        // Split into components
         let iv = &ticket[..AES_CBC_IV_LEN];
         let hmac_received = &ticket[ticket.len() - 32..];
         let ciphertext = &ticket[AES_CBC_IV_LEN..ticket.len() - 32];
 
-        // Verify HMAC-SHA256 (constant-time comparison)
         hmac::verify(&self.hmac_key, &ticket[..ticket.len() - 32], hmac_received).ok()?;
 
-        // Decrypt AES-256-CBC
         let mut plaintext = ciphertext.to_vec();
         let mut iv_array = [0u8; AES_CBC_IV_LEN];
         iv_array.copy_from_slice(iv);
