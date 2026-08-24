@@ -321,7 +321,6 @@ pub fn prepare_host_block(
         }
     }
 
-    // Set the final directives (wrapped in Arc)
     block.directives = Arc::new(directives);
 
     Ok(block)

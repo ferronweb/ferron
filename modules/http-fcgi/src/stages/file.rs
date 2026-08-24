@@ -179,7 +179,6 @@ impl Stage<HttpFileContext> for FcgiFileStage {
             &config.backend_server
         };
 
-        // Set and get local limit for the connection pool
         if let Some(limit) = config.local_limit {
             self.client.set_local_limit(scgi_to_fixed, limit).await;
         }

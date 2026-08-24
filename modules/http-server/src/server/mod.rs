@@ -726,7 +726,7 @@ impl BasicHttpModule {
         }
 
         // Build a merged config from global + all host blocks so that
-        // `is_applicable` includes a stage if *any* host uses its directive.
+        // `is_applicable` includes a stage if any host uses its directive.
         let port_config_merged = ferron_core::config::ServerConfigurationBlock::merge_from(
             std::iter::once(global_config.as_ref()).chain(get_host_config_iter(port_config)),
         );

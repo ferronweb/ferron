@@ -51,7 +51,6 @@ impl RateLimitEngine {
         config: &RateLimitConfig,
         zone_id: &RateLimitZoneId,
     ) -> TokenBucketRegistry {
-        // Create a fingerprint from the config parameters (including key type)
         let key_type = match &config.key {
             KeyExtractor::RemoteAddress => "ip",
             KeyExtractor::Uri => "uri",

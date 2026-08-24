@@ -411,7 +411,6 @@ fn bind_udp_socket(address: SocketAddr) -> io::Result<std::net::UdpSocket> {
         Some(socket2::Protocol::UDP),
     )?;
 
-    // Set socket options
     listener_socket2
         .set_reuse_address(!cfg!(windows))
         .unwrap_or_default();

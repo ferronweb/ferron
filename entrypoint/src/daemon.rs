@@ -114,7 +114,6 @@ pub fn write_pid_file(path: &str) -> Result<()> {
     let pid = getpid().as_raw();
     let pid_path = Path::new(path);
 
-    // Create parent directories if they don't exist
     if let Some(parent) = pid_path.parent() {
         fs::create_dir_all(parent)
             .context(format!("Failed to create PID file directory: {}", path))?;

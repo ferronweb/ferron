@@ -217,7 +217,6 @@ pub fn generate_initial_ticket_keys(filename: &str, num_keys: usize) -> std::io:
 
     let path = Path::new(filename);
 
-    // Create parent directories if needed
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -233,7 +232,8 @@ pub fn generate_initial_ticket_keys(filename: &str, num_keys: usize) -> std::io:
     {
         let mut file = fs::File::create(&tmp_path)?;
 
-        // Set restrictive permissions on Unix before writing
+        // Set restrictive permissions on Unix before writing (to prevent compromise
+        // by the unprivileged)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -289,7 +289,6 @@ pub fn persist_ticket_keys(filename: &str, keys: &[TicketKeyComponents]) -> std:
 
     let path = Path::new(filename);
 
-    // Create parent directories if needed
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -306,7 +305,6 @@ pub fn persist_ticket_keys(filename: &str, keys: &[TicketKeyComponents]) -> std:
     {
         let mut file = fs::File::create(&tmp_path)?;
 
-        // Set restrictive permissions on Unix
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

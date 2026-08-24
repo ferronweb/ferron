@@ -51,7 +51,6 @@ pub async fn resolve_srv_inner(
         return cached;
     }
 
-    // Get the secondary runtime handle (captured globally during Module::start)
     let (handle, event_sink) = match crate::runtime_handle::try_get_secondary_runtime_handle() {
         Some(h) => h,
         None => {

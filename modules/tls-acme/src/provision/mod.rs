@@ -35,7 +35,6 @@ pub async fn provision_certificate(
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let domains = config.domains.join(", ");
 
-    // Get the provider list and extract all providers (primary + fallbacks)
     let provider_list = config.provider_list.read().await;
     let mut providers = vec![provider_list.primary.clone()];
     providers.extend(provider_list.fallbacks.iter().cloned());
@@ -675,7 +674,6 @@ pub async fn provision_certificate(
         private_key_pem: private_key_pem.clone(),
     };
 
-    // Store in cache
     if let Err(err) = config
         .certificate_cache
         .set(&certificate_cache_key, serde_json::to_vec(&cache_data)?)
@@ -694,11 +692,10 @@ pub async fn provision_certificate(
         );
     }
 
-    // Install the cert
     install_certified_key(config, certs, private_key, &cache_data, event_sink).await?;
-
     config.account.replace(acme_account);
 
+    // Don't leave stale DNS records...
     cleanup_challenge_data(config, &dns_01_domains, event_sink).await;
 
     Ok(true)

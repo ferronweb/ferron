@@ -430,7 +430,6 @@ async fn handle_http_forward(
         }
     };
 
-    // Build the request with path-only URI
     let request_path = parts.uri.path();
     let query = parts
         .uri

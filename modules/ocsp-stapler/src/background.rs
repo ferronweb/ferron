@@ -391,7 +391,6 @@ pub async fn background_ocsp_task(
     // Track known cert chains
     let mut known_certs: HashMap<Vec<u8>, Vec<CertificateDer<'static>>> = HashMap::new();
 
-    // Build HTTPS client with native certificate store and webpki-roots fallback
     let Ok(https_connector) = build_https_connector() else {
         emit_log(
             &event_sink,

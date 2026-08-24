@@ -88,7 +88,6 @@ pub async fn request_handler(
     let has_traces = events.has_trace_sinks();
 
     let scheme: &'static str = if encrypted { "https" } else { "http" };
-    // Build observability payloads from the original request before consuming it.
     let metric_attrs = has_events.then(|| build_metric_attributes(&request, encrypted, None));
     let method = has_events.then(|| request.method().clone());
     let path = has_events.then(|| request.uri().path().to_string());
@@ -743,7 +742,7 @@ async fn request_handler_inner(
     };
 
     // Create a partial HttpContext for variable resolution during config resolution.
-    // This enables all interpolation variables (request.*, server.*, remote.*) to be
+    // This allows all interpolation variables (request.*, server.*, remote.*) to be
     // resolved dynamically from the context rather than pre-populated in a HashMap.
     let mut ctx = HttpContext::default();
     ctx.req = Some(request);

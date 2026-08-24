@@ -147,7 +147,6 @@ impl<'a> Provider<TlsContext<'a>> for TlsHttpProvider {
         let http_config = TlsHttpConfig::from_config(ctx.config)
             .map_err(|e| std::io::Error::other(format!("Invalid `tls-http` configuration: {e}")))?;
 
-        // Build the ServerConfig up to the verifier stage using the shared builder
         let config_builder =
             build_server_config_builder(&tls_config.crypto, &tls_config.client_auth)?;
 

@@ -228,7 +228,6 @@ impl ForwardedAuthenticationStage {
             }
         };
 
-        // Send the authentication request
         let auth_response = match conn_item
             .inner_mut()
             .as_mut()

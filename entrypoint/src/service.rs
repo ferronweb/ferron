@@ -182,7 +182,8 @@ pub fn install_service(args: Vec<String>) -> Result<(), Box<dyn std::error::Erro
 
     let exe_path = std::env::current_exe()?;
 
-    // Build launch arguments: always include --service flag plus any user-provided args
+    // Build launch arguments: always include --service flag plus any user-provided args,
+    // to prevent infinite recursion loop.
     let mut launch_arguments: Vec<std::ffi::OsString> = vec!["run".into(), "--service".into()];
     launch_arguments.extend(args.into_iter().map(|s| s.into()));
 
