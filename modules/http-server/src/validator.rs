@@ -294,6 +294,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         // HTTP-only deployment check (per-host only)
         if !is_global {
             add_http_only_best_practice_diagnostics(config, ctx);
+            add_location_best_practice_diagnostics(config, ctx);
         }
 
         Ok(())
@@ -352,7 +353,12 @@ fn add_http_block_best_practice_diagnostics(
             }
         }
     }
+}
 
+fn add_location_best_practice_diagnostics(
+    http: &ServerConfigurationBlock,
+    ctx: &mut ConfigurationValidatorContext,
+) {
     // Detect "location" block duplicates
     let mut unique_pathnames = std::collections::HashSet::new();
 
