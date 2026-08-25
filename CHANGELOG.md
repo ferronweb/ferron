@@ -9,6 +9,7 @@
 #### HTTP server core
 
 - **Linear-time regular expression engine**: The regular expression engine used by Ferron has been replaced by one using a linear-time algorithm, which means that backtracking regex patterns are no longer supported. This change was made to avoid potential ReDoS and catastrophic backtracking issues. If you are using syntax such as `(?= ...)`, `(?! ...)`, `(?<= ...)`, `(?<! ...)`, or `\1`, you need to rewrite the regexes.
+- **Symlink following disable by default for webroots**: following symlinks during static file resolution from webroot is now disabled by default for symlink attack prevention. Check if web application uses symlinks (if it uses, use `disable_symlinks false` or a similar setting).
 
 ### Added
 

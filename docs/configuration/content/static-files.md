@@ -127,10 +127,10 @@ example.com {
 
 - `disable_symlinks [bool: boolean | string: "if_not_owner"]`
   - This directive controls whether Ferron allows symbolic links during file path resolution. When the resolver encounters a symlink while traversing the request path, the behavior depends on this setting:
-    - `false` (default): Allow all symlinks without restriction.
-    - `true`: Reject all symbolic links with a `403 Forbidden` response. The resolver detects symlinks during path traversal without following them, mitigating symlink-based escape attacks.
+    - `false`: Allow all symlinks without restriction.
+    - `true` (default): Reject all symbolic links with a `403 Forbidden` response. The resolver detects symlinks during path traversal without following them, mitigating symlink-based escape attacks.
     - `"if_not_owner"`: Allow symlinks when the same user owns the link and the target file. On non-Unix systems, Ferron treats this value as `true`.
-  - Default: `disable_symlinks false`
+  - Default: `disable_symlinks true`
 
 > [!warning]
 > Symlink-based attacks can bypass directory boundaries. If the `root` directory contains untrusted symlinks, enable `disable_symlinks true`. If you run a shared hosting environment, enable it there as well.

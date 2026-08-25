@@ -504,13 +504,13 @@ fn resolve_disable_symlinks(ctx: &HttpContext) -> Result<SymlinkMode, FilePipeli
     if let Some(s) = value.map(|v| {
         v.args
             .first()
-            .unwrap_or(&ServerConfigurationValue::Boolean(false, None))
+            .unwrap_or(&ServerConfigurationValue::Boolean(true, None))
     }) {
         SymlinkMode::from_config_value(s).map_err(|e| {
             FilePipelineExecutionError::Io(io::Error::new(io::ErrorKind::InvalidInput, e))
         })
     } else {
-        Ok(SymlinkMode::Off)
+        Ok(SymlinkMode::On)
     }
 }
 

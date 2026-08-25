@@ -13,9 +13,9 @@ use std::collections::HashMap;
 /// Symlink handling mode for path resolution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymlinkMode {
-    /// Allow all symlinks (default).
+    /// Allow all symlinks.
     Off,
-    /// Reject all symlinks encountered during traversal.
+    /// Reject all symlinks encountered during traversal (default).
     On,
     /// Allow symlinks only if owned by the same UID as target (Unix only).
     IfNotOwner,

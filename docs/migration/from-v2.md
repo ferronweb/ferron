@@ -426,6 +426,10 @@ Ferron 2 used `include "/path/to/*.kdl"`. Ferron 3 uses `include "/path/to/*.con
 #include "/etc/ferron/conf.d/**/*.conf"
 ```
 
+### Static file serving
+
+Ferron 2 always followed symlinks in webroots by default. Ferron 3 however does not, but you can change that using `disable_symlinks false` directive in a host block.
+
 ## Known pitfalls
 
 ### `location` always removes the base path
