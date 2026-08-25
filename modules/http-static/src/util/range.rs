@@ -79,7 +79,9 @@ pub fn parse_range_header(
             let start = a
                 .parse::<u64>()
                 .map_err(|_| RangeParseError::InvalidSyntax)?;
-            let start = start.min(default_end);
+            if start > default_end {
+                return Err(RangeParseError::Unsatisfiable);
+            }
             ranges.push((start, default_end))
         } else {
             let start = a
@@ -88,7 +90,7 @@ pub fn parse_range_header(
             let end = b
                 .parse::<u64>()
                 .map_err(|_| RangeParseError::InvalidSyntax)?;
-            if start > end {
+            if start > default_end || start > end {
                 return Err(RangeParseError::Unsatisfiable);
             }
             ranges.push((start, end))
@@ -192,6 +194,14 @@ mod tests {
     fn parse_start_greater_than_end() {
         assert_eq!(
             parse_range_header("bytes=100-50", 999),
+            Err(RangeParseError::Unsatisfiable)
+        );
+    }
+
+    #[test]
+    fn parse_start_greater_than_length() {
+        assert_eq!(
+            parse_range_header("bytes=9999-", 999),
             Err(RangeParseError::Unsatisfiable)
         );
     }

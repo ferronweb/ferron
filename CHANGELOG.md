@@ -80,6 +80,10 @@
 
 - **Fixed `deny_ips` bypass using non-canonical IP representations**: previously, `deny_ips` could be bypassed using non-canonical IP address representations (such as `0x7f.0.0.1` or `2130706433`). This has been fixed to normalize the IP addresses first.
 
+#### Static file serving
+
+- **Ranges beyond the end correctness**: the server now returns `416 Range Not Satisfiable` when a range request start exceeds the available content length.
+
 ## Ferron 3.0.0-beta.9
 
 **Released in August 16, 2026**
