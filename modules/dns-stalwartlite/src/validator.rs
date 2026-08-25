@@ -163,8 +163,8 @@ fn opt_bool(ctx: &mut ConfigurationValidatorContext, key: &str) {
     ctx.used_directives.insert(key.to_string());
 }
 
-/// Register an optional numeric directive.
-/*fn opt_num(ctx: &mut ConfigurationValidatorContext, key: &str) {
+/*/// Register an optional numeric directive.
+fn opt_num(ctx: &mut ConfigurationValidatorContext, key: &str) {
     ctx.used_directives.insert(key.to_string());
 }*/
 
