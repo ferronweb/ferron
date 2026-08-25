@@ -4,7 +4,6 @@ version = "3.0.0-beta.9"
 edition = "2021"
 
 [features]
-bench = []
 fuzz = []
 
 [dependencies]

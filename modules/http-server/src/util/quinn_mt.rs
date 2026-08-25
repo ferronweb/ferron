@@ -104,7 +104,6 @@ impl<Rt: quinn::Runtime> QuinnMTRuntime<Rt> {
 
     /// Build the connection ID generator this endpoint must use on its
     /// `EndpointConfig`, so the CIDs it issues route back to this endpoint.
-    #[allow(dead_code)]
     #[inline]
     pub fn cid_generator(&self) -> QuinnMTConnectionIdGenerator {
         QuinnMTConnectionIdGenerator::new(self.id, self.channels.clone())

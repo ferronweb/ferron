@@ -403,6 +403,7 @@ example.com {
         upstream http://localhost:8081
 
         affinity hash {
+            # Variable name you'd use in string interpolations, but with quotes instead of double-curly-braces.
             variable "request.header.x-tenant-id"
         }
     }

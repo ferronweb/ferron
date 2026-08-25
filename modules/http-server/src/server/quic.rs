@@ -23,7 +23,7 @@ use crate::server::common::{
 };
 use crate::server::sni::CustomSniResolver;
 use crate::server::tls_resolve::RadixTree;
-use crate::util::quinn_mt::{QuinnMTChannels, QuinnMTConnectionIdGenerator, QuinnMTRuntime};
+use crate::util::quinn_mt::{QuinnMTChannels, QuinnMTRuntime};
 
 fn emit_connection_error_metric(
     observability: &CompositeEventSink,
@@ -168,7 +168,6 @@ impl QuicListenerHandle {
                 channels.clone(),
                 id,
             ));
-            let channels_for_cid = channels.clone();
             let config = config_clone.clone();
             let cancel_token = cancel_token_clone.clone();
             let listen_error_tx = listen_error_tx.clone();
@@ -179,7 +178,6 @@ impl QuicListenerHandle {
                 let listen_error_tx = listen_error_tx.clone();
                 let udp_socket = udp_socket.try_clone();
                 let quinn_runtime = quinn_runtime.clone();
-                let channels_for_cid = channels_for_cid.clone();
                 Box::pin(async move {
                     let rustls_server_config = (match rustls::ServerConfig::builder_with_provider(
                         Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
@@ -229,12 +227,9 @@ impl QuicListenerHandle {
                     server_config.transport_config(Arc::new(transport_config));
 
                     let mut endpoint_config = quinn::EndpointConfig::default();
-                    endpoint_config.cid_generator(move || {
-                        Box::new(QuinnMTConnectionIdGenerator::new(
-                            id,
-                            channels_for_cid.clone(),
-                        ))
-                    });
+                    let quinn_runtime_cl = quinn_runtime.clone();
+                    endpoint_config
+                        .cid_generator(move || Box::new(quinn_runtime_cl.cid_generator()));
 
                     let endpoint = match udp_socket.and_then(|udp_socket| {
                         quinn::Endpoint::new(
