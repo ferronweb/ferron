@@ -43,7 +43,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                     config
                         .directives
                         .get("default_http_port")
-                        .and_then(|d| d.get(0))
+                        .and_then(|d| d.first())
                         .and_then(|d| d.span.clone()),
                 ));
             }
@@ -59,7 +59,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                     config
                         .directives
                         .get("default_https_port")
-                        .and_then(|d| d.get(0))
+                        .and_then(|d| d.first())
                         .and_then(|d| d.span.clone()),
                 ));
             }
