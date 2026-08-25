@@ -43,6 +43,10 @@ name = "config"
 path = "tests/config/mod.rs"
 
 [[test]]
+name = "cors"
+path = "tests/cors.rs"
+
+[[test]]
 name = "dcompress"
 path = "tests/dcompress.rs"
 
