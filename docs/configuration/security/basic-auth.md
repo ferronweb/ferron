@@ -65,7 +65,6 @@ example.com {
         }
 
         brute_force_protection {
-            enabled
             max_attempts 5
             lockout_duration "15m"
             window "5m"
@@ -76,11 +75,11 @@ example.com {
 
 You can define multiple `basic_auth` blocks. Ferron merges the users from all blocks.
 
-| Nested directive         | Arguments  | Description                                                   | Default             |
-| ------------------------ | ---------- | ------------------------------------------------------------- | ------------------- |
-| `realm`                  | `<string>` | Authentication realm shown in the browser auth dialog.        | `Restricted Access` |
-| `users`                  | block      | User credentials block (username to hash mappings). Required. | none                |
-| `brute_force_protection` | block      | Brute-force attack protection settings.                       | enabled (see below) |
+| Nested directive         | Arguments        | Description                                                                       | Default             |
+| ------------------------ | ---------------- | --------------------------------------------------------------------------------- | ------------------- |
+| `realm`                  | `<string>`       | Authentication realm shown in the browser auth dialog.                            | `Restricted Access` |
+| `users`                  | block            | User credentials block (username to hash mappings). Required.                     | none                |
+| `brute_force_protection` | block or `false` | Brute-force attack protection settings. Set to `false` to disable the protection. | enabled (see below) |
 
 ### `users` block
 
@@ -120,7 +119,6 @@ Brute-force protection is enabled by default to protect against credential-guess
 
 | Nested directive   | Type         | Default | Description                                                |
 | ------------------ | ------------ | ------- | ---------------------------------------------------------- |
-| `enabled`          | `<bool>`     | `true`  | Whether brute-force protection is active.                  |
 | `max_attempts`     | `<int>`      | `5`     | Maximum failed attempts before lockout.                    |
 | `lockout_duration` | `<duration>` | `15m`   | How long to lock the account after exceeding max attempts. |
 | `window`           | `<duration>` | `5m`    | Sliding window for counting attempts.                      |
@@ -192,9 +190,7 @@ example.com {
             deploy "$argon2id$v=19$m=19456,t=2,p=1$..."
         }
 
-        brute_force_protection {
-            enabled false
-        }
+        brute_force_protection false
     }
 }
 ```

@@ -133,21 +133,10 @@ pub fn register_tls_common_directives(
 }
 
 fn register_ocsp_children(
-    registry: &mut DirectiveRegistry,
-    applicable_protocols: Option<&'static [&'static str]>,
+    _registry: &mut DirectiveRegistry,
+    _applicable_protocols: Option<&'static [&'static str]>,
 ) {
-    registry.register(
-        Directive {
-            name: "enabled",
-            usage: "enabled [bool]",
-            description: "This directive specifies whether OCSP stapling is enabled. \
-        Default: enabled",
-            applicable_protocols,
-            global_only: false,
-            subblock_link: None,
-        },
-        DirectiveSubblock::custom("ocsp"),
-    );
+    // Currently, no OCSP children...
 }
 
 fn register_ticket_keys_children(

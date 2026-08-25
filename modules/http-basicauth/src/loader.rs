@@ -70,7 +70,7 @@ impl ModuleLoader for HttpBasicAuthModuleLoader {
             .register(
                 Directive {
                     name: "brute_force_protection",
-                    usage: "brute_force_protection { enabled ...; max_attempts ...; lockout_duration ...; window ... }",
+                    usage: "brute_force_protection <{ max_attempts ...; lockout_duration ...; window ... }|false>",
                     description: "This directive configures IP-based brute force lockout protection for basic auth.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,

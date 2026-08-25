@@ -38,9 +38,7 @@ example.com {
         provider manual
         cert "cert.pem"
         key "key.pem"
-        ocsp {
-            enabled
-        }
+        ocsp
     }
 }
 ```
@@ -53,33 +51,10 @@ example.com {
         provider manual
         cert "cert.pem"
         key "key.pem"
-        ocsp {
-            enabled false
-        }
+        ocsp false
     }
 }
 ```
-
-### Bare directive
-
-A bare `ocsp` directive (without a nested block) also enables stapling, equivalent to the default:
-
-```ferron
-example.com {
-    tls {
-        provider manual
-        cert "cert.pem"
-        key "key.pem"
-        ocsp
-    }
-}
-```
-
-### Configuration parameters
-
-| Parameter | Type     | Default | Required | Description                     |
-| --------- | -------- | ------- | -------- | ------------------------------- |
-| `enabled` | `<bool>` | `true`  | No       | Whether OCSP stapling is active |
 
 ## OCSP responder URL
 

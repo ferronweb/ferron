@@ -79,6 +79,7 @@ fn parse_basicauth_block(
 
     if let Some(bfp_entries) = block.directives.get("brute_force_protection") {
         for bfp_entry in bfp_entries {
+            config.brute_force.enabled = bfp_entry.get_flag();
             if let Some(ref bfp_block) = bfp_entry.children {
                 parse_brute_force_block(bfp_block, &mut config.brute_force);
             }
@@ -105,8 +106,6 @@ fn parse_users_block(
 }
 
 fn parse_brute_force_block(block: &ServerConfigurationBlock, bfc: &mut BruteForceConfig) {
-    bfc.enabled = block.get_flag("enabled");
-
     if let Some(max_attempts_val) = block.get_value("max_attempts") {
         if let Some(n) = max_attempts_val.as_number() {
             if n > 0 {

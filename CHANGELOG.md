@@ -11,6 +11,10 @@
 - **Linear-time regular expression engine**: The regular expression engine used by Ferron has been replaced by one using a linear-time algorithm, which means that backtracking regex patterns are no longer supported. This change was made to avoid potential ReDoS and catastrophic backtracking issues. If you are using syntax such as `(?= ...)`, `(?! ...)`, `(?<= ...)`, `(?<! ...)`, or `\1`, you need to rewrite the regexes.
 - **Symlink following disable by default for webroots**: following symlinks during static file resolution from webroot is now disabled by default for symlink attack prevention. Check if web application uses symlinks (if it uses, use `disable_symlinks false` or a similar setting).
 
+#### Configuration
+
+- **`enabled true` no longer effective**: `tls { ocsp { enabled true } }` and `basic_auth { brute_force_protection { enabled true } }` are no longer effective and are replaced with `tls { ocsp }` and `basic_auth { brute_force_protection }` respectively, to improve consistency across configuration directives.
+
 ### Added
 
 #### CLI utilities

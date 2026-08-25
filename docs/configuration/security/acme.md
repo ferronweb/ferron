@@ -111,9 +111,7 @@ example.com {
         # `post_obtain_command` arg is a script/binary name + args, separated by spaces.
         post_obtain_command "/var/lib/post_obtain_command.sh"
 
-        ocsp {
-            enabled
-        }
+        ocsp
     }
 }
 ```

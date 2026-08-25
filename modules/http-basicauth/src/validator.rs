@@ -12,7 +12,7 @@ use ferron_core::validate_directive;
 const BASICAUTH_DIRECTIVES: &[&str] = &["realm", "users", "brute_force_protection"];
 
 /// Recognized directives inside a `brute_force_protection { ... }` block.
-const BRUTE_FORCE_DIRECTIVES: &[&str] = &["enabled", "max_attempts", "lockout_duration", "window"];
+const BRUTE_FORCE_DIRECTIVES: &[&str] = &["max_attempts", "lockout_duration", "window"];
 
 /// Validator for `basic_auth` configuration blocks.
 #[derive(Default)]
@@ -103,6 +103,14 @@ impl BasicAuthValidator {
         if let Some(bfp_entries) = block.directives.get("brute_force_protection") {
             sub.insert("brute_force_protection".to_string());
             for bfp_entry in bfp_entries {
+                let enabled = bfp_entry.get_flag();
+                if !enabled {
+                    ctx.add_best_practice_violation(
+                        "`brute_force_protection false` disables credential-guessing protection; \
+                        only disable it when equivalent protection exists at another layer",
+                        entry_span(bfp_entry),
+                    );
+                }
                 if let Some(ref bfp_block) = bfp_entry.children {
                     self.validate_brute_force_block(bfp_block, ctx)?;
                 }
@@ -202,28 +210,9 @@ impl BasicAuthValidator {
             if !BRUTE_FORCE_DIRECTIVES.contains(&directive_name.as_str()) {
                 return Err(ConfigurationValidationError::from(format!(
                     "Invalid `{directive_name}` — unknown directive in brute_force_protection block. \
-                     Recognized directives: enabled, max_attempts, lockout_duration, window"
+                     Recognized directives: max_attempts, lockout_duration, window"
                 ))
                 .with_span(first_entry_span(block, directive_name)));
-            }
-        }
-
-        if let Some(entries) = block.directives.get("enabled") {
-            sub.insert("enabled".to_string());
-            for entry in entries {
-                let enabled = entry.args.first().map_or(Some(false), |v| v.as_boolean());
-                if enabled.is_none() {
-                    return Err(ConfigurationValidationError::from(
-                        "Invalid `brute_force_protection` — `enabled` must be a boolean value",
-                    )
-                    .with_span(entry_span(entry)));
-                }
-                if enabled == Some(false) {
-                    ctx.add_best_practice_violation(
-                        "`brute_force_protection.enabled false` disables credential-guessing protection; only disable it when equivalent protection exists at another layer",
-                        entry_span(entry),
-                    );
-                }
             }
         }
 

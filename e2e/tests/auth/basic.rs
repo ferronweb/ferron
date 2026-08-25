@@ -139,7 +139,6 @@ async fn test_http_auth_too_many_attempts() {
     }}
 
     brute_force_protection {{
-        enabled true
         max_attempts 3
         lockout_duration "15m"
         window "5m"

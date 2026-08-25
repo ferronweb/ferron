@@ -418,7 +418,6 @@ example.com {
             admin "$argon2id$v=19$m=19456,t=2,p=1$..."
         }
         brute_force_protection {
-            enabled
             max_attempts 5
             lockout_duration "15m"
             window "5m"

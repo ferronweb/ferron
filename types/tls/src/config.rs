@@ -238,9 +238,7 @@ impl OcspConfig {
     /// tls {
     ///     cert /path/cert.pem
     ///     key /path/key.pem
-    ///     ocsp {
-    ///         enabled true
-    ///     }
+    ///     ocsp
     /// }
     /// ```
     ///
@@ -253,16 +251,19 @@ impl OcspConfig {
             return Self { enabled: true };
         };
 
+        let enabled = ocsp_entry.get_flag();
+
         // Check if it's a nested block (has children)
-        if let Some(ref ocsp_block) = ocsp_entry.children {
+        /*if let Some(ref ocsp_block) = ocsp_entry.children {
             let enabled = ocsp_block
                 .get_value("enabled")
                 .and_then(|v| v.as_boolean())
                 .unwrap_or(true);
             Self { enabled }
         } else {
-            Self { enabled: true }
-        }
+            Self { enabled }
+        }*/
+        Self { enabled }
     }
 }
 
@@ -538,9 +539,10 @@ macro_rules! validate_tls_common {
 
            // OCSP stapling configuration
            validate_directive!($config, used, ocsp, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {
-                let mut ocsp_used = std::collections::HashSet::new();
+           /*let mut ocsp_used = std::collections::HashSet::new();
                 validate_nested!(ocsp, used(ocsp_used), enabled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
-                ferron_core::check_unused_subdirectives!(ocsp, ocsp_used, &mut $validator_ctx.diagnostics, $validator_ctx.scope.clone());
+                ferron_core::check_unused_subdirectives!(ocsp, ocsp_used, &mut $validator_ctx.diagnostics, $validator_ctx.scope.clone());*/
+                let _ = ocsp;
            });
 
            // Session ticket keys configuration
