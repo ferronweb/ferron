@@ -66,6 +66,7 @@
 - **Webroots with interpolations in URL rewrites**: webroot paths can now contain string interpolations when using with URL rewrite rules.
 - **Less QUIC packet loss and retransmissions**: previously, QUIC packet loss and retransmissions were higher due to improper routing of packets by the QUIC transport. This has been fixed to improve packet routing (via IP hashing when initializing and connection ID hashing later on) and reduce packet loss.
 - **HTTP/3 stream reset errors fixed with curl**: fixed `curl: (18) HTTP/3 stream 0 reset by server (error 0x0 unknown)` on `curl` for HTTP/3 in underlying HTTP server library used by Ferron. ([GitHub issue](https://github.com/ferronweb/ferron/issues/887))
+- **IPv4 host blocks never matching**: fixed IPv4 host never matching due to IP address canonicalization issues and IPv4-mapped IPv6 addresses.
 
 #### TLS
 

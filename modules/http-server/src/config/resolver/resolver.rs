@@ -135,6 +135,7 @@ impl ThreeStageResolver {
         path: &str,
         ctx: &HttpContext,
     ) -> Option<ResolutionResult> {
+        let ip = ip.map(|a| a.to_canonical());
         let base = self.resolve_base(ip, hostname, path, ctx)?;
         Some(ResolutionResult::new(
             base.configuration,
@@ -154,6 +155,7 @@ impl ThreeStageResolver {
         error_code: u16,
         ctx: &HttpContext,
     ) -> Option<ResolutionResult> {
+        let ip = ip.map(|a| a.to_canonical());
         let mut base = self.resolve_base(ip, hostname, path, ctx)?;
         base.location_path.error_key = Some(error_code);
 
