@@ -152,7 +152,7 @@ Selectors:
 
 - `example.org`: hostname tree
 - `*.example.org`: wildcard hostname
-- `127.0.1`: IP-based host
+- `127.0.0.1`: IP-based host
 - `[2001:db8::1]`: IPv6 address
 - `http example.org`: explicit protocol
 - `http example.org:8080`: explicit protocol and port
