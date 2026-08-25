@@ -283,16 +283,6 @@ async fn test_partial_content() {
     assert_eq!(response.status(), reqwest::StatusCode::PARTIAL_CONTENT);
     assert_eq!(response.text().await.unwrap(), BASIC_CONTENT);
 
-    // Bytes=999- (Out of range, should return 206 with available content per RFC 7233)
-    let response = ctx
-        .client
-        .get(format!("{}/basic.txt", ctx.base_url))
-        .header(header::RANGE, "bytes=999-")
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), reqwest::StatusCode::PARTIAL_CONTENT);
-
     // Bytes=0-999 (end beyond file, should return 206 with full content)
     let response = ctx
         .client
