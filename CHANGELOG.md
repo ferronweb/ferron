@@ -34,6 +34,10 @@
 
 - **Same-upstream retries**: new `max_retries_per_upstream <count>` directive controls how many times the proxy retries the same upstream on a transport or connection failure before it falls back to another backend via `retry_connection`. The retry applies only to idempotent requests with a replayable body and, when `retry_budget` is enabled, each same-upstream retry consumes a retry-budget token. Default: `max_retries_per_upstream 1`.
 
+#### DNS / Automatic TLS
+
+- **`command` DNS provider (external hook)**: the new `dns-command` module provides a `command` DNS provider for the ACME DNS-01 challenge. It runs an external program for each record change, passing the record details through environment variables (`FERRON_DNS_ACTION`, `FERRON_DNS_DOMAIN`, `FERRON_DNS_RECORD_TYPE`, `FERRON_DNS_RECORD_VALUE`, `FERRON_DNS_RECORD_TTL`). The program must exit `0` on success. Configure with `provider command` and the `command` directive (with optional `min_ttl`, default `60`). This delegates DNS updates to any DNS server or automation that Ferron does not support natively.
+
 #### Observability
 
 - **Baggage key promotion for StatsD**: the `observability-statsd` module now supports the `baggage` directive, which promotes W3C Baggage keys into DogStatsD tags (requires `datadog` mode). This matches the existing OTLP and Prometheus baggage promotion support.

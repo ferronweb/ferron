@@ -20,7 +20,7 @@ The `tls-acme` module uses DNS providers to solve the DNS-01 ACME challenge. Thi
 }
 ```
 
-All DNS provider implementations are currently part of the `dns-stalwartlite` module.
+All DNS provider implementations are currently part of the `dns-stalwartlite` module, except the `command` provider, which ships in the separate `dns-command` module.
 
 ## Providers
 
@@ -342,6 +342,60 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
         }
     }
 }
+```
+
+---
+
+### Command (external hook)
+
+**Provider name:** `command`
+
+The `command` provider runs an external program for every DNS record change. It does not call any DNS API directly. Use it to delegate updates to any DNS server or automation that Ferron does not support natively. The program receives the record details through environment variables and must exit with status `0` to signal success.
+
+| Directive | Arguments  | Description                                                                                     | Default |
+| --------- | ---------- | ----------------------------------------------------------------------------------------------- | ------- |
+| `command` | `<string>` | Absolute path to the program to run for each record change.                                     | none (required) |
+| `min_ttl` | `<int>`    | Minimum TTL (in seconds) that Ferron will accept for records created by this provider.          | `60`    |
+
+The provider passes the following environment variables to the program:
+
+| Variable                  | Set on        | Description                                                        |
+| ------------------------- | ------------- | ------------------------------------------------------------------ |
+| `FERRON_DNS_ACTION`       | always        | `add` for `update_record`, `delete` for `delete_record`.           |
+| `FERRON_DNS_DOMAIN`       | always        | Full record name (for example `_acme-challenge.example.com`).      |
+| `FERRON_DNS_RECORD_TYPE`  | always        | Record type (for example `TXT`).                                   |
+| `FERRON_DNS_RECORD_VALUE` | `add` only    | The record value (the ACME DNS challenge token).                  |
+| `FERRON_DNS_RECORD_TTL`   | `add` only    | The requested TTL in seconds.                                      |
+
+The program runs directly (no shell), so arguments beyond the program path are not supported. Pass dynamic data through the environment variables. The program's exit status determines success: `0` means the change is applied, any other status is treated as an error.
+
+> [!note]
+> After the program creates the `_acme-challenge` TXT record, propagation time depends entirely on your script and DNS server. Ferron cannot know the delay, so verify the record is publicly resolvable before issuance retries, or set a short TTL.
+
+**Configuration example:**
+
+```ferron
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+
+        dns {
+            provider command
+            command "/usr/local/bin/ferron-dns-hook.sh"
+            min_ttl 30
+        }
+    }
+}
+```
+
+A minimal hook script:
+
+```sh
+#!/bin/sh
+# Example hook: log the requested change. Replace with your real DNS update.
+echo "$(date) $FERRON_DNS_ACTION $FERRON_DNS_RECORD_TYPE $FERRON_DNS_DOMAIN $FERRON_DNS_RECORD_VALUE" >> /var/log/ferron-dns.log
+exit 0
 ```
 
 ---

@@ -42,6 +42,7 @@ ferron-admin-api = { path = "../modules/admin-api", optional = true }
 ferron-config-json = { path = "../modules/config-json", optional = true }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf", optional = true }
 ferron-dns-stalwartlite = { path = "../modules/dns-stalwartlite", optional = true }
+ferron-dns-command = { path = "../modules/dns-command", optional = true }
 ferron-tls-manual = { path = "../modules/tls-manual", optional = true }
 ferron-tls-acme = { path = "../modules/tls-acme", optional = true }
 ferron-tls-local = { path = "../modules/tls-local", optional = true }
@@ -105,6 +106,7 @@ profile-default = [
     "ferron-config-json",
     "ferron-config-ferronconf",
     "ferron-dns-stalwartlite",
+    "ferron-dns-command",
     "ferron-tls-manual",
     "ferron-tls-acme",
     "ferron-tls-local",

@@ -84,6 +84,7 @@ pub fn default_profile() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(ferron_metrics_admin::AdminMetricsModuleLoader::default()),
         Box::new(ferron_metrics_reload::ReloadMetricsModuleLoader::default()),
         Box::new(ferron_dns_stalwartlite::StalwartDnsModuleLoader),
+        Box::new(ferron_dns_command::CommandDnsModuleLoader),
     ]
 }
 

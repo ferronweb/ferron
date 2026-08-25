@@ -1138,6 +1138,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferron-dns-command"
+version = "3.0.0-beta.9"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ferron-core",
+ "ferron-dns",
+ "tokio",
+]
+
+[[package]]
 name = "ferron-dns-stalwartlite"
 version = "3.0.0-beta.9"
 dependencies = [
@@ -1161,6 +1172,7 @@ dependencies = [
  "ferron-config-ferronconf",
  "ferron-config-json",
  "ferron-core",
+ "ferron-dns-command",
  "ferron-dns-stalwartlite",
  "ferron-http-abuseban",
  "ferron-http-basicauth",
