@@ -36,7 +36,7 @@ macro_rules! dns_provider {
                 let val = $crate::providers::util::required_string(ctx, $key, $name)?;
                 ctx.client = ::std::option::Option::Some(::std::sync::Arc::new(
                     $crate::client::DnsStalwartClient::new(
-                        ::dns_update::DnsUpdater::$updater(&val, ::std::option::Option::None)?,
+                        ::dns_update_lite::DnsUpdater::$updater(&val, ::std::option::Option::None)?,
                         $ttl,
                     ),
                 ));

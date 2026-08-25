@@ -1,26 +1,26 @@
 use std::sync::Arc;
 
-use dns_update::DnsUpdater;
+use dns_update_lite::DnsUpdater;
 use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
 use crate::client::DnsStalwartClient;
 use crate::providers::util::required_string;
 
-pub struct DnsimpleDnsProvider;
+pub struct PorkbunDnsProvider;
 
-impl Provider<DnsContext<'static>> for DnsimpleDnsProvider {
+impl Provider<DnsContext<'static>> for PorkbunDnsProvider {
     fn name(&self) -> &'static str {
-        "dnsimple"
+        "porkbun"
     }
 
     fn execute(&self, ctx: &mut DnsContext) -> Result<(), Box<dyn std::error::Error>> {
-        let oauth_token = required_string(ctx, "oauth_token", "dnsimple")?;
-        let account_id = required_string(ctx, "account_id", "dnsimple")?;
+        let api_key = required_string(ctx, "api_key", "porkbun")?;
+        let secret_key = required_string(ctx, "secret_key", "porkbun")?;
 
         ctx.client = Some(Arc::new(DnsStalwartClient::new(
-            DnsUpdater::new_dnsimple(&oauth_token, &account_id, None)?,
-            60,
+            DnsUpdater::new_porkbun(&api_key, &secret_key, None)?,
+            600,
         )));
         Ok(())
     }

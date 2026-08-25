@@ -1,12 +1,12 @@
 [package]
-name = "ferron-dns-stalwart"
+name = "ferron-dns-stalwartlite"
 version = "3.0.0-beta.9"
 edition = "2021"
 
 [dependencies]
 ferron-core = { path = "../../core" }
 ferron-dns = { path = "../../types/dns" }
-dns-update = "0.5.5"
+dns-update-lite = "0.5.9"
 async-trait = "0.1.89"
 base64 = "0.23.0"
 hex = "0.4.3"

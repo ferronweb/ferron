@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use dns_update::providers::google_cloud_dns::GoogleCloudDnsConfig;
-use dns_update::DnsUpdater;
+use dns_update_lite::providers::google_cloud_dns::GoogleCloudDnsConfig;
+use dns_update_lite::DnsUpdater;
 use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 

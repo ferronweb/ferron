@@ -2,7 +2,7 @@ use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
 use base64::Engine;
-use dns_update::DnsUpdater;
+use dns_update_lite::DnsUpdater;
 use ferron_core::providers::Provider;
 use ferron_dns::DnsContext;
 
@@ -33,8 +33,8 @@ impl Provider<DnsContext<'static>> for Rfc2136DnsProvider {
                 .next()
                 .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?;
             match scheme {
-                "tcp" => Ok(dns_update::providers::rfc2136::DnsAddress::Tcp(addr)),
-                "udp" => Ok(dns_update::providers::rfc2136::DnsAddress::Udp(addr)),
+                "tcp" => Ok(dns_update_lite::providers::rfc2136::DnsAddress::Tcp(addr)),
+                "udp" => Ok(dns_update_lite::providers::rfc2136::DnsAddress::Udp(addr)),
                 _ => Err(anyhow::anyhow!("Invalid RFC 2136 server address scheme")),
             }
         };
@@ -53,16 +53,16 @@ impl Provider<DnsContext<'static>> for Rfc2136DnsProvider {
             .to_uppercase()
             .as_str()
         {
-            "HMAC-MD5" => dns_update::TsigAlgorithm::HmacMd5,
-            "GSS" => dns_update::TsigAlgorithm::Gss,
-            "HMAC-SHA1" => dns_update::TsigAlgorithm::HmacSha1,
-            "HMAC-SHA224" => dns_update::TsigAlgorithm::HmacSha224,
-            "HMAC-SHA256" => dns_update::TsigAlgorithm::HmacSha256,
-            "HMAC-SHA256-128" => dns_update::TsigAlgorithm::HmacSha256_128,
-            "HMAC-SHA384" => dns_update::TsigAlgorithm::HmacSha384,
-            "HMAC-SHA384-192" => dns_update::TsigAlgorithm::HmacSha384_192,
-            "HMAC-SHA512" => dns_update::TsigAlgorithm::HmacSha512,
-            "HMAC-SHA512-256" => dns_update::TsigAlgorithm::HmacSha512_256,
+            "HMAC-MD5" => dns_update_lite::TsigAlgorithm::HmacMd5,
+            "GSS" => dns_update_lite::TsigAlgorithm::Gss,
+            "HMAC-SHA1" => dns_update_lite::TsigAlgorithm::HmacSha1,
+            "HMAC-SHA224" => dns_update_lite::TsigAlgorithm::HmacSha224,
+            "HMAC-SHA256" => dns_update_lite::TsigAlgorithm::HmacSha256,
+            "HMAC-SHA256-128" => dns_update_lite::TsigAlgorithm::HmacSha256_128,
+            "HMAC-SHA384" => dns_update_lite::TsigAlgorithm::HmacSha384,
+            "HMAC-SHA384-192" => dns_update_lite::TsigAlgorithm::HmacSha384_192,
+            "HMAC-SHA512" => dns_update_lite::TsigAlgorithm::HmacSha512,
+            "HMAC-SHA512-256" => dns_update_lite::TsigAlgorithm::HmacSha512_256,
             _ => Err(anyhow::anyhow!("Unsupported RFC 2136 TSIG algorithm"))?,
         };
 
