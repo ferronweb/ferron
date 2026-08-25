@@ -33,6 +33,39 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
             if config
                 .get_value("default_http_port")
+                .and_then(ServerConfigurationValue::as_number)
+                .is_some_and(|p| !(0..=65535).contains(&p))
+            {
+                return Err(ConfigurationValidationError::from(
+                    "default_http_port must be a number between 0 and 65535",
+                )
+                .with_span(
+                    config
+                        .directives
+                        .get("default_http_port")
+                        .and_then(|d| d.get(0))
+                        .and_then(|d| d.span.clone()),
+                ));
+            }
+            if config
+                .get_value("default_https_port")
+                .and_then(ServerConfigurationValue::as_number)
+                .is_some_and(|p| !(0..=65535).contains(&p))
+            {
+                return Err(ConfigurationValidationError::from(
+                    "default_https_port must be a number between 0 and 65535",
+                )
+                .with_span(
+                    config
+                        .directives
+                        .get("default_https_port")
+                        .and_then(|d| d.get(0))
+                        .and_then(|d| d.span.clone()),
+                ));
+            }
+
+            if config
+                .get_value("default_http_port")
                 .and_then(ServerConfigurationValue::as_boolean)
                 == Some(false)
                 && config
