@@ -69,6 +69,10 @@
 - **IPv4 host blocks never matching**: fixed IPv4 host never matching due to IP address canonicalization issues and IPv4-mapped IPv6 addresses.
 - **Best practice diagnostics for `location` blocks**: the best practice diagnostics for `location` blocks with duplicate pathnames are now emitted correctly.
 
+#### Admin API
+
+- **Improved config redaction**: `users` subdirective used by HTTP basic auth functionality is now redacted properly in the config JSON output.
+
 #### TLS
 
 - **Local TLS with ALPN + OCSP**: local TLS now supports ALPN and OCSP stapling properly, for HTTP/2 to work properly.

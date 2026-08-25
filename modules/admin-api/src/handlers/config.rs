@@ -56,11 +56,14 @@ fn value_to_json(value: &ferron_core::config::ServerConfigurationValue) -> Value
 }
 
 /// Serialize a configuration block to JSON, recursively redacting sensitive directives.
-fn block_to_json(block: &ferron_core::config::ServerConfigurationBlock) -> Value {
+fn block_to_json(
+    block: &ferron_core::config::ServerConfigurationBlock,
+    sanitize_all: bool,
+) -> Value {
     let mut map = Map::new();
 
     for (name, entries) in block.directives.iter() {
-        if is_sensitive(name) {
+        if sanitize_all || is_sensitive(name) {
             map.insert(name.clone(), Value::String("[redacted]".to_string()));
             continue;
         }
@@ -76,7 +79,11 @@ fn block_to_json(block: &ferron_core::config::ServerConfigurationBlock) -> Value
 
                 // Serialize children if present
                 if let Some(children) = &entry.children {
-                    entry_map.insert("children".to_string(), block_to_json(children));
+                    let sensitive_users = name == "users"; // Used by ferron-http-basicauth
+                    entry_map.insert(
+                        "children".to_string(),
+                        block_to_json(children, sanitize_all || sensitive_users),
+                    );
                 }
 
                 Value::Object(entry_map)
@@ -96,7 +103,7 @@ pub fn sanitize_config(config: &ServerConfiguration) -> Value {
     // Global config
     result.insert(
         "global_config".to_string(),
-        block_to_json(&config.global_config),
+        block_to_json(&config.global_config, false),
     );
 
     // Ports
@@ -128,7 +135,7 @@ pub fn sanitize_config(config: &ServerConfiguration) -> Value {
                             host_map.insert("filters".to_string(), Value::Object(filters_map));
 
                             // Block (sanitized)
-                            host_map.insert("config".to_string(), block_to_json(block));
+                            host_map.insert("config".to_string(), block_to_json(block, false));
 
                             Value::Object(host_map)
                         })
