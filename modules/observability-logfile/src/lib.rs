@@ -1,7 +1,7 @@
-use ferron_core::{config_validator_scoped_key, log_warn};
+use ferron_core::config_validator_scoped_key;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Once};
+use std::sync::Arc;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::time::{interval, Duration, MissedTickBehavior};
@@ -11,6 +11,7 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::Registry;
 use ferron_core::{log_error, Module};
+use ferron_observability::module::{format_metadata_prefix, try_send_event, ConfiguredEvent};
 use ferron_observability::{
     AccessEvent, AccessVisitor, ApplicationLogFormatterContext, Event, EventSink,
     LogAttributeValue, LogEvent, LogFormatterContext, ObservabilityContext,
@@ -20,15 +21,6 @@ use crate::rotate::{rotate_log_file, RotationConfig};
 
 mod rotate;
 mod validator;
-
-static DROPPED_EVENT: Once = Once::new();
-
-/// Wrapper that carries an event with its configuration through the channel
-struct ConfiguredEvent {
-    event: Arc<Event>,
-    log_config: Arc<ServerConfigurationBlock>,
-    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
-}
 
 /// The initialized event sink that writes events to log files
 struct LogFileEventSink {
@@ -41,58 +33,26 @@ impl EventSink for LogFileEventSink {
     #[inline]
     fn emit(&self, event: Event) {
         if matches!(event, Event::Access(_) | Event::Log(_)) {
-            match self.inner.try_send(ConfiguredEvent {
-                event: Arc::new(event),
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`file` observability backend). \
-                            This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+            try_send_event(
+                &self.inner,
+                Arc::new(event),
+                &self.log_config,
+                &self.control_plane_metadata,
+                "file",
+            );
         }
     }
 
     #[inline]
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         if matches!(&*event, Event::Access(_) | Event::Log(_)) {
-            match self.inner.try_send(ConfiguredEvent {
+            try_send_event(
+                &self.inner,
                 event,
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`file` observability backend). \
-                            This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+                &self.log_config,
+                &self.control_plane_metadata,
+                "file",
+            );
         }
     }
 
@@ -443,16 +403,6 @@ fn log_event_variables(log_event: &LogEvent) -> HashMap<String, String> {
     }
 
     fields
-}
-
-fn format_metadata_prefix(metadata: Option<&Arc<BTreeMap<String, String>>>) -> String {
-    match metadata {
-        Some(meta) if !meta.is_empty() => {
-            let parts: Vec<String> = meta.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
-            format!("[{}] ", parts.join(" "))
-        }
-        _ => String::new(),
-    }
 }
 
 fn format_access_event(

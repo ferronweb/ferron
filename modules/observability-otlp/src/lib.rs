@@ -18,15 +18,16 @@ mod convert;
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Once};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::{Registry, RegistryBuilder};
-use ferron_core::{config_validator_scoped_key, log_warn, Module};
+use ferron_core::{config_validator_scoped_key, Module};
 use ferron_observability::baggage::{BaggageKeyPromotion, DistinctValueTracker};
+use ferron_observability::module::{try_send_event, ConfiguredEvent};
 use ferron_observability::{
     build_composite_sink, CompositeEventSink, Event, EventSink, LogAttributeValue, LogEvent,
     LogLevel, ObservabilityContext, TraceEvent,
@@ -44,15 +45,6 @@ use crate::pipeline::{
     DEFAULT_READ_INTERVAL,
 };
 use crate::transport::client::OtlpTransport;
-
-static DROPPED_EVENT: Once = Once::new();
-
-/// Wrapper that carries an event with its configuration through the channel
-struct ConfiguredEvent {
-    event: Arc<Event>,
-    log_config: Arc<ServerConfigurationBlock>,
-    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
-}
 
 /// The OTLP event sink that emits events to an OTLP collector
 struct OtlpEventSink {
@@ -73,29 +65,13 @@ impl EventSink for OtlpEventSink {
             Event::Trace(_) => self.has_traces,
         };
         if emit {
-            match self.inner.try_send(ConfiguredEvent {
-                event: Arc::new(event),
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`otlp` observability backend). \
-                        This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+            try_send_event(
+                &self.inner,
+                Arc::new(event),
+                &self.log_config,
+                &self.control_plane_metadata,
+                "otlp",
+            );
         }
     }
 
@@ -107,29 +83,13 @@ impl EventSink for OtlpEventSink {
             Event::Trace(_) => self.has_traces,
         };
         if emit {
-            match self.inner.try_send(ConfiguredEvent {
+            try_send_event(
+                &self.inner,
                 event,
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`otlp` observability backend). \
-                        This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+                &self.log_config,
+                &self.control_plane_metadata,
+                "otlp",
+            );
         }
     }
 

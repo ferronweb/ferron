@@ -3,6 +3,8 @@ pub mod baggage;
 mod config;
 pub mod control_plane;
 mod event;
+#[cfg(feature = "module")]
+pub mod module;
 mod provider;
 pub mod sampler;
 mod sink;

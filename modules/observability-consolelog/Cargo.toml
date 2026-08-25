@@ -4,7 +4,7 @@ version = "3.0.0-beta.9"
 edition = "2021"
 
 [dependencies]
-ferron-observability = { path = "../../types/observability" }
+ferron-observability = { path = "../../types/observability", features = ["module"] }
 ferron-core = { path = "../../core" }
 async-channel = "2.5.0"
 tokio-util = "0.7.18"

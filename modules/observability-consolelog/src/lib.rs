@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Once};
+use std::sync::Arc;
 
 use ferron_core::config::validator::{
     validate_scoped_block_flat, ConfigurationValidationError, ConfigurationValidator,
@@ -10,20 +10,10 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::Registry;
 use ferron_core::{config_validator_scoped_key, log_debug, log_error, log_info, log_warn, Module};
+use ferron_observability::module::{format_metadata_prefix, try_send_event, ConfiguredEvent};
 use ferron_observability::{
     AccessEvent, Event, EventSink, LogFormatterContext, ObservabilityContext,
 };
-
-static DROPPED_EVENT: Once = Once::new();
-
-/// Wrapper that carries an event with its configuration through the channel
-struct ConfiguredEvent {
-    event: Arc<Event>,
-    log_config: Arc<ServerConfigurationBlock>,
-    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
-}
-
-/// The initialized event sink that emits events to the console
 struct ConsoleEventSink {
     inner: async_channel::Sender<ConfiguredEvent>,
     log_config: Arc<ServerConfigurationBlock>,
@@ -34,60 +24,26 @@ impl EventSink for ConsoleEventSink {
     #[inline]
     fn emit(&self, event: Event) {
         if matches!(event, Event::Access(_) | Event::Log(_)) {
-            match self.inner.try_send(ConfiguredEvent {
-                event: Arc::new(event),
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    // Increment dropped events metric and warn once
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`console` observability backend). \
-                            This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+            try_send_event(
+                &self.inner,
+                Arc::new(event),
+                &self.log_config,
+                &self.control_plane_metadata,
+                "console",
+            );
         }
     }
 
     #[inline]
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         if matches!(&*event, Event::Access(_) | Event::Log(_)) {
-            match self.inner.try_send(ConfiguredEvent {
+            try_send_event(
+                &self.inner,
                 event,
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    // Increment dropped events metric and warn once
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`console` observability backend). \
-                            This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+                &self.log_config,
+                &self.control_plane_metadata,
+                "console",
+            );
         }
     }
 
@@ -192,16 +148,6 @@ impl Module for ConsoleObservabilityModule {
 impl Drop for ConsoleObservabilityModule {
     fn drop(&mut self) {
         self.cancel_token.cancel();
-    }
-}
-
-fn format_metadata_prefix(metadata: Option<&Arc<BTreeMap<String, String>>>) -> String {
-    match metadata {
-        Some(meta) if !meta.is_empty() => {
-            let parts: Vec<String> = meta.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
-            format!("[{}] ", parts.join(" "))
-        }
-        _ => String::new(),
     }
 }
 

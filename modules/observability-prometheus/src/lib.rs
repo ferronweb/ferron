@@ -6,15 +6,16 @@ use std::error::Error;
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Once};
+use std::sync::Arc;
 
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::shutdown::RELOAD_TOKEN;
-use ferron_core::{config_validator_scoped_key, log_warn, Module};
+use ferron_core::{config_validator_scoped_key, Module};
 use ferron_observability::baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet};
+use ferron_observability::module::{try_send_event, ConfiguredEvent, InitAccessEvent};
 use ferron_observability::{
     Event, EventSink, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
     ObservabilityContext,
@@ -28,8 +29,6 @@ use prometheus_client::metrics::histogram::{self, Histogram, NativeHistogramConf
 use tokio_util::sync::CancellationToken;
 
 use crate::endpoint::endpoint_listener_fn;
-
-static DROPPED_EVENT: Once = Once::new();
 
 const DEFAULT_BUCKETS: [f64; 11] = [
     0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
@@ -66,13 +65,6 @@ struct PrometheusBackendConfig {
     baggage_promotions: Vec<BaggageKeyPromotion>,
 }
 
-/// Wrapper that carries an event with its configuration through the channel
-struct ConfiguredEvent {
-    event: Option<Arc<Event>>,
-    log_config: Arc<ServerConfigurationBlock>,
-    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
-}
-
 /// The Prometheus event sink that emits events to a Prometheus collector
 struct PrometheusEventSink {
     inner: async_channel::Sender<ConfiguredEvent>,
@@ -84,58 +76,26 @@ impl EventSink for PrometheusEventSink {
     #[inline]
     fn emit(&self, event: Event) {
         if matches!(event, Event::Metric(_)) {
-            match self.inner.try_send(ConfiguredEvent {
-                event: Some(Arc::new(event)),
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`prometheus` observability backend). \
-                            This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+            try_send_event(
+                &self.inner,
+                Arc::new(event),
+                &self.log_config,
+                &self.control_plane_metadata,
+                "prometheus",
+            );
         }
     }
 
     #[inline]
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         if matches!(&*event, Event::Metric(_)) {
-            match self.inner.try_send(ConfiguredEvent {
-                event: Some(event),
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`prometheus` observability backend). \
-                            This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+            try_send_event(
+                &self.inner,
+                event,
+                &self.log_config,
+                &self.control_plane_metadata,
+                "prometheus",
+            );
         }
     }
 }
@@ -259,11 +219,9 @@ impl Module for PrometheusObservabilityModule {
                 } => result.ok(),
                 _ = cancel_token.cancelled() => None,
             } {
-                if msg.event.is_some() {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_sub(1, Ordering::Relaxed);
-                }
+                ferron_core::admin::ADMIN_METRICS
+                    .observability_event_queue_len
+                    .fetch_sub(1, Ordering::Relaxed);
 
                 let config = match parse_prometheus_config(&msg.log_config) {
                     Ok(c) => c,
@@ -282,7 +240,7 @@ impl Module for PrometheusObservabilityModule {
                     )
                 });
 
-                if let Some(Event::Metric(metric_event)) = msg.event.as_deref() {
+                if let Event::Metric(metric_event) = &*msg.event {
                     emit_metric(
                         &entry.registry,
                         metric_event,
@@ -898,11 +856,13 @@ impl Provider<ObservabilityContext> for PrometheusObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn Error>> {
-        let _ = self.inner.try_send(ConfiguredEvent {
-            event: None,
-            log_config: ctx.log_config.clone(),
-            control_plane_metadata: ctx.control_plane_metadata.clone(),
-        });
+        try_send_event(
+            &self.inner,
+            Arc::new(Event::Access(Arc::new(InitAccessEvent))),
+            &ctx.log_config,
+            &ctx.control_plane_metadata,
+            "prometheus",
+        );
         ctx.sink = Some(Arc::new(PrometheusEventSink {
             inner: self.inner.clone(),
             log_config: ctx.log_config.clone(),

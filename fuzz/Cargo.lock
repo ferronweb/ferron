@@ -734,7 +734,9 @@ dependencies = [
 name = "ferron-observability"
 version = "3.0.0-beta.9"
 dependencies = [
+ "async-channel",
  "ferron-core",
+ "tokio-util",
  "urlencoding",
  "xxhash-rust",
 ]

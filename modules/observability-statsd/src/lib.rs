@@ -12,8 +12,9 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::shutdown::RELOAD_TOKEN;
-use ferron_core::{config_validator_scoped_key, log_warn, Module};
+use ferron_core::{config_validator_scoped_key, Module};
 use ferron_observability::baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet};
+use ferron_observability::module::{try_send_event, ConfiguredEvent, InitAccessEvent};
 use ferron_observability::{
     Event, EventSink, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
     ObservabilityContext,
@@ -21,19 +22,11 @@ use ferron_observability::{
 
 use crate::config::StatsdBackendConfig;
 
-static DROPPED_EVENT: Once = Once::new();
 static FAILED_DATAGRAM_SEND: Once = Once::new();
 
 /// Maximum length of a UDP datagram carrying StatsD metrics. 1432 bytes stays
 /// safely below the typical 1500-byte MTU even with IP and UDP headers.
 const MAX_DATAGRAM_LEN: usize = 1432;
-
-/// Wrapper that carries an event with its configuration through the channel
-struct ConfiguredEvent {
-    event: Option<Arc<Event>>,
-    log_config: Arc<ServerConfigurationBlock>,
-    control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
-}
 
 /// The StatsD event sink that forwards metric events through the channel
 struct StatsdEventSink {
@@ -46,58 +39,26 @@ impl EventSink for StatsdEventSink {
     #[inline]
     fn emit(&self, event: Event) {
         if matches!(event, Event::Metric(_)) {
-            match self.inner.try_send(ConfiguredEvent {
-                event: Some(Arc::new(event)),
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`statsd` observability backend). \
-                            This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+            try_send_event(
+                &self.inner,
+                Arc::new(event),
+                &self.log_config,
+                &self.control_plane_metadata,
+                "statsd",
+            );
         }
     }
 
     #[inline]
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
         if matches!(&*event, Event::Metric(_)) {
-            match self.inner.try_send(ConfiguredEvent {
-                event: Some(event),
-                log_config: self.log_config.clone(),
-                control_plane_metadata: self.control_plane_metadata.clone(),
-            }) {
-                Ok(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_event_queue_len
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                Err(_) => {
-                    ferron_core::admin::ADMIN_METRICS
-                        .observability_events_dropped
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    DROPPED_EVENT.call_once(|| {
-                        log_warn!(
-                            "Observability event dropped (`statsd` observability backend). \
-                            This may be caused by high server load."
-                        );
-                    });
-                }
-            }
+            try_send_event(
+                &self.inner,
+                event,
+                &self.log_config,
+                &self.control_plane_metadata,
+                "statsd",
+            );
         }
     }
 }
@@ -336,11 +297,9 @@ async fn run_statsd_consumer(
         } => result.ok(),
         _ = cancel_token.cancelled() => None,
     } {
-        if msg.event.is_some() {
-            ferron_core::admin::ADMIN_METRICS
-                .observability_event_queue_len
-                .fetch_sub(1, Ordering::Relaxed);
-        }
+        ferron_core::admin::ADMIN_METRICS
+            .observability_event_queue_len
+            .fetch_sub(1, Ordering::Relaxed);
 
         let config = parse_statsd_config(&msg.log_config);
 
@@ -387,7 +346,7 @@ async fn run_statsd_consumer(
             continue;
         };
 
-        let Some(Event::Metric(metric_event)) = msg.event.as_deref() else {
+        let Event::Metric(metric_event) = &*msg.event else {
             continue;
         };
 
@@ -441,11 +400,13 @@ impl Provider<ObservabilityContext> for StatsdObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn Error>> {
-        let _ = self.inner.try_send(ConfiguredEvent {
-            event: None,
-            log_config: ctx.log_config.clone(),
-            control_plane_metadata: ctx.control_plane_metadata.clone(),
-        });
+        try_send_event(
+            &self.inner,
+            Arc::new(Event::Access(Arc::new(InitAccessEvent))),
+            &ctx.log_config,
+            &ctx.control_plane_metadata,
+            "statsd",
+        );
         ctx.sink = Some(Arc::new(StatsdEventSink {
             inner: self.inner.clone(),
             log_config: ctx.log_config.clone(),

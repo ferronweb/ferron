@@ -7,7 +7,7 @@ edition = "2021"
 fuzz = []
 
 [dependencies]
-ferron-observability = { path = "../../types/observability" }
+ferron-observability = { path = "../../types/observability", features = ["module"] }
 ferron-core = { path = "../../core" }
 async-channel = "2.5.0"
 tokio-util = "0.7.18"
