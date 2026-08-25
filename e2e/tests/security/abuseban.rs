@@ -154,7 +154,6 @@ async fn test_abuse_protection_without_rate_limit_does_not_block() {
 *:80 {
   root "/var/www/ferron"
   abuse_protection {
-    enabled true
     ban_duration "1m"
     rate_limit_threshold {
       events 1

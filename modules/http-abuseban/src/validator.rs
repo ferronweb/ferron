@@ -7,7 +7,6 @@ use ferron_core::config::{
 };
 
 const RECOGNIZED_DIRECTIVES: &[&str] = &[
-    "enabled",
     "ban_duration",
     "rate_limit_threshold",
     "brute_force_threshold",
@@ -67,20 +66,6 @@ impl AbuseProtectionValidator {
                     "Invalid `{directive_name}` — unknown directive in abuse_protection block"
                 ))
                 .with_span(entry_span(entry)));
-            }
-        }
-
-        if let Some(entries) = block.directives.get("enabled") {
-            sub.insert("enabled".to_string());
-            for entry in entries {
-                if let Some(value) = entry.args.first() {
-                    if value.as_boolean().is_none() {
-                        return Err(ConfigurationValidationError::from(
-                            "Invalid `enabled` — must be a boolean",
-                        )
-                        .with_span(entry_span(entry)));
-                    }
-                }
             }
         }
 

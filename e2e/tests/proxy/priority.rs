@@ -308,7 +308,6 @@ async fn test_priority_failover_circuit_breaker() {
     retry_connection true
 
     circuit_breaker {
-      enabled true
       window_size 1
       min_requests 1
       failure_rate_threshold 1.0

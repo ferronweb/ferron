@@ -267,9 +267,7 @@ mod tests {
 
     use bytes::Bytes;
     use ferron_core::config::layer::LayeredConfiguration;
-    use ferron_core::config::{
-        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
-    };
+    use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
     use ferron_http::HttpRequest;
     use ferron_observability::CompositeEventSink;
     use http::Request;
@@ -296,16 +294,7 @@ mod tests {
     }
 
     fn make_config_with_abuse() -> LayeredConfiguration {
-        let mut inner = StdHashMap::new();
-        inner.insert(
-            "enabled".to_string(),
-            vec![ServerConfigurationDirectiveEntry {
-                args: vec![ServerConfigurationValue::Boolean(true, None)],
-                children: None,
-                span: None,
-            }],
-        );
-
+        let inner = StdHashMap::new();
         let mut outer = StdHashMap::new();
         outer.insert(
             "abuse_protection".to_string(),

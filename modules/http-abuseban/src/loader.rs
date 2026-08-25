@@ -50,17 +50,6 @@ impl ModuleLoader for HttpAbuseProtectionModuleLoader {
             )
             .register(
                 Directive {
-                    name: "enabled",
-                    usage: "enabled [bool]",
-                    description: "This directive enables or disables the abuse protection module.",
-                    applicable_protocols: Some(&["http"]),
-                    global_only: false,
-                    subblock_link: None,
-                },
-                DirectiveSubblock::custom("http_abuse_protection"),
-            )
-            .register(
-                Directive {
                     name: "ban_duration",
                     usage: "ban_duration <duration>",
                     description: "This directive sets the ban duration for abusive IP addresses.",
