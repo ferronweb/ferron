@@ -69,6 +69,10 @@
 - **IPv4 host blocks never matching**: fixed IPv4 host never matching due to IP address canonicalization issues and IPv4-mapped IPv6 addresses.
 - **Best practice diagnostics for `location` blocks**: the best practice diagnostics for `location` blocks with duplicate pathnames are now emitted correctly.
 
+#### Configuration
+
+- **Stray `}` fix**: earlier, stray `}` characters in `ferron.conf` files could cause an infinite loop. These are now properly handled by erroring out.
+
 #### Admin API
 
 - **Improved config redaction**: `users` subdirective used by HTTP basic auth functionality is now redacted properly in the config JSON output.
