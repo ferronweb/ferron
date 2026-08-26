@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error};
 
 use async_trait::async_trait;
-use dns_update::DnsUpdater;
+use dns_update_lite::DnsUpdater;
 
 use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
@@ -12,7 +12,7 @@ pub struct SpaceshipDnsProvider {
 
 impl SpaceshipDnsProvider {
   /// Create a new Spaceship DNS provider
-  fn new(api_key: &str, secret_key: &str) -> dns_update::Result<Self> {
+  fn new(api_key: &str, secret_key: &str) -> dns_update_lite::Result<Self> {
     Ok(Self {
       client: DnsUpdater::new_spaceship(api_key, secret_key, None)?,
     })
@@ -49,10 +49,11 @@ impl DnsProvider for SpaceshipDnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .create(
+      .set_rrset(
         full_domain,
-        dns_update::DnsRecord::TXT(dns_value.to_string()),
+        dns_update_lite::DnsRecordType::TXT,
         1200,
+        vec![dns_update_lite::DnsRecord::TXT(dns_value.to_string())],
         domain_name,
       )
       .await
@@ -70,7 +71,13 @@ impl DnsProvider for SpaceshipDnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .delete(full_domain, domain_name, dns_update::DnsRecordType::TXT)
+      .set_rrset(
+        full_domain,
+        dns_update_lite::DnsRecordType::TXT,
+        1200,
+        vec![],
+        domain_name,
+      )
       .await
       .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())

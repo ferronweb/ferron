@@ -3,7 +3,7 @@ use std::{collections::HashMap, error::Error};
 
 use async_trait::async_trait;
 use base64::Engine;
-use dns_update::{DnsUpdater, TsigAlgorithm};
+use dns_update_lite::{DnsUpdater, TsigAlgorithm};
 
 use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
@@ -15,11 +15,11 @@ pub struct Rfc2136DnsProvider {
 impl Rfc2136DnsProvider {
   /// Create a new RFC2136 DNS provider
   fn new(
-    addr: dns_update::providers::rfc2136::DnsAddress,
+    addr: dns_update_lite::providers::rfc2136::DnsAddress,
     key_name: &str,
     key: Vec<u8>,
     algorithm: TsigAlgorithm,
-  ) -> dns_update::Result<Self> {
+  ) -> dns_update_lite::Result<Self> {
     Ok(Self {
       client: DnsUpdater::new_rfc2136_tsig(addr, key_name, key, algorithm)?,
     })
@@ -34,7 +34,7 @@ impl Rfc2136DnsProvider {
       .parse::<hyper::Uri>()
       .map_err(|e| anyhow::anyhow!("Invalid RFC 2136 server address: {}", e))?;
     let addr = match addr_uri.scheme_str() {
-      Some("tcp") => dns_update::providers::rfc2136::DnsAddress::Tcp(
+      Some("tcp") => dns_update_lite::providers::rfc2136::DnsAddress::Tcp(
         addr_uri
           .authority()
           .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
@@ -44,7 +44,7 @@ impl Rfc2136DnsProvider {
           .next()
           .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
       ),
-      Some("udp") => dns_update::providers::rfc2136::DnsAddress::Udp(
+      Some("udp") => dns_update_lite::providers::rfc2136::DnsAddress::Udp(
         addr_uri
           .authority()
           .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
@@ -71,16 +71,16 @@ impl Rfc2136DnsProvider {
       .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 TSIG algorithm"))?
       .to_uppercase() as &str
     {
-      "HMAC-MD5" => dns_update::TsigAlgorithm::HmacMd5,
-      "GSS" => dns_update::TsigAlgorithm::Gss,
-      "HMAC-SHA1" => dns_update::TsigAlgorithm::HmacSha1,
-      "HMAC-SHA224" => dns_update::TsigAlgorithm::HmacSha224,
-      "HMAC-SHA256" => dns_update::TsigAlgorithm::HmacSha256,
-      "HMAC-SHA256-128" => dns_update::TsigAlgorithm::HmacSha256_128,
-      "HMAC-SHA384" => dns_update::TsigAlgorithm::HmacSha384,
-      "HMAC-SHA384-192" => dns_update::TsigAlgorithm::HmacSha384_192,
-      "HMAC-SHA512" => dns_update::TsigAlgorithm::HmacSha512,
-      "HMAC-SHA512-256" => dns_update::TsigAlgorithm::HmacSha512_256,
+      "HMAC-MD5" => dns_update_lite::TsigAlgorithm::HmacMd5,
+      "GSS" => dns_update_lite::TsigAlgorithm::Gss,
+      "HMAC-SHA1" => dns_update_lite::TsigAlgorithm::HmacSha1,
+      "HMAC-SHA224" => dns_update_lite::TsigAlgorithm::HmacSha224,
+      "HMAC-SHA256" => dns_update_lite::TsigAlgorithm::HmacSha256,
+      "HMAC-SHA256-128" => dns_update_lite::TsigAlgorithm::HmacSha256_128,
+      "HMAC-SHA384" => dns_update_lite::TsigAlgorithm::HmacSha384,
+      "HMAC-SHA384-192" => dns_update_lite::TsigAlgorithm::HmacSha384_192,
+      "HMAC-SHA512" => dns_update_lite::TsigAlgorithm::HmacSha512,
+      "HMAC-SHA512-256" => dns_update_lite::TsigAlgorithm::HmacSha512_256,
       _ => Err(anyhow::anyhow!("Unsupported RFC 2136 TSIG algorithm"))?,
     };
     Ok(
@@ -106,10 +106,11 @@ impl DnsProvider for Rfc2136DnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .create(
+      .set_rrset(
         full_domain,
-        dns_update::DnsRecord::TXT(dns_value.to_string()),
+        dns_update_lite::DnsRecordType::TXT,
         300,
+        vec![dns_update_lite::DnsRecord::TXT(dns_value.to_string())],
         domain_name,
       )
       .await
@@ -127,7 +128,13 @@ impl DnsProvider for Rfc2136DnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .delete(full_domain, domain_name, dns_update::DnsRecordType::TXT)
+      .set_rrset(
+        full_domain,
+        dns_update_lite::DnsRecordType::TXT,
+        300,
+        vec![],
+        domain_name,
+      )
       .await
       .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())

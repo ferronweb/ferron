@@ -174,7 +174,7 @@ auto_tls_challenge "dns-01" provider="cloudflare" api_key="your_api_key" email="
 #### Additional props
 
 - `api_key` - Cloudflare API key (required)
-- `email` - Cloudflare account email address (optional)
+- `email` - Cloudflare account email address (optional; has no effect in Ferron UNRELEASED and newer)
 
 ### deSEC (`desec`)
 

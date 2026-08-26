@@ -4,6 +4,10 @@
 
 **Not yet released**
 
+### Changed
+
+- Email address setting for Cloudflare DNS provider is now ineffective.
+
 ### Fixed
 
 - Fixed OCSP stapling not working properly for ECDSA issuer certificates.

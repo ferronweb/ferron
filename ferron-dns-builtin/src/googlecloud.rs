@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error};
 
 use async_trait::async_trait;
-use dns_update::DnsUpdater;
+use dns_update_lite::DnsUpdater;
 
 use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
@@ -12,7 +12,7 @@ pub struct GoogleCloudDnsProvider {
 
 impl GoogleCloudDnsProvider {
   /// Create a new Google Cloud DNS provider
-  fn new(config: dns_update::providers::google_cloud_dns::GoogleCloudDnsConfig) -> dns_update::Result<Self> {
+  fn new(config: dns_update_lite::providers::google_cloud_dns::GoogleCloudDnsConfig) -> dns_update_lite::Result<Self> {
     Ok(Self {
       client: DnsUpdater::new_google_cloud_dns(config)?,
     })
@@ -36,7 +36,7 @@ impl GoogleCloudDnsProvider {
       .get("impersonate_service_account")
       .map(ToOwned::to_owned);
 
-    let config = dns_update::providers::google_cloud_dns::GoogleCloudDnsConfig {
+    let config = dns_update_lite::providers::google_cloud_dns::GoogleCloudDnsConfig {
       service_account_json,
       project_id,
       managed_zone,
@@ -65,10 +65,11 @@ impl DnsProvider for GoogleCloudDnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .create(
+      .set_rrset(
         full_domain,
-        dns_update::DnsRecord::TXT(dns_value.to_string()),
+        dns_update_lite::DnsRecordType::TXT,
         300,
+        vec![dns_update_lite::DnsRecord::TXT(dns_value.to_string())],
         domain_name,
       )
       .await
@@ -86,7 +87,13 @@ impl DnsProvider for GoogleCloudDnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .delete(full_domain, domain_name, dns_update::DnsRecordType::TXT)
+      .set_rrset(
+        full_domain,
+        dns_update_lite::DnsRecordType::TXT,
+        300,
+        vec![],
+        domain_name,
+      )
       .await
       .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
