@@ -534,7 +534,7 @@ example.com {
 
 ### Placeholders in conditionals
 
-Even if you migrate `condition` → `match`, you must also migrate the placeholder syntax used inside subconditions. Ferron 2 used `{path}`, `{client_ip}`, `{header:name}` etc. inside `condition` blocks. Ferron 3 uses `request.uri.path`, `remote.ip`, `request.header.name` etc. inside `match` blocks.
+Even if you migrate `condition` → `match`, you must also migrate the placeholder syntax used inside subconditions. Ferron 2 used `{path}`, `{client_ip}`, `{header:name}` and so on inside `condition` blocks. Ferron 3 uses `request.uri.path`, `remote.ip`, `request.header.name` and so on inside `match` blocks.
 
 **Example of the pitfall. This will not** work:
 

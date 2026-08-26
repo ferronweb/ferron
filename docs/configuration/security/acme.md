@@ -285,7 +285,7 @@ If you give only one path, the key path defaults to the certificate path with a 
 
 ### "ACME certificate provisioning error: ..."
 
-Certificate issuance failed. The log message includes the affected domains. Check the error message for details (DNS resolution, ACME server errors, etc.). At debug log level, you will also see per-step messages for account loading, order creation, challenge solving, and certificate installation.
+Certificate issuance failed. The log message includes the affected domains. Check the error message for details (DNS resolution, ACME server errors, and so on). At debug log level, you will also see per-step messages for account loading, order creation, challenge solving, and certificate installation.
 
 ### DNS-01 issues
 

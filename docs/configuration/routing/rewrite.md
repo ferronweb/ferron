@@ -13,7 +13,7 @@ This page documents the `rewrite` directive for transforming request URLs using 
 ### `rewrite`
 
 - `rewrite <regex: string> <replacement: string>`
-  - This directive specifies a regular expression pattern and replacement string for URL rewriting. You can reference regex capture groups in the replacement string (`$1`, `$2`, etc.). Default: none
+  - This directive specifies a regular expression pattern and replacement string for URL rewriting. You can reference regex capture groups in the replacement string (`$1`, `$2`, and so on). Default: none
 
 #### Block options
 

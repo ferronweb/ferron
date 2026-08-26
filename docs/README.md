@@ -109,7 +109,7 @@ See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).
   - **Sentence length**: Max 20 words for instructions, max 25 for descriptive sentences. Split longer sentences.
   - **No semicolons**: Use a period and split into two sentences.
   - **Replace banned words**: begin→start, ensure→make sure, utilize→use, "prior to"→before, "subsequent to"→after, obtain→get, demonstrate→show, additionally→also, "in order to"→to, "a variety of"→various, "it is important to note"→delete/restate, "due to the fact that"→because.
-  - **No marketing adjectives**: seamless, robust, powerful, effortless, etc.
+  - **No marketing adjectives**: seamless, robust, powerful, effortless, and so on.
   - **No nominalizations**: "perform an analysis"→"analyze", "provide documentation"→"document".
   - **No "-ing" main verbs**: "is creating"→"creates", "is running"→"runs".
   - **One topic per paragraph**, max six sentences per paragraph.

@@ -108,7 +108,7 @@ In this example: `192.168.1.50` → allowed, `192.168.1.100` → blocked, `10.0.
 ### 103 Early Hints
 
 - `early_hints` (`http-response`)
-  - This directive specifies a 103 Early Hints response to send before the final response is ready. The 103 response includes `Link` headers that let the browser preload resources (stylesheets, scripts, fonts, etc.). This happens while the server is still preparing the final response. Default: none
+  - This directive specifies a 103 Early Hints response to send before the final response is ready. The 103 response includes `Link` headers that let the browser preload resources (stylesheets, scripts, fonts, and so on). This happens while the server is still preparing the final response. Default: none
 
 #### Subdirectives
 
@@ -151,11 +151,11 @@ Without this option, Ferron silently skips 103 Early Hints on HTTP/1.1 connectio
 
 ### Metrics
 
-| Metric                                | Type    | Attributes                                    | Description                                                                               |
-| ------------------------------------- | ------- | --------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `ferron.response.aborted`             | Counter | None                                          | Connections aborted via the `abort` directive                                             |
+| Metric                                | Type    | Attributes                                    | Description                                                                           |
+| ------------------------------------- | ------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `ferron.response.aborted`             | Counter | None                                          | Connections aborted via the `abort` directive                                         |
 | `ferron.response.ip_blocked`          | Counter | None                                          | Connections blocked via `block`/`allow` directives. Does not include raw IP addresses |
-| `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives                                      |
+| `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives                                  |
 
 ### Access log fields
 

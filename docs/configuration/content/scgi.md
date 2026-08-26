@@ -53,7 +53,7 @@ example.com {
 >
 > - TCP URLs must include both host and port (for example, `tcp://127.0.0.1:4000`).
 > - Unix socket paths must be absolute paths.
-> - When a connection failure occurs (connection refused, host unreachable, etc.), Ferron logs an error and returns a `503 Service Unavailable` response.
+> - When a connection failure occurs (connection refused, host unreachable, and so on), Ferron logs an error and returns a `503 Service Unavailable` response.
 
 ### `environment`
 

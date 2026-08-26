@@ -16,7 +16,7 @@ Ferron emits two log signals: access logs and application logs.
 
 | Signal           | What it captures                                                              |
 | ---------------- | ----------------------------------------------------------------------------- |
-| Access logs      | Per-request HTTP request/response data (method, path, status, duration, etc.) |
+| Access logs      | Per-request HTTP request/response data (method, path, status, duration, and so on) |
 | Application logs | Server-level messages (startup, config reloads, errors, debug output)         |
 
 Configure access logs per-host with the `log` directive. Configure application logs with the `console_log` and `error_log` directives (core-directives) or the `observability` block with `provider console` or `provider file`. There is no separate "error log" signal. The `error_log` directive is the file sink for the application log signal.
@@ -50,10 +50,10 @@ Each access log entry contains the following fields:
 
 | Field                 | Description                                                                |
 | --------------------- | -------------------------------------------------------------------------- |
-| `path`                | The request URI path (e.g. `/index.html`)                                  |
+| `path`                | The request URI path (for example `/index.html`)                           |
 | `path_and_query`      | The request URI with path and query                                        |
-| `method`              | The HTTP request method (e.g. `GET`, `POST`)                               |
-| `version`             | The HTTP version (e.g. `HTTP/1.1`, `HTTP/2.0`)                             |
+| `method`              | The HTTP request method (for example `GET`, `POST`)                        |
+| `version`             | The HTTP version (for example `HTTP/1.1`, `HTTP/2.0`)                      |
 | `scheme`              | The request scheme (`http` or `https`)                                     |
 | `client_ip`           | The client IP address                                                      |
 | `client_port`         | The client port number                                                     |
@@ -235,14 +235,14 @@ These events carry the `ferron-metrics-reload` target, and the observability eve
 
 Structured error logs include contextual attributes to aid troubleshooting:
 
-| Attribute        | Description                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------- |
-| `error.type`     | Error category (e.g. `bad_request`, `timeout`, `tcp_connection_error`, `tcp_tls_handshake_error`) |
-| `error.message`  | The human-readable error description                                                              |
-| `client.address` | The client IP address, when available                                                             |
-| `client.port`    | The client port, when available                                                                   |
-| `server.address` | The server IP or Unix socket address, when available                                              |
-| `server.port`    | The server port, when available                                                                   |
+| Attribute        | Description                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------- |
+| `error.type`     | Error category (for example `bad_request`, `timeout`, `tcp_connection_error`, `tcp_tls_handshake_error`) |
+| `error.message`  | The human-readable error description                                                                     |
+| `client.address` | The client IP address, when available                                                                    |
+| `client.port`    | The client port, when available                                                                          |
+| `server.address` | The server IP or Unix socket address, when available                                                     |
+| `server.port`    | The server port, when available                                                                          |
 
 Ferron includes the `client.address` and `server.address` attributes in:
 
@@ -270,10 +270,10 @@ When the server resolves an `log` filename, it uses the access log event fields 
 
 | Variable                        | Description                                                                                |
 | ------------------------------- | ------------------------------------------------------------------------------------------ |
-| `accesslog.path`                | The request URI path (e.g. `/index.html`)                                                  |
+| `accesslog.path`                | The request URI path (for example `/index.html`)                                           |
 | `accesslog.path_and_query`      | The request URI with path and query                                                        |
-| `accesslog.method`              | The HTTP request method (e.g. `GET`, `POST`)                                               |
-| `accesslog.version`             | The HTTP version (e.g. `HTTP/1.1`, `HTTP/2.0`)                                             |
+| `accesslog.method`              | The HTTP request method (for example `GET`, `POST`)                                        |
+| `accesslog.version`             | The HTTP version (for example `HTTP/1.1`, `HTTP/2.0`)                                      |
 | `accesslog.scheme`              | The request scheme (`http` or `https`)                                                     |
 | `accesslog.client_ip`           | The client IP address                                                                      |
 | `accesslog.client_port`         | The client port number                                                                     |

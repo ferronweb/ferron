@@ -151,20 +151,20 @@ The JSON configuration follows a hierarchical structure that mirrors Ferron's in
 
 The top-level configuration contains two main sections:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `global_config` | `ServerConfigurationBlock` | Global configuration applying to all protocols |
-| `ports` | `BTreeMap<String, Vec<ServerConfigurationPort>>` | Per-protocol port configurations, keyed by protocol name (e.g., "http", "https", "tcp") |
+| Field           | Type                                             | Description                                                                                    |
+| --------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `global_config` | `ServerConfigurationBlock`                       | Global configuration applying to all protocols                                                 |
+| `ports`         | `BTreeMap<String, Vec<ServerConfigurationPort>>` | Per-protocol port configurations, keyed by protocol name (for example, "http", "https", "tcp") |
 
 ### Configuration blocks
 
 A `ServerConfigurationBlock` represents a scope of directives:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `directives` | `HashMap<String, Vec<ServerConfigurationDirectiveEntry>>` | All directives in this block, indexed by name |
-| `matchers` | `HashMap<String, ServerConfigurationMatcher>` | Named matcher expressions for conditional directives |
-| `span` | `ServerConfigurationSpan \| null` | Where this block is |
+| Field        | Type                                                      | Description                                          |
+| ------------ | --------------------------------------------------------- | ---------------------------------------------------- |
+| `directives` | `HashMap<String, Vec<ServerConfigurationDirectiveEntry>>` | All directives in this block, indexed by name        |
+| `matchers`   | `HashMap<String, ServerConfigurationMatcher>`             | Named matcher expressions for conditional directives |
+| `span`       | `ServerConfigurationSpan \| null`                         | Where this block is                                  |
 
 Blocks appear at multiple levels:
 
@@ -176,11 +176,11 @@ Blocks appear at multiple levels:
 
 Each directive entry represents one directive:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `args` | `Vec<ServerConfigurationValue>` | Arguments provided to this directive |
-| `children` | `ServerConfigurationBlock \| null` | Optional nested configuration block |
-| `span` | `ServerConfigurationSpan \| null` | Where this directive is |
+| Field      | Type                               | Description                          |
+| ---------- | ---------------------------------- | ------------------------------------ |
+| `args`     | `Vec<ServerConfigurationValue>`    | Arguments provided to this directive |
+| `children` | `ServerConfigurationBlock \| null` | Optional nested configuration block  |
+| `span`     | `ServerConfigurationSpan \| null`  | Where this directive is              |
 
 Multiple entries with the same name can exist in a single block, allowing for repeated directives.
 
@@ -188,13 +188,13 @@ Multiple entries with the same name can exist in a single block, allowing for re
 
 `ServerConfigurationValue` uses a tagged union to represent different value types:
 
-| Variant | JSON structure | Example |
-|---------|----------------|---------|
-| `String` | `["String", [value, span]]` | `["String", ["/var/www/html", {"line": 8, "column": 8, "file": "ferron.conf"}]]` |
-| `Number` | `["Number", [value, span]]` | `["Number", [8080, null]]` |
-| `Float` | `["Float", [value, span]]` | `["Float", [3.14, null]]` |
-| `Boolean` | `["Boolean", [value, span]]` | `["Boolean", [true, {"line": 3, "column": 14, "file": "ferron.conf"}]]` |
-| `InterpolatedString` | `["InterpolatedString", [parts, span]]` | See interpolated strings section below |
+| Variant              | JSON structure                          | Example                                                                          |
+| -------------------- | --------------------------------------- | -------------------------------------------------------------------------------- |
+| `String`             | `["String", [value, span]]`             | `["String", ["/var/www/html", {"line": 8, "column": 8, "file": "ferron.conf"}]]` |
+| `Number`             | `["Number", [value, span]]`             | `["Number", [8080, null]]`                                                       |
+| `Float`              | `["Float", [value, span]]`              | `["Float", [3.14, null]]`                                                        |
+| `Boolean`            | `["Boolean", [value, span]]`            | `["Boolean", [true, {"line": 3, "column": 14, "file": "ferron.conf"}]]`          |
+| `InterpolatedString` | `["InterpolatedString", [parts, span]]` | See interpolated strings section below                                           |
 
 Span information can be null.
 
@@ -202,10 +202,10 @@ Span information can be null.
 
 Interpolated strings use `{{name}}` syntax. The system represents them as an array of parts:
 
-| Part type | JSON structure | Description |
-|-----------|----------------|-------------|
-| `String` | `["String", literal_text]` | Literal text content |
-| `Variable` | `["Variable", var_name]` | Variable reference that the system resolves |
+| Part type  | JSON structure             | Description                                 |
+| ---------- | -------------------------- | ------------------------------------------- |
+| `String`   | `["String", literal_text]` | Literal text content                        |
+| `Variable` | `["Variable", var_name]`   | Variable reference that the system resolves |
 
 Variables resolve at runtime:
 
@@ -237,19 +237,19 @@ If the system cannot resolve a variable, the placeholder stays as `{{NAME}}` in 
 
 Each entry in the `ports` map represents a protocol:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `port` | `u16 \| null` | Port number (the protocol may provide a default) |
-| `hosts` | `Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>` | Host configurations with filters |
+| Field   | Type                                                              | Description                                      |
+| ------- | ----------------------------------------------------------------- | ------------------------------------------------ |
+| `port`  | `u16 \| null`                                                     | Port number (the protocol may provide a default) |
+| `hosts` | `Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>` | Host configurations with filters                 |
 
 ### Host filters
 
 `ServerConfigurationHostFilters` controls which host/IP a port configuration applies to:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `ip` | `IpAddr \| null` | IP address to match (for multi-homed servers) |
-| `host` | `String \| null` | Host/domain name to match (for SNI) |
+| Field  | Type             | Description                                   |
+| ------ | ---------------- | --------------------------------------------- |
+| `ip`   | `IpAddr \| null` | IP address to match (for multi-homed servers) |
+| `host` | `String \| null` | Host/domain name to match (for SNI)           |
 
 When both are `null`, the configuration applies to all hosts on that port (for example, `*:8080`).
 
@@ -257,47 +257,47 @@ When both are `null`, the configuration applies to all hosts on that port (for e
 
 Named matchers contain expressions for conditional configuration:
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field   | Type                                  | Description                     |
+| ------- | ------------------------------------- | ------------------------------- |
 | `exprs` | `Vec<ServerConfigurationMatcherExpr>` | List of expressions to evaluate |
-| `span` | `ServerConfigurationSpan \| null` | Source location |
+| `span`  | `ServerConfigurationSpan \| null`     | Source location                 |
 
 Each expression has three components:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `left` | `ServerConfigurationMatcherOperand` | Left operand |
-| `right` | `ServerConfigurationMatcherOperand` | Right operand |
-| `op` | `ServerConfigurationMatcherOperator` | Comparison operator |
+| Field   | Type                                 | Description         |
+| ------- | ------------------------------------ | ------------------- |
+| `left`  | `ServerConfigurationMatcherOperand`  | Left operand        |
+| `right` | `ServerConfigurationMatcherOperand`  | Right operand       |
+| `op`    | `ServerConfigurationMatcherOperator` | Comparison operator |
 
 Operands can be:
 
-| Variant | JSON structure | Example |
-|---------|----------------|---------|
+| Variant      | JSON structure         | Example                            |
+| ------------ | ---------------------- | ---------------------------------- |
 | `Identifier` | `["Identifier", name]` | `["Identifier", "request.method"]` |
-| `String` | `["String", value]` | `["String", "GET"]` |
-| `Integer` | `["Integer", value]` | `["Integer", 8080]` |
-| `Float` | `["Float", value]` | `["Float", 3.14]` |
+| `String`     | `["String", value]`    | `["String", "GET"]`                |
+| `Integer`    | `["Integer", value]`   | `["Integer", 8080]`                |
+| `Float`      | `["Float", value]`     | `["Float", 3.14]`                  |
 
 Supported operators:
 
-| Operator | JSON value | Meaning |
-|----------|------------|---------|
-| `==` | `["Eq"]` | String equality |
-| `!=` | `["NotEq"]` | String inequality |
-| `~` | `["Regex"]` | Regex match |
-| `!~` | `["NotRegex"]` | Regex non-match |
-| `in` | `["In"]` | Membership check |
+| Operator | JSON value     | Meaning           |
+| -------- | -------------- | ----------------- |
+| `==`     | `["Eq"]`       | String equality   |
+| `!=`     | `["NotEq"]`    | String inequality |
+| `~`      | `["Regex"]`    | Regex match       |
+| `!~`     | `["NotRegex"]` | Regex non-match   |
+| `in`     | `["In"]`       | Membership check  |
 
 ### Span metadata
 
 `ServerConfigurationSpan` tracks source locations for error reporting:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `line` | `usize` | Line number (1-indexed) |
-| `column` | `usize` | Column number (1-indexed) |
-| `file` | `String \| null` | Source file path |
+| Field    | Type             | Description               |
+| -------- | ---------------- | ------------------------- |
+| `line`   | `usize`          | Line number (1-indexed)   |
+| `column` | `usize`          | Column number (1-indexed) |
+| `file`   | `String \| null` | Source file path          |
 
 The system preserves span information in JSON output to provide accurate error messages during validation and runtime.
 
@@ -307,10 +307,10 @@ Ferron uses a pluggable adapter system for loading configuration from different 
 
 ### Built-in adapters
 
-| Adapter | File extensions | Description |
-|---------|-----------------|-------------|
-| `config-ferronconf` | `.conf` | Parses Ferron's custom configuration syntax |
-| `config-json` | `.json` | Loads JSON configuration directly |
+| Adapter             | File extensions | Description                                 |
+| ------------------- | --------------- | ------------------------------------------- |
+| `config-ferronconf` | `.conf`         | Parses Ferron's custom configuration syntax |
+| `config-json`       | `.json`         | Loads JSON configuration directly           |
 
 ### Selecting an adapter
 

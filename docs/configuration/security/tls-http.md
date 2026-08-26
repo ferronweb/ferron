@@ -202,7 +202,7 @@ The `refresh_interval` directive controls how often Ferron refreshes certificate
 
 ### Continuous operation
 
-The refresh loops run indefinitely. If a request fails (network error, parse error, etc.), the module logs a warning and retries on the next interval. The currently loaded certificate remains in effect until the module receives a successful response.
+The refresh loops run indefinitely. If a request fails (network error, parse error, and so on), the module logs a warning and retries on the next interval. The currently loaded certificate remains in effect until the module receives a successful response.
 
 ## Observability
 

@@ -437,4 +437,4 @@ Choose the `endpoint` that matches where your domain resides:
 
 `ferron doctor` reports the following best-practice check for DNS provider directives.
 
-- **Secrets in plain configuration.** DNS provider credentials (`api_key`, `secret`, `token`, etc.) should use environment variable interpolation (`{{env.VAR}}`) rather than plain strings. This avoids leaking secrets in version control or logs.
+- **Secrets in plain configuration.** DNS provider credentials (`api_key`, `secret`, `token`, and so on) should use environment variable interpolation (`{{env.VAR}}`) rather than plain strings. This avoids leaking secrets in version control or logs.

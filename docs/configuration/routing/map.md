@@ -17,11 +17,11 @@ This page documents the `map` directive. It creates variables whose values come 
 
 #### Block sub-directives
 
-| Sub-directive | Arguments                            | Description                                                                                  | Default      |
-| ------------- | ------------------------------------ | -------------------------------------------------------------------------------------------- | ------------ |
-| `default`     | `<value: string>`                    | The fallback value when no entry matches the source.                                         | Empty string |
-| `exact`       | `<pattern: string> <result: string>` | Exact string match, or wildcard match if the pattern contains `*`.                           | None         |
-| `regex`       | `<pattern: string> <result: string>` | Regular expression match. You can reference capture groups in the result as `$1`, `$2`, etc. | None         |
+| Sub-directive | Arguments                            | Description                                                                                       | Default      |
+| ------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- | ------------ |
+| `default`     | `<value: string>`                    | The fallback value when no entry matches the source.                                              | Empty string |
+| `exact`       | `<pattern: string> <result: string>` | Exact string match, or wildcard match if the pattern contains `*`.                                | None         |
+| `regex`       | `<pattern: string> <result: string>` | Regular expression match. You can reference capture groups in the result as `$1`, `$2`, and so on | None         |
 
 > [!note]
 > If Ferron cannot resolve the source variable, it treats the source value as an empty string and uses the `default` value. Ferron compiles regex patterns at parse time. It rejects invalid patterns during validation. Ferron converts wildcard patterns (`*`) to regex internally.
@@ -31,8 +31,8 @@ This page documents the `map` directive. It creates variables whose values come 
 
 #### Block options (inside `regex { ... }`)
 
-| Option             | Arguments | Description                                                                | Default |
-| ------------------ | --------- | -------------------------------------------------------------------------- | ------- |
+| Option             | Arguments | Description                                                                    | Default |
+| ------------------ | --------- | ------------------------------------------------------------------------------ | ------- |
 | `case_insensitive` | `<bool>`  | When `true`, Ferron matches the regular expression pattern case-insensitively. | `false` |
 
 **Configuration example:**
@@ -90,7 +90,7 @@ http * {
 }
 ```
 
-A request to `/users/42` sets `user_id` to `42`. Capture groups from the regex are available as `$1`, `$2`, etc. in the result string. If the pattern has no capture groups or the group does not exist, Ferron keeps the reference literally (for example `$1`).
+A request to `/users/42` sets `user_id` to `42`. Capture groups from the regex are available as `$1`, `$2`, and so on in the result string. If the pattern has no capture groups or the group does not exist, Ferron keeps the reference literally (for example `$1`).
 
 ### Case-insensitive matching
 
@@ -153,7 +153,7 @@ Map evaluation runs after client IP resolution and before URL rewriting. This me
 
 The map stage sets the following attributes on its `ferron.stage.map` span:
 
-| Attribute             | Type   | Description                                            |
-| --------------------- | ------ | ------------------------------------------------------ |
-| `ferron.map.variable` | string | The variable name that Ferron maps.                        |
+| Attribute             | Type   | Description                                     |
+| --------------------- | ------ | ----------------------------------------------- |
+| `ferron.map.variable` | string | The variable name that Ferron maps.             |
 | `ferron.map.edited`   | bool   | Whether the mapping changed the variable value. |

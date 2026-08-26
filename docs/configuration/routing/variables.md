@@ -154,7 +154,7 @@ http * {
 
 The `set_var` directive runs after client IP resolution and before URL rewriting and the `map` directive. This means variables set by `set_var` are available for `map` evaluation, `rewrite` patterns, and all downstream pipeline stages.
 
-The `log_field` directive runs during the inverse (post-response) phase. It runs after the content-generating stages (reverse proxy, static file, CGI, etc.) have produced a response.
+The `log_field` directive runs during the inverse (post-response) phase. It runs after the content-generating stages (reverse proxy, static file, CGI, and so on) have produced a response.
 
 > [!info]
 > For variable mapping based on complex patterns, see [HTTP map](./map.md). For URL rewriting, see [URL rewriting](./rewrite.md).

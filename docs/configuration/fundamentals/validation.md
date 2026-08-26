@@ -79,7 +79,7 @@ Each diagnostic entry contains:
 | `kind`    | `string`         | The diagnostic category (`"Unknown directive"`, `"Invalid configuration"`, or `"Best practice violation"`). |
 | `message` | `string`         | A human-readable description of the issue.                                                                  |
 | `span`    | `Span \| null`   | Source location (line, column, file) where the issue occurred.                                              |
-| `scope`   | `string \| null` | The configuration block scope (e.g., `"http port 443"`, `"global"`).                                        |
+| `scope`   | `string \| null` | The configuration block scope (for example, `"http port 443"`, `"global"`).                                 |
 
 ## Diagnostic kinds
 

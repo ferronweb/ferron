@@ -34,12 +34,12 @@ Metadata values are automatically included as:
 
 Each `span_links` block defines one link with:
 
-| Directive    | Type    | Required | Description                                                                |
-| ------------ | ------- | -------- | -------------------------------------------------------------------------- |
-| `trace_id`   | string  | yes      | 32 hex characters (the trace ID of the linked span)                        |
-| `span_id`    | string  | yes      | 16 hex characters (the span ID of the linked span)                         |
-| `sampled`    | boolean | no       | Whether the linked span was sampled (default: `false`)                     |
-| `attributes` | block   | no       | Key-value pairs describing the relationship (e.g. `relationship triggers`) |
+| Directive    | Type    | Required | Description                                                                       |
+| ------------ | ------- | -------- | --------------------------------------------------------------------------------- |
+| `trace_id`   | string  | yes      | 32 hex characters (the trace ID of the linked span)                               |
+| `span_id`    | string  | yes      | 16 hex characters (the span ID of the linked span)                                |
+| `sampled`    | boolean | no       | Whether the linked span was sampled (default: `false`)                            |
+| `attributes` | block   | no       | Key-value pairs describing the relationship (for example `relationship triggers`) |
 
 ## Precedence
 

@@ -63,27 +63,27 @@ The following operators are available inside `match` blocks:
 
 The HTTP resolver exposes these variables for use in `match` blocks and interpolation (`{{...}}`):
 
-| Variable                    | Value                                                                              |
-| --------------------------- | ---------------------------------------------------------------------------------- |
-| `request.method`            | HTTP method (e.g. `GET`, `POST`)                                                   |
-| `request.uri.path`          | Request path                                                                       |
-| `request.uri.query`         | Query string, or empty string                                                      |
-| `request.uri.query.<param>` | URL-decoded query parameter value, if present                                      |
-| `request.uri`               | Full request URI                                                                   |
-| `request.version`           | HTTP version string (e.g. `HTTP/1.1`)                                              |
-| `request.header.<name>`     | Request header value                                                               |
-| `request.cookie.<name>`     | URL-decoded HTTP cookie value, if present                                          |
-| `request.host`              | Resolved request hostname                                                          |
-| `request.scheme`            | `http` or `https`                                                                  |
-| `request.path_info`         | Extra path info after a script match (e.g. `/test` in `/index.php/test`), or empty |
-| `server.ip`                 | Local listener IP address                                                          |
-| `server.port`               | Local listener port                                                                |
-| `remote.ip`                 | Client IP address                                                                  |
-| `remote.port`               | Client port                                                                        |
-| `auth.user`                 | Authenticated user, if any                                                         |
-| `trace.id`                  | Trace ID, if available                                                             |
-| `trace.spanid`              | Span ID, if available                                                              |
-| `mtls.cn`                   | Client certificate common name, if available                                       |
+| Variable                    | Value                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------- |
+| `request.method`            | HTTP method (for example `GET`, `POST`)                                                   |
+| `request.uri.path`          | Request path                                                                              |
+| `request.uri.query`         | Query string, or empty string                                                             |
+| `request.uri.query.<param>` | URL-decoded query parameter value, if present                                             |
+| `request.uri`               | Full request URI                                                                          |
+| `request.version`           | HTTP version string (for example `HTTP/1.1`)                                              |
+| `request.header.<name>`     | Request header value                                                                      |
+| `request.cookie.<name>`     | URL-decoded HTTP cookie value, if present                                                 |
+| `request.host`              | Resolved request hostname                                                                 |
+| `request.scheme`            | `http` or `https`                                                                         |
+| `request.path_info`         | Extra path info after a script match (for example `/test` in `/index.php/test`), or empty |
+| `server.ip`                 | Local listener IP address                                                                 |
+| `server.port`               | Local listener port                                                                       |
+| `remote.ip`                 | Client IP address                                                                         |
+| `remote.port`               | Client port                                                                               |
+| `auth.user`                 | Authenticated user, if any                                                                |
+| `trace.id`                  | Trace ID, if available                                                                    |
+| `trace.spanid`              | Span ID, if available                                                                     |
+| `mtls.cn`                   | Client certificate common name, if available                                              |
 
 Ferron normalizes header names by lowercasing them and converting `_` to `-`. For example, `request.header.x_forwarded_for` reads the `x-forwarded-for` header.
 

@@ -9,7 +9,7 @@ This page documents OCSP stapling configuration (`ocsp-stapler` module). OCSP st
 - **Performance**. Eliminates the extra round-trip to the OCSP responder.
 - **Reliability**. Works even when the CA OCSP responder is unreachable.
 
-OCSP stapling works with all TLS providers (`manual`, `acme`, etc.).
+OCSP stapling works with all TLS providers (`manual`, `acme`, and so on).
 
 ## Default behavior (recommended)
 

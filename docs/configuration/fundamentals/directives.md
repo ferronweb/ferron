@@ -38,7 +38,7 @@ The JSON output is an object whose keys are **directive sections**: logical grou
 | `name`                 | `string`           | The directive name as it appears in the configuration file.                                                                                                            |
 | `usage`                | `string`           | A usage hint showing the expected argument shape. `<arg>` indicates a required value, `[bool]` an optional boolean flag, and `{ ... }` a block with sub-directives.    |
 | `description`          | `string`           | A short human-readable description that states the directive's purpose.                                                                                                |
-| `applicable_protocols` | `string[] \| null` | The protocols this directive can appear in (e.g. `["http"]`). `null` means the directive is valid globally or in all protocol contexts.                                |
+| `applicable_protocols` | `string[] \| null` | The protocols this directive can appear in (for example `["http"]`). `null` means the directive is valid globally or in all protocol contexts.                         |
 | `global_only`          | `bool`             | If `true`, the directive can only appear at the top level of the configuration file (outside any host block).                                                          |
 | `subblock_link`        | `string \| null`   | When non-null, the directive has child directives registered under this subblock name. Ferron groups the child directives under a separate section with the same name. |
 

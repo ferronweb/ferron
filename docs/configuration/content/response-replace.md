@@ -3,7 +3,7 @@ title: "Configuration: HTTP response body replacement"
 description: The `replace` directive for string replacement in HTTP response bodies.
 ---
 
-This page documents the `replace`, `replace_last_modified`, and `replace_filter_types` directives for modifying HTTP response bodies on the fly. Ferron applies string replacement after all content generation (static files, proxy responses, etc.) and before caching. Clients receive the modified content, and the cache stores it.
+This page documents the `replace`, `replace_last_modified`, and `replace_filter_types` directives for modifying HTTP response bodies on the fly. Ferron applies string replacement after all content generation (static files, proxy responses, and so on) and before caching. Clients receive the modified content, and the cache stores it.
 
 ## Directives
 
