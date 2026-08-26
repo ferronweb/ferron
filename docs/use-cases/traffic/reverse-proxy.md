@@ -361,7 +361,7 @@ grpc.example.com {
 
 ## Reverse proxy to dynamic backends (via SRV records)
 
-Ferron supports reverse proxying to dynamic backends via DNS SRV records (requires `srv-lookup` feature):
+Ferron supports reverse proxying to dynamic backends via DNS SRV records:
 
 ```ferron
 example.com {
