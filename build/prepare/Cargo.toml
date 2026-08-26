@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-yaml-rust2 = "0.11.0"
+yaml-rust2 = "0.12.0"
 toml = "1.1.2"
