@@ -88,6 +88,7 @@
 #### TLS
 
 - **Local TLS with ALPN + OCSP**: local TLS now supports ALPN and OCSP stapling properly, for HTTP/2 to work properly.
+- **OCSP stapling verification fix for some CAs**: OCSP stapling verification now works properly for some CAs that have non-standard DER encoding of `tbsResponseData` (like Actalis).
 
 #### Observability and tracing
 

@@ -111,13 +111,23 @@ fn build_https_connector() -> Result<
 /// Verify the signature on the OCSP response using the issuer's public key.
 #[inline]
 fn verify_ocsp_signature(
+    response_bytes: &[u8],
     basic_response: &BasicOcspResponse,
     issuer_cert: &rasn_pkix::Certificate,
 ) -> anyhow::Result<()> {
+    // I got this while debugging certificate verification errors with Actalis:
+    //
+    // `response` is an OCTET STRING containing the DER-encoded BasicOcspResponse.
+    // Keep the raw bytes for signature verification — re-encoding `tbs_response_data`
+    // via `rasn::der::encode` is not byte-identical to the original (e.g. an empty
+    // `singleExtensions [1] SEQUENCE OF` with 0 elements is omitted on re-encode,
+    // 4 bytes shorter) and causes ECDSA verification to fail.
+    //
+    // So basically, rasn's re-encoding quirks!
     verify_signature(
         &basic_response.signature,
         &basic_response.signature_algorithm,
-        &rasn::der::encode(&basic_response.tbs_response_data)
+        &extract_tbs_bytes(response_bytes)
             .map_err(|e| anyhow::anyhow!("OCSP response signature verification failed: {e}"))?,
         issuer_cert,
     )
@@ -241,10 +251,12 @@ fn verify_signature(
 
 /// Verify OCSP signature, trying certificates in the certs field if initial verification fails.
 fn verify_ocsp_signature_with_certs_field(
+    response_bytes: &[u8],
     basic_response: &BasicOcspResponse,
     issuer_cert: &rasn_pkix::Certificate,
 ) -> anyhow::Result<()> {
-    let Err(mut last_error) = verify_ocsp_signature(basic_response, issuer_cert) else {
+    let Err(mut last_error) = verify_ocsp_signature(response_bytes, basic_response, issuer_cert)
+    else {
         return Ok(());
     };
 
@@ -285,7 +297,8 @@ fn verify_ocsp_signature_with_certs_field(
                 continue;
             }
 
-            let Err(new_last_error) = verify_ocsp_signature(basic_response, cert) else {
+            let Err(new_last_error) = verify_ocsp_signature(response_bytes, basic_response, cert)
+            else {
                 return Ok(());
             };
             last_error = new_last_error;
@@ -293,6 +306,72 @@ fn verify_ocsp_signature_with_certs_field(
     }
 
     Err(last_error)
+}
+
+/// Extract the exact DER bytes of `tbsResponseData` (first element of
+/// BasicOcspResponse SEQUENCE) from the raw BasicOcspResponse DER.
+///
+/// BasicOcspResponse ::= SEQUENCE {
+///   tbsResponseData    ResponseData,
+///   signatureAlgorithm AlgorithmIdentifier,
+///   signature          BIT STRING,
+///   certs          [0] EXPLICIT SEQUENCE OF Certificate OPTIONAL }
+///
+/// The signature is computed over the DER encoding of `tbsResponseData` as it
+/// appears on the wire, so we must slice the original bytes rather than
+/// re-encoding via `rasn`.
+fn extract_tbs_bytes(basic_der: &[u8]) -> anyhow::Result<Vec<u8>> {
+    // Parse outer SEQUENCE header at offset 0.
+    let (tag, _len, header_len, _, _) = parse_tlv(basic_der, 0)?;
+    if tag != 0x30 {
+        anyhow::bail!("expected outer SEQUENCE (0x30), got {:#x}", tag);
+    }
+    // First child is tbsResponseData at `header_len`.
+    let (tbs_tag, _tbs_len, _tbs_header_len, _, tbs_end) = parse_tlv(basic_der, header_len)?;
+    if tbs_tag != 0x30 {
+        anyhow::bail!(
+            "expected tbsResponseData SEQUENCE (0x30), got {:#x}",
+            tbs_tag
+        );
+    }
+    // Include tag+length+value.
+    Ok(basic_der[header_len..tbs_end].to_vec())
+}
+
+/// Minimal DER TLV parser returning (tag, length, header_len, content_start, content_end).
+fn parse_tlv(data: &[u8], offset: usize) -> anyhow::Result<(u8, usize, usize, usize, usize)> {
+    if offset + 2 > data.len() {
+        anyhow::bail!("TLV out of bounds at offset {}", offset);
+    }
+    let tag = data[offset];
+    let len_byte = data[offset + 1];
+    let (length, header_len) = if len_byte & 0x80 == 0 {
+        (len_byte as usize, 2)
+    } else {
+        let num_bytes = (len_byte & 0x7F) as usize;
+        if num_bytes == 0 || num_bytes > 4 {
+            anyhow::bail!("unsupported DER length at offset {}", offset);
+        }
+        if offset + 2 + num_bytes > data.len() {
+            anyhow::bail!("TLV length bytes out of bounds");
+        }
+        let mut len = 0usize;
+        for b in &data[offset + 2..offset + 2 + num_bytes] {
+            len = (len << 8) | (*b as usize);
+        }
+        (len, 2 + num_bytes)
+    };
+    let content_start = offset + header_len;
+    let content_end = content_start + length;
+    if content_end > data.len() {
+        anyhow::bail!(
+            "TLV content out of bounds: offset {} len {} data len {}",
+            offset,
+            length,
+            data.len()
+        );
+    }
+    Ok((tag, length, header_len, content_start, content_end))
 }
 
 /// Hash the given data using the specified hash algorithm OID.
@@ -918,7 +997,11 @@ async fn fetch_ocsp_response_inner(
     let basic_response: BasicOcspResponse = rasn::der::decode(&response_bytes.response)
         .map_err(|e| anyhow::anyhow!("Failed to decode BasicOcspResponse: {e}"))?;
 
-    verify_ocsp_signature_with_certs_field(&basic_response, &issuer_cert)?;
+    verify_ocsp_signature_with_certs_field(
+        &response_bytes.response,
+        &basic_response,
+        &issuer_cert,
+    )?;
 
     // Compute next_update across all single responses
     let mut min_next_update: Option<SystemTime> = None;
