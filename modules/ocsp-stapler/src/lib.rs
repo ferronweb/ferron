@@ -9,6 +9,12 @@
 use std::sync::Arc;
 
 mod background;
+mod cert;
+mod crypto;
+mod der;
+mod fetch;
+mod telemetry;
+mod verify;
 
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::Registry;
