@@ -712,6 +712,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
 name = "base64-simd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1386,12 +1392,12 @@ dependencies = [
 
 [[package]]
 name = "dns-update"
-version = "0.3.1"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b70617312220ada56e308bf4a2287c942629ce36635204eb18faa74db2470514"
+checksum = "f1bc47b32e69ef1ef40a7020f2737f7abb582579a400d482de76765f5a6a5277"
 dependencies = [
  "aws-lc-rs",
- "base64",
+ "base64 0.23.1",
  "chrono",
  "hex",
  "hickory-net",
@@ -1488,7 +1494,7 @@ dependencies = [
  "arc-swap",
  "async-channel",
  "aws-lc-rs",
- "base64",
+ "base64 0.22.1",
  "blocking",
  "bytes",
  "chrono",
@@ -1591,7 +1597,7 @@ dependencies = [
  "aws-config",
  "aws-credential-types",
  "aws-sdk-route53",
- "base64",
+ "base64 0.22.1",
  "dns-update",
  "ferron-common",
  "hyper",
@@ -1620,7 +1626,7 @@ dependencies = [
  "async-compression",
  "async-process",
  "async-trait",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "cegla",
  "cegla-cgi",
@@ -2301,7 +2307,7 @@ version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96547c2556ec9d12fb1578c4eaf448b04993e7fb79cbaad930a656880a6bdfa0"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-channel",
  "futures-util",
@@ -2472,7 +2478,7 @@ checksum = "9f05ad37c421b962354c358d347d4a6130151df9407978372d3ad7f0c8f71a64"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "http 1.4.2",
  "http-body 1.0.1",
@@ -3130,7 +3136,7 @@ version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56d658ba1faf63f7b9c492cfbe6e0ec365440a16132d3270c1065f7b33f1b638"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "const-hex",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -3248,7 +3254,7 @@ version = "3.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d30c53c26bc5b31a98cd02d20f25a7c8567146caf63ed593a9d87b2775291be"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "serde_core",
 ]
 
@@ -3459,9 +3465,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.39.4"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdcc8dd4e2f670d309a5f0e83fe36dfdc05af317008fea29144da1a2ac858e5e"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "memchr",
  "serde",
@@ -3819,7 +3825,7 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-core",
  "h2",
@@ -4693,7 +4699,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac2a5518c70fa84342385732db33fb3f44bc4cc748936eb5833d2df34d6445ef"
 dependencies = [
  "async-trait",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "http 1.4.2",
  "http-body 1.0.1",
