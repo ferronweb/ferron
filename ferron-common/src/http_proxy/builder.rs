@@ -269,9 +269,9 @@ impl<'a> ReverseProxyBuilder<'a> {
       proxy_http2: self.proxy_http2,
       proxy_keepalive: self.proxy_keepalive,
       proxy_header: self.proxy_proxy_header,
-      headers_to_add: Arc::new(self.proxy_request_header.drain(..).collect()),
-      headers_to_replace: Arc::new(self.proxy_request_header_replace.drain(..).collect()),
-      headers_to_remove: Arc::new(self.proxy_request_header_remove.drain(..).collect()),
+      headers_to_add: Arc::new(std::mem::take(&mut self.proxy_request_header)),
+      headers_to_replace: Arc::new(std::mem::take(&mut self.proxy_request_header_replace)),
+      headers_to_remove: Arc::new(std::mem::take(&mut self.proxy_request_header_remove)),
       rewrite_host: self.rewrite_host,
       connections,
       #[cfg(unix)]
