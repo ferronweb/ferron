@@ -7,7 +7,7 @@ build = "build.rs"
 [dependencies]
 reqwest = { version = "0.13.2", default-features = false, features = ["http2", "rustls-no-provider"] }
 tempfile = "3.27.0"
-testcontainers = { version = "0.27.2", features = ["http_wait_plain", "reusable-containers"] }
+testcontainers = { version = "0.28.0", features = ["http_wait_plain", "reusable-containers"] }
 tokio = { version = "1.50.0", features = ["full"] }
 flate2 = "1.1.9"
 password-auth = "1.0.0"
