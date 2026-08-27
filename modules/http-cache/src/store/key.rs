@@ -58,16 +58,55 @@ pub fn build_entry_key(
 /// edges and collapse internal runs of whitespace into a single space, so
 /// equivalent representations that differ only in formatting share a key.
 pub fn normalize_key_value(value: &str) -> String {
+    let bytes = value.as_bytes();
+    if bytes.is_empty() {
+        return String::new();
+    }
+    // Fast path: already normalized -> avoid Vec allocation.
+    // A normalized value has no leading/trailing whitespace, no TAB/CR/LF,
+    // and no consecutive spaces.
+    let mut needs_normalize = false;
+    if bytes[0].is_ascii_whitespace() || bytes[bytes.len() - 1].is_ascii_whitespace() {
+        needs_normalize = true;
+    } else {
+        let mut prev_was_space = false;
+        for &b in bytes {
+            if b == b' ' {
+                if prev_was_space {
+                    needs_normalize = true;
+                    break;
+                }
+                prev_was_space = true;
+            } else if b.is_ascii_whitespace() {
+                needs_normalize = true;
+                break;
+            } else {
+                prev_was_space = false;
+            }
+        }
+    }
+    if !needs_normalize {
+        return value.to_string();
+    }
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn header_values(headers: &HeaderMap, name: &HeaderName) -> String {
-    let mut values: Vec<String> = headers
-        .get_all(name)
-        .into_iter()
-        .filter_map(|value| value.to_str().ok())
-        .map(normalize_key_value)
-        .collect();
+    let mut iter = headers.get_all(name).into_iter().filter_map(|v| v.to_str().ok());
+    let Some(first) = iter.next() else {
+        return String::new();
+    };
+    let first_norm = normalize_key_value(first);
+    let Some(second) = iter.next() else {
+        return first_norm;
+    };
+    // Two or more values: collect, sort, join.
+    let mut values = Vec::with_capacity(4);
+    values.push(first_norm);
+    values.push(normalize_key_value(second));
+    for v in iter {
+        values.push(normalize_key_value(v));
+    }
     values.sort_unstable();
     values.join(", ")
 }
