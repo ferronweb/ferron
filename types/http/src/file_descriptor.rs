@@ -11,11 +11,12 @@ use ferron_core::config::ServerConfigurationValue;
 use std::collections::HashMap;
 
 /// Symlink handling mode for path resolution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum SymlinkMode {
     /// Allow all symlinks.
     Off,
     /// Reject all symlinks encountered during traversal (default).
+    #[default]
     On,
     /// Allow symlinks only if owned by the same UID as target (Unix only).
     IfNotOwner,
@@ -68,7 +69,7 @@ struct FdPoolItem {
 /// Per-thread file descriptor reuse pool with expired eviction.
 struct FdPool {
     /// Maps file paths to a stack of pooled handles.
-    entries: BTreeMap<PathBuf, FdPoolItem>,
+    entries: BTreeMap<(PathBuf, SymlinkMode), FdPoolItem>,
 }
 
 impl FdPool {
@@ -93,7 +94,7 @@ impl FdPool {
             return;
         }
 
-        let mut expired_paths: Vec<PathBuf> = Vec::new();
+        let mut expired_paths: Vec<_> = Vec::new();
         for (path, item) in &mut self.entries {
             item.handles
                 .retain(|h| h.pooled_at.elapsed() < FD_CACHE_TTL);
@@ -125,6 +126,7 @@ thread_local! {
 /// while maintaining correctness (the cursor is always reset to the beginning).
 pub struct ReusedFile {
     inner: Option<zincio::fs::File>,
+    symlink_mode: SymlinkMode,
     metadata: Result<zincio::fs::Metadata, std::io::Error>,
     path: PathBuf,
 }
@@ -133,9 +135,19 @@ impl ReusedFile {
     /// Open a file, reusing a pooled handle if available.
     #[inline]
     pub async fn open(path: impl AsRef<Path>) -> io::Result<Self> {
+        Self::open_with_symlink_mode(path, Path::new(""), SymlinkMode::Off).await
+    }
+
+    /// Open a file, reusing a pooled handle if available, with symlink mode.
+    #[inline]
+    pub async fn open_with_symlink_mode(
+        path: impl AsRef<Path>,
+        root_path: impl AsRef<Path>,
+        symlink_mode: SymlinkMode,
+    ) -> io::Result<Self> {
         let cached_error = FD_REUSE_CACHE.with(|c| {
             let mut cache = c.borrow_mut();
-            let path_key = path.as_ref().to_path_buf();
+            let path_key = (path.as_ref().to_path_buf(), symlink_mode);
             let ent = cache.entries.get_mut(&path_key)?;
             let err = ent.error.as_ref()?;
             if err.pooled_at.elapsed() < FD_CACHE_TTL {
@@ -158,7 +170,7 @@ impl ReusedFile {
         // Try reusing from pool first
         let pooled = FD_REUSE_CACHE.with(|c| {
             let mut cache = c.borrow_mut();
-            let path_key = path.as_ref().to_path_buf();
+            let path_key = (path.as_ref().to_path_buf(), symlink_mode);
             let mut entry = cache.entries.get_mut(&path_key);
             let mut result = None;
             while entry.as_ref().is_some_and(|e| !e.handles.is_empty()) {
@@ -186,11 +198,18 @@ impl ReusedFile {
                 inner: Some(file),
                 metadata,
                 path: path.as_ref().to_path_buf(),
+                symlink_mode,
             });
         }
 
         // Pool miss...
-        let file = match zincio::fs::File::open(path.as_ref()).await {
+        let file = match Self::open_with_symlink_mode_nocache(
+            path.as_ref(),
+            root_path.as_ref(),
+            symlink_mode,
+        )
+        .await
+        {
             Ok(file) => file,
             Err(e) => {
                 let e2 = if let Some(e) = e.raw_os_error() {
@@ -200,7 +219,7 @@ impl ReusedFile {
                 };
                 FD_REUSE_CACHE.with(|c| {
                     let mut cache = c.borrow_mut();
-                    let path_key = path.as_ref().to_path_buf();
+                    let path_key = (path.as_ref().to_path_buf(), symlink_mode);
                     cache.entries.entry(path_key).or_default().error = Some(PooledError {
                         error: e2,
                         pooled_at: Instant::now(),
@@ -214,17 +233,32 @@ impl ReusedFile {
             inner: Some(file),
             metadata,
             path: path.as_ref().to_path_buf(),
+            symlink_mode,
         })
     }
 
     #[inline]
-    fn return_handle_to_pool(inner: zincio::fs::File, path_buf: PathBuf) {
+    async fn open_with_symlink_mode_nocache(
+        path: &Path,
+        root: &Path,
+        mode: SymlinkMode,
+    ) -> io::Result<zincio::fs::File> {
+        check_symlinks_in_path(path, root, mode).await?;
+        zincio::fs::File::open(path).await
+    }
+
+    #[inline]
+    fn return_handle_to_pool(
+        inner: zincio::fs::File,
+        path_buf: PathBuf,
+        symlink_mode: SymlinkMode,
+    ) {
         FD_REUSE_CACHE.with(move |c| {
             let mut cache = c.borrow_mut();
             cache.evict_if_full();
             cache
                 .entries
-                .entry(path_buf)
+                .entry((path_buf, symlink_mode))
                 .or_default()
                 .handles
                 .push(PooledHandle {
@@ -257,6 +291,12 @@ impl ReusedFile {
     #[inline]
     pub fn is_open(&self) -> bool {
         self.inner.is_some()
+    }
+
+    /// Get the symlink mode for this reused file.
+    #[inline]
+    pub fn symlink_mode(&self) -> SymlinkMode {
+        self.symlink_mode
     }
 }
 
@@ -319,9 +359,64 @@ impl Drop for ReusedFile {
             }
 
             let path_buf = self.path.clone();
-            Self::return_handle_to_pool(inner, path_buf);
+            let symlink_mode = self.symlink_mode;
+            Self::return_handle_to_pool(inner, path_buf, symlink_mode);
         }
     }
+}
+
+/// Check for symlinks in the path traversal chain (if enabled).
+/// Returns an error if a forbidden symlink is found.
+async fn check_symlinks_in_path(path: &Path, root: &Path, mode: SymlinkMode) -> io::Result<()> {
+    if mode == SymlinkMode::Off {
+        return Ok(());
+    }
+
+    // Walk the path components and check each for symlinks
+    let mut current = root.to_path_buf();
+
+    for component in path
+        .strip_prefix(root)
+        .unwrap_or_else(|_| Path::new(""))
+        .components()
+    {
+        current.push(component);
+
+        // Check if this component is a symlink
+        match zincio::fs::symlink_metadata(&current).await {
+            Ok(metadata) if metadata.is_symlink() => {
+                match mode {
+                    SymlinkMode::On => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::PermissionDenied,
+                            "symlinks not allowed",
+                        ));
+                    }
+                    SymlinkMode::IfNotOwner => {
+                        // The UID check is Unix-specific, skip it on other platforms
+                        // Based on NGINX disable_symlinks if_not_owner (UID comparison basically)
+                        #[cfg(unix)]
+                        {
+                            let mut same_owner = false;
+                            if let Ok(canonical_metadata) = zincio::fs::metadata(&current).await {
+                                same_owner = metadata.uid() == canonical_metadata.uid();
+                            }
+                            if !same_owner {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::PermissionDenied,
+                                    "different-owner symlinks not allowed",
+                                ));
+                            }
+                        }
+                    }
+                    SymlinkMode::Off => {} // Already checked above
+                }
+            }
+            _ => {} // Not a symlink or doesn't exist, continue
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -344,7 +439,7 @@ mod tests {
             // How is that possible!? Why does this test somehow pass?
             let std_file = zincio::fs::File::from_std(file).unwrap();
             pool.entries
-                .entry(file_path)
+                .entry((file_path, SymlinkMode::default()))
                 .or_default()
                 .handles
                 .push(PooledHandle {
@@ -359,7 +454,7 @@ mod tests {
         let file = std::fs::File::open(&expired_path).unwrap();
         let std_file = zincio::fs::File::from_std(file).unwrap();
         pool.entries
-            .entry(expired_path.clone())
+            .entry((expired_path.clone(), SymlinkMode::default()))
             .or_default()
             .handles
             .push(PooledHandle {
@@ -373,8 +468,15 @@ mod tests {
 
         // The expired handle should be removed
         assert!(
-            !pool.entries.contains_key(&expired_path)
-                || pool.entries.get(&expired_path).unwrap().handles.is_empty()
+            !pool
+                .entries
+                .contains_key(&(expired_path.clone(), SymlinkMode::default()))
+                || pool
+                    .entries
+                    .get(&(expired_path.clone(), SymlinkMode::default()))
+                    .unwrap()
+                    .handles
+                    .is_empty()
         );
 
         std::fs::remove_dir_all(&dir).unwrap();

@@ -1,5 +1,13 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+- **Static file serving symlink settings fix**: previously, symlink mode (follow or not) was not properly respected when serving precompressed static files.
+
 ## Ferron 3.0.0-beta.10
 
 **Released in August 27, 2026**

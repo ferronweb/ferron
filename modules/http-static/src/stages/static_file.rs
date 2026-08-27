@@ -546,7 +546,13 @@ impl Stage<HttpFileContext> for StaticFileStage {
                         precomp_path.set_extension(ext);
                     }
 
-                    if let Ok(file) = ReusedFile::open(&precomp_path).await {
+                    if let Ok(file) = ReusedFile::open_with_symlink_mode(
+                        &precomp_path,
+                        &ctx.file_root,
+                        file.symlink_mode(),
+                    )
+                    .await
+                    {
                         if let Ok(meta) = file.metadata() {
                             if meta.is_file() {
                                 ctx.get_span_attributes().insert(
@@ -882,7 +888,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
         // Use the file handle from context (already opened during path resolution)
         // For precompressed files, the file_path may have changed, so we re-open
         let file = if is_precompressed_file {
-            ReusedFile::open(&file_path)
+            ReusedFile::open_with_symlink_mode(&file_path, &ctx.file_root, file.symlink_mode())
                 .await
                 .map_err(|e| PipelineError::custom(format!("failed to open file: {e}")))?
         } else {

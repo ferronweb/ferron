@@ -537,21 +537,6 @@ async fn resolve_http_file_target(
                 last_candidate_path: None,
             })?;
 
-        // Check for symlinks if enabled
-        if disable_symlinks != SymlinkMode::Off {
-            if let Err(e) =
-                check_symlinks_in_path(&candidate_path, root_path, disable_symlinks).await
-            {
-                if e.kind() == io::ErrorKind::PermissionDenied {
-                    return Err(FilePipelineExecutionError::Forbidden {
-                        request_path: req_str.clone(),
-                        last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
-                    });
-                }
-                // Continue with other checks
-            }
-        }
-
         // Optimization inspired by NGINX (kernel caching data)
         if let Some(idx) = index_files.and_then(|idf| idf.first()) {
             if let Some(index_file) = try_resolve_index_files(
@@ -569,26 +554,29 @@ async fn resolve_http_file_target(
             }
         }
 
-        let reused_file = match ReusedFile::open(&candidate_path).await {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                return Err(FilePipelineExecutionError::Forbidden {
-                    request_path: req_str,
-                    last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
-                })
-            }
-            Err(error) if error.kind() == io::ErrorKind::InvalidFilename => {
-                return Err(FilePipelineExecutionError::BadRequest {
-                    request_path: req_str,
-                })
-            }
-            Err(error) if is_not_directory_like(&error) && candidate_depth > 0 => {
-                candidate_depth -= 1;
-                continue;
-            }
-            Err(error) => return Err(FilePipelineExecutionError::Io(error)),
-        };
+        let reused_file =
+            match ReusedFile::open_with_symlink_mode(&candidate_path, root_path, disable_symlinks)
+                .await
+            {
+                Ok(file) => file,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+                Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                    return Err(FilePipelineExecutionError::Forbidden {
+                        request_path: req_str,
+                        last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
+                    })
+                }
+                Err(error) if error.kind() == io::ErrorKind::InvalidFilename => {
+                    return Err(FilePipelineExecutionError::BadRequest {
+                        request_path: req_str,
+                    })
+                }
+                Err(error) if is_not_directory_like(&error) && candidate_depth > 0 => {
+                    candidate_depth -= 1;
+                    continue;
+                }
+                Err(error) => return Err(FilePipelineExecutionError::Io(error)),
+            };
         match reused_file.metadata() {
             Ok(metadata) => {
                 if metadata.is_dir() {
@@ -643,60 +631,6 @@ async fn resolve_http_file_target(
     }
 }
 
-/// Check for symlinks in the path traversal chain (if enabled).
-/// Returns an error if a forbidden symlink is found.
-async fn check_symlinks_in_path(path: &Path, root: &Path, mode: SymlinkMode) -> io::Result<()> {
-    if mode == SymlinkMode::Off {
-        return Ok(());
-    }
-
-    // Walk the path components and check each for symlinks
-    let mut current = root.to_path_buf();
-
-    for component in path
-        .strip_prefix(root)
-        .unwrap_or_else(|_| Path::new(""))
-        .components()
-    {
-        current.push(component);
-
-        // Check if this component is a symlink
-        match zincio::fs::symlink_metadata(&current).await {
-            Ok(metadata) if metadata.is_symlink() => {
-                match mode {
-                    SymlinkMode::On => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::PermissionDenied,
-                            "symlinks not allowed",
-                        ));
-                    }
-                    SymlinkMode::IfNotOwner => {
-                        // The UID check is Unix-specific, skip it on other platforms
-                        // Based on NGINX disable_symlinks if_not_owner (UID comparison basically)
-                        #[cfg(unix)]
-                        {
-                            let mut same_owner = false;
-                            if let Ok(canonical_metadata) = zincio::fs::metadata(&current).await {
-                                same_owner = metadata.uid() == canonical_metadata.uid();
-                            }
-                            if !same_owner {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::PermissionDenied,
-                                    "different-owner symlinks not allowed",
-                                ));
-                            }
-                        }
-                    }
-                    SymlinkMode::Off => {} // Already checked above
-                }
-            }
-            _ => {} // Not a symlink or doesn't exist, continue
-        }
-    }
-
-    Ok(())
-}
-
 async fn try_resolve_index_files(
     directory: &Path,
     index_files: &[String],
@@ -707,29 +641,21 @@ async fn try_resolve_index_files(
     for index in index_files {
         let index_path = directory.join(index);
 
-        // Check for symlinks if enabled
-        if disable_symlinks != SymlinkMode::Off
-            && check_symlinks_in_path(&index_path, root, disable_symlinks)
-                .await
-                .is_err()
-        {
-            continue;
-        }
-
-        let reused_file = match ReusedFile::open(&index_path).await {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-            Err(error) if error.kind() == io::ErrorKind::NotADirectory => continue,
-            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                return Err(FilePipelineExecutionError::Forbidden {
-                    request_path: request_path.to_string(),
-                    last_candidate_path: Some(index_path.to_string_lossy().into_owned()),
-                });
-            }
-            Err(error) => {
-                return Err(FilePipelineExecutionError::Io(error));
-            }
-        };
+        let reused_file =
+            match ReusedFile::open_with_symlink_mode(&index_path, root, disable_symlinks).await {
+                Ok(file) => file,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                Err(error) if error.kind() == io::ErrorKind::NotADirectory => continue,
+                Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                    return Err(FilePipelineExecutionError::Forbidden {
+                        request_path: request_path.to_string(),
+                        last_candidate_path: Some(index_path.to_string_lossy().into_owned()),
+                    });
+                }
+                Err(error) => {
+                    return Err(FilePipelineExecutionError::Io(error));
+                }
+            };
         match reused_file.metadata() {
             Ok(metadata) if metadata.is_file() => {
                 return Ok(Some(ResolvedHttpFile {
