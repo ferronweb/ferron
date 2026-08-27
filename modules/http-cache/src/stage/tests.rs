@@ -269,6 +269,80 @@ fn report_emits_exactly_one_request_metric_per_outcome() {
 }
 
 #[test]
+fn report_surfaces_detail_and_bypass_reason_in_access_log_fields() {
+    use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
+
+    let zone = CacheZoneId::Host("example.com".to_string());
+    let mut ctx = test_context("/reason");
+
+    report(
+        &mut ctx,
+        CacheOutcome {
+            result: "miss",
+            zone_id: &zone,
+            key: "https://example.com/reason",
+            scope: None,
+            items: Some(3),
+            stored: None,
+            evictions: None,
+            detail: Some("not-cacheable"),
+            key_uri: None,
+            key_method: None,
+            bypass_reason: Some("request-only-if-cached"),
+            evaluated_cookies: None,
+            coalesced_wait_ms: None,
+            mark_uncoalesced: true,
+            metric_result: None,
+        },
+    );
+
+    let fields = custom_access_log_fields(&mut ctx);
+    match fields.get("ferron.cache.detail") {
+        Some(CustomAccessLogField::String(value)) => assert_eq!(value, "not-cacheable"),
+        Some(_) => panic!("expected ferron.cache.detail to be a String field"),
+        None => panic!("expected ferron.cache.detail access-log field to be present"),
+    }
+    match fields.get("ferron.cache.bypass_reason") {
+        Some(CustomAccessLogField::String(value)) => assert_eq!(value, "request-only-if-cached"),
+        Some(_) => panic!("expected ferron.cache.bypass_reason to be a String field"),
+        None => panic!("expected ferron.cache.bypass_reason access-log field to be present"),
+    }
+}
+
+#[test]
+fn report_omits_detail_and_bypass_reason_fields_when_absent() {
+    use ferron_http::access_log::custom_access_log_fields;
+
+    let zone = CacheZoneId::Host("example.com".to_string());
+    let mut ctx = test_context("/no-reason");
+
+    report(
+        &mut ctx,
+        CacheOutcome {
+            result: "hit",
+            zone_id: &zone,
+            key: "https://example.com/no-reason",
+            scope: None,
+            items: Some(3),
+            stored: None,
+            evictions: None,
+            detail: None,
+            key_uri: None,
+            key_method: None,
+            bypass_reason: None,
+            evaluated_cookies: None,
+            coalesced_wait_ms: None,
+            mark_uncoalesced: true,
+            metric_result: None,
+        },
+    );
+
+    let fields = custom_access_log_fields(&mut ctx);
+    assert!(!fields.contains_key("ferron.cache.detail"));
+    assert!(!fields.contains_key("ferron.cache.bypass_reason"));
+}
+
+#[test]
 fn private_key_requires_identity_without_falling_back_to_ip() {
     // No auth, no private cookie, no declared vary cookie: no identity, so no
     // key. The caller must treat the response as not storable in private scope

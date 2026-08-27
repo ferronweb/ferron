@@ -1056,7 +1056,12 @@ pub(super) async fn run_inverse_handler(
                 items: Some(state.store.len()),
                 stored: None,
                 evictions: None,
-                detail: (result == "bypass").then_some(decision.reason),
+                // Always report the policy reason, not just for bypass: a
+                // plain miss (no-store, not-cacheable, private-no-identity,
+                // zero-ttl, ...) needs the same "why" surfaced to the
+                // access log/span, otherwise the reason only ever lived in
+                // the ephemeral Cache-Status response header.
+                detail: Some(decision.reason),
                 key_uri: None,
                 key_method: None,
                 bypass_reason: None,

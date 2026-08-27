@@ -138,6 +138,21 @@ pub(super) fn report(ctx: &mut HttpContext, outcome: CacheOutcome<'_>) {
         "ferron.cache.key_fingerprint".into(),
         CustomAccessLogField::String(cache_key_fingerprint(key)),
     );
+    // Surface the same policy reason already attached to the trace span
+    // attribute (`ferron.cache.detail`) so it is also queryable after the
+    // fact from access logs, without needing a live trace/DEBUG log capture.
+    if let Some(detail) = detail {
+        log_fields.insert(
+            "ferron.cache.detail".into(),
+            CustomAccessLogField::String(detail.to_string()),
+        );
+    }
+    if let Some(reason) = bypass_reason {
+        log_fields.insert(
+            "ferron.cache.bypass_reason".into(),
+            CustomAccessLogField::String(reason.to_string()),
+        );
+    }
     if let Some(wait_ms) = coalesced_wait_ms {
         log_fields.insert(
             "ferron.cache.coalesced".into(),
