@@ -29,6 +29,7 @@ rustls-native-certs = "0.8"
 webpki-roots = "1.0"
 serde_json = "1"
 crc32fast = "1.4" # Here, CRC32 is used for verifying snapshot integrity as checksums, not cryptographic hashing, and so it should be allowed for these purposes even under FIPS 140-3
+xxhash-rust = { version = "0.8", features = ["xxh3"] } # Non-cryptographic hashing for log-safe key fingerprints, not used for any security purpose
 parking_lot = "0.12.5"
 zincio = { version = "0.2.22", default-features = false, features = ["fs"] }
 

@@ -636,6 +636,7 @@ dependencies = [
  "tokio",
  "typemap_rev",
  "webpki-roots",
+ "xxhash-rust",
  "zincio",
 ]
 

@@ -1,6 +1,7 @@
 use ahash::{AHashMap, AHashSet};
 use ferron_core::pipeline::PipelineError;
 use http::header::{HeaderMap, HeaderName};
+use xxhash_rust::xxh3::xxh3_64;
 
 use crate::config::CacheConfig;
 use crate::store::VaryRule;
@@ -187,22 +188,45 @@ fn starts_with_ignore_ascii_case(value: &str, prefix: &str) -> bool {
 /// `/search?token=<secret>` would otherwise leak up to the truncation limit
 /// into the logs. The scope and `Vary` components after the base URL are
 /// kept, so the fingerprint still distinguishes variants.
+///
+/// Dropping the query and truncating the base can otherwise make two
+/// different requests collapse into the same fingerprint (for example two
+/// long, only-differing-by-query URLs, or two long paths that diverge only
+/// past the truncation point), which is exactly the case someone debugging a
+/// specific miss cares about. To keep that differentiator without leaking
+/// the raw values, a short non-cryptographic xxh3 tag of the stripped query
+/// string and, when truncated, of the untruncated base are appended: two
+/// requests that produced different fingerprint text before now differ in
+/// their `q=`/`h=` tag instead of silently looking identical.
 pub(super) fn cache_key_fingerprint(key: &str) -> String {
     const MAX_LEN: usize = 48;
     let base_end = key.find('\n').unwrap_or(key.len());
     let query_start = key[..base_end].find('?');
-    let cleaned = match query_start {
+    let (cleaned, query_tag) = match query_start {
         Some(query_start) => {
             let mut cleaned = String::with_capacity(key.len());
             cleaned.push_str(&key[..query_start]);
             cleaned.push_str(&key[base_end..]);
-            cleaned
+            let query = &key[query_start + 1..base_end];
+            let tag = format!("{:016x}", xxh3_64(query.as_bytes()));
+            (cleaned, Some(tag))
         }
-        None => key.to_string(),
+        None => (key.to_string(), None),
     };
     if cleaned.len() <= MAX_LEN {
-        cleaned
+        match query_tag {
+            Some(tag) => format!("{cleaned} q={tag}"),
+            None => cleaned,
+        }
     } else {
-        format!("{}...", &cleaned[..MAX_LEN])
+        // Truncation past MAX_LEN can itself hide the differentiator between
+        // two keys (e.g. two long paths sharing the same 48-char prefix), so
+        // tag the full untruncated `cleaned` string as well.
+        let head_tag = format!("{:016x}", xxh3_64(cleaned.as_bytes()));
+        let mut out = format!("{}... h={head_tag}", &cleaned[..MAX_LEN]);
+        if let Some(tag) = query_tag {
+            out.push_str(&format!(" q={tag}"));
+        }
+        out
     }
 }

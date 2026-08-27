@@ -584,13 +584,27 @@ fn base_key_falls_back_to_host_header_without_resolved_host() {
 fn cache_key_fingerprint_does_not_leak_query_string() {
     use super::key::cache_key_fingerprint;
 
-    // A short key with a secret query value must drop the query entirely.
+    // A short key with a secret query value must drop the query text, but a
+    // short opaque tag differentiates it from another key with a different
+    // query.
     let key = "https://example.com/search?token=super-secret";
     let fingerprint = cache_key_fingerprint(key);
-    assert_eq!(fingerprint, "https://example.com/search");
+    assert!(fingerprint.starts_with("https://example.com/search q="));
+    assert!(!fingerprint.contains("secret"));
+
+    // A different query value on the same base must produce a different tag,
+    // so two distinct misses no longer collapse into an identical
+    // fingerprint.
+    let other_key = "https://example.com/search?token=another-secret";
+    let other_fingerprint = cache_key_fingerprint(other_key);
+    assert_ne!(
+        fingerprint, other_fingerprint,
+        "different query strings must produce different fingerprints"
+    );
 
     // A long URL: the query is stripped before truncation, so no part of the
-    // secret query survives even in the truncated prefix.
+    // secret query survives even in the truncated prefix, but the query tag
+    // still distinguishes it from another long URL differing only in query.
     let key = format!(
         "https://example.com/very/long/path/{}/search?token=super-secret&page={}",
         "x".repeat(80),
@@ -604,6 +618,25 @@ fn cache_key_fingerprint_does_not_leak_query_string() {
     assert!(
         !fingerprint.contains("secret"),
         "fingerprint must not leak the query value, got: {fingerprint}"
+    );
+    assert!(
+        fingerprint.contains("q="),
+        "truncated fingerprint must carry the query tag, got: {fingerprint}"
+    );
+    assert!(
+        fingerprint.contains("h="),
+        "truncated fingerprint must carry the head tag, got: {fingerprint}"
+    );
+
+    // Two long URLs sharing the same 48-char prefix but diverging after it
+    // must no longer collapse into the same fingerprint text.
+    let long_a = format!("https://example.com/{}/a", "x".repeat(80));
+    let long_b = format!("https://example.com/{}/b", "x".repeat(80));
+    assert_eq!(&long_a[..48], &long_b[..48]);
+    assert_ne!(
+        cache_key_fingerprint(&long_a),
+        cache_key_fingerprint(&long_b),
+        "keys sharing a truncated prefix must still get distinguishable fingerprints"
     );
 
     // The scope/vary tail after the base URL is preserved, so variants stay
