@@ -22,9 +22,7 @@ use super::helpers::{
     client_conditionals_indicate_not_modified, entry_host, propagation_secret_verified,
     purge_allowed, resolve_zone_id,
 };
-use super::key::{
-    build_base_key, build_private_cache_key, build_vary_rule, parse_cookies_filtered,
-};
+use super::key::{build_base_key, build_private_cache_key, build_vary_rule, parse_cookies};
 use super::outcome::{
     emit_eviction_metrics, emit_request_metric, emit_singleflight_metrics, emit_store_metric,
     report, CacheOutcome,
@@ -59,11 +57,8 @@ pub(super) async fn run_forward(
         return Ok(true);
     };
 
-    let headers_ref = request.headers();
-    // Only parse cookies that could affect the cache key (vary cookies or
-    // private-session cookies). For public, non-varying assets this avoids
-    // allocating a map for every cookie in the request.
-    let request_cookies = parse_cookies_filtered(headers_ref, &config.vary_cookies);
+    let request_headers = request.headers().clone();
+    let request_cookies = parse_cookies(&request_headers);
     let request_policy = if config.ignore_request_cache_control {
         RequestCachePolicy {
             allow_lookup: true,
@@ -72,9 +67,9 @@ pub(super) async fn run_forward(
             ..Default::default()
         }
     } else {
-        parse_request_policy(headers_ref)
+        parse_request_policy(&request_headers)
     };
-    let has_authorization = headers_ref.contains_key(header::AUTHORIZATION);
+    let has_authorization = request_headers.contains_key(header::AUTHORIZATION);
     let purge_url = request
         .uri()
         .path_and_query()
@@ -82,7 +77,7 @@ pub(super) async fn run_forward(
         .unwrap_or_else(|| request.uri().path().to_string());
     let base_key = build_base_key(
         ctx.encrypted,
-        headers_ref,
+        &request_headers,
         ctx.original_uri.as_ref(),
         request.uri(),
         ctx.hostname.as_deref(),
@@ -101,7 +96,7 @@ pub(super) async fn run_forward(
         if !config.purge_method {
             // PURGE not enabled: fall through to 405 from downstream stages
         } else {
-            let is_propagated = headers_ref
+            let is_propagated = request_headers
                 .get(&PURGE_SOURCE_HEADER)
                 .and_then(|v| v.to_str().ok())
                 .is_some_and(|v| v.eq_ignore_ascii_case("propagation"));
@@ -111,7 +106,7 @@ pub(super) async fn run_forward(
             // propagated and bypass the normal authorization (B#9).
             if is_propagated
                 && !propagation_secret_verified(
-                    headers_ref,
+                    &request_headers,
                     config.purge_propagation.shared_secret.as_deref(),
                 )
             {
@@ -241,8 +236,8 @@ pub(super) async fn run_forward(
     }
 
     let request_is_lookup_eligible = method_cacheable
-        && !headers_ref.contains_key(header::RANGE)
-        && !headers_ref.contains_key(header::UPGRADE)
+        && !request_headers.contains_key(header::RANGE)
+        && !request_headers.contains_key(header::UPGRADE)
         && request_policy.allow_lookup;
 
     let lookup_result = if request_is_lookup_eligible {
@@ -253,7 +248,7 @@ pub(super) async fn run_forward(
             had_expired,
         } = store.lookup(
             &base_key,
-            headers_ref,
+            &request_headers,
             &request_cookies,
             private_key.as_deref(),
         );
@@ -289,7 +284,7 @@ pub(super) async fn run_forward(
             } else {
                 let client_conditionals_match = client_conditionals_indicate_not_modified(
                     request.method(),
-                    headers_ref,
+                    &request_headers,
                     entry.etag.as_ref(),
                     entry.last_modified.as_ref(),
                 );
@@ -328,7 +323,7 @@ pub(super) async fn run_forward(
                         config.emit_litespeed_headers,
                     )?)
                 });
-                return Ok(false);
+                LookupResult::Hit
             }
         } else {
             if had_expired {
@@ -336,7 +331,7 @@ pub(super) async fn run_forward(
                 let coalesce_key = store
                     .primary_candidate_key(
                         &base_key,
-                        headers_ref,
+                        &request_headers,
                         &request_cookies,
                         private_key.as_deref(),
                     )
@@ -359,7 +354,7 @@ pub(super) async fn run_forward(
                     } = if coalesced {
                         store.lookup(
                             &base_key,
-                            headers_ref,
+                            &request_headers,
                             &request_cookies,
                             private_key.as_deref(),
                         )
@@ -484,8 +479,6 @@ pub(super) async fn run_forward(
         _ => None,
     };
 
-    let _ = request;
-    let _ = headers_ref;
     if let LookupResult::Revalidate { ref entry, .. } = lookup_result {
         if entry.status != http::StatusCode::NOT_MODIFIED {
             // Don't add caching headers if status is 304, otherwise browsers won't load a page!
@@ -547,12 +540,7 @@ pub(super) async fn run_forward(
         config,
         zone_id,
         base_key,
-        request_headers: ctx
-            .req
-            .as_ref()
-            .expect("request state is invalid at this point")
-            .headers()
-            .clone(),
+        request_headers,
         request_cookies,
         private_key,
         purge_url,
