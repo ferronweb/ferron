@@ -4,7 +4,19 @@
 
 **Not yet released**
 
+### Changed
+
+#### Static file serving
+
+- **Symlink check performance optimizations**: optimized symlink check performance by caching the results in file open cache along with opened files.
+
+#### HTTP caching
+
+- **HTTP caching performance optimizations**: performed multiple internal throughput optimizations to the in-memory HTTP cache store, especially on the cache hit path.
+
 ### Fixed
+
+#### Static file serving
 
 - **Static file serving symlink settings fix**: previously, symlink mode (follow or not) was not properly respected when serving precompressed static files.
 
