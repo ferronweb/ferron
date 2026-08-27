@@ -154,13 +154,13 @@ impl HttpCacheStage {
         zone_id: &CacheZoneId,
         configuration: &ferron_core::config::layer::LayeredConfiguration,
     ) -> Arc<CacheStore> {
-        let persist_config = resolve_persist_config(zone_id, configuration);
         let store_ent = if let Some(e) = self.zones.get(zone_id) {
             e
         } else {
             match self.zones.entry(zone_id.clone()) {
                 dashmap::Entry::Occupied(oe) => oe.into_ref().downgrade(),
                 dashmap::Entry::Vacant(ve) => {
+                    let persist_config = resolve_persist_config(zone_id, configuration);
                     let store = Arc::new(CacheStore::new(crate::config::DEFAULT_MAX_CACHE_ENTRIES));
                     if let Some(dir) = persist_config.dir {
                         let label = zone_id.label().to_string();
@@ -177,11 +177,16 @@ impl HttpCacheStage {
                         );
                         store.attach_persistence(persist);
                     }
-                    ve.insert(store).downgrade()
+                    let inserted = ve.insert(store);
+                    inserted.ensure_cleanup_task();
+                    inserted.downgrade()
                 }
             }
         };
         let store = store_ent.clone();
+        if !store.is_cleanup_active() {
+            store.ensure_cleanup_task();
+        }
 
         let current_gen = active_config_generation();
 
@@ -209,7 +214,6 @@ impl HttpCacheStage {
                 .store(current_gen, Ordering::Relaxed);
         }
 
-        store.ensure_cleanup_task();
         store
     }
 
