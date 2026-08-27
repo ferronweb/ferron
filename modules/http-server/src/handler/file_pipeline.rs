@@ -1,7 +1,6 @@
 use std::borrow::Cow;
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
 use std::io;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -49,9 +48,9 @@ impl ResolvedHttpFile {
             .map(|d| d.as_secs())
             .unwrap_or(0);
         let mut hasher = xxhash_rust::xxh3::Xxh3::new();
-        hasher.update(self.file_path.as_os_str().as_bytes());
-        hasher.update(&self.metadata.len().to_be_bytes());
-        hasher.update(&mtime_secs.to_be_bytes());
+        self.file_path.hash(&mut hasher);
+        self.metadata.len().hash(&mut hasher);
+        mtime_secs.hash(&mut hasher);
         let hash = hasher.finish();
         hex::encode(hash.to_be_bytes())
     }
