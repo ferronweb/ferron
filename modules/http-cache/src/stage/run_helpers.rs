@@ -22,7 +22,9 @@ use super::helpers::{
     client_conditionals_indicate_not_modified, entry_host, propagation_secret_verified,
     purge_allowed, resolve_zone_id,
 };
-use super::key::{build_base_key, build_private_cache_key, build_vary_rule, parse_cookies_filtered};
+use super::key::{
+    build_base_key, build_private_cache_key, build_vary_rule, parse_cookies_filtered,
+};
 use super::outcome::{
     emit_eviction_metrics, emit_request_metric, emit_singleflight_metrics, emit_store_metric,
     report, CacheOutcome,
@@ -545,7 +547,12 @@ pub(super) async fn run_forward(
         config,
         zone_id,
         base_key,
-        request_headers: ctx.req.as_ref().unwrap().headers().clone(),
+        request_headers: ctx
+            .req
+            .as_ref()
+            .expect("request state is invalid at this point")
+            .headers()
+            .clone(),
         request_cookies,
         private_key,
         purge_url,
