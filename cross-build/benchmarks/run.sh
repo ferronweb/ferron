@@ -202,10 +202,18 @@ create_ferron_config() {
     }
 }
 
+match TO_CACHE {
+    request.uri.query.cache == "1"
+}
+
 *:${ferron_port} {
     root ${bench_dir}
     location /proxy {
         proxy http://127.0.0.1:${backend_port}
+    }
+    if TO_CACHE {
+        file_cache_control "public,max-age=3600"
+        cache
     }
 }
 
@@ -214,6 +222,10 @@ create_ferron_config() {
     root ${bench_dir}
     location /proxy {
         proxy http://127.0.0.1:${backend_port}
+    }
+    if TO_CACHE {
+        file_cache_control "public,max-age=3600"
+        cache
     }
 }
 EOF
@@ -227,10 +239,18 @@ EOF
     }
 }
 
+match TO_CACHE {
+    request.uri.query.cache == "1"
+}
+
 *:${ferron_port} {
     root ${bench_dir}
     location /proxy {
         proxy http://127.0.0.1:${backend_port}
+    }
+    if TO_CACHE {
+        file_cache_control "public,max-age=3600"
+        cache
     }
 }
 
@@ -239,6 +259,10 @@ EOF
     root ${bench_dir}
     location /proxy {
         proxy http://127.0.0.1:${backend_port}
+    }
+    if TO_CACHE {
+        file_cache_control "public,max-age=3600"
+        cache
     }
 }
 EOF
@@ -549,6 +573,20 @@ main() {
 			done
 		done
 
+		log_info "  Scenario: HTTP cache 1KB - HTTP/1.1"
+		for i in $(seq 1 200); do
+		    for j in $(seq 1 20); do
+				curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1k.txt?cache=1" 2>/dev/null &
+			    curl_pids+=($!)
+		    done
+			# Wait for first 5 curl processes to complete
+			local curl_pid_to_wait=(${curl_pids[@]:0:5})
+			curl_pids=(${curl_pids[@]:5})
+			for pid in "${curl_pid_to_wait[@]}"; do
+				wait "${pid}" || true
+			done
+		done
+
 		log_info "  Scenario: Reverse proxy (HTTP/1.1)"
 		for i in $(seq 1 200); do
 		    for j in $(seq 1 20); do
@@ -610,20 +648,27 @@ main() {
 			"${duration}" \
 			"Large static files (1MB) - HTTP/1.1"
 
-		# Scenario 3: Reverse proxy (HTTP/1.1)
+		# Scenario 3: HTTP cache (HTTP/1.1)
+		run_wrk \
+			"http://127.0.0.1:${ferron_port}/static/1k.txt?cache=1" \
+			"${lua_dir}/cache-http1.lua" \
+			"${duration}" \
+			"HTTP cache (1KB) - HTTP/1.1"
+
+		# Scenario 4: Reverse proxy (HTTP/1.1)
 		run_wrk \
 			"http://127.0.0.1:${ferron_port}/proxy/static/1k.txt" \
 			"${lua_dir}/proxy-http1.lua" \
 			"${duration}" \
 			"Reverse proxy - HTTP/1.1"
 
-		# Scenario 4: Reverse proxy (HTTP/2 + TLS)
+		# Scenario 5: Reverse proxy (HTTP/2 + TLS)
 		run_h2load \
 			"https://127.0.0.1:${tls_port}/proxy/static/1k.txt" \
 			"${duration}" \
 			"Reverse proxy - HTTP/2 + TLS"
 
-        # Scenario 5: Reverse proxy (HTTP/3 + TLS)
+        # Scenario 6: Reverse proxy (HTTP/3 + TLS)
         log_info "Running curl --http3-only: Reverse proxy - HTTP/3"
 	    log_info "  URL: https://127.0.0.1:${tls_port}/proxy/static/1k.txt"
 	    local curl_pids=()
