@@ -76,7 +76,19 @@ pub(super) fn report(ctx: &mut HttpContext, outcome: CacheOutcome<'_>) {
         emit_store_metric(ctx, zone_id, scope, status);
     }
     if let Some(items) = items {
-        emit_request_metric(ctx, zone_id, metric_result, scope, items);
+        // Attach the same policy reason already surfacing in access logs
+        // and trace spans to the aggregate metric too, but only for
+        // miss/bypass: the reason set is small and bounded (`not-cacheable`,
+        // `zero-ttl`, `private-no-identity`, `request-only-if-cached`, ...),
+        // so this stays safe for high-cardinality metric backends while
+        // finally letting a dashboard answer "why did misses spike" without
+        // grepping individual access log lines.
+        let metric_reason = if metric_result == "miss" || metric_result == "bypass" {
+            detail.or(bypass_reason)
+        } else {
+            None
+        };
+        emit_request_metric(ctx, zone_id, metric_result, scope, items, metric_reason);
     }
 
     let sa = ctx.get_span_attributes();
@@ -181,6 +193,7 @@ pub(super) fn emit_request_metric(
     result: &'static str,
     scope: Option<CacheScope>,
     items: usize,
+    reason: Option<&str>,
 ) {
     let mut attrs = vec![
         (
@@ -196,6 +209,15 @@ pub(super) fn emit_request_metric(
         attrs.push((
             "ferron.cache.scope",
             MetricAttributeValue::StaticStr(scope.as_str()),
+        ));
+    }
+    // Bounded label: `reason` only ever comes from the small closed set of
+    // policy/bypass reason strings (see policy::mod and run_helpers), so
+    // this cannot blow up cardinality the way a raw key or URL would.
+    if let Some(reason) = reason {
+        attrs.push((
+            "ferron.cache.reason",
+            MetricAttributeValue::String(reason.to_string()),
         ));
     }
     ctx.events.emit(Event::Metric(MetricEvent {

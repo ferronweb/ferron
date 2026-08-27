@@ -269,6 +269,103 @@ fn report_emits_exactly_one_request_metric_per_outcome() {
 }
 
 #[test]
+fn report_attaches_reason_to_request_metric_for_miss_and_bypass_only() {
+    use std::sync::Mutex;
+
+    use ferron_observability::{Event, EventSink, MetricAttributeValue, MetricEvent};
+
+    #[derive(Default)]
+    struct CapturingSink(Mutex<Vec<Event>>);
+    impl EventSink for CapturingSink {
+        fn emit(&self, event: Event) {
+            self.0.lock().unwrap().push(event);
+        }
+    }
+
+    let zone = CacheZoneId::Host("example.com".to_string());
+
+    // miss + detail: the reason must land on ferron.cache.requests.
+    {
+        let sink = Arc::new(CapturingSink::default());
+        let mut ctx = test_context("/metric-reason-miss");
+        ctx.events.add_sink(sink.clone());
+        report(
+            &mut ctx,
+            CacheOutcome {
+                result: "miss",
+                zone_id: &zone,
+                key: "https://example.com/metric-reason-miss",
+                scope: None,
+                items: Some(1),
+                stored: None,
+                evictions: None,
+                detail: Some("not-cacheable"),
+                key_uri: None,
+                key_method: None,
+                bypass_reason: None,
+                evaluated_cookies: None,
+                coalesced_wait_ms: None,
+                mark_uncoalesced: true,
+                metric_result: None,
+            },
+        );
+        let events = sink.0.lock().unwrap();
+        let metric = events
+            .iter()
+            .find_map(|event| match event {
+                Event::Metric(metric) if metric.name == "ferron.cache.requests" => Some(metric),
+                _ => None,
+            })
+            .expect("request metric must be emitted");
+        let has_reason = metric.attributes.iter().any(|(key, value)| {
+            *key == "ferron.cache.reason"
+                && matches!(value, MetricAttributeValue::String(v) if v == "not-cacheable")
+        });
+        assert!(has_reason, "miss metric must carry ferron.cache.reason");
+    }
+
+    // hit: no reason attribute, even if detail happened to be set.
+    {
+        let sink = Arc::new(CapturingSink::default());
+        let mut ctx = test_context("/metric-reason-hit");
+        ctx.events.add_sink(sink.clone());
+        report(
+            &mut ctx,
+            CacheOutcome {
+                result: "hit",
+                zone_id: &zone,
+                key: "https://example.com/metric-reason-hit",
+                scope: None,
+                items: Some(1),
+                stored: None,
+                evictions: None,
+                detail: None,
+                key_uri: None,
+                key_method: None,
+                bypass_reason: None,
+                evaluated_cookies: None,
+                coalesced_wait_ms: None,
+                mark_uncoalesced: true,
+                metric_result: None,
+            },
+        );
+        let events = sink.0.lock().unwrap();
+        let metric = events
+            .iter()
+            .find_map(|event| match event {
+                Event::Metric(metric) if metric.name == "ferron.cache.requests" => Some(metric),
+                _ => None,
+            })
+            .expect("request metric must be emitted");
+        let has_reason = metric
+            .attributes
+            .iter()
+            .any(|(key, _)| *key == "ferron.cache.reason");
+        assert!(!has_reason, "hit metric must not carry ferron.cache.reason");
+    }
+}
+
+#[test]
 fn report_surfaces_detail_and_bypass_reason_in_access_log_fields() {
     use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 

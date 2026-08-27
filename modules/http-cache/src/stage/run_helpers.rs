@@ -683,6 +683,7 @@ pub(super) async fn run_inverse_handler(
                 "revalidated",
                 Some(cached_entry.scope),
                 state.store.len(),
+                None,
             );
 
             ctx.res = Some(HttpResponse::Custom(response_200));
@@ -943,6 +944,7 @@ pub(super) async fn run_inverse_handler(
                         "revalidated",
                         *stale_scope,
                         *stale_items,
+                        None,
                     );
                     return Ok(());
                 }
