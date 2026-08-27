@@ -222,11 +222,6 @@ impl CacheStore {
     }
 
     #[inline]
-    pub fn len_exact(&self) -> usize {
-        self.entries.len()
-    }
-
-    #[inline]
     fn sync_cached_len(&self) {
         self.cached_len
             .store(self.entries.len(), Ordering::Relaxed);

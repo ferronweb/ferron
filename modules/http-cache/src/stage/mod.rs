@@ -55,6 +55,7 @@ pub(super) struct RequestState {
     _inflight_guard: Option<InflightGuard>,
 }
 
+#[allow(dead_code)]
 pub(super) enum LookupResult {
     Hit,
     StaleWhileRevalidate {

@@ -482,8 +482,8 @@ pub(super) async fn run_forward(
         _ => None,
     };
 
-    drop(request);
-    drop(headers_ref);
+    let _ = request;
+    let _ = headers_ref;
     if let LookupResult::Revalidate { ref entry, .. } = lookup_result {
         if entry.status != http::StatusCode::NOT_MODIFIED {
             // Don't add caching headers if status is 304, otherwise browsers won't load a page!

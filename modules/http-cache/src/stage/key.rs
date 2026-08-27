@@ -46,6 +46,7 @@ pub(super) fn build_base_key(
     key
 }
 
+#[allow(dead_code)]
 pub(super) fn parse_cookies(headers: &HeaderMap) -> AHashMap<String, String> {
     let mut cookies = AHashMap::default();
     for value in headers.get_all(http::header::COOKIE) {
