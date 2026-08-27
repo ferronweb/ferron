@@ -1046,7 +1046,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "ferron"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "ferron-entrypoint",
  "winresource",
@@ -1054,7 +1054,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-admin-api"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "arc-swap",
  "chrono",
@@ -1072,7 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-config-ferronconf"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1087,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-config-json"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1101,7 +1101,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-core"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1118,7 +1118,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "ferron-core",
@@ -1127,7 +1127,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns-command"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1138,7 +1138,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns-stalwartlite"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1152,7 +1152,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-entrypoint"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "clap",
@@ -1213,7 +1213,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-fmt"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "clap",
  "ferronconf",
@@ -1222,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "bytes",
  "cidr",
@@ -1243,7 +1243,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-abuseban"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1261,7 +1261,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-basicauth"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "argon2",
  "async-trait",
@@ -1285,7 +1285,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-buffer"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1302,7 +1302,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-cache"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "ahash",
  "async-trait",
@@ -1335,7 +1335,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-canary"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "ahash",
  "async-trait",
@@ -1353,7 +1353,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-cgi"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1375,7 +1375,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-compression"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-compression",
  "async-trait",
@@ -1394,7 +1394,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-fauth"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1417,7 +1417,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-fcgi"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1439,7 +1439,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-fproxy"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1460,7 +1460,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-headers"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1474,7 +1474,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-jsonerror"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1487,7 +1487,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-map"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1502,7 +1502,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-proxy"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -1539,7 +1539,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-ratelimit"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1558,7 +1558,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-replace"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1577,7 +1577,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-response"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1596,7 +1596,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-rewrite"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1614,7 +1614,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-scgi"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "cegla-scgi",
@@ -1633,7 +1633,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-server"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1669,7 +1669,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-static"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-compression",
  "async-trait",
@@ -1699,7 +1699,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-traceid"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "ferron-core",
@@ -1711,7 +1711,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-variables"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1726,7 +1726,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-kdl2ferron"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "clap",
@@ -1740,7 +1740,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-logformat-json"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "ferron-core",
  "ferron-observability",
@@ -1749,7 +1749,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-logformat-text"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "chrono",
  "ferron-core",
@@ -1760,7 +1760,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-metrics-admin"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "ferron-core",
  "ferron-observability",
@@ -1770,7 +1770,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-metrics-process"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "ferron-core",
  "ferron-observability",
@@ -1783,7 +1783,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-metrics-reload"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "ferron-core",
  "ferron-observability",
@@ -1793,7 +1793,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-channel",
  "ferron-core",
@@ -1804,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-consolelog"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-channel",
  "ferron-core",
@@ -1815,7 +1815,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-logfile"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-channel",
  "ferron-core",
@@ -1827,7 +1827,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-otlp"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-channel",
  "base64 0.23.1",
@@ -1866,7 +1866,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-prometheus"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1884,7 +1884,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-statsd"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-channel",
  "ferron-core",
@@ -1895,7 +1895,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-ocsp"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "ferron-observability",
  "parking_lot",
@@ -1906,7 +1906,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-ocsp-stapler"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "aws-lc-rs",
@@ -1934,7 +1934,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "aws-lc-rs",
  "base64 0.23.1",
@@ -1947,7 +1947,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-precompress"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "brotli",
  "clap",
@@ -1959,7 +1959,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-serve"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "clap",
  "tempfile",
@@ -1968,7 +1968,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
@@ -1990,7 +1990,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls-acme"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2033,7 +2033,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls-http"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2061,7 +2061,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls-local"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2082,7 +2082,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls-manual"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 dependencies = [
  "async-trait",
  "ferron-core",
