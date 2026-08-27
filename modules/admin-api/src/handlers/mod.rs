@@ -152,6 +152,9 @@ pub async fn status_handler() -> Response<Full<Bytes>> {
                 "config_file_mtime": metrics.config_file_mtime,
                 "config_drift": metrics.config_drift,
                 "config_drift_hints_enabled": metrics.config_drift_hints_enabled,
+                "cache_persistence_dropped_records": metrics.cache_persistence_dropped_records,
+                "cache_persistence_errors": metrics.cache_persistence_errors,
+                "cache_persistence_zones_inactive": metrics.cache_persistence_zones_inactive,
             })
             .to_string(),
         )))

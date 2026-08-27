@@ -28,7 +28,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
-use ferron_observability::{CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel};
+use ferron_observability::{
+    CompositeEventSink, Event, LogAttributeValue, LogEvent, LogLevel, MetricAttributeValue,
+    MetricEvent, MetricType, MetricValue,
+};
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
@@ -207,6 +210,16 @@ impl ZonePersistState {
                 queue.pop_front();
             }
             self.dropped.fetch_add(drop as u64, Ordering::Relaxed);
+            ferron_core::admin::ADMIN_METRICS
+                .cache_persistence_dropped_records
+                .fetch_add(drop as u64, Ordering::Relaxed);
+            self.emit_metric(
+                "ferron.cache.persistence_dropped_records",
+                MetricType::Counter,
+                MetricValue::U64(drop as u64),
+                Some("{record}"),
+                "Journal records dropped because a zone's write queue overflowed under backpressure.",
+            );
             if !self.drop_warned.swap(true, Ordering::Relaxed) {
                 self.emit_log(
                     LogLevel::Warn,
@@ -242,6 +255,21 @@ impl ZonePersistState {
     ) {
         if let Some(manager) = self.manager.as_ref().and_then(Weak::upgrade) {
             manager.emit_log(level, message, summary, attributes);
+        }
+    }
+
+    /// Emit a cache persistence metric scoped by zone through the configured
+    /// event sinks.
+    fn emit_metric(
+        &self,
+        name: &'static str,
+        ty: MetricType,
+        value: MetricValue,
+        unit: Option<&'static str>,
+        description: &'static str,
+    ) {
+        if let Some(manager) = self.manager.as_ref().and_then(Weak::upgrade) {
+            manager.emit_metric(name, self.label.clone(), ty, value, unit, description);
         }
     }
 
@@ -365,6 +393,26 @@ impl ZonePersistState {
 
     fn on_flush_error(&self, error: io::Error) {
         self.active.store(false, Ordering::Relaxed);
+        ferron_core::admin::ADMIN_METRICS
+            .cache_persistence_zones_inactive
+            .fetch_add(1, Ordering::Relaxed);
+        ferron_core::admin::ADMIN_METRICS
+            .cache_persistence_errors
+            .fetch_add(1, Ordering::Relaxed);
+        self.emit_metric(
+            "ferron.cache.persistence_errors",
+            MetricType::Counter,
+            MetricValue::U64(1),
+            Some("{error}"),
+            "Cache persistence errors (journal flush or snapshot compaction failures).",
+        );
+        self.emit_metric(
+            "ferron.cache.persistence_active",
+            MetricType::Gauge,
+            MetricValue::U64(0),
+            None,
+            "Whether the zone's on-disk persistence is currently active (1) or disabled after a flush failure (0).",
+        );
         if !self.warned.swap(true, Ordering::Relaxed) {
             *self.last_error.lock() = Some(format!("{error}"));
             self.emit_log(
@@ -621,6 +669,31 @@ impl PersistManager {
         }));
     }
 
+    /// Emit a cache persistence metric, scoped by zone, through the
+    /// configured event sinks.
+    pub(crate) fn emit_metric(
+        &self,
+        name: &'static str,
+        zone_label: String,
+        ty: MetricType,
+        value: MetricValue,
+        unit: Option<&'static str>,
+        description: &'static str,
+    ) {
+        self.events.lock().emit(Event::Metric(MetricEvent {
+            name,
+            attributes: vec![(
+                "ferron.cache.zone",
+                MetricAttributeValue::String(zone_label),
+            )],
+            ty,
+            value,
+            unit,
+            description: Some(description),
+            trace_context: None,
+        }));
+    }
+
     /// Get or create the persistence state for `label`. Idempotent: the same
     /// label always maps to the same state for the process lifetime.
     pub fn register_zone(
@@ -720,6 +793,16 @@ impl PersistManager {
                     // Compaction is a durability optimization, not the source
                     // of truth: the journal keeps working, so warn and retry
                     // on the next cycle instead of disabling the zone.
+                    ferron_core::admin::ADMIN_METRICS
+                        .cache_persistence_errors
+                        .fetch_add(1, Ordering::Relaxed);
+                    zone.emit_metric(
+                        "ferron.cache.persistence_errors",
+                        MetricType::Counter,
+                        MetricValue::U64(1),
+                        Some("{error}"),
+                        "Cache persistence errors (journal flush or snapshot compaction failures).",
+                    );
                     self.emit_log(
                         LogLevel::Warn,
                         format!(

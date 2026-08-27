@@ -24,6 +24,15 @@ pub struct StatusResponse {
     pub config_drift: bool,
     /// Whether configuration drift hints are enabled.
     pub config_drift_hints_enabled: bool,
+    /// Total HTTP cache journal records dropped under write-queue
+    /// backpressure, across all zones.
+    pub cache_persistence_dropped_records: u64,
+    /// Total HTTP cache persistence errors (journal flush or snapshot
+    /// compaction failures), across all zones.
+    pub cache_persistence_errors: u64,
+    /// Number of HTTP cache zones currently running memory-only after a
+    /// journal flush failure disabled their persistence.
+    pub cache_persistence_zones_inactive: u64,
 }
 
 impl StatusResponse {
@@ -52,6 +61,15 @@ impl StatusResponse {
             config_drift: ADMIN_METRICS.config_drift.load(Ordering::Relaxed),
             config_drift_hints_enabled: ADMIN_METRICS
                 .config_drift_hints_enabled
+                .load(Ordering::Relaxed),
+            cache_persistence_dropped_records: ADMIN_METRICS
+                .cache_persistence_dropped_records
+                .load(Ordering::Relaxed),
+            cache_persistence_errors: ADMIN_METRICS
+                .cache_persistence_errors
+                .load(Ordering::Relaxed),
+            cache_persistence_zones_inactive: ADMIN_METRICS
+                .cache_persistence_zones_inactive
                 .load(Ordering::Relaxed),
         }
     }
