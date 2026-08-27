@@ -212,8 +212,7 @@ impl CacheStore {
     pub fn set_max_entries(&self, max_entries: usize) {
         self.max_entries.store(max_entries, Ordering::Relaxed);
         self.entries.set_capacity(max_entries as u64);
-        self.cached_len
-            .store(self.entries.len(), Ordering::Relaxed);
+        self.cached_len.store(self.entries.len(), Ordering::Relaxed);
     }
 
     #[inline]
@@ -223,8 +222,7 @@ impl CacheStore {
 
     #[inline]
     fn sync_cached_len(&self) {
-        self.cached_len
-            .store(self.entries.len(), Ordering::Relaxed);
+        self.cached_len.store(self.entries.len(), Ordering::Relaxed);
     }
 
     #[inline]

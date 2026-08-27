@@ -92,7 +92,10 @@ pub fn normalize_key_value(value: &str) -> String {
 }
 
 fn header_values(headers: &HeaderMap, name: &HeaderName) -> String {
-    let mut iter = headers.get_all(name).into_iter().filter_map(|v| v.to_str().ok());
+    let mut iter = headers
+        .get_all(name)
+        .into_iter()
+        .filter_map(|v| v.to_str().ok());
     let Some(first) = iter.next() else {
         return String::new();
     };
