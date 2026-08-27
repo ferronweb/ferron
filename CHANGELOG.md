@@ -4,6 +4,13 @@
 
 **Not yet released**
 
+### Added
+
+#### HTTP caching
+
+- **Cache key fingerprinting improvements for observability**: truncated cache key (up to 48 characters) with the query string removed, useful for diagnosing why a specific request missed. Optionally with a short non-reversible tag (`q=<16 hex chars>`), and if the base itself had to be truncated, a second tag (`h=<16 hex chars>`).
+- **Cache metrics improvements**: cache decision reasons are now attached to access log entries and cache metrics.
+
 ### Changed
 
 #### Static file serving
