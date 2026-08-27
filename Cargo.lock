@@ -1645,6 +1645,7 @@ dependencies = [
  "ferron-http",
  "ferron-observability",
  "ferron-tls",
+ "hex",
  "http",
  "http-body-util",
  "libc",

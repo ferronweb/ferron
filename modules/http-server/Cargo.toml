@@ -33,6 +33,7 @@ quinn = { version = "0.11.8", default-features = false, features = [
     "runtime-tokio",
 ] }
 smallvec = "1.15.2"
+hex = "0.4.3"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
