@@ -210,9 +210,6 @@ impl ZonePersistState {
                 queue.pop_front();
             }
             self.dropped.fetch_add(drop as u64, Ordering::Relaxed);
-            ferron_core::admin::ADMIN_METRICS
-                .cache_persistence_dropped_records
-                .fetch_add(drop as u64, Ordering::Relaxed);
             self.emit_metric(
                 "ferron.cache.persistence_dropped_records",
                 MetricType::Counter,
@@ -393,12 +390,6 @@ impl ZonePersistState {
 
     fn on_flush_error(&self, error: io::Error) {
         self.active.store(false, Ordering::Relaxed);
-        ferron_core::admin::ADMIN_METRICS
-            .cache_persistence_zones_inactive
-            .fetch_add(1, Ordering::Relaxed);
-        ferron_core::admin::ADMIN_METRICS
-            .cache_persistence_errors
-            .fetch_add(1, Ordering::Relaxed);
         self.emit_metric(
             "ferron.cache.persistence_errors",
             MetricType::Counter,
@@ -793,9 +784,6 @@ impl PersistManager {
                     // Compaction is a durability optimization, not the source
                     // of truth: the journal keeps working, so warn and retry
                     // on the next cycle instead of disabling the zone.
-                    ferron_core::admin::ADMIN_METRICS
-                        .cache_persistence_errors
-                        .fetch_add(1, Ordering::Relaxed);
                     zone.emit_metric(
                         "ferron.cache.persistence_errors",
                         MetricType::Counter,

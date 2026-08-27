@@ -495,7 +495,7 @@ The cache module emits the following metrics:
 
 The `ferron.cache.zone` attribute identifies which cache zone the request belongs to. Ferron sets it to `"global"` for the shared global zone. For named zones, it uses the zone name. For per-host zones, it uses the hostname.
 
-Persistence runs on a background task, so its metrics above are emitted on the writer's own schedule rather than per-request. Its health is also visible through the structured log events in the table below, and through the admin API `/status` endpoint, which reports process-wide `cache_persistence_errors`, `cache_persistence_dropped_records`, and `cache_persistence_zones_inactive` counters. See [Admin API](/docs/v3/use-cases/operations/admin-api). The `persist_interval` directive controls how often the journal is written. It sets the trade-off between write amplification and data loss on a crash.
+Persistence runs on a background task, so its metrics above are emitted on the writer's own schedule rather than per-request. Its health is also visible through the structured log events in the table below. The `persist_interval` directive controls how often the journal is written. It sets the trade-off between write amplification and data loss on a crash.
 
 ### Logs
 

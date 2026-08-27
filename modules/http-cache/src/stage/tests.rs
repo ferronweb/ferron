@@ -272,7 +272,7 @@ fn report_emits_exactly_one_request_metric_per_outcome() {
 fn report_attaches_reason_to_request_metric_for_miss_and_bypass_only() {
     use std::sync::Mutex;
 
-    use ferron_observability::{Event, EventSink, MetricAttributeValue, MetricEvent};
+    use ferron_observability::{Event, EventSink, MetricAttributeValue};
 
     #[derive(Default)]
     struct CapturingSink(Mutex<Vec<Event>>);

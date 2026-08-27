@@ -64,15 +64,6 @@ pub struct AdminMetrics {
     pub observability_events_dropped: AtomicU64,
     /// Approximate current number of enqueued observability events across sinks.
     pub observability_event_queue_len: AtomicU64,
-    /// Total HTTP cache journal records dropped because a zone's write queue
-    /// overflowed (oldest prefix drop under backpressure).
-    pub cache_persistence_dropped_records: AtomicU64,
-    /// Total HTTP cache persistence errors (journal flush or snapshot
-    /// compaction failures) across all zones.
-    pub cache_persistence_errors: AtomicU64,
-    /// Number of HTTP cache zones currently running memory-only after a
-    /// journal flush failure disabled their persistence.
-    pub cache_persistence_zones_inactive: AtomicU64,
     /// Metrics related to configuration reloads.
     pub reload_metrics: parking_lot::RwLock<ReloadMetrics>,
     /// Metrics related to runtime.
@@ -108,9 +99,6 @@ impl AdminMetrics {
             reloads: AtomicU64::new(0),
             observability_events_dropped: AtomicU64::new(0),
             observability_event_queue_len: AtomicU64::new(0),
-            cache_persistence_dropped_records: AtomicU64::new(0),
-            cache_persistence_errors: AtomicU64::new(0),
-            cache_persistence_zones_inactive: AtomicU64::new(0),
             reload_metrics: parking_lot::RwLock::new(ReloadMetrics::default()),
             runtime_metrics: parking_lot::RwLock::new(RuntimeMetrics::default()),
             config_hash: parking_lot::RwLock::new(String::new()),

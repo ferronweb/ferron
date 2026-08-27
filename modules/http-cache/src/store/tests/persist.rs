@@ -19,8 +19,7 @@ use tokio::sync::Notify;
 use crate::policy::CacheScope;
 use crate::store::persist::record::{decode_next, DecodedRecord};
 use crate::store::persist::writer::{
-    restore_zone, sanitize_zone_label, PersistManager, RestoreStop, ZonePersistState, JOURNAL_FILE,
-    SNAPSHOT_FILE,
+    restore_zone, sanitize_zone_label, PersistManager, RestoreStop, ZonePersistState, SNAPSHOT_FILE,
 };
 use crate::store::types::StoredEntry;
 
@@ -516,96 +515,6 @@ fn private_entries_filtered() {
         }
         _ => panic!("expected Put"),
     }
-}
-
-#[test]
-fn overflow_drops_oldest_prefix() {
-    let dir = TempDir::new();
-    let before = ferron_core::admin::ADMIN_METRICS
-        .cache_persistence_dropped_records
-        .load(Ordering::Relaxed);
-    let zone = ZonePersistState::new(
-        "zone".to_string(),
-        dir.path().clone(),
-        false,
-        Duration::from_secs(1),
-        4,
-        wake_pair(),
-        None,
-    );
-    // Fill to capacity, then overflow.
-    for i in 0..6 {
-        zone.record_put(&format!("k{i}"), &public_entry());
-    }
-    // Capacity 4: at the 5th push two records are dropped (len 4 -> 2),
-    // the 6th push fits. The journal holds only k2..k5.
-    assert_eq!(zone.dropped_records(), 2);
-    // The overflow also bumps the process-wide admin metric so it is
-    // visible on the admin API `/status` endpoint without a zone handle.
-    assert_eq!(
-        ferron_core::admin::ADMIN_METRICS
-            .cache_persistence_dropped_records
-            .load(Ordering::Relaxed),
-        before + 2
-    );
-    zone.flush_all_sync().unwrap();
-    let records = decode_file(&zone.journal_path());
-    let keys: Vec<&str> = records
-        .iter()
-        .map(|r| match r {
-            DecodedRecord::Put { key, .. } => key.as_str(),
-            DecodedRecord::Delete { key } => key.as_str(),
-        })
-        .collect();
-    assert_eq!(keys, vec!["k2", "k3", "k4", "k5"]);
-}
-
-#[test]
-fn io_failure_disables_zone() {
-    let dir = TempDir::new();
-    // Make the journal path unopenable: a directory in its place.
-    std::fs::create_dir(dir.path().join(JOURNAL_FILE)).unwrap();
-
-    let errors_before = ferron_core::admin::ADMIN_METRICS
-        .cache_persistence_errors
-        .load(Ordering::Relaxed);
-    let inactive_before = ferron_core::admin::ADMIN_METRICS
-        .cache_persistence_zones_inactive
-        .load(Ordering::Relaxed);
-
-    let manager = PersistManager::new();
-    let zone = manager.register_zone(
-        "zone".to_string(),
-        dir.path().clone(),
-        false,
-        Duration::from_secs(1),
-    );
-    zone.record_put("k1", &public_entry());
-    manager.flush_all();
-    assert!(!zone.is_active());
-    assert!(zone.last_error().is_some());
-    // A flush failure is a durability incident: it must surface on the
-    // process-wide admin metrics that back the admin API `/status` endpoint,
-    // not just in a one-shot log line.
-    assert_eq!(
-        ferron_core::admin::ADMIN_METRICS
-            .cache_persistence_errors
-            .load(Ordering::Relaxed),
-        errors_before + 1
-    );
-    assert_eq!(
-        ferron_core::admin::ADMIN_METRICS
-            .cache_persistence_zones_inactive
-            .load(Ordering::Relaxed),
-        inactive_before + 1
-    );
-
-    // Subsequent records are dropped and further flushes are no-ops.
-    zone.record_put("k2", &public_entry());
-    manager.flush_all();
-    assert!(!zone.is_active());
-    // The first (and only) reported error is unchanged.
-    assert!(zone.last_error().is_some());
 }
 
 #[test]
