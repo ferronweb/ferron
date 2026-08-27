@@ -66,6 +66,50 @@ pub(super) fn parse_cookies(headers: &HeaderMap) -> AHashMap<String, String> {
     cookies
 }
 
+pub(super) fn parse_cookies_filtered(
+    headers: &HeaderMap,
+    vary_cookie_names: &[String],
+) -> AHashMap<String, String> {
+    // Fast path: no Cookie header at all.
+    if !headers.contains_key(http::header::COOKIE) {
+        return AHashMap::default();
+    }
+    let mut cookies = AHashMap::default();
+    for value in headers.get_all(http::header::COOKIE) {
+        let Some(text) = value.to_str().ok() else {
+            continue;
+        };
+        for cookie in text.split(';') {
+            let Some((name, value)) = cookie.split_once('=') else {
+                continue;
+            };
+            let name = name.trim();
+            if name.is_empty() {
+                continue;
+            }
+            if !is_needed_cookie(name, vary_cookie_names) {
+                continue;
+            }
+            let value = value.trim();
+            cookies.insert(name.to_string(), value.to_string());
+        }
+    }
+    cookies
+}
+
+#[inline]
+fn is_needed_cookie(name: &str, vary_cookie_names: &[String]) -> bool {
+    if is_private_cookie_name(name) {
+        return true;
+    }
+    for candidate in vary_cookie_names {
+        if candidate.eq_ignore_ascii_case(name) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Build the private-scope key component for a request, or `None` when the
 /// request carries no client identity.
 ///
