@@ -89,6 +89,7 @@ pub struct CacheStore {
     persist: OnceLock<Arc<ZonePersistState>>,
     expired_count: Arc<AtomicUsize>,
     cleanup_task_active: AtomicBool,
+    cached_len: AtomicUsize,
 }
 
 /// Tracks an in-flight upstream fetch for a specific cache key.
@@ -168,6 +169,7 @@ impl CacheStore {
             persist: OnceLock::new(),
             expired_count: Arc::new(AtomicUsize::new(0)),
             cleanup_task_active: AtomicBool::new(false),
+            cached_len: AtomicUsize::new(0),
         }
     }
 
@@ -210,11 +212,24 @@ impl CacheStore {
     pub fn set_max_entries(&self, max_entries: usize) {
         self.max_entries.store(max_entries, Ordering::Relaxed);
         self.entries.set_capacity(max_entries as u64);
+        self.cached_len
+            .store(self.entries.len(), Ordering::Relaxed);
     }
 
     #[inline]
     pub fn len(&self) -> usize {
+        self.cached_len.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn len_exact(&self) -> usize {
         self.entries.len()
+    }
+
+    #[inline]
+    fn sync_cached_len(&self) {
+        self.cached_len
+            .store(self.entries.len(), Ordering::Relaxed);
     }
 
     #[inline]
@@ -227,23 +242,26 @@ impl CacheStore {
 
     #[inline]
     fn remove(&self, key: &str) -> Option<(String, StoredEntry)> {
-        let (orig_key, entry) = self.entries.remove(key)?;
-        if !self.entries.contains_key(key) {
+        let res = self.entries.remove(key)?;
+        let (ref orig_key, ref entry) = res;
+        if !self.entries.contains_key(orig_key) {
             if let Some(mut e) = self.base_key_entries.get_mut(&entry.base_key) {
-                e.remove(key);
+                e.remove(orig_key.as_str());
                 if e.is_empty() {
                     drop(e);
                     self.base_key_entries.remove(&entry.base_key);
                 }
             }
         }
-        Some((orig_key, entry))
+        self.sync_cached_len();
+        Some(res)
     }
 
     #[inline]
     fn insert(&self, key: String, entry: StoredEntry) {
         self.insert_base_key_entry(&key, &entry.base_key);
         self.entries.insert(key, entry);
+        self.sync_cached_len();
     }
 
     #[inline]
@@ -256,6 +274,7 @@ impl CacheStore {
         self.insert_base_key_entry(&key, &entry.base_key);
         self.entries
             .insert_with_lifecycle(key, entry, request_state);
+        self.sync_cached_len();
     }
 
     /// Return the number of active in-flight upstream fetches currently
@@ -311,7 +330,7 @@ impl CacheStore {
             return LookupOutcome {
                 entry: None,
                 stats,
-                items: self.entries.len(),
+                items: self.cached_len.load(Ordering::Relaxed),
                 had_expired: false,
             };
         };
@@ -321,10 +340,11 @@ impl CacheStore {
         let candidate_keys =
             build_candidate_keys(base_key, private_key, headers, cookies, &variants);
 
-        // First pass: look for fresh entries
+        let now = Instant::now();
+        let mut first_stale: Option<(LookupEntry, String, LookupHit)> = None;
         for key in &candidate_keys {
             if let Some(entry) = self.entries.get(key) {
-                let age = entry.created_at.elapsed();
+                let age = now.saturating_duration_since(entry.created_at);
                 if age <= entry.ttl {
                     return LookupOutcome {
                         entry: Some((
@@ -345,21 +365,14 @@ impl CacheStore {
                             LookupHit::Fresh,
                         )),
                         stats,
-                        items: self.entries.len(),
+                        items: self.cached_len.load(Ordering::Relaxed),
                         had_expired: false,
                     };
                 }
-            }
-        }
-
-        // Second pass: look for stale entries within the SWR window
-        for key in &candidate_keys {
-            if let Some(entry) = self.entries.get(key) {
-                let age = entry.created_at.elapsed();
-                let swr_window = entry.stale_while_revalidate.unwrap_or_default();
-                if age <= entry.ttl + swr_window && !entry.must_revalidate {
-                    return LookupOutcome {
-                        entry: Some((
+                if first_stale.is_none() {
+                    let swr_window = entry.stale_while_revalidate.unwrap_or_default();
+                    if age <= entry.ttl + swr_window && !entry.must_revalidate {
+                        first_stale = Some((
                             LookupEntry {
                                 scope: entry.scope,
                                 status: entry.status,
@@ -375,19 +388,25 @@ impl CacheStore {
                             },
                             key.clone(),
                             LookupHit::StaleWhileRevalidate,
-                        )),
-                        stats,
-                        items: self.entries.len(),
-                        had_expired: false,
-                    };
+                        ));
+                    }
                 }
             }
+        }
+
+        if let Some(entry) = first_stale {
+            return LookupOutcome {
+                entry: Some(entry),
+                stats,
+                items: self.cached_len.load(Ordering::Relaxed),
+                had_expired: false,
+            };
         }
 
         LookupOutcome {
             entry: None,
             stats,
-            items: self.entries.len(),
+            items: self.cached_len.load(Ordering::Relaxed),
             had_expired: has_variants,
         }
     }
@@ -426,7 +445,7 @@ impl CacheStore {
 
         let max_entries = self.max_entries.load(Ordering::Relaxed);
         if max_entries == 0 {
-            return (stats, self.entries.len());
+            return (stats, self.cached_len.load(Ordering::Relaxed));
         }
 
         let key = build_entry_key(
@@ -475,7 +494,7 @@ impl CacheStore {
         for base_key in request_state.evicted_base_keys {
             self.remove_orphaned_base_key(&base_key);
         }
-        (stats, self.entries.len())
+        (stats, self.cached_len.load(Ordering::Relaxed))
     }
 
     #[inline]
@@ -509,7 +528,7 @@ impl CacheStore {
             self.remove_orphaned_base_key(base_key);
         }
 
-        (stats, self.entries.len())
+        (stats, self.cached_len.load(Ordering::Relaxed))
     }
 
     /// Drop a base key's variant registry once no entry references it, so the
@@ -666,6 +685,11 @@ impl CacheStore {
     #[inline]
     fn get_cleanup_expired(&self) -> usize {
         self.expired_count.swap(0, Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub(crate) fn is_cleanup_active(&self) -> bool {
+        self.cleanup_task_active.load(Ordering::Relaxed)
     }
 }
 
