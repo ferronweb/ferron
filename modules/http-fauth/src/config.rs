@@ -6,14 +6,6 @@ use std::time::Duration;
 use ferron_core::config::ServerConfigurationValue;
 use http::header::HeaderName;
 
-/// A header action for the `request_header` subdirective: currently only
-/// append is supported for `request_header +Name`.
-#[derive(Clone, Debug)]
-pub enum HeaderAction {
-    /// Append the given value to the header.
-    Append(HeaderName, String),
-}
-
 /// Parsed forwarded authentication configuration.
 #[derive(Clone, Debug)]
 pub struct ForwardedAuthConfig {
@@ -32,7 +24,7 @@ pub struct ForwardedAuthConfig {
     /// Whether to intercept upstream error responses
     pub intercept_errors: bool,
     /// Headers to add to the auth request (`request_header +Name`)
-    pub headers_to_add: Vec<HeaderAction>,
+    pub headers_to_add: Vec<(HeaderName, String)>,
     /// Headers to replace on the auth request (`request_header Name`)
     pub headers_to_replace: Vec<(HeaderName, String)>,
     /// Headers to remove from the auth request (`request_header -Name`)
@@ -81,8 +73,7 @@ fn parse_request_header_entry(
                 .ok_or("request_header +Name requires a value")?;
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
-            cfg.headers_to_add
-                .push(HeaderAction::Append(header_name, value));
+            cfg.headers_to_add.push((header_name, value));
         }
         Some('-') => {
             let name = &first_arg[1..];

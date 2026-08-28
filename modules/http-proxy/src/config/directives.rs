@@ -4,7 +4,7 @@ use std::str::FromStr;
 use ferron_core::config::ServerConfigurationDirectiveEntry;
 use http::header::HeaderName;
 
-use super::types::{HeaderAction, ProxyConfig};
+use super::types::ProxyConfig;
 
 #[inline]
 pub(super) fn parse_request_header_entry(
@@ -30,8 +30,7 @@ pub(super) fn parse_request_header_entry(
                 .ok_or("request_header +Name requires a value")?;
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
-            cfg.headers_to_add
-                .push(HeaderAction::Append(header_name, value));
+            cfg.headers_to_add.push((header_name, value));
         }
         Some('-') => {
             let name = &first_arg[1..];

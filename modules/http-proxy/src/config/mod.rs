@@ -12,7 +12,6 @@ use std::time::Duration;
 use dashmap::DashMap;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
-pub use self::types::HeaderAction;
 pub use self::types::{CircuitBreakerConfig, ProxyConfig, RetryBudgetConfig};
 pub use crate::types::affinity::{AffinityConfig, AffinityType};
 

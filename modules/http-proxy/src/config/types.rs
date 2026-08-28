@@ -3,13 +3,6 @@ use std::time::Duration;
 use crate::types::lb::LoadBalancerAlgorithm;
 use crate::types::upstream::{ProxyHeader, Upstream};
 
-/// A header action: currently only append is supported for `request_header +Name`.
-#[derive(Clone)]
-pub enum HeaderAction {
-    /// Append the given value to the header.
-    Append(http::header::HeaderName, String),
-}
-
 /// Retry budget configuration for the reverse proxy.
 #[derive(Clone)]
 pub struct RetryBudgetConfig {
@@ -80,7 +73,7 @@ pub struct ProxyConfig {
     pub intercept_errors: bool,
     pub no_verification: bool,
     pub proxy_header: Option<ProxyHeader>,
-    pub headers_to_add: Vec<HeaderAction>,
+    pub headers_to_add: Vec<(http::header::HeaderName, String)>,
     pub headers_to_replace: Vec<(http::header::HeaderName, String)>,
     pub headers_to_remove: Vec<http::header::HeaderName>,
     pub concurrent_conns: Option<usize>,

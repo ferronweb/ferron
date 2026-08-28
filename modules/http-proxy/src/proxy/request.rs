@@ -7,7 +7,7 @@ use ferron_http::HttpContext;
 use http::header::{HeaderName, HeaderValue};
 use http::{Request, Uri};
 
-use crate::config::{HeaderAction, ProxyConfig};
+use crate::config::ProxyConfig;
 use crate::send_request::ProxyBody;
 use crate::types::error::ProxyError;
 
@@ -63,7 +63,7 @@ pub(super) fn construct_proxy_request(
     let mut add_values: Vec<(HeaderName, HeaderValue)> =
         Vec::with_capacity(config.headers_to_add.len());
     for action in &config.headers_to_add {
-        let HeaderAction::Append(name, v) = action;
+        let (name, v) = action;
         let hv = HeaderValue::from_str(v)?;
         add_values.push((name.clone(), hv));
     }

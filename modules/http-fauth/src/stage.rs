@@ -142,7 +142,7 @@ impl ForwardedAuthenticationStage {
             headers.insert(name.clone(), http::HeaderValue::from_str(value)?);
         }
         for action in &config.headers_to_add {
-            let crate::config::HeaderAction::Append(name, value) = action;
+            let (name, value) = action;
             headers.append(name.clone(), http::HeaderValue::from_str(value)?);
         }
 
