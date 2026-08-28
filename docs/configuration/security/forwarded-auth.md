@@ -134,7 +134,7 @@ Default: `auth_to_concurrent_conns 16384`
 
 1. The stage receives the incoming request and parses the `auth_to` configuration.
 2. The stage constructs a new HTTP request using the original request's method, path, query string, and headers.
-3. The stage adds standard forwarding headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Uri`, `X-Forwarded-Method`, `Forwarded`).
+3. The stage adds standard forwarding headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Uri`, `X-Forwarded-Method`, `X-Real-IP`, `Forwarded`).
 4. The stage sends the request to the authentication backend via the connection pool.
 5. **On success (2xx)**: The stage copies configured headers from the response to the original request. The pipeline continues.
 6. **On failure (4xx/5xx)**: The stage returns the backend's response directly to the client. The pipeline stops.

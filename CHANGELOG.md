@@ -21,6 +21,10 @@
 
 - **HTTP caching performance optimizations**: performed multiple internal throughput optimizations to the in-memory HTTP cache store, especially on the cache hit path.
 
+#### Forwarded auth
+
+- **Forwarded auth `X-Real-IP` header**: added `X-Real-IP` header to forwarded auth requests, with same value as reverse-proxied requests.
+
 ### Fixed
 
 #### Static file serving

@@ -147,6 +147,10 @@ impl ForwardedAuthenticationStage {
                 Self::set_x_forwarded_for(headers, &client_ip_str);
                 Self::set_forwarded(headers, &client_ip_str, proto, &local_ip_str);
             }
+            headers.insert(
+                http::HeaderName::from_static("x-real-ip"),
+                http::HeaderValue::from_str(&client_ip_str)?,
+            );
         }
         headers.insert(
             http::header::HeaderName::from_static("x-forwarded-proto"),
