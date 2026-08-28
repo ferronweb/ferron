@@ -71,19 +71,9 @@ pub async fn background_ocsp_task(
 
     let sleep_duration = Duration::from_secs(60); // default check interval
 
-    emit_log(
-        &event_sink,
-        LogLevel::Debug,
-        "OCSP background task started",
-        "OCSP background task started",
-        LOG_TARGET,
-        Vec::new(),
-    );
-
     loop {
         let received_certified_key = tokio::select! {
             _ = cancel_token.cancelled() => {
-                emit_log(&event_sink, LogLevel::Info, "OCSP background task shutting down", "OCSP background task shutting down", LOG_TARGET, Vec::new());
                 return;
             }
             _ = tokio::time::sleep(sleep_duration) => None,

@@ -344,16 +344,6 @@ impl Module for ReverseProxyModule {
         secondary_handle.spawn(metrics::emit_pool_and_dns_metrics(pool_sink));
         secondary_handle.spawn(metrics::cleanup_dns_cache_task());
 
-        self.sink.emit(ferron_observability::Event::Log(
-            ferron_observability::LogEvent {
-                level: ferron_observability::LogLevel::Debug,
-                message: "Reverse proxy module initialized".to_string(),
-                summary: "Reverse proxy module initialized".into(),
-                target: LOG_TARGET,
-                attributes: Vec::new(),
-                trace_context: None,
-            },
-        ));
         Ok(())
     }
 }

@@ -811,12 +811,6 @@ impl PersistManager {
     /// Writer task body: flush due zones and compact due zones, then wait
     /// for a queued record, the poll interval, or shutdown.
     async fn run(self: Arc<Self>) {
-        self.emit_log(
-            LogLevel::Debug,
-            "cache persistence: writer task started".to_string(),
-            "Cache persistence writer task started",
-            vec![],
-        );
         loop {
             if self.stop.load(Ordering::Relaxed)
                 || ferron_core::shutdown::SHUTDOWN_TOKEN.load().is_cancelled()

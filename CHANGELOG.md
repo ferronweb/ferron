@@ -36,6 +36,10 @@
 
 ### Fixed
 
+#### Logging
+
+- **Reduced startup logs**: removed multiple startup logs for various features to reduce noise in the logs.
+
 #### Static file serving
 
 - **Static file serving symlink settings fix**: previously, symlink mode (follow or not) was not properly respected when serving precompressed static files.
