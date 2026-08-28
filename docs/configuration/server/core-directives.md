@@ -80,7 +80,7 @@ This page documents directives that belong in top-level global blocks:
 ### Network and listeners
 
 - `listen <address: string>`
-  - This directive sets the bind address for HTTP TCP listeners. It accepts either an IP address or a full socket address. If you use a socket address, its port must match the HTTP port that Ferron starts. Default: `[::]:<http-port>`
+  - This directive sets the bind addresses for TCP listeners. It accepts either IP addresses or full socket addresses. If you use a socket address, its port must match the HTTP port that Ferron starts. Default: `[::]:<http-port>`
 
 - `send_buf <size: integer>`
   - This directive sets the TCP send buffer size. It must resolve to a non-negative integer at runtime. Default: OS default

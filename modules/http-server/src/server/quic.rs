@@ -125,139 +125,142 @@ pub struct QuicListenerHandle {
 
 impl QuicListenerHandle {
     pub fn new(
-        address: SocketAddr,
+        address: &[SocketAddr],
         config: ConfigArcSwap,
         runtime: &mut ferron_core::runtime::Runtime,
     ) -> Result<Self, std::io::Error> {
-        let udp_socket = bind_udp_socket(address)?;
-        ferron_core::log_info!("HTTP/3 server listening on {address}");
-        // Fan a single UDP socket out to one independent quinn endpoint per
-        // primary (per-CPU) thread. QuinnMTRuntime routes each datagram to the
-        // endpoint that owns the connection; the CID generator below makes sure
-        // the server connection IDs it issues route back to the same endpoint.
-        // `spawn_primary_task_on` pins exactly one endpoint to each primary
-        // thread, so the number of endpoints must match the thread count.
-        let endpoint_count = runtime.primary_thread_count();
-        // Server connection ID length; must match what the CID generator issues
-        // and what the router expects when parsing short-header packets.
-        let cid_len = 8;
-        let channels = QuinnMTChannels::new(endpoint_count, cid_len);
-
         let cancel_token = Arc::new(CancellationToken::new());
+        for address in address {
+            let udp_socket = bind_udp_socket(*address)?;
+            ferron_core::log_info!("HTTP/3 server listening on {address}");
+            // Fan a single UDP socket out to one independent quinn endpoint per
+            // primary (per-CPU) thread. QuinnMTRuntime routes each datagram to the
+            // endpoint that owns the connection; the CID generator below makes sure
+            // the server connection IDs it issues route back to the same endpoint.
+            // `spawn_primary_task_on` pins exactly one endpoint to each primary
+            // thread, so the number of endpoints must match the thread count.
+            let endpoint_count = runtime.primary_thread_count();
+            // Server connection ID length; must match what the CID generator issues
+            // and what the router expects when parsing short-header packets.
+            let cid_len = 8;
+            let channels = QuinnMTChannels::new(endpoint_count, cid_len);
 
-        let (listen_error_tx, mut listen_error_rx) =
-            tokio::sync::mpsc::unbounded_channel::<Option<io::Error>>();
+            let (listen_error_tx, mut listen_error_rx) =
+                tokio::sync::mpsc::unbounded_channel::<Option<io::Error>>();
 
-        let config_clone = config.clone();
-        let cancel_token_clone = cancel_token.clone();
+            let config_clone = config.clone();
+            let cancel_token_clone = cancel_token.clone();
 
-        for id in 0..endpoint_count {
-            let udp_socket = match udp_socket.try_clone() {
-                Ok(udp_socket) => udp_socket,
-                Err(error) => {
-                    listen_error_tx
-                        .send(Some(io::Error::other(format!(
-                            "Failed to clone UDP socket for HTTP/3 endpoint {id}: {error}"
-                        ))))
-                        .unwrap_or_default();
-                    continue;
-                }
-            };
-            let quinn_runtime = Arc::new(QuinnMTRuntime::new(
-                zincio_quinn::ZincioRuntime,
-                channels.clone(),
-                id,
-            ));
-            let config = config_clone.clone();
-            let cancel_token = cancel_token_clone.clone();
-            let listen_error_tx = listen_error_tx.clone();
-
-            runtime.spawn_primary_task_on(id, move || {
-                let config = config.clone();
-                let cancel_token = cancel_token.clone();
+            for id in 0..endpoint_count {
+                let udp_socket = match udp_socket.try_clone() {
+                    Ok(udp_socket) => udp_socket,
+                    Err(error) => {
+                        listen_error_tx
+                            .send(Some(io::Error::other(format!(
+                                "Failed to clone UDP socket for HTTP/3 endpoint {id}: {error}"
+                            ))))
+                            .unwrap_or_default();
+                        continue;
+                    }
+                };
+                let quinn_runtime = Arc::new(QuinnMTRuntime::new(
+                    zincio_quinn::ZincioRuntime,
+                    channels.clone(),
+                    id,
+                ));
+                let config = config_clone.clone();
+                let cancel_token = cancel_token_clone.clone();
                 let listen_error_tx = listen_error_tx.clone();
-                let udp_socket = udp_socket.try_clone();
-                let quinn_runtime = quinn_runtime.clone();
-                Box::pin(async move {
-                    let rustls_server_config = (match rustls::ServerConfig::builder_with_provider(
-                        Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
-                    )
-                    .with_safe_default_protocol_versions()
-                    {
-                        Ok(builder) => builder,
-                        Err(error) => {
-                            listen_error_tx
-                                .send(Some(io::Error::other(format!(
-                                    "Failed to create Rustls ServerConfig builder: {error}"
-                                ))))
-                                .unwrap_or_default();
-                            return;
-                        }
-                    })
-                    .with_no_client_auth()
-                    .with_cert_resolver(Arc::new(NoCertResolver));
-                    let quinn_crypto_config: quinn::crypto::rustls::QuicServerConfig =
-                        match rustls_server_config.try_into() {
-                            Ok(config) => config,
-                            Err(error) => {
+                let address = *address;
+
+                runtime.spawn_primary_task_on(id, move || {
+                    let config = config.clone();
+                    let cancel_token = cancel_token.clone();
+                    let listen_error_tx = listen_error_tx.clone();
+                    let udp_socket = udp_socket.try_clone();
+                    let quinn_runtime = quinn_runtime.clone();
+                    Box::pin(async move {
+                        let rustls_server_config =
+                            (match rustls::ServerConfig::builder_with_provider(Arc::new(
+                                rustls::crypto::aws_lc_rs::default_provider(),
+                            ))
+                            .with_safe_default_protocol_versions()
+                            {
+                                Ok(builder) => builder,
+                                Err(error) => {
+                                    listen_error_tx
+                                        .send(Some(io::Error::other(format!(
+                                            "Failed to create Rustls ServerConfig builder: {error}"
+                                        ))))
+                                        .unwrap_or_default();
+                                    return;
+                                }
+                            })
+                            .with_no_client_auth()
+                            .with_cert_resolver(Arc::new(NoCertResolver));
+                        let quinn_crypto_config: quinn::crypto::rustls::QuicServerConfig =
+                            match rustls_server_config.try_into() {
+                                Ok(config) => config,
+                                Err(error) => {
+                                    listen_error_tx
+                                        .send(Some(io::Error::other(format!(
+                                            "Failed to create Quinn crypto config: {error}"
+                                        ))))
+                                        .unwrap_or_default();
+                                    return;
+                                }
+                            };
+                        let mut server_config =
+                            quinn::ServerConfig::with_crypto(Arc::new(quinn_crypto_config));
+
+                        // Use BBR to optimize for high-latency network links
+                        let mut transport_config = quinn::TransportConfig::default();
+                        transport_config.congestion_controller_factory(Arc::new(
+                            quinn::congestion::BbrConfig::default(),
+                        ));
+                        // See https://blog.litespeedtech.com/2020/10/19/improve-performance-with-dplpmtud/
+                        // Quinn already supports DPLPMTUD, but we set an upper bound to avoid fragmentation,
+                        // and because LiteSpeed's benchmarks demonstrate faster timing with upper bound
+                        // of 4096 vs. the default of 1472.
+                        let mut mtu_config = quinn::MtuDiscoveryConfig::default();
+                        mtu_config.upper_bound(4096);
+                        transport_config.mtu_discovery_config(Some(mtu_config));
+
+                        server_config.transport_config(Arc::new(transport_config));
+
+                        let mut endpoint_config = quinn::EndpointConfig::default();
+                        let quinn_runtime_cl = quinn_runtime.clone();
+                        endpoint_config
+                            .cid_generator(move || Box::new(quinn_runtime_cl.cid_generator()));
+
+                        let endpoint = match udp_socket.and_then(|udp_socket| {
+                            quinn::Endpoint::new(
+                                endpoint_config,
+                                Some(server_config),
+                                udp_socket,
+                                quinn_runtime,
+                            )
+                        }) {
+                            Ok(endpoint) => endpoint,
+                            Err(err) => {
                                 listen_error_tx
-                                    .send(Some(io::Error::other(format!(
-                                        "Failed to create Quinn crypto config: {error}"
+                                    .send(Some(std::io::Error::other(format!(
+                                        "Cannot listen to HTTP/3 port: {err}"
                                     ))))
                                     .unwrap_or_default();
                                 return;
                             }
                         };
-                    let mut server_config =
-                        quinn::ServerConfig::with_crypto(Arc::new(quinn_crypto_config));
 
-                    // Use BBR to optimize for high-latency network links
-                    let mut transport_config = quinn::TransportConfig::default();
-                    transport_config.congestion_controller_factory(Arc::new(
-                        quinn::congestion::BbrConfig::default(),
-                    ));
-                    // See https://blog.litespeedtech.com/2020/10/19/improve-performance-with-dplpmtud/
-                    // Quinn already supports DPLPMTUD, but we set an upper bound to avoid fragmentation,
-                    // and because LiteSpeed's benchmarks demonstrate faster timing with upper bound
-                    // of 4096 vs. the default of 1472.
-                    let mut mtu_config = quinn::MtuDiscoveryConfig::default();
-                    mtu_config.upper_bound(4096);
-                    transport_config.mtu_discovery_config(Some(mtu_config));
+                        run_endpoint(endpoint, config, cancel_token, address).await;
+                    })
+                });
+            }
 
-                    server_config.transport_config(Arc::new(transport_config));
-
-                    let mut endpoint_config = quinn::EndpointConfig::default();
-                    let quinn_runtime_cl = quinn_runtime.clone();
-                    endpoint_config
-                        .cid_generator(move || Box::new(quinn_runtime_cl.cid_generator()));
-
-                    let endpoint = match udp_socket.and_then(|udp_socket| {
-                        quinn::Endpoint::new(
-                            endpoint_config,
-                            Some(server_config),
-                            udp_socket,
-                            quinn_runtime,
-                        )
-                    }) {
-                        Ok(endpoint) => endpoint,
-                        Err(err) => {
-                            listen_error_tx
-                                .send(Some(std::io::Error::other(format!(
-                                    "Cannot listen to HTTP/3 port: {err}"
-                                ))))
-                                .unwrap_or_default();
-                            return;
-                        }
-                    };
-
-                    run_endpoint(endpoint, config, cancel_token, address).await;
-                })
-            });
-        }
-
-        listen_error_tx.send(None).unwrap_or_default();
-        if let Some(error) = listen_error_rx.blocking_recv().unwrap_or(None) {
-            return Err(error);
+            listen_error_tx.send(None).unwrap_or_default();
+            if let Some(error) = listen_error_rx.blocking_recv().unwrap_or(None) {
+                return Err(error);
+            }
         }
 
         Ok(Self { cancel_token })

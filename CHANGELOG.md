@@ -6,6 +6,10 @@
 
 ### Added
 
+#### HTTP server core
+
+- **Support for listening to multiple IP addresses**: multiple IP addresses can now be specified in the `listen` subdirective in `tcp` block for TCP and QUIC, allowing the server to listen on multiple selected network interfaces.
+
 #### HTTP caching
 
 - **Cache key fingerprinting improvements for observability**: truncated cache key (up to 48 characters) with the query string removed, useful for diagnosing why a specific request missed. Optionally with a short non-reversible tag (`q=<16 hex chars>`), and if the base itself had to be truncated, a second tag (`h=<16 hex chars>`).

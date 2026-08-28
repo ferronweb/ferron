@@ -30,7 +30,7 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
 
             validate_directive!(config, used_directives, tcp, no_args, {
                 let mut sub = std::collections::HashSet::new();
-                validate_nested!(tcp, used(sub), listen, args(1) => [ServerConfigurationValue::String(_, _)]);
+                validate_nested!(tcp, used(sub), listen, args(*) => [ServerConfigurationValue::String(_, _)]);
                 validate_nested!(tcp, used(sub), send_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
                 validate_nested!(tcp, used(sub), recv_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
                 validate_nested!(tcp, used(sub), backlog, args(1) => [ServerConfigurationValue::Number(_, _)]);

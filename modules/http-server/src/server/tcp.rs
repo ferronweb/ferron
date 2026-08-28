@@ -24,9 +24,9 @@ use crate::util::proxy_protocol::read_proxy_header;
 use super::common::*;
 use super::native_sockets::*;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TcpListenerOptions {
-    pub address: SocketAddr,
+    pub address: Vec<SocketAddr>,
     pub send_buffer_size: Option<usize>,
     pub recv_buffer_size: Option<usize>,
     pub backlog: Option<i32>,
@@ -44,25 +44,25 @@ impl TcpListenerHandle {
         config: ConfigArcSwap,
         runtime: &mut Runtime,
     ) -> Result<Self, std::io::Error> {
-        let listener = build_tcp_listener(
-            options.address,
-            (options.send_buffer_size, options.recv_buffer_size),
-            options.backlog,
-            options.multipath,
-        )?;
-
-        if config.load().tls_resolver.is_some() {
-            log_info!("HTTPS server listening on {}", options.address);
-        } else {
-            log_info!("HTTP server listening on {}", options.address);
-        }
-
         let cancel_token = Arc::new(CancellationToken::new());
+        for address in &options.address {
+            let listener = build_tcp_listener(
+                *address,
+                (options.send_buffer_size, options.recv_buffer_size),
+                options.backlog,
+                options.multipath,
+            )?;
 
-        let config_clone = config.clone();
-        let cancel_token_clone = cancel_token.clone();
+            if config.load().tls_resolver.is_some() {
+                log_info!("HTTPS server listening on {}", address);
+            } else {
+                log_info!("HTTP server listening on {}", address);
+            }
 
-        runtime.spawn_primary_task(move || {
+            let config_clone = config.clone();
+            let cancel_token_clone = cancel_token.clone();
+
+            runtime.spawn_primary_task(move || {
             let new_listener_result = listener.try_clone();
             let cancel_token = cancel_token_clone.clone();
             let config = config_clone.clone();
@@ -593,6 +593,7 @@ impl TcpListenerHandle {
                 }
             })
         });
+        }
 
         Ok(Self { cancel_token })
     }

@@ -135,9 +135,9 @@ fn register_tcp_directives(registry: &mut crate::directives::DirectiveRegistry) 
         .register(
             Directive {
                 name: "listen",
-                usage: "listen <address>",
-                description: "This directive specifies the listener bind address for HTTP \
-                TCP listeners. Accepts either an IP address or a full socket address. \
+                usage: "listen <address> ...",
+                description: "This directive specifies the listener bind addresses for \
+                TCP listeners. Accepts either IP addresses or full socket addresses. \
                 Default: [::]:<http-port>",
                 applicable_protocols: None,
                 global_only: true,

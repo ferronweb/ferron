@@ -190,31 +190,41 @@ fn resolve_tcp_listener_options(
     port: u16,
 ) -> anyhow::Result<tcp::TcpListenerOptions> {
     let tcp_config = tcp_config(global_config);
-    let address = match tcp_config.and_then(|config| config.get_value("listen")) {
+    let address = match tcp_config
+        .and_then(|config| config.directives.get("listen"))
+        .and_then(|e| e.first())
+        .filter(|e| !e.args.is_empty())
+        .map(|e| &e.args)
+    {
         Some(value) => {
-            let listen = value
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("tcp.listen must be a string"))?;
+            let mut listen_vec = Vec::with_capacity(value.len());
+            for value_one in value {
+                let listen = value_one
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("tcp.listen must be a string"))?;
 
-            if let Ok(address) = listen.parse::<SocketAddr>() {
-                if address.port() != port {
-                    anyhow::bail!(
-                        "tcp.listen address port {} does not match the configured HTTP port {}",
-                        address.port(),
-                        port
-                    );
-                }
-                address
-            } else {
-                SocketAddr::new(
-                    listen
-                        .parse::<IpAddr>()
-                        .map_err(|_| anyhow::anyhow!("Invalid tcp.listen address '{listen}'"))?,
-                    port,
-                )
+                let listen_one = if let Ok(address) = listen.parse::<SocketAddr>() {
+                    if address.port() != port {
+                        anyhow::bail!(
+                            "tcp.listen address port {} does not match the configured HTTP port {}",
+                            address.port(),
+                            port
+                        );
+                    }
+                    address
+                } else {
+                    SocketAddr::new(
+                        listen.parse::<IpAddr>().map_err(|_| {
+                            anyhow::anyhow!("Invalid tcp.listen address '{listen}'")
+                        })?,
+                        port,
+                    )
+                };
+                listen_vec.push(listen_one);
             }
+            listen_vec
         }
-        None => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port),
+        None => vec![SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)],
     };
 
     let multipath = tcp_config
@@ -994,18 +1004,18 @@ impl Module for BasicHttpModule {
         let config = self.config.load();
         let has_http3 = config.quic_tls_resolver.is_some();
         let listener_options = resolve_tcp_listener_options(&config.global_config, port)?;
+        let listener_addresses = listener_options.address.clone();
         let listener =
             tcp::TcpListenerHandle::new(listener_options, has_http3, self.config.clone(), runtime)
                 .map_err(|e| anyhow::anyhow!("Failed to start HTTP server on port {port}: {e}"))?;
         self.listeners.lock().push(listener);
 
         if has_http3 {
-            let quic_listener = quic::QuicListenerHandle::new(
-                listener_options.address,
-                self.config.clone(),
-                runtime,
-            )
-            .map_err(|e| anyhow::anyhow!("Failed to start HTTP/3 server on port {port}: {e}"))?;
+            let quic_listener =
+                quic::QuicListenerHandle::new(&listener_addresses, self.config.clone(), runtime)
+                    .map_err(|e| {
+                        anyhow::anyhow!("Failed to start HTTP/3 server on port {port}: {e}")
+                    })?;
             self.quic_listeners.lock().push(quic_listener);
         }
 
