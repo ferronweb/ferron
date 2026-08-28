@@ -85,6 +85,35 @@ example.com {
 > [!note]
 > The LSCache WordPress plugin already sends `no-cache` directives on admin and login pages by default. The explicit `location` blocks serve as a safety net in case the plugin does not send cache-control headers.
 
+## Caching static files from Apache
+
+Apache still serves static assets (theme CSS/JS, uploaded images, fonts) through the same `mod_php`/`.htaccess` stack as your PHP pages, even though nothing dynamic happens for those requests. Every hit still pays for a full Apache round trip. You do not need a `location` block or a separate Ferron directive to fix this: the `cache` block from [Basic edge cache configuration](#basic-edge-cache-configuration) already caches these responses. Ferron's cache policy reads the standard `Cache-Control` header on any proxied response. `litespeed_override_cache_control` only takes effect when the response also carries `X-LiteSpeed-Cache-Control`, and plain static files served directly by Apache (as opposed to pages rendered by the LSCache plugin) never send that header. So standard `Cache-Control` governs static assets, and LSCache semantics keep governing PHP pages, from the same host block.
+
+The only thing missing is telling Apache to send `Cache-Control` on static files. Without it, Ferron still caches a bare `200 OK` for a short time under its default heuristic (5 minutes), but you get no control over the TTL and no `immutable` hint. Add explicit headers with `mod_headers` and `mod_expires`:
+
+```apache
+<IfModule mod_headers.c>
+    <FilesMatch "\.(?:css|js|mjs|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot)$">
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </FilesMatch>
+</IfModule>
+```
+
+Use `immutable` only for assets with a hashed or versioned filename (for example `app.a1b2c3.js`), since it tells clients and Ferron never to revalidate the entry for the lifetime of `max-age`. For unversioned assets that change in place, drop `immutable` and pick a shorter `max-age`, or plan to `PURGE` the entry after a deploy (see [PURGE method cache invalidation](/docs/v3/configuration/content/cache#purge-method-cache-invalidation)).
+
+With that header in place, the flow looks like this:
+
+1. The first request for `/theme/style.css` reaches Ferron, which has no cached entry and proxies to Apache.
+2. Apache serves the file with `Cache-Control: public, max-age=2592000, immutable`.
+3. Ferron stores the response body and headers, keyed by the request path (and by `Accept-Encoding`, thanks to `vary Accept-Encoding` in the `cache` block).
+4. Every later request for that asset, from any client, is served directly from Ferron's in-memory cache. Apache never sees it again until the entry expires or is purged.
+
+> [!tip]
+> Static assets are usually far larger than typical PHP HTML responses. If images or bundled JS exceed the default `max_response_size` (2 MB), Ferron proxies them correctly but does not cache them. Raise `max_response_size` in the `cache` block, or give static assets their own [named zone](/docs/v3/configuration/content/cache#cache-zones) so a few large files do not crowd out cached HTML pages.
+
+> [!note]
+> This pattern only removes the Apache round trip for GET/HEAD requests that qualify for caching. Requests with `Authorization` headers, or responses that carry `Set-Cookie`, still bypass the cache unless the response also authorizes shared caching (`public` or `s-maxage`). See [Public and private cache behavior](/docs/v3/configuration/content/cache#public-and-private-cache-behavior).
+
 ## Cache purging from PHP
 
 When content changes (a new blog post, updated product, or comment), you must invalidate the cache. LSCache plugins emit an `X-LiteSpeed-Purge` response header to invalidate tagged or URL-specific cache entries. Ferron processes these headers automatically when you enable caching. You do not need additional configuration.
