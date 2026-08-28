@@ -71,6 +71,7 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
                 }
                 validate_nested!(auth_to, used(sub), copy, args(*) => [ServerConfigurationValue::String(_, _)]);
                 validate_nested!(auth_to, used(sub), last, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(auth_to, used(sub), intercept_errors, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 check_unused_subdirectives!(auth_to, sub, &mut ctx.diagnostics, ctx.scope.clone());
             });
         }

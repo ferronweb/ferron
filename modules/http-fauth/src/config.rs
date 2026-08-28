@@ -21,6 +21,8 @@ pub struct ForwardedAuthConfig {
     pub no_verification: bool,
     /// Headers to copy from auth response to original request
     pub copy_headers: Vec<HeaderName>,
+    /// Whether to intercept upstream error responses
+    pub intercept_errors: bool,
 }
 
 impl Default for ForwardedAuthConfig {
@@ -32,6 +34,7 @@ impl Default for ForwardedAuthConfig {
             idle_timeout: Duration::from_millis(60_000), // 60 seconds
             no_verification: false,
             copy_headers: Vec::new(),
+            intercept_errors: false,
         }
     }
 }
@@ -139,6 +142,10 @@ pub fn parse_forwarded_auth_from_context(
 
             if children.get_flag("last") {
                 last = true;
+            }
+
+            if children.get_flag("intercept_errors") {
+                config.intercept_errors = true;
             }
         }
 

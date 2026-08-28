@@ -309,9 +309,16 @@ impl ForwardedAuthenticationStage {
         } else {
             let auth_status = auth_response.status();
             // Authentication failed - return the auth response as the final response
-            ctx.res = Some(ferron_http::HttpResponse::Custom(
-                auth_response.map(|body| body.map_err(std::io::Error::other).boxed_unsync()),
-            ));
+            if config.intercept_errors {
+                ctx.res = Some(ferron_http::HttpResponse::BuiltinError(
+                    auth_status.as_u16(),
+                    None,
+                ));
+            } else {
+                ctx.res = Some(ferron_http::HttpResponse::Custom(
+                    auth_response.map(|body| body.map_err(std::io::Error::other).boxed_unsync()),
+                ));
+            }
 
             self.client.return_connection(pool_key, conn_item);
 

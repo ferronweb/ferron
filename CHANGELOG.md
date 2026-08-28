@@ -11,6 +11,10 @@
 - **Cache key fingerprinting improvements for observability**: truncated cache key (up to 48 characters) with the query string removed, useful for diagnosing why a specific request missed. Optionally with a short non-reversible tag (`q=<16 hex chars>`), and if the base itself had to be truncated, a second tag (`h=<16 hex chars>`).
 - **Cache metrics improvements**: cache decision reasons are now attached to access log entries and cache metrics.
 
+#### Forwarded auth
+
+- **Forwarded auth `intercept_errors` subdirective**: added `intercept_errors` subdirective to forwarded auth stage, allowing custom handling of upstream error responses, similarly to `intercept_errors` subdirective for reverse proxying.
+
 ### Changed
 
 #### Static file serving

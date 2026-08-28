@@ -153,6 +153,17 @@ impl ferron_core::loader::ModuleLoader for ForwardedAuthenticationModuleLoader {
                     subblock_link: None,
                 },
                 DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
+                    name: "intercept_errors",
+                    usage: "intercept_errors [bool]",
+                    description: "This directive enables interception of upstream error responses for custom handling.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
             );
     }
 

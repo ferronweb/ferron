@@ -23,15 +23,16 @@ example.com {
 }
 ```
 
-| Nested directive  | Arguments     | Description                                                                                               | Default                 |
-| ----------------- | ------------- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `url`             | `<string>`    | Backend server URL (http:// or https://). Required if you do not provide it as an argument.               | none                    |
-| `unix`            | `<path>`      | Connect to the backend via Unix domain socket instead of TCP.                                             | TCP                     |
-| `limit`           | `<number>`    | Maximum concurrent connections to this backend.                                                           | No limit (per upstream) |
-| `idle_timeout`    | `<duration>`  | Keep-alive idle timeout for connections. Connections idle longer than this duration expire from the pool. | `60s`                   |
-| `no_verification` | `[bool]`      | Skip TLS certificate verification for HTTPS backends.                                                     | `false`                 |
-| `copy`            | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers.           | none                    |
-| `last`            | `[bool]`      | Whether this is the last backend in the chain (no further verification).                                  | `false`                 |
+| Nested directive   | Arguments     | Description                                                                                               | Default                 |
+| ------------------ | ------------- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `url`              | `<string>`    | Backend server URL (http:// or https://). Required if you do not provide it as an argument.               | none                    |
+| `unix`             | `<path>`      | Connect to the backend via Unix domain socket instead of TCP.                                             | TCP                     |
+| `limit`            | `<number>`    | Maximum concurrent connections to this backend.                                                           | No limit (per upstream) |
+| `idle_timeout`     | `<duration>`  | Keep-alive idle timeout for connections. Connections idle longer than this duration expire from the pool. | `60s`                   |
+| `no_verification`  | `[bool]`      | Skip TLS certificate verification for HTTPS backends.                                                     | `false`                 |
+| `copy`             | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers.           | none                    |
+| `last`             | `[bool]`      | Whether this is the last backend in the chain (no further verification).                                  | `false`                 |
+| `intercept_errors` | `[bool]`      | Whether to intercept upstream error responses and replace them with built-in error pages.                 | `false`                 |
 
 > [!note]
 >
@@ -137,7 +138,7 @@ Default: `auth_to_concurrent_conns 16384`
 3. The stage adds standard forwarding headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Uri`, `X-Forwarded-Method`, `X-Real-IP`, `Forwarded`).
 4. The stage sends the request to the authentication backend via the connection pool.
 5. **On success (2xx)**: The stage copies configured headers from the response to the original request. The pipeline continues.
-6. **On failure (4xx/5xx)**: The stage returns the backend's response directly to the client. The pipeline stops.
+6. **On failure (4xx/5xx)**: The stage returns the backend's response directly to the client, or (if `intercept_errors` is enabled), the stage returns a custom error response. The pipeline stops.
 
 ## Configuration examples
 
