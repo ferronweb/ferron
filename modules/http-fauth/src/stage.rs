@@ -132,6 +132,20 @@ impl ForwardedAuthenticationStage {
             headers.insert(name.clone(), value.clone());
         }
 
+        // Apply request_header transformations (add/replace/remove) before
+        // Ferron injects its own forwarding headers, so a user-configured
+        // request_header can still override an auto-injected header below.
+        for name in &config.headers_to_remove {
+            headers.remove(name);
+        }
+        for (name, value) in &config.headers_to_replace {
+            headers.insert(name.clone(), http::HeaderValue::from_str(value)?);
+        }
+        for action in &config.headers_to_add {
+            let crate::config::HeaderAction::Append(name, value) = action;
+            headers.append(name.clone(), http::HeaderValue::from_str(value)?);
+        }
+
         let client_ip = ctx.remote_address.map(|a| a.ip());
         let local_ip = ctx.local_address.map(|a| a.ip());
         let proto = if ctx.encrypted { "https" } else { "http" };

@@ -145,6 +145,17 @@ impl ferron_core::loader::ModuleLoader for ForwardedAuthenticationModuleLoader {
             )
             .register(
                 Directive {
+                    name: "request_header",
+                    usage: "request_header +Name <value> | request_header -Name | request_header Name <value>",
+                    description: "This directive adds, removes, or replaces a header on the request sent to the auth backend.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
                     name: "last",
                     usage: "last [bool]",
                     description: "This directive stops processing further auth_to entries on match.",

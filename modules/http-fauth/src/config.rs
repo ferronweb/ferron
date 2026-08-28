@@ -6,6 +6,14 @@ use std::time::Duration;
 use ferron_core::config::ServerConfigurationValue;
 use http::header::HeaderName;
 
+/// A header action for the `request_header` subdirective: currently only
+/// append is supported for `request_header +Name`.
+#[derive(Clone, Debug)]
+pub enum HeaderAction {
+    /// Append the given value to the header.
+    Append(HeaderName, String),
+}
+
 /// Parsed forwarded authentication configuration.
 #[derive(Clone, Debug)]
 pub struct ForwardedAuthConfig {
@@ -23,6 +31,12 @@ pub struct ForwardedAuthConfig {
     pub copy_headers: Vec<HeaderName>,
     /// Whether to intercept upstream error responses
     pub intercept_errors: bool,
+    /// Headers to add to the auth request (`request_header +Name`)
+    pub headers_to_add: Vec<HeaderAction>,
+    /// Headers to replace on the auth request (`request_header Name`)
+    pub headers_to_replace: Vec<(HeaderName, String)>,
+    /// Headers to remove from the auth request (`request_header -Name`)
+    pub headers_to_remove: Vec<HeaderName>,
 }
 
 impl Default for ForwardedAuthConfig {
@@ -35,8 +49,61 @@ impl Default for ForwardedAuthConfig {
             no_verification: false,
             copy_headers: Vec::new(),
             intercept_errors: false,
+            headers_to_add: Vec::new(),
+            headers_to_replace: Vec::new(),
+            headers_to_remove: Vec::new(),
         }
     }
+}
+
+/// Parse a single `request_header` entry into the given config, supporting
+/// `+Name` (append), `-Name` (remove), and bare `Name` (replace) forms.
+fn parse_request_header_entry(
+    entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
+    cfg: &mut ForwardedAuthConfig,
+    ctx: &ferron_http::HttpContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if entry.args.is_empty() {
+        return Err("request_header requires at least one argument".into());
+    }
+
+    let first_arg = entry.args[0]
+        .as_str()
+        .ok_or("request_header name must be a string")?;
+
+    match first_arg.chars().next() {
+        Some('+') => {
+            let name = &first_arg[1..];
+            let value = entry
+                .args
+                .get(1)
+                .and_then(|v| v.as_string_with_interpolations(ctx))
+                .ok_or("request_header +Name requires a value")?;
+            let header_name = HeaderName::from_str(name)
+                .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
+            cfg.headers_to_add
+                .push(HeaderAction::Append(header_name, value));
+        }
+        Some('-') => {
+            let name = &first_arg[1..];
+            let header_name = HeaderName::from_str(name)
+                .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
+            cfg.headers_to_remove.push(header_name);
+        }
+        _ => {
+            let name = first_arg;
+            let value = entry
+                .args
+                .get(1)
+                .and_then(|v| v.as_string_with_interpolations(ctx))
+                .ok_or("request_header Name requires a value")?;
+            let header_name = HeaderName::from_str(name)
+                .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
+            cfg.headers_to_replace.push((header_name, value));
+        }
+    }
+
+    Ok(())
 }
 
 /// Parse forwarded authentication configuration from HTTP context.
@@ -137,6 +204,12 @@ pub fn parse_forwarded_auth_from_context(
                             }
                         }
                     }
+                }
+            }
+
+            if let Some(request_header_entries) = children.directives.get("request_header") {
+                for entry in request_header_entries {
+                    parse_request_header_entry(entry, &mut config, ctx)?;
                 }
             }
 

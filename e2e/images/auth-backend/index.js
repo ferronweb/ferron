@@ -33,6 +33,30 @@ app.all("/auth/echo", (req, res) => {
   });
 });
 
+app.all("/auth/check-header-added", (req, res) => {
+  if (req.headers["x-custom-header"] === "added-value") {
+    res.status(200).send("OK");
+  } else {
+    res.status(401).send("Missing or wrong X-Custom-Header");
+  }
+});
+
+app.all("/auth/check-header-removed", (req, res) => {
+  if (req.headers["x-sensitive-header"] === undefined) {
+    res.status(200).send("OK");
+  } else {
+    res.status(401).send("X-Sensitive-Header should have been removed");
+  }
+});
+
+app.all("/auth/check-header-replaced", (req, res) => {
+  if (req.headers["x-replace-me"] === "replaced-value") {
+    res.status(200).send("OK");
+  } else {
+    res.status(401).send("X-Replace-Me should have been replaced");
+  }
+});
+
 app.all("/auth/malformed", (_req, res) => {
   res.socket.write("HTTP/1.1 200 OK\r\nContent-Length: -1\r\n\r\n");
   res.socket.end();

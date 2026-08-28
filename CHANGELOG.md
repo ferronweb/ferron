@@ -18,6 +18,7 @@
 #### Forwarded auth
 
 - **Forwarded auth `intercept_errors` subdirective**: added `intercept_errors` subdirective to forwarded auth stage, allowing custom handling of upstream error responses, similarly to `intercept_errors` subdirective for reverse proxying.
+- **Forwarded auth `request_header` subdirective**: added `request_header` subdirective to `auth_to`, allowing headers to be added (`+Name`), removed (`-Name`), or replaced (`Name`) on the request sent to the auth backend, mirroring the reverse proxy's `request_header` subdirective.
 
 ### Changed
 

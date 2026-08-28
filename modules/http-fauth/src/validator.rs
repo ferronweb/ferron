@@ -6,6 +6,10 @@ use ferron_core::config::{
     ServerConfigurationValue,
 };
 use ferron_core::{check_unused_subdirectives, validate_directive, validate_nested};
+use std::collections::HashMap;
+use std::str::FromStr;
+
+use http::header::HeaderName;
 
 pub struct ForwardedAuthenticationConfigurationValidator;
 
@@ -70,6 +74,10 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
                     no_verification_warn = first_entry_span(auth_to, "no_verification");
                 }
                 validate_nested!(auth_to, used(sub), copy, args(*) => [ServerConfigurationValue::String(_, _)]);
+                if auth_to.directives.contains_key("request_header") {
+                    sub.insert("request_header".to_string());
+                }
+                validate_request_header(auth_to)?;
                 validate_nested!(auth_to, used(sub), last, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 validate_nested!(auth_to, used(sub), intercept_errors, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
                 check_unused_subdirectives!(auth_to, sub, &mut ctx.diagnostics, ctx.scope.clone());
@@ -99,4 +107,47 @@ fn block_flag(block: &ServerConfigurationBlock, directive: &str) -> Option<bool>
         .get(directive)
         .and_then(|entries| entries.first())
         .map(ServerConfigurationDirectiveEntry::get_flag)
+}
+
+fn validate_request_header(
+    block: &ServerConfigurationBlock,
+) -> Result<(), ConfigurationValidationError> {
+    if let Some(entries) = block.directives.get("request_header") {
+        for entry in entries {
+            if entry.args.is_empty() {
+                return Err(ConfigurationValidationError::from(
+                    "request_header requires at least one argument",
+                )
+                .with_span(entry_span(entry)));
+            }
+            let first = entry.args[0].as_str().ok_or_else(|| {
+                ConfigurationValidationError::from("The header name must be a string")
+                    .with_span(entry_span(entry))
+            })?;
+            let (name, needs_value) = match first.chars().next() {
+                Some('+') => (&first[1..], true),
+                Some('-') => (&first[1..], false),
+                _ => (first, true),
+            };
+            HeaderName::from_str(name).map_err(|parse_err| {
+                ConfigurationValidationError::from(format!(
+                    "Invalid header name '{name}': {parse_err}"
+                ))
+                .with_span(entry_span(entry))
+            })?;
+            if needs_value
+                && entry
+                    .args
+                    .get(1)
+                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                    .is_none()
+            {
+                return Err(ConfigurationValidationError::from(
+                    "request_header requires a value for add/replace operations",
+                )
+                .with_span(entry_span(entry)));
+            }
+        }
+    }
+    Ok(())
 }

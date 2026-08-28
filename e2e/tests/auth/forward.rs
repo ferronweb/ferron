@@ -258,6 +258,81 @@ async fn test_fauth_header_copy_missing() {
 }
 
 #[tokio::test]
+async fn test_fauth_request_header_add() {
+    let ctx = FAuthTestContext::new(
+        "request-header-add",
+        r#"
+*:80 {
+    auth_to http://auth-backend:9090/auth/check-header-added {
+        request_header +X-Custom-Header "added-value"
+    }
+
+    root "/var/www/ferron"
+}
+"#,
+    )
+    .await;
+
+    let response = ctx.client.get(&ctx.base_url).send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(response.text().await.unwrap(), "Authenticated!");
+}
+
+#[tokio::test]
+async fn test_fauth_request_header_remove() {
+    let ctx = FAuthTestContext::new(
+        "request-header-remove",
+        r#"
+*:80 {
+    auth_to http://auth-backend:9090/auth/check-header-removed {
+        request_header -X-Sensitive-Header
+    }
+
+    root "/var/www/ferron"
+}
+"#,
+    )
+    .await;
+
+    let response = ctx
+        .client
+        .get(&ctx.base_url)
+        .header("X-Sensitive-Header", "should-be-removed")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(response.text().await.unwrap(), "Authenticated!");
+}
+
+#[tokio::test]
+async fn test_fauth_request_header_replace() {
+    let ctx = FAuthTestContext::new(
+        "request-header-replace",
+        r#"
+*:80 {
+    auth_to http://auth-backend:9090/auth/check-header-replaced {
+        request_header X-Replace-Me "replaced-value"
+    }
+
+    root "/var/www/ferron"
+}
+"#,
+    )
+    .await;
+
+    let response = ctx
+        .client
+        .get(&ctx.base_url)
+        .header("X-Replace-Me", "original-value")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(response.text().await.unwrap(), "Authenticated!");
+}
+
+#[tokio::test]
 async fn test_fauth_no_spoof_x_forwarded_user() {
     let ctx = FAuthTestContext::new(
         "no-spoof-x-forwarded-user",

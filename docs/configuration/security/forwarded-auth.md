@@ -18,18 +18,21 @@ example.com {
         idle_timeout "30s"
         no_verification false
 
+        request_header +X-Internal-Auth "shared-secret"
+
         copy X-Auth-User X-Auth-Roles
     }
 }
 ```
 
-| Nested directive   | Arguments     | Description                                                                                               | Default                 |
-| ------------------ | ------------- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
+| Nested directive   | Arguments                            | Description                                                                                               | Default                 |
+| ------------------ | ------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
 | `url`              | `<string>`    | Backend server URL (http:// or https://). Required if you do not provide it as an argument.               | none                    |
 | `unix`             | `<path>`      | Connect to the backend via Unix domain socket instead of TCP.                                             | TCP                     |
 | `limit`            | `<number>`    | Maximum concurrent connections to this backend.                                                           | No limit (per upstream) |
 | `idle_timeout`     | `<duration>`  | Keep-alive idle timeout for connections. Connections idle longer than this duration expire from the pool. | `60s`                   |
 | `no_verification`  | `[bool]`      | Skip TLS certificate verification for HTTPS backends.                                                     | `false`                 |
+| `request_header`   | see below     | Add, replace, or remove a header on the request sent to the auth backend. Repeat for multiple headers.    | none                    |
 | `copy`             | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers.           | none                    |
 | `last`             | `[bool]`      | Whether this is the last backend in the chain (no further verification).                                  | `false`                 |
 | `intercept_errors` | `[bool]`      | Whether to intercept upstream error responses and replace them with built-in error pages.                 | `false`                 |
@@ -110,6 +113,39 @@ example.com {
 
 Ferron copies headers by name. If the auth response contains the specified header, Ferron adds it to the original request. Ferron preserves multiple values.
 
+#### Request header transformations
+
+Use `request_header` to add, replace, or remove a header on the request Ferron sends to the auth backend, before Ferron injects its own forwarding headers:
+
+```ferron
+example.com {
+    auth_to http://auth.example.com/auth {
+        request_header +X-Internal-Auth "shared-secret"
+        request_header -Authorization
+        request_header X-Forwarded-Host "example.com"
+    }
+}
+```
+
+| Form                            | Behavior                                                              |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `request_header +Name "value"`   | Add the header (appends, allows duplicates).                          |
+| `request_header -Name`           | Remove all instances of the header.                                   |
+| `request_header Name "value"`    | Replace the header (removes existing instances, sets a new value).    |
+
+The value argument supports `{{variable}}` interpolation, so you can forward request or host data to the auth backend:
+
+```ferron
+example.com {
+    auth_to http://auth.example.com/auth {
+        request_header +X-Original-Host "{{request.host}}"
+    }
+}
+```
+
+> [!note]
+> `request_header` only affects the request sent to the auth backend, not the original client request. To pass data from the auth response back to the original request, use `copy` instead.
+
 ### Global connection limit
 
 The global `auth_to_concurrent_conns` directive controls the maximum number of concurrent connections across all forwarded authentication backends:
@@ -135,10 +171,11 @@ Default: `auth_to_concurrent_conns 16384`
 
 1. The stage receives the incoming request and parses the `auth_to` configuration.
 2. The stage constructs a new HTTP request using the original request's method, path, query string, and headers.
-3. The stage adds standard forwarding headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Uri`, `X-Forwarded-Method`, `X-Real-IP`, `Forwarded`).
-4. The stage sends the request to the authentication backend via the connection pool.
-5. **On success (2xx)**: The stage copies configured headers from the response to the original request. The pipeline continues.
-6. **On failure (4xx/5xx)**: The stage returns the backend's response directly to the client, or (if `intercept_errors` is enabled), the stage returns a custom error response. The pipeline stops.
+3. The stage applies any configured `request_header` transformations (add, replace, remove).
+4. The stage adds standard forwarding headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Uri`, `X-Forwarded-Method`, `X-Real-IP`, `Forwarded`).
+5. The stage sends the request to the authentication backend via the connection pool.
+6. **On success (2xx)**: The stage copies configured headers from the response to the original request. The pipeline continues.
+7. **On failure (4xx/5xx)**: The stage returns the backend's response directly to the client, or (if `intercept_errors` is enabled), the stage returns a custom error response. The pipeline stops.
 
 ## Configuration examples
 
