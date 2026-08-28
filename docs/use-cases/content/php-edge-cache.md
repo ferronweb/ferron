@@ -87,9 +87,15 @@ example.com {
 
 ## Caching static files from Apache
 
-Apache still serves static assets (theme CSS/JS, uploaded images, fonts) through the same `mod_php`/`.htaccess` stack as your PHP pages, even though nothing dynamic happens for those requests. Every hit still pays for a full Apache round trip. You do not need a `location` block or a separate Ferron directive to fix this: the `cache` block from [Basic edge cache configuration](#basic-edge-cache-configuration) already caches these responses. Ferron's cache policy reads the standard `Cache-Control` header on any proxied response. `litespeed_override_cache_control` only takes effect when the response also carries `X-LiteSpeed-Cache-Control`, and plain static files served directly by Apache (as opposed to pages rendered by the LSCache plugin) never send that header. So standard `Cache-Control` governs static assets, and LSCache semantics keep governing PHP pages, from the same host block.
+Apache still serves static assets (theme CSS/JS, uploaded images, fonts) through the same `mod_php`/`.htaccess` stack as your PHP pages, even though nothing dynamic happens for those requests. Every hit still pays for a full Apache round trip.
 
-The only thing missing is telling Apache to send `Cache-Control` on static files. Without it, Ferron still caches a bare `200 OK` for a short time under its default heuristic (5 minutes), but you get no control over the TTL and no `immutable` hint. Add explicit headers with `mod_headers` and `mod_expires`:
+You do not need a `location` block or a separate Ferron directive to fix this: the `cache` block from [Basic edge cache configuration](#basic-edge-cache-configuration) already caches these responses. Ferron's cache policy reads the standard `Cache-Control` header on any proxied response.
+
+`litespeed_override_cache_control` only takes effect when the response also carries `X-LiteSpeed-Cache-Control`, and plain static files served directly by Apache (as opposed to pages rendered by the LSCache plugin) never send that header. So standard `Cache-Control` governs static assets, and LSCache semantics keep governing PHP pages, from the same host block.
+
+The only thing missing is telling Apache to send `Cache-Control` on static files. Without it, Ferron still caches a bare `200 OK` for a short time under its default heuristic (5 minutes), but you get no control over the TTL and no `immutable` hint.
+
+Add explicit headers with `mod_headers` and `mod_expires`:
 
 ```apache
 <IfModule mod_headers.c>
@@ -99,7 +105,9 @@ The only thing missing is telling Apache to send `Cache-Control` on static files
 </IfModule>
 ```
 
-Use `immutable` only for assets with a hashed or versioned filename (for example `app.a1b2c3.js`), since it tells clients and Ferron never to revalidate the entry for the lifetime of `max-age`. For unversioned assets that change in place, drop `immutable` and pick a shorter `max-age`, or plan to `PURGE` the entry after a deploy (see [PURGE method cache invalidation](/docs/v3/configuration/content/cache#purge-method-cache-invalidation)).
+Use `immutable` only for assets with a hashed or versioned filename (for example `app.a1b2c3.js`), since it tells clients and Ferron never to revalidate the entry for the lifetime of `max-age`.
+
+For unversioned assets that change in place, drop `immutable` and pick a shorter `max-age`, or plan to `PURGE` the entry after a deploy (see [PURGE method cache invalidation](/docs/v3/configuration/content/cache#purge-method-cache-invalidation)).
 
 With that header in place, the flow looks like this:
 
