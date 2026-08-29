@@ -36,6 +36,10 @@
 
 ### Fixed
 
+#### HTTP server core
+
+- **`request.uri` interpolation fix**: previously, `request.uri` interpolation included the full request URL, including the `http`/`https` scheme and hostname. This had been changed to only include the path and query string.
+
 #### Logging
 
 - **Reduced startup logs**: removed multiple startup logs for various features to reduce noise in the logs.

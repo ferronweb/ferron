@@ -74,7 +74,10 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
         var::REQUEST_URI => ctx
             .original_uri
             .as_ref()
-            .map(|u| u.to_string())
+            .map(|u| {
+                u.path_and_query()
+                    .map_or_else(|| u.path().to_string(), |q| q.to_string())
+            })
             .or_else(|| ctx.req.as_ref().map(|r| r.uri().to_string())),
         var::REQUEST_VERSION => ctx.req.as_ref().map(|r| match r.version() {
             http::Version::HTTP_09 => "HTTP/0.9".to_string(),
