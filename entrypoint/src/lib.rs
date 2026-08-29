@@ -21,8 +21,8 @@ use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{ReloadState, RELOAD_STATE, RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
-use mimalloc::MiMalloc;
 use serde::Serialize;
+use tikv_jemallocator::Jemalloc;
 use tokio_util::sync::CancellationToken;
 
 #[cfg(windows)]
@@ -31,7 +31,7 @@ use crate::cli::{parse_config_params, Cli, Commands};
 use crate::panic::install_panic_hook;
 
 #[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+static GLOBAL: Jemalloc = Jemalloc;
 
 shadow_rs::shadow!(build);
 

@@ -11,6 +11,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 tokio-util = "0.7.18"
 anyhow = "1.0.102"
 shadow-rs = { version = "2.0.0", default-features = false }
+tikv-jemallocator = { version = "0.7", features = ["background_threads", "unprefixed_malloc_on_supported_platforms"] }
 
 ferron-core = { path = "../core" }
 
@@ -65,12 +66,6 @@ windows-service = "0.8"
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["fs", "signal", "process"] }
 signal-hook = "0.4"
-
-[target.'cfg(target_arch = "x86")'.dependencies]
-mimalloc = { version = "0.1.52", features = ["v2"] } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
-
-[target.'cfg(not(target_arch = "x86"))'.dependencies]
-mimalloc = { version = "0.1.52" }
 
 [build-dependencies]
 shadow-rs = { version = "2.0.0", default-features = false, features = [
