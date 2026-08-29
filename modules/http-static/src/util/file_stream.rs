@@ -36,9 +36,11 @@ impl FileStream {
     /// Create a new `FileStream` reading from `start` to `end` (exclusive).
     /// If `end` is `None`, reads until EOF.
     #[inline]
-    pub fn new(file: ReusedFile, start: u64, end: Option<u64>) -> Self {
+    pub fn new(mut file: ReusedFile, start: u64, end: Option<u64>) -> Self {
         let remaining = remaining_from_bounds(start, end);
         let finished = matches!(remaining, Some(0));
+        // SAFETY: FileStream uses read_at (which uses pread), which does not require rewinding.
+        unsafe { file.dont_rewind() };
 
         Self {
             file: Arc::new(SendWrapper::new(file)),

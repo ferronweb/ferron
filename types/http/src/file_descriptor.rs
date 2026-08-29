@@ -129,6 +129,7 @@ pub struct ReusedFile {
     symlink_mode: SymlinkMode,
     metadata: Result<zincio::fs::Metadata, std::io::Error>,
     path: PathBuf,
+    dont_rewind: bool,
 }
 
 impl ReusedFile {
@@ -199,6 +200,7 @@ impl ReusedFile {
                 metadata,
                 path: path.as_ref().to_path_buf(),
                 symlink_mode,
+                dont_rewind: false,
             });
         }
 
@@ -234,6 +236,7 @@ impl ReusedFile {
             metadata,
             path: path.as_ref().to_path_buf(),
             symlink_mode,
+            dont_rewind: true,
         })
     }
 
@@ -298,6 +301,17 @@ impl ReusedFile {
     pub fn symlink_mode(&self) -> SymlinkMode {
         self.symlink_mode
     }
+
+    /// Marks the file as not needing to be rewound after reading.
+    ///
+    /// # Safety
+    ///
+    /// The user needs to make sure that the file operations don't move the file pointer.
+    /// For example, pread will not move the file pointer, but read will move it.
+    #[inline]
+    pub unsafe fn dont_rewind(&mut self) {
+        self.dont_rewind = true;
+    }
 }
 
 impl Deref for ReusedFile {
@@ -335,27 +349,29 @@ impl Drop for ReusedFile {
     #[inline]
     fn drop(&mut self) {
         if let Some(inner) = self.inner.take() {
-            // Rewind the file cursor to the beginning so the next user
-            // of this pooled handle starts at offset 0.
-            //
-            // `zincio` doesn't currently expose `rewind` for `zincio::fs::File`,
-            // but we can work around that by borrowing an fd, wrapping it in a
-            // `std::fs::File`, and then rewinding that, and discarding the file
-            // without closing the underlying fd.
-            #[cfg(unix)]
-            {
-                let fd = inner.as_raw_fd();
-                let mut std_inner = unsafe { std::fs::File::from_raw_fd(fd) };
-                let _ = std_inner.rewind();
-                let _ = std_inner.into_raw_fd();
-            }
-            #[cfg(windows)]
-            {
-                use std::os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle};
-                let handle = inner.as_raw_handle();
-                let mut std_inner = unsafe { std::fs::File::from_raw_handle(handle) };
-                let _ = std_inner.rewind();
-                let _ = std_inner.into_raw_handle();
+            if !self.dont_rewind {
+                // Rewind the file cursor to the beginning so the next user
+                // of this pooled handle starts at offset 0.
+                //
+                // `zincio` doesn't currently expose `rewind` for `zincio::fs::File`,
+                // but we can work around that by borrowing an fd, wrapping it in a
+                // `std::fs::File`, and then rewinding that, and discarding the file
+                // without closing the underlying fd.
+                #[cfg(unix)]
+                {
+                    let fd = inner.as_raw_fd();
+                    let mut std_inner = unsafe { std::fs::File::from_raw_fd(fd) };
+                    let _ = std_inner.rewind();
+                    let _ = std_inner.into_raw_fd();
+                }
+                #[cfg(windows)]
+                {
+                    use std::os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle};
+                    let handle = inner.as_raw_handle();
+                    let mut std_inner = unsafe { std::fs::File::from_raw_handle(handle) };
+                    let _ = std_inner.rewind();
+                    let _ = std_inner.into_raw_handle();
+                }
             }
 
             let path_buf = self.path.clone();

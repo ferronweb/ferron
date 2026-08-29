@@ -136,7 +136,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             return Ok(true);
         };
 
-        let Some(file) = ctx.file.take() else {
+        let Some(mut file) = ctx.file.take() else {
             ctx.http.req = Some(request);
             return Ok(true);
         };
@@ -888,6 +888,8 @@ impl Stage<HttpFileContext> for StaticFileStage {
         // Use the file handle from context (already opened during path resolution)
         // For precompressed files, the file_path may have changed, so we re-open
         let file = if is_precompressed_file {
+            // SAFETY: this file is discarded after use.
+            unsafe { file.dont_rewind() };
             ReusedFile::open_with_symlink_mode(&file_path, &ctx.file_root, file.symlink_mode())
                 .await
                 .map_err(|e| PipelineError::custom(format!("failed to open file: {e}")))?
