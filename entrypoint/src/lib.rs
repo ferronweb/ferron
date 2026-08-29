@@ -26,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 
 #[cfg(windows)]
 use mimalloc::MiMalloc;
-#[cfg(not(windows))]
+#[cfg(unix)]
 use tikv_jemallocator::Jemalloc;
 
 #[cfg(windows)]
@@ -37,7 +37,7 @@ use crate::panic::install_panic_hook;
 #[cfg(windows)]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
-#[cfg(not(windows))]
+#[cfg(unix)]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
