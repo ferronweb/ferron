@@ -22,14 +22,22 @@ use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{ReloadState, RELOAD_STATE, RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
 use serde::Serialize;
-use tikv_jemallocator::Jemalloc;
 use tokio_util::sync::CancellationToken;
+
+#[cfg(windows)]
+use mimalloc::MiMalloc;
+#[cfg(not(windows))]
+use tikv_jemallocator::Jemalloc;
 
 #[cfg(windows)]
 use crate::cli::WinServiceCommands;
 use crate::cli::{parse_config_params, Cli, Commands};
 use crate::panic::install_panic_hook;
 
+#[cfg(windows)]
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+#[cfg(not(windows))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 

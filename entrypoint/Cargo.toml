@@ -11,7 +11,6 @@ serde = { version = "1.0.228", features = ["derive"] }
 tokio-util = "0.7.18"
 anyhow = "1.0.102"
 shadow-rs = { version = "2.0.0", default-features = false }
-tikv-jemallocator = { version = "0.7", features = ["background_threads", "unprefixed_malloc_on_supported_platforms"] }
 
 ferron-core = { path = "../core" }
 
@@ -62,10 +61,12 @@ ferron-metrics-reload = { path = "../modules/metrics-reload", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
+mimalloc = "0.1.52"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["fs", "signal", "process"] }
 signal-hook = "0.4"
+tikv-jemallocator = { version = "0.7", features = ["background_threads", "unprefixed_malloc_on_supported_platforms"] }
 
 [build-dependencies]
 shadow-rs = { version = "2.0.0", default-features = false, features = [
