@@ -108,7 +108,10 @@ http {
 
 With `trust_request` enabled, Ferron reads the incoming `traceparent`, `tracestate`, and `baggage` headers. It stores baggage in the request trace context and passes the trace headers to upstream services. With the OTLP provider, Ferron attaches the baggage to the span context, and the observability backend sees it.
 
-> The reverse proxy, CGI, FastCGI, and SCGI modules inject trace context headers into outgoing requests when a trace context exists. The headers are `traceparent`, `tracestate`, and `baggage`, and they need no per-module configuration. The `trace` block with `generate` and `trust_request` controls this injection globally, and a configured trace sink also matters. For CGI, FastCGI, and SCGI backends, the modules map these headers to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). Application code can then read the variables without special header parsing.
+> [!tip]
+> The reverse proxy, CGI, FastCGI, and SCGI modules inject trace context headers into outgoing requests when a trace context exists. The headers are `traceparent`, `tracestate`, and `baggage`, and they need no per-module configuration. The `trace` block with `generate` and `trust_request` controls this injection globally, and a configured trace sink also matters.
+>
+> For CGI, FastCGI, and SCGI backends, the modules map these headers to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). Application code can then read the variables without special header parsing.
 
 > [!note]
 >
@@ -228,14 +231,14 @@ Observability backends that support tracing (for example, OTLP) consume the trac
 
 The `trace_sampling` directive (in the `http` block) controls which traces Ferron samples and exports. Sampling reduces the volume of trace data that Ferron sends to the collector while keeping representative coverage.
 
-| Mode                       | Description                                                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `always_on`                | Sample every trace. Useful for development.                                                                   |
-| `always_off`               | Sample no traces. This disables trace export effectively.                                                     |
+| Mode                       | Description                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `always_on`                | Sample every trace. Useful for development.                                                               |
+| `always_off`               | Sample no traces. This disables trace export effectively.                                                 |
 | `parentbased_always_on`    | Follow the parent sampling decision. Always sample root spans, which have no parent. This is the default. |
-| `traceidratio`             | Sample a fixed ratio of traces based on the trace ID.                                                         |
-| `parentbased_traceidratio` | Sample root spans by ratio, and follow the parent decision for child spans. Recommended for production.       |
-| `attribute_based`          | Sample based on span attributes visible when Ferron creates the span.                                         |
+| `traceidratio`             | Sample a fixed ratio of traces based on the trace ID.                                                     |
+| `parentbased_traceidratio` | Sample root spans by ratio, and follow the parent decision for child spans. Recommended for production.   |
+| `attribute_based`          | Sample based on span attributes visible when Ferron creates the span.                                     |
 
 **Configuration example:**
 
@@ -309,10 +312,10 @@ Each `rule` takes 2 or 3 arguments:
 
 **Any** matching rule samples the span. When no rule matches, the `default_action` directive controls the outcome:
 
-| Value    | Behavior                                                        |
-| -------- | --------------------------------------------------------------- |
+| Value    | Behavior                                                    |
+| -------- | ----------------------------------------------------------- |
 | `drop`   | Ferron drops spans that match no rule. This is the default. |
-| `sample` | Ferron samples spans even when they match no rule.              |
+| `sample` | Ferron samples spans even when they match no rule.          |
 
 > [!warning]
 > Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually not intended. For example, adding rules to sample `/api/` routes also drops health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
