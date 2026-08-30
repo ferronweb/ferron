@@ -645,6 +645,11 @@ async fn try_resolve_index_files(
                         last_candidate_path: Some(index_path.to_string_lossy().into_owned()),
                     });
                 }
+                Err(error) if error.kind() == io::ErrorKind::InvalidFilename => {
+                    return Err(FilePipelineExecutionError::BadRequest {
+                        request_path: request_path.to_string(),
+                    })
+                }
                 Err(error) => {
                     return Err(FilePipelineExecutionError::Io(error));
                 }

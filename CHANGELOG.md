@@ -40,6 +40,7 @@
 #### HTTP server core
 
 - **`request.uri` interpolation fix**: previously, `request.uri` interpolation included the full request URL, including the `http`/`https` scheme and hostname. This had been changed to only include the path and query string.
+- **HTTP status code for overlong paths**: previously, overlong file paths led to 500 Internal Server Error status code to be returned. This has been changed to return 400 Bad Request instead.
 
 #### Logging
 
