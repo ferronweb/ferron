@@ -12,6 +12,7 @@ use std::time::{Instant, SystemTime};
 const DEFAULT_MTIME: SystemTime = SystemTime::UNIX_EPOCH;
 
 /// Metrics for the reload process.
+#[non_exhaustive]
 pub struct ReloadMetrics {
     pub last_reload_time: SystemTime,
     pub last_reload_error: Option<String>,
@@ -30,6 +31,7 @@ impl Default for ReloadMetrics {
 }
 
 /// Metrics for the runtime.
+#[non_exhaustive]
 pub struct RuntimeMetrics {
     pub primary_threads: usize,
     pub io_uring_supported: bool,
@@ -51,6 +53,7 @@ impl Default for RuntimeMetrics {
 ///
 /// Counters are updated from the data plane (HTTP server TCP listener and handler)
 /// and read by the control plane (admin API axum handlers).
+#[non_exhaustive]
 pub struct AdminMetrics {
     /// Server start time, used to compute uptime.
     pub start_time: Instant,
