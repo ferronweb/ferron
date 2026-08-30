@@ -26,11 +26,12 @@ pub mod adapter;
 mod builder;
 mod duration;
 pub mod layer;
-pub mod macros;
+mod macros;
 pub mod validator;
 
 pub use builder::*;
 pub use duration::*;
+//pub use macros::*;
 
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
