@@ -236,7 +236,7 @@ impl ReusedFile {
             metadata,
             path: path.as_ref().to_path_buf(),
             symlink_mode,
-            dont_rewind: true,
+            dont_rewind: false,
         })
     }
 
