@@ -419,11 +419,19 @@ Ferron 2 used `include "/path/to/*.kdl"`. Ferron 3 uses `include "/path/to/*.con
 ```kdl
 // Ferron 2
 //include "/etc/ferron.d/**/*.kdl"
+
+{
+    log_stdout
+}
 ```
 
 ```ferron
 # Ferron 3
 #include "/etc/ferron/conf.d/**/*.conf"
+
+{
+    console_log
+}
 ```
 
 ### Static file serving

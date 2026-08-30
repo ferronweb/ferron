@@ -7,7 +7,8 @@ This page documents directives that belong in top-level global blocks:
 
 ```ferron
 {
-    # global directives here
+    # global directives here, for example:
+    console_log
 }
 ```
 
