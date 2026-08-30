@@ -4,7 +4,6 @@
 //! `futures_core::Stream` for position-based async reads without spawning blocking threads.
 
 use std::io;
-use std::sync::Arc;
 
 use bytes::Bytes;
 use ferron_http::file_descriptor::ReusedFile;
@@ -25,7 +24,7 @@ type ReadChunkFuture = ReusableBoxFuture<'static, ReadChunkResult>;
 /// `SendWrapper` ensures the non-`Send` `zincio::fs::File` can safely cross thread boundaries
 /// as long as it's only polled on the same thread (guaranteed by the single-threaded runtime).
 pub struct FileStream {
-    file: Arc<SendWrapper<ReusedFile>>,
+    file: SendWrapper<std::rc::Rc<ReusedFile>>,
     current_pos: u64,
     remaining: Option<u64>,
     finished: bool,
@@ -43,7 +42,7 @@ impl FileStream {
         unsafe { file.dont_rewind() };
 
         Self {
-            file: Arc::new(SendWrapper::new(file)),
+            file: SendWrapper::new(std::rc::Rc::new(file)),
             current_pos: start,
             remaining,
             finished,
@@ -153,7 +152,7 @@ fn buffer_size_for_read(remaining: Option<u64>) -> usize {
 
 /// Reads a single chunk from a zincio file at the given position.
 async fn read_chunk(
-    file: Arc<SendWrapper<ReusedFile>>,
+    file: SendWrapper<std::rc::Rc<ReusedFile>>,
     pos: u64,
     remaining: Option<u64>,
 ) -> ReadChunkResult {
