@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint;
+use ferron_core::registry::StageConstraint;
 use ferron_http::file_descriptor::ReusedFile;
 use ferron_http::HttpErrorContext;
 use futures_util::TryStreamExt;

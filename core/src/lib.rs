@@ -23,8 +23,6 @@ pub mod registry;
 pub mod runtime;
 pub mod shutdown;
 
-pub use registry::StageConstraint;
-
 use std::any::Any;
 
 /// Trait for pluggable server modules in the Ferron architecture.

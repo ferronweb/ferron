@@ -6,7 +6,7 @@ use std::io;
 use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint;
+use ferron_core::registry::StageConstraint;
 use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::file_descriptor::ReusedFile;
 use ferron_http::span::HttpContextSpanExt;

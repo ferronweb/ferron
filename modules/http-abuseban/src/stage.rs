@@ -1,7 +1,7 @@
 //! HTTP request stage for abuse ban checks.
 
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint;
+use ferron_core::registry::StageConstraint;
 use ferron_http::abuse::{get_global_abuse_recorder, AbuseEvent, AbuseEventType};
 use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;

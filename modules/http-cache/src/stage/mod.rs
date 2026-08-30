@@ -16,7 +16,7 @@ use ahash::AHashMap;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint;
+use ferron_core::registry::StageConstraint;
 use ferron_http::HttpContext;
 use http::HeaderMap;
 use typemap_rev::TypeMapKey;

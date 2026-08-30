@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint;
+use ferron_core::registry::StageConstraint;
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::TraceAttributeValue;

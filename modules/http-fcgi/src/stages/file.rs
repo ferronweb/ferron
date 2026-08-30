@@ -33,8 +33,8 @@ impl Stage<HttpFileContext> for FcgiFileStage {
         "fcgi"
     }
 
-    fn constraints(&self) -> Vec<ferron_core::StageConstraint> {
-        vec![ferron_core::StageConstraint::Before(
+    fn constraints(&self) -> Vec<ferron_core::registry::StageConstraint> {
+        vec![ferron_core::registry::StageConstraint::Before(
             "static_file".to_string(),
         )]
     }

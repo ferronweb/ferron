@@ -42,8 +42,8 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
         "headers"
     }
 
-    fn constraints(&self) -> Vec<ferron_core::StageConstraint> {
-        vec![ferron_core::StageConstraint::Before(
+    fn constraints(&self) -> Vec<ferron_core::registry::StageConstraint> {
+        vec![ferron_core::registry::StageConstraint::Before(
             "reverse_proxy".to_string(),
         )]
     }

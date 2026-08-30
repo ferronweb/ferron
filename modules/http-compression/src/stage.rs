@@ -9,7 +9,7 @@ use async_compression::zstd::CParameter;
 use async_compression::Level;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint as CoreStageConstraint;
+use ferron_core::registry::StageConstraint as CoreStageConstraint;
 use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::util::parse_q_value_header_grouped::parse_q_value_header_grouped;

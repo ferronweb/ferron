@@ -7,7 +7,7 @@
 
 use async_trait::async_trait;
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint;
+use ferron_core::registry::StageConstraint;
 use ferron_http::client_ip::ClientIpFromHeaderConfig;
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::HttpContext;

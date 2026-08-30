@@ -5,7 +5,7 @@
 
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint;
+use ferron_core::registry::StageConstraint;
 use ferron_http::HttpErrorContext;
 use http::{header, HeaderValue, Response};
 use http_body_util::{BodyExt, Full};

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
-use ferron_core::StageConstraint;
+use ferron_core::registry::StageConstraint;
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::HttpContext;
 use ferron_observability::TraceAttributeValue;

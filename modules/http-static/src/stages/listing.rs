@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use chrono::{DateTime, Local};
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint;
+use ferron_core::registry::StageConstraint;
 use ferron_http::access_log::{custom_access_log_fields, CustomAccessLogField};
 use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
