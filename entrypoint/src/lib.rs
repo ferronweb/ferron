@@ -432,6 +432,23 @@ fn run_configuration_validators(
         >,
     >,
 ) -> ConfigurationValidationResult {
+    if config.ports.is_empty()
+        && config.global_config.directives.is_empty()
+        && config.global_config.matchers.is_empty()
+    {
+        // Configuration is empty overall!
+        // Ah, the Zeta autocomplete gave me this... *sweaty smile*
+        return ConfigurationValidationResult {
+            valid: false,
+            diagnostics: vec![ConfigurationValidatorDiagnostic {
+                kind: ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                message: "Empty configuration provided".to_string(),
+                span: None,
+                scope: None,
+            }],
+        };
+    }
+
     let mut all_diagnostics = Vec::new();
 
     let mut validator_ctx = ConfigurationValidatorContext {

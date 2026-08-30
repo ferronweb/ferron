@@ -37,6 +37,10 @@
 
 ### Fixed
 
+#### Configuration
+
+- **Empty configuration validation**: added a check for empty configurations (no ports, no global directives/matchers) to return an error instead of silently starting.
+
 #### HTTP server core
 
 - **`request.uri` interpolation fix**: previously, `request.uri` interpolation included the full request URL, including the `http`/`https` scheme and hostname. This had been changed to only include the path and query string.
