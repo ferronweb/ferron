@@ -101,18 +101,18 @@ pub(super) async fn execute_http_file_pipeline(
     parent_span_key: Option<&str>,
     control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) -> Result<(), FilePipelineExecutionError> {
-    let Some(request_path_encoded) = ctx
-        .req
-        .as_ref()
-        .map(|request| request.uri().path().to_string())
-    else {
-        return Ok(());
+    let request_path = {
+        let Some(request) = ctx.req.as_ref() else {
+            return Ok(());
+        };
+        let request_path_encoded = request.uri().path();
+        let cow = urlencoding::decode(request_path_encoded).map_err(|_| {
+            FilePipelineExecutionError::BadRequest {
+                request_path: request_path_encoded.to_string(),
+            }
+        })?;
+        cow.into_owned()
     };
-    let request_path = urlencoding::decode(&request_path_encoded)
-        .map_err(|_| FilePipelineExecutionError::BadRequest {
-            request_path: request_path_encoded.clone(),
-        })?
-        .to_string();
     let Some(root_path) = resolve_webroot(ctx)? else {
         return Ok(());
     };
@@ -527,12 +527,11 @@ async fn resolve_http_file_target(
     let request_segments = request_path_segments(request_path)?;
     let mut candidate_depth = request_segments.len();
     let trailing_slash = request_path.ends_with('/') && request_path != "/";
-    let req_str = request_path.to_string();
 
     loop {
         let candidate_path = build_candidate_path(root_path, &request_segments[..candidate_depth])
             .ok_or_else(|| FilePipelineExecutionError::Forbidden {
-                request_path: req_str.clone(),
+                request_path: request_path.to_string(),
                 last_candidate_path: None,
             })?;
 
@@ -543,7 +542,7 @@ async fn resolve_http_file_target(
                 std::slice::from_ref(idx),
                 root_path,
                 disable_symlinks,
-                &req_str,
+                request_path,
             )
             .await?
             {
@@ -561,13 +560,13 @@ async fn resolve_http_file_target(
                 Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
                 Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
                     return Err(FilePipelineExecutionError::Forbidden {
-                        request_path: req_str,
+                        request_path: request_path.to_string(),
                         last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
                     })
                 }
                 Err(error) if error.kind() == io::ErrorKind::InvalidFilename => {
                     return Err(FilePipelineExecutionError::BadRequest {
-                        request_path: req_str,
+                        request_path: request_path.to_string(),
                     })
                 }
                 Err(error) if is_not_directory_like(&error) && candidate_depth > 0 => {
@@ -585,7 +584,7 @@ async fn resolve_http_file_target(
                             &index_files[1..],
                             root_path,
                             disable_symlinks,
-                            &req_str,
+                            request_path,
                         )
                         .await?
                         {
@@ -613,13 +612,13 @@ async fn resolve_http_file_target(
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
                 return Err(FilePipelineExecutionError::Forbidden {
-                    request_path: req_str,
+                    request_path: request_path.to_string(),
                     last_candidate_path: Some(candidate_path.to_string_lossy().into_owned()),
                 })
             }
             Err(error) if error.kind() == io::ErrorKind::InvalidFilename => {
                 return Err(FilePipelineExecutionError::BadRequest {
-                    request_path: req_str,
+                    request_path: request_path.to_string(),
                 })
             }
             Err(error) if is_not_directory_like(&error) && candidate_depth > 0 => {
@@ -686,7 +685,6 @@ async fn try_resolve_index_files(
 
 fn request_path_segments(request_path: &str) -> Result<Vec<String>, FilePipelineExecutionError> {
     let mut segments = Vec::new();
-    let req_str = request_path.to_string();
 
     for component in Path::new(request_path).components() {
         match component {
@@ -697,7 +695,7 @@ fn request_path_segments(request_path: &str) -> Result<Vec<String>, FilePipeline
                 // (ADS) access (e.g., /file.txt::$DATA) and scheme injection.
                 if segment_str.contains(':') {
                     return Err(FilePipelineExecutionError::Forbidden {
-                        request_path: req_str,
+                        request_path: request_path.to_string(),
                         last_candidate_path: None,
                     });
                 }
@@ -705,7 +703,7 @@ fn request_path_segments(request_path: &str) -> Result<Vec<String>, FilePipeline
             }
             Component::CurDir | Component::ParentDir | Component::Prefix(_) => {
                 return Err(FilePipelineExecutionError::Forbidden {
-                    request_path: req_str,
+                    request_path: request_path.to_string(),
                     last_candidate_path: None,
                 });
             }
