@@ -40,6 +40,7 @@
 #### Configuration
 
 - **Empty configuration validation**: added a check for empty configurations (no ports, no global directives/matchers) to return an error instead of silently starting.
+- **Protocol + IP + port host block split fix**: previously, the protocol+IP+port combination was not properly split when used as a host block (for example, `http 127.0.0.1:18081` lead to two host blocks: `http 127` and `0.0.1:18081`).
 
 #### HTTP server core
 
