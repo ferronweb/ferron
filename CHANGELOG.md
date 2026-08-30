@@ -54,6 +54,10 @@
 
 - **Static file serving symlink settings fix**: previously, symlink mode (follow or not) was not properly respected when serving precompressed static files.
 
+#### TLS
+
+- **Certificate and private key mismatch fix**: previously, when a certificate and private key did not match for a given host, this was silently allowed. This has been changed to error out on the startup of the server.
+
 ## Ferron 3.0.0-beta.10
 
 **Released in August 27, 2026**

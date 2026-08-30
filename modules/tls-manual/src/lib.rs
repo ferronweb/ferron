@@ -8,6 +8,7 @@ use ferron_observability::{build_composite_sink, CompositeEventSink};
 use ferron_tls::builder::build_server_config_builder;
 use ferron_tls::config::TlsServerConfig;
 use ferron_tls::{observability, validate_tls_common, TlsContext, TlsResolver};
+use rustls::sign::{CertifiedKey, SingleCertAndKey};
 use rustls::ServerConfig;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -23,20 +24,6 @@ fn resolve_host(ctx: &TlsContext<'_>) -> String {
         .clone()
         .or_else(|| ctx.domain.ip.map(|i| i.to_canonical().to_string()))
         .unwrap_or_default()
-}
-
-/// Build a `rustls::sign::CertifiedKey` from loaded certs and private key.
-///
-/// Used to preload certificates with Must-Staple into the OCSP service for
-/// immediate fetching.
-fn build_certified_key(
-    certs: &[CertificateDer<'static>],
-    private_key: &PrivateKeyDer<'static>,
-) -> Option<rustls::sign::CertifiedKey> {
-    use rustls::crypto::aws_lc_rs::sign::any_supported_type;
-
-    let signing_key = any_supported_type(private_key).ok()?;
-    Some(rustls::sign::CertifiedKey::new(certs.to_vec(), signing_key))
 }
 
 pub struct TlsManualResolver {
@@ -86,8 +73,25 @@ impl<'a> Provider<TlsContext<'a>> for TlsManualProvider {
             observability::emit_certificate_not_after(sink, "manual", &resolve_host(ctx), leaf);
         }
 
-        let mut config_with_tickets =
-            config_builder.with_single_cert(certs.clone(), private_key.clone_key())?;
+        let certified_key = CertifiedKey::new(
+            certs,
+            config_builder
+                .crypto_provider()
+                .key_provider
+                .load_private_key(private_key)?,
+        );
+        if certified_key.keys_match().is_err() {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "Certificate and private key do not match for \"{}\" host",
+                    resolve_host(ctx)
+                ),
+            ))?;
+        }
+
+        let resolver: Arc<SingleCertAndKey> = Arc::new(certified_key.clone().into());
+        let mut config_with_tickets = config_builder.with_cert_resolver(resolver);
 
         // Attach the ticketer
         if let Some(ticketer) = ticketer {
@@ -111,24 +115,22 @@ impl<'a> Provider<TlsContext<'a>> for TlsManualProvider {
             // would not include a stapled OCSP response because the fetch
             // hasn't completed yet. Preloading ensures the background task
             // starts fetching as soon as the config is loaded.
-            if let Some(certified_key) = build_certified_key(&certs, &private_key) {
-                if let Some(leaf) = certs.first() {
-                    // The same leaf is being mounted into the OCSP service; emit
-                    // the unified cert expiration gauge a second time so
-                    // observers can see that preload as a distinct mount.
-                    if let Some(sink) = EVENT_SINK.get() {
-                        observability::emit_certificate_not_after(
-                            sink,
-                            "manual",
-                            &resolve_host(ctx),
-                            leaf,
-                        );
-                    }
+            if let Some(leaf) = certified_key.cert.first() {
+                // The same leaf is being mounted into the OCSP service; emit
+                // the unified cert expiration gauge a second time so
+                // observers can see that preload as a distinct mount.
+                if let Some(sink) = EVENT_SINK.get() {
+                    observability::emit_certificate_not_after(
+                        sink,
+                        "manual",
+                        &resolve_host(ctx),
+                        leaf,
+                    );
                 }
-                // It would be already preloaded, even without Must-Staple extension,
-                // no need to check for Must-Staple...
-                ocsp_handle.preload_with_host(certified_key.cert.clone(), resolve_host(ctx));
             }
+            // It would be already preloaded, even without Must-Staple extension,
+            // no need to check for Must-Staple...
+            ocsp_handle.preload_with_host(certified_key.cert.clone(), resolve_host(ctx));
         }
 
         let config = Arc::new(config_with_tickets);
