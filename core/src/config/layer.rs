@@ -3,7 +3,10 @@
 //! Layered configurations allow directives to be overridden at different levels
 //! (global, protocol, host) with proper inheritance.
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+
+static EMPTY_LAYERS: LazyLock<Arc<Vec<Arc<crate::config::ServerConfigurationBlock>>>> =
+    LazyLock::new(|| Arc::new(Vec::new()));
 
 /// A configuration composed of multiple layers for inheritance.
 ///
@@ -12,10 +15,19 @@ use std::sync::Arc;
 /// - Global directives provide defaults
 /// - Protocol-level directives override globals
 /// - Host-level directives override protocol-level
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct LayeredConfiguration {
     /// Configuration layers, searched in reverse order
     pub layers: Arc<Vec<Arc<crate::config::ServerConfigurationBlock>>>,
+}
+
+impl Default for LayeredConfiguration {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            layers: EMPTY_LAYERS.clone(),
+        }
+    }
 }
 
 impl LayeredConfiguration {
@@ -23,7 +35,7 @@ impl LayeredConfiguration {
     #[inline]
     pub fn new() -> Self {
         Self {
-            layers: Arc::new(Vec::new()),
+            layers: EMPTY_LAYERS.clone(),
         }
     }
 

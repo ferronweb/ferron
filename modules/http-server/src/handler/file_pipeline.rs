@@ -392,14 +392,10 @@ async fn apply_resolved_file_to_context(
         ctx.variables.remove("request.path_info");
     }
 
+    // Avoid cloning configuration/hostname for placeholder (saves 1 Arc inc + String clone per request)
+    let has_traces = parent_span_key.is_some() && ctx.events.has_trace_sinks();
     let mut placeholder = HttpContext::default();
     placeholder.events = ctx.events.clone();
-    placeholder.configuration = ctx.configuration.clone();
-    placeholder.hostname = ctx.hostname.clone();
-    placeholder.encrypted = ctx.encrypted;
-    placeholder.local_address = ctx.local_address;
-    placeholder.remote_address = ctx.remote_address;
-    placeholder.https_port = ctx.https_port;
     let http_ctx = std::mem::replace(ctx, placeholder);
     let mut file_ctx = HttpFileContext::default();
     file_ctx.http = http_ctx;
@@ -409,7 +405,6 @@ async fn apply_resolved_file_to_context(
     file_ctx.etag = resolved_file.etag.clone();
     file_ctx.file = Some(resolved_file.file);
 
-    let has_traces = parent_span_key.is_some() && ctx.events.has_trace_sinks();
     let mut stage_hooks = PerStageSpanHooks::new(
         &ctx.events,
         has_traces,
