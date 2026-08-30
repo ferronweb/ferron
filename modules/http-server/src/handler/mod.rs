@@ -483,6 +483,8 @@ async fn request_handler_inner(
     Option<Arc<std::collections::BTreeMap<String, String>>>,
     bool,
 ) {
+    // Cache global config once to avoid multiple Arc clones on the hot path
+    let global_config = config_resolver.global();
     // Normalize "Host" header
     let request_log_trace_context = request_trace_context
         .as_ref()
@@ -519,7 +521,7 @@ async fn request_handler_inner(
             Ok(builtin_error_response(
                 400,
                 None,
-                config_resolver.global().and_then(|g| {
+                global_config.as_ref().and_then(|g| {
                     g.get_value("admin_email")
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
@@ -557,7 +559,7 @@ async fn request_handler_inner(
             Ok(builtin_error_response(
                 400,
                 None,
-                config_resolver.global().and_then(|g| {
+                global_config.as_ref().and_then(|g| {
                     g.get_value("admin_email")
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
@@ -576,17 +578,17 @@ async fn request_handler_inner(
     // Decode location for configuration resolution (routing-only, compute forwarding lazily).
     // For CONNECT requests, skip canonicalization and set the routing path to "/"
     // so the config resolver can find the applicable configuration.
-    let url_sanitize_enabled = config_resolver
-        .global()
-        .and_then(|g| get_http_nested_boolean(&g, "url_sanitize"))
+    let url_sanitize_enabled = global_config
+        .as_ref()
+        .and_then(|g| get_http_nested_boolean(g, "url_sanitize"))
         .unwrap_or(true);
     let (routing_str, _original_str) = if is_connect {
         (String::from("/"), String::new())
     } else {
         // Reject backslashes in URL (unless disabled by configuration)
-        let reject_backslash = config_resolver
-            .global()
-            .and_then(|g| get_http_nested_boolean(&g, "url_reject_backslash"))
+        let reject_backslash = global_config
+            .as_ref()
+            .and_then(|g| get_http_nested_boolean(g, "url_reject_backslash"))
             .unwrap_or(true);
         if let Err(e) = check_backslash_in_path(request.uri().path(), reject_backslash) {
             emit_error_with_trace(
@@ -620,7 +622,7 @@ async fn request_handler_inner(
                 Ok(builtin_error_response(
                     400,
                     None,
-                    config_resolver.global().and_then(|g| {
+                    global_config.as_ref().and_then(|g| {
                         g.get_value("admin_email")
                             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                     }),
@@ -672,7 +674,7 @@ async fn request_handler_inner(
                             Ok(builtin_error_response(
                                 400,
                                 None,
-                                config_resolver.global().and_then(|g| {
+                                global_config.as_ref().and_then(|g| {
                                     g.get_value("admin_email").and_then(|v| {
                                         v.as_string_with_interpolations(&HashMap::new())
                                     })
@@ -723,7 +725,7 @@ async fn request_handler_inner(
                     Ok(builtin_error_response(
                         400,
                         None,
-                        config_resolver.global().and_then(|g| {
+                        global_config.as_ref().and_then(|g| {
                             g.get_value("admin_email")
                                 .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                         }),
@@ -793,7 +795,7 @@ async fn request_handler_inner(
             Ok(builtin_error_response(
                 404,
                 None,
-                config_resolver.global().and_then(|g| {
+                global_config.as_ref().and_then(|g| {
                     g.get_value("admin_email")
                         .and_then(|v| v.as_string_with_interpolations(&ctx))
                 }),
