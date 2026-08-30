@@ -832,7 +832,7 @@ fn load_modules(
                 let io_uring_enabled = layered_config
                     .get_entry("runtime", false)
                     .and_then(|d| d.children.as_ref().map(|c| c.get_flag("io_uring")))
-                    .unwrap_or(true);
+                    .unwrap_or(false);
 
                 if runtime.is_none() {
                     runtime = Some(Runtime::new(io_uring_enabled)?);

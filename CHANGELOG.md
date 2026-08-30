@@ -17,6 +17,10 @@
 
 ### Changed
 
+#### Runtime
+
+- **`io_uring` disabled by default**: `io_uring` is now disabled by default in the runtime configuration, as small static file serving and reverse proxying performance turned out to be slower than with `epoll`.
+
 #### Static file serving
 
 - **Symlink check performance optimizations**: optimized symlink check performance by caching the results in file open cache along with opened files.

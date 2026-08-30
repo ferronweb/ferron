@@ -65,7 +65,7 @@ This page documents directives that belong in top-level global blocks:
 ### Runtime
 
 - `io_uring <bool>`
-  - This directive turns on `io_uring` for the server when it is available. If initialization fails, Ferron falls back to epoll and logs a warning. Default: enabled
+  - This directive turns on `io_uring` for the server when it is available. Enabling `io_uring` could improve performance for static file serving involving large files or reverse proxying involving very high concurrency. If initialization fails, Ferron falls back to `epoll` and logs a warning. Default: disabled
 
 **Configuration example:**
 

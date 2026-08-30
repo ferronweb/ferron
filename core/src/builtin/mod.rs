@@ -46,7 +46,7 @@ fn register_runtime_directives(registry: &mut crate::directives::DirectiveRegist
                 usage: "io_uring [bool]",
                 description: "This directive specifies whether `io_uring` is enabled for the \
                 primary runtime when available. If initialization fails, Ferron falls back to \
-                epoll and logs a warning. Default: enabled",
+                epoll and logs a warning. Default: disabled",
                 applicable_protocols: None,
                 global_only: true,
                 subblock_link: None,
