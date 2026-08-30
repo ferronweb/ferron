@@ -24,10 +24,11 @@ type ReadChunkFuture = ReusableBoxFuture<'static, ReadChunkResult>;
 /// `SendWrapper` ensures the non-`Send` `zincio::fs::File` can safely cross thread boundaries
 /// as long as it's only polled on the same thread (guaranteed by the single-threaded runtime).
 pub struct FileStream {
-    file: SendWrapper<std::rc::Rc<ReusedFile>>,
+    file: SendWrapper<std::rc::Rc<std::cell::UnsafeCell<ReusedFile>>>,
     current_pos: u64,
     remaining: Option<u64>,
     finished: bool,
+    started: bool,
     read_future: Option<ReadChunkFuture>,
 }
 
@@ -35,14 +36,13 @@ impl FileStream {
     /// Create a new `FileStream` reading from `start` to `end` (exclusive).
     /// If `end` is `None`, reads until EOF.
     #[inline]
-    pub fn new(mut file: ReusedFile, start: u64, end: Option<u64>) -> Self {
+    pub fn new(file: ReusedFile, start: u64, end: Option<u64>) -> Self {
         let remaining = remaining_from_bounds(start, end);
         let finished = matches!(remaining, Some(0));
-        // SAFETY: FileStream uses read_at (which uses pread), which does not require rewinding.
-        unsafe { file.dont_rewind() };
 
         Self {
-            file: SendWrapper::new(std::rc::Rc::new(file)),
+            started: false,
+            file: SendWrapper::new(std::rc::Rc::new(std::cell::UnsafeCell::new(file))),
             current_pos: start,
             remaining,
             finished,
@@ -57,6 +57,7 @@ impl FileStream {
         let finished = matches!(remaining, Some(0));
 
         Self {
+            started: self.started,
             file: self.file.clone(),
             current_pos: start,
             remaining,
@@ -73,6 +74,13 @@ impl Stream for FileStream {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.finished {
             return Poll::Ready(None);
+        }
+
+        if !self.started {
+            self.started = true;
+            // SAFETY: FileStream uses read_at (which uses pread), which does not require rewinding.
+            //         Also, other call is reading the separate struct field...
+            unsafe { (&mut *self.file.get()).dont_rewind() };
         }
 
         if self.read_future.is_none() {
@@ -152,7 +160,7 @@ fn buffer_size_for_read(remaining: Option<u64>) -> usize {
 
 /// Reads a single chunk from a zincio file at the given position.
 async fn read_chunk(
-    file: SendWrapper<std::rc::Rc<ReusedFile>>,
+    file: SendWrapper<std::rc::Rc<std::cell::UnsafeCell<ReusedFile>>>,
     pos: u64,
     remaining: Option<u64>,
 ) -> ReadChunkResult {
@@ -163,6 +171,8 @@ async fn read_chunk(
     let buffer_uninit = Box::new_uninit_slice(buffer_sz);
     // Safety: The buffer is a boxed slice of uninitialized `u8` values. `u8` is a primitive type.
     let buffer: Box<[u8]> = unsafe { buffer_uninit.assume_init() };
+    // SAFETY: other call is modifying the separate struct field...
+    let file = unsafe { &*file.get() };
     let result = file.read_at(buffer, pos).await;
     match result {
         (Ok(n), buffer) => {
