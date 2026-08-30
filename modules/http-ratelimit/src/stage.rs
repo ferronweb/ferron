@@ -4,7 +4,6 @@
 //! If any rule's bucket is exhausted, the request is rejected with a 429
 //! (or configured) status code and a `Retry-After` header.
 
-use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 

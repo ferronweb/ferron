@@ -7,7 +7,6 @@
 mod config;
 mod validator;
 
-use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 

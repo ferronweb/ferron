@@ -11,7 +11,6 @@ use super::{
     ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator, ServerConfigurationPort,
     ServerConfigurationSpan, ServerConfigurationValue,
 };
-use rustc_hash::FxHashMap;
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::sync::Arc;

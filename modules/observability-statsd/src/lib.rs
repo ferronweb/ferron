@@ -1,7 +1,6 @@
 mod config;
 mod validator;
 
-use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::net::SocketAddr;
