@@ -1,11 +1,33 @@
 ---
 title: "Configuration: security and TLS"
-description: "Cipher suites, ECDH curves, TLS protocol versions, and client certificate authentication (mTLS)."
+description: "Certificate and key paths, cipher suites, ECDH curves, TLS protocol versions, and client certificate authentication (mTLS)."
 ---
 
 This page documents the TLS crypto directives available inside a `tls { ... }` block. These settings are optional. Ferron uses safe defaults when you omit a setting. The TLS crypto configuration applies to all TLS providers: `manual`, `acme`, and `local`.
 
 ## Directives
+
+### Certificate and private key
+
+- `cert <path: string>`
+  - This directive specifies the path to the server certificate file. The file must be PEM format and include the leaf certificate and any intermediate certificates your CA requires.
+- `key <path: string>`
+  - This directive specifies the path to the server private key file. The file must be PEM format.
+
+These directives are required for the `manual` provider. Make sure Ferron can read both files. The certificate and private key must match.
+If they do not match, TLS handshakes fail. You can use environment variable interpolation for the paths.
+
+**Configuration example:**
+
+```ferron
+example.com {
+    tls {
+        provider manual
+        cert "/path/cert.pem"
+        key "/path/key.pem"
+    }
+}
+```
 
 ### Cipher suites
 
@@ -15,12 +37,14 @@ This page documents the TLS crypto directives available inside a `tls { ... }` b
 **Configuration example:**
 
 ```ferron
-tls {
-    provider manual
-    cert "/path/cert.pem"
-    key "/path/key.pem"
-    cipher_suite TLS_AES_128_GCM_SHA256
-    cipher_suite TLS_AES_256_GCM_SHA384
+example.com {
+    tls {
+        provider manual
+        cert "/path/cert.pem"
+        key "/path/key.pem"
+        cipher_suite TLS_AES_128_GCM_SHA256
+        cipher_suite TLS_AES_256_GCM_SHA384
+    }
 }
 ```
 
@@ -66,12 +90,14 @@ tls {
 **Configuration example: TLS 1.3 only**
 
 ```ferron
-tls {
-    provider manual
-    cert "/path/cert.pem"
-    key "/path/key.pem"
-    min_version TLSv1.3
-    max_version TLSv1.3
+example.com {
+  tls {
+      provider manual
+      cert "/path/cert.pem"
+      key "/path/key.pem"
+      min_version TLSv1.3
+      max_version TLSv1.3
+  }
 }
 ```
 
