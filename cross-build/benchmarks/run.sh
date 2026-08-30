@@ -234,6 +234,9 @@ EOF
 {
     log /dev/null
     error_log /dev/null
+    runtime {
+        io_uring
+    }
     http {
         protocols h1 h2 h3
     }
