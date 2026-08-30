@@ -68,17 +68,25 @@ pub(super) fn normalize_host_header(
             Err(anyhow::anyhow!("Multiple Host headers found"))?;
         }
         let host_header = header_data.to_str()?.trim();
-        let host_header_lower_case = host_header.to_lowercase();
-        let host_header_without_dot = host_header_lower_case
-            .strip_suffix('.')
-            .unwrap_or(host_header_lower_case.as_str());
-
-        if host_header_without_dot != host_header {
-            let host_header_value = HeaderValue::from_str(host_header_without_dot)?;
-            request
-                .headers_mut()
-                .insert(http::header::HOST, host_header_value);
+        // Fast path: avoid allocation when header is already lowercase and has no trailing dot
+        // (common for wrk / static file benchmarks).
+        let needs_lower = host_header.bytes().any(|b| b.is_ascii_uppercase());
+        let has_trailing_dot = host_header.as_bytes().last() == Some(&b'.');
+        if !needs_lower && !has_trailing_dot {
+            return Ok(());
         }
+        let normalized: String = if needs_lower {
+            let mut lower = host_header.to_ascii_lowercase();
+            if has_trailing_dot {
+                lower.pop();
+            }
+            lower
+        } else {
+            // Already lowercase but has trailing dot
+            host_header[..host_header.len() - 1].to_owned()
+        };
+        let host_header_value = HeaderValue::from_str(&normalized)?;
+        request.headers_mut().insert(http::header::HOST, host_header_value);
     }
     Ok(())
 }
