@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use rustc_hash::FxHashMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use ferron_core::config::{

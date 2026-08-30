@@ -1,7 +1,7 @@
 //! Module loader implementation
 
-use std::collections::{HashMap, VecDeque};
 use rustc_hash::FxHashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use ferron_core::builtin::BuiltinConfigurationValidator;
@@ -598,8 +598,8 @@ mod tests {
         ServerConfiguration, ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
         ServerConfigurationHostFilters, ServerConfigurationPort, ServerConfigurationValue,
     };
-    use std::collections::{BTreeMap, HashMap};
     use rustc_hash::FxHashMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::sync::Arc;
 
     fn make_config_with_directives(

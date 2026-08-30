@@ -1,10 +1,10 @@
-use rustc_hash::FxHashMap;
 use super::*;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationHostFilters,
     ServerConfigurationMatcher, ServerConfigurationMatcherExpr, ServerConfigurationMatcherOperand,
     ServerConfigurationMatcherOperator, ServerConfigurationPort, ServerConfigurationValue,
 };
+use rustc_hash::FxHashMap;
 
 // Helper functions to create test configuration blocks
 fn create_block_with_directives(
@@ -14,7 +14,8 @@ fn create_block_with_directives(
         Option<ServerConfigurationBlock>,
     )>,
 ) -> ServerConfigurationBlock {
-    let mut directive_map: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>> = FxHashMap::default();
+    let mut directive_map: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>> =
+        FxHashMap::default();
 
     for (name, args, children) in directives {
         let entry = ServerConfigurationDirectiveEntry {

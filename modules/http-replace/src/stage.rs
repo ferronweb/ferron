@@ -238,7 +238,7 @@ mod tests {
     use http::Request;
     use http_body_util::{BodyExt, Full};
     use rustc_hash::FxHashMap;
-use std::collections::HashMap;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     fn make_value_string(s: &str) -> ServerConfigurationValue {

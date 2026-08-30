@@ -86,7 +86,9 @@ pub(super) fn normalize_host_header(
             host_header[..host_header.len() - 1].to_owned()
         };
         let host_header_value = HeaderValue::from_str(&normalized)?;
-        request.headers_mut().insert(http::header::HOST, host_header_value);
+        request
+            .headers_mut()
+            .insert(http::header::HOST, host_header_value);
     }
     Ok(())
 }
