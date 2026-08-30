@@ -308,7 +308,7 @@ mod tests {
 
     #[tokio::test]
     async fn map_case_insensitive_regex() {
-        let mut opts = FxHashMap::default();
+        let mut opts = StdHashMap::default();
         opts.insert(
             "case_insensitive".to_string(),
             vec![make_map_entry(vec![make_value_bool(true)], None)],

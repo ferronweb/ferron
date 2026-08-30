@@ -424,7 +424,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use std::collections::HashMap as StdHashMap;
+    use std::collections::HashMap as FxHashMap;
 
     fn make_test_context(
         remote_address: &str,

@@ -412,7 +412,6 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use rustc_hash::FxHashMap;
-    use std::collections::HashMap;
 
     fn make_value_number(n: i64) -> ServerConfigurationValue {
         ServerConfigurationValue::Number(n, None)

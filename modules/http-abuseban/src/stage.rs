@@ -263,7 +263,6 @@ impl Stage<HttpContext> for AbuseProtectionStage {
 mod tests {
     use super::*;
     use rustc_hash::FxHashMap;
-    use std::collections::HashMap as StdHashMap;
     use std::net::SocketAddr;
 
     use bytes::Bytes;

@@ -228,7 +228,6 @@ mod tests {
     use http::Request;
     use http_body_util::{BodyExt, Full};
     use rustc_hash::FxHashMap;
-    use std::collections::HashMap;
     use std::sync::Arc;
 
     fn make_layered_config(directives: Vec<(&str, i64)>) -> LayeredConfiguration {

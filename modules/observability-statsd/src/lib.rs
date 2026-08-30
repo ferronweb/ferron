@@ -541,6 +541,7 @@ mod tests {
     use std::sync::Arc;
 
     use ferron_observability::MetricAttributeValue;
+    use rustc_hash::FxHashMap;
 
     use super::*;
     use crate::config::StatsdBackendConfig;
