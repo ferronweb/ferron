@@ -15,14 +15,16 @@ use std::sync::Arc;
 #[derive(Clone, Default)]
 pub struct LayeredConfiguration {
     /// Configuration layers, searched in reverse order
-    pub layers: Vec<Arc<crate::config::ServerConfigurationBlock>>,
+    pub layers: Arc<Vec<Arc<crate::config::ServerConfigurationBlock>>>,
 }
 
 impl LayeredConfiguration {
     /// Create a new empty layered configuration.
     #[inline]
     pub fn new() -> Self {
-        Self { layers: Vec::new() }
+        Self {
+            layers: Arc::new(Vec::new()),
+        }
     }
 
     /// Add a configuration layer.
@@ -31,7 +33,7 @@ impl LayeredConfiguration {
     /// than previously added layers.
     #[inline]
     pub fn add_layer(&mut self, layer: Arc<crate::config::ServerConfigurationBlock>) {
-        self.layers.push(layer);
+        Arc::make_mut(&mut self.layers).push(layer);
     }
 
     /// Get all entries for a directive across layers.

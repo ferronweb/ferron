@@ -438,7 +438,7 @@ mod tests {
         );
 
         let mut config = LayeredConfiguration::new();
-        config.layers.push(Arc::new(ServerConfigurationBlock {
+        config.add_layer(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(directives),
             matchers: FxHashMap::default(),
             span: None,

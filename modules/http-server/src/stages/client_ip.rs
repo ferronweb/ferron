@@ -168,9 +168,7 @@ mod tests {
                     span: None,
                 }],
             );
-            ctx.configuration
-                .layers
-                .push(Arc::new(ServerConfigurationBlock {
+            ctx.configuration.add_layer(Arc::new(ServerConfigurationBlock {
                     directives: Arc::new(directives),
                     matchers: StdHashMap::default(),
                     span: None,

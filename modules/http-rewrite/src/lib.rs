@@ -373,7 +373,7 @@ mod tests {
         directives.insert("rewrite".to_string(), entries);
 
         let mut config = LayeredConfiguration::new();
-        config.layers.push(Arc::new(ServerConfigurationBlock {
+        config.add_layer(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(directives),
             matchers: StdHashMap::default(),
             span: None,
