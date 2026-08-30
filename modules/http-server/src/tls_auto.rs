@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use ferron_core::config::{
@@ -50,7 +50,7 @@ pub fn select_auto_tls_provider(
 /// Create a synthetic `tls` directive entry for a specific provider.
 pub fn create_synthetic_tls_directive(provider_name: &str) -> ServerConfigurationDirectiveEntry {
     let synthetic_children = ServerConfigurationBlock {
-        directives: Arc::new(HashMap::from([(
+        directives: Arc::new(FxHashMap::from_iter([(
             "provider".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![ServerConfigurationValue::String(
@@ -60,7 +60,7 @@ pub fn create_synthetic_tls_directive(provider_name: &str) -> ServerConfiguratio
                 ..Default::default()
             }],
         )])),
-        matchers: HashMap::new(),
+        matchers: FxHashMap::default(),
         span: None,
     };
 

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,
 };
+use rustc_hash::FxHashMap;
 
 /// Named and default host configurations for a given IP scope.
 ///
@@ -65,7 +66,7 @@ pub type PreparedConfiguration = HashMap<Option<IpAddr>, HostConfigs>;
 
 #[derive(Debug, Clone)]
 pub struct PreparedHostConfigurationBlock {
-    pub directives: Arc<std::collections::HashMap<String, Vec<ServerConfigurationDirectiveEntry>>>,
+    pub directives: Arc<FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>>>,
     pub matches: Vec<PreparedHostConfigurationMatch>,
     pub error_config: Vec<PreparedHostConfigurationErrorConfig>,
 }
@@ -126,7 +127,7 @@ pub fn prepare_host_block(
     let mut directives = Arc::try_unwrap(config.directives).unwrap_or_else(|arc| (*arc).clone());
 
     let mut block = PreparedHostConfigurationBlock {
-        directives: Arc::new(HashMap::new()), // Placeholder, will be set at the end
+        directives: Arc::new(FxHashMap::default()), // Placeholder, will be set at the end
         matches: Vec::new(),
         error_config: Vec::new(),
     };

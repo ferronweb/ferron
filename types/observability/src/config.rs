@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use ferron_core::config::{
@@ -25,7 +26,7 @@ pub fn transform_observability_alias(
     let mut directives = directive
         .children
         .as_ref()
-        .map_or(HashMap::new(), |ch| ch.directives.as_ref().clone());
+        .map_or(FxHashMap::default(), |ch| ch.directives.as_ref().clone());
 
     match directive_name {
         "log" => {
@@ -117,7 +118,7 @@ pub fn transform_observability_alias(
 
     Ok(Some(ServerConfigurationBlock {
         directives: Arc::new(directives),
-        matchers: HashMap::new(),
+        matchers: FxHashMap::default(),
         span: directive.span.clone(),
     }))
 }
@@ -161,8 +162,8 @@ impl<'a> ObservabilityConfigExtractor<'a> {
                     blocks.push(children.clone());
                 } else {
                     blocks.push(ServerConfigurationBlock {
-                        directives: Arc::new(HashMap::new()),
-                        matchers: HashMap::new(),
+                        directives: Arc::new(FxHashMap::default()),
+                        matchers: FxHashMap::default(),
                         span: directive.span.clone(),
                     });
                 }

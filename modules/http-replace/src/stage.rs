@@ -237,7 +237,8 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Full};
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
+use std::collections::HashMap;
     use std::sync::Arc;
 
     fn make_value_string(s: &str) -> ServerConfigurationValue {
@@ -249,11 +250,11 @@ mod tests {
     }
 
     fn make_layered_config(
-        directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+        directives: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
     ) -> LayeredConfiguration {
         let block = Arc::new(ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: HashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         });
         let mut config = LayeredConfiguration::new();
@@ -263,7 +264,7 @@ mod tests {
 
     fn make_context(
         res: Option<HttpResponse>,
-        directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+        directives: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
     ) -> HttpContext {
         let req: ferron_http::HttpRequest = Request::builder()
             .uri("/test")
@@ -309,7 +310,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simple_replacement() {
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "replace".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -343,7 +344,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_skips_compressed_responses() {
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "replace".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -376,7 +377,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_skips_non_matching_mime_type() {
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "replace".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -409,7 +410,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_removes_last_modified_by_default() {
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "replace".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -444,7 +445,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_preserves_last_modified_when_configured() {
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "replace".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -453,7 +454,7 @@ mod tests {
                 span: None,
             }],
         );
-        let mut child = HashMap::new();
+        let mut child = FxHashMap::default();
         child.insert(
             "once".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -498,7 +499,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_replacements() {
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "replace".to_string(),
             vec![

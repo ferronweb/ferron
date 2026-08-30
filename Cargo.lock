@@ -1081,6 +1081,7 @@ dependencies = [
  "glob",
  "notify",
  "notify-debouncer-mini",
+ "rustc-hash",
  "tokio",
  "xxhash-rust",
 ]
@@ -1109,6 +1110,7 @@ dependencies = [
  "chrono",
  "core_affinity",
  "parking_lot",
+ "rustc-hash",
  "serde",
  "tokio",
  "tokio-util",
@@ -1297,6 +1299,7 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
+ "rustc-hash",
  "tokio",
  "typemap_rev",
 ]
@@ -1349,6 +1352,7 @@ dependencies = [
  "http-body-util",
  "parking_lot",
  "rand 0.10.2",
+ "rustc-hash",
  "tokio",
  "typemap_rev",
 ]
@@ -1499,6 +1503,7 @@ dependencies = [
  "http",
  "http-body-util",
  "regex",
+ "rustc-hash",
  "tokio",
 ]
 
@@ -1573,6 +1578,7 @@ dependencies = [
  "http-body-util",
  "memchr",
  "pin-project-lite",
+ "rustc-hash",
  "tokio",
  "typemap_rev",
 ]
@@ -1724,6 +1730,7 @@ dependencies = [
  "http",
  "http-body-util",
  "regex",
+ "rustc-hash",
  "tokio",
 ]
 
@@ -1800,6 +1807,7 @@ version = "3.0.0-beta.10"
 dependencies = [
  "async-channel",
  "ferron-core",
+ "rustc-hash",
  "tokio-util",
  "urlencoding",
  "xxhash-rust",
@@ -1892,6 +1900,7 @@ dependencies = [
  "async-channel",
  "ferron-core",
  "ferron-observability",
+ "rustc-hash",
  "tokio",
  "tokio-util",
 ]

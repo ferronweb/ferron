@@ -411,7 +411,8 @@ mod tests {
     };
     use ferron_observability::CompositeEventSink;
     use http::Request;
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
+use std::collections::HashMap;
 
     fn make_value_number(n: i64) -> ServerConfigurationValue {
         ServerConfigurationValue::Number(n, None)
@@ -446,12 +447,12 @@ mod tests {
     }
 
     fn make_config_with_layer(
-        directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+        directives: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
     ) -> LayeredConfiguration {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: HashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         }));
         config
@@ -460,13 +461,13 @@ mod tests {
     fn make_child_block(
         directives: Vec<(&str, Vec<ServerConfigurationDirectiveEntry>)>,
     ) -> ServerConfigurationBlock {
-        let mut d = HashMap::new();
+        let mut d = FxHashMap::default();
         for (name, entries) in directives {
             d.insert(name.to_string(), entries);
         }
         ServerConfigurationBlock {
             directives: Arc::new(d),
-            matchers: HashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         }
     }
@@ -476,7 +477,7 @@ mod tests {
         let engine = Arc::new(ResponseEngine::new());
         let stage = HttpResponseStage::new(engine);
 
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "abort".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -499,7 +500,7 @@ mod tests {
         let engine = Arc::new(ResponseEngine::new());
         let stage = HttpResponseStage::new(engine);
 
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "abort".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -522,7 +523,7 @@ mod tests {
         let engine = Arc::new(ResponseEngine::new());
         let stage = HttpResponseStage::new(engine);
 
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "block".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -548,7 +549,7 @@ mod tests {
         let engine = Arc::new(ResponseEngine::new());
         let stage = HttpResponseStage::new(engine);
 
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "allow".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -571,7 +572,7 @@ mod tests {
         let engine = Arc::new(ResponseEngine::new());
         let stage = HttpResponseStage::new(engine);
 
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "status".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -606,7 +607,7 @@ mod tests {
             }],
         )]);
 
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "status".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -642,7 +643,7 @@ mod tests {
             }],
         )]);
 
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "status".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -677,7 +678,7 @@ mod tests {
             }],
         )]);
 
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "status".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -709,7 +710,7 @@ mod tests {
             }],
         )]);
 
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "status".to_string(),
             vec![ServerConfigurationDirectiveEntry {

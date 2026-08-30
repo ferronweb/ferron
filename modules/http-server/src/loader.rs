@@ -1,6 +1,7 @@
 //! Module loader implementation
 
 use std::collections::{HashMap, VecDeque};
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use ferron_core::builtin::BuiltinConfigurationValidator;
@@ -319,7 +320,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                             .find(|(filters, _)| filters == &existing_host.0)
                         {
                             // Merge the configuration blocks
-                            let mut merged_block = HashMap::new();
+                            let mut merged_block = FxHashMap::default();
                             merged_block.extend(
                                 existing_host
                                     .1
@@ -597,17 +598,18 @@ mod tests {
         ServerConfiguration, ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
         ServerConfigurationHostFilters, ServerConfigurationPort, ServerConfigurationValue,
     };
-    use std::collections::{BTreeMap, HashMap as StdHashMap};
+    use std::collections::{BTreeMap, HashMap};
+    use rustc_hash::FxHashMap;
     use std::sync::Arc;
 
     fn make_config_with_directives(
-        directives: StdHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+        directives: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
         ports: BTreeMap<String, Vec<ServerConfigurationPort>>,
     ) -> Arc<ServerConfiguration> {
         Arc::new(ServerConfiguration {
             global_config: Arc::new(ServerConfigurationBlock {
                 directives: Arc::new(directives),
-                matchers: StdHashMap::new(),
+                matchers: FxHashMap::default(),
                 span: None,
             }),
             ports,
@@ -616,7 +618,7 @@ mod tests {
 
     fn make_host_block(
         hostname: Option<&str>,
-        directives: StdHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+        directives: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
     ) -> (ServerConfigurationHostFilters, ServerConfigurationBlock) {
         let filters = ServerConfigurationHostFilters {
             host: hostname.map(|s| s.to_string()),
@@ -624,7 +626,7 @@ mod tests {
         };
         let block = ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: StdHashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         };
         (filters, block)
@@ -632,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_resolve_default_http_port_number() {
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "default_http_port".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -647,7 +649,7 @@ mod tests {
 
     #[test]
     fn test_resolve_default_http_port_false() {
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "default_http_port".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -662,7 +664,7 @@ mod tests {
 
     #[test]
     fn test_resolve_default_http_port_true() {
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "default_http_port".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -677,13 +679,13 @@ mod tests {
 
     #[test]
     fn test_resolve_default_http_port_missing() {
-        let config = make_config_with_directives(StdHashMap::new(), BTreeMap::new());
+        let config = make_config_with_directives(FxHashMap::default(), BTreeMap::new());
         assert_eq!(resolve_default_http_port(&config), Some(DEFAULT_HTTP_PORT));
     }
 
     #[test]
     fn test_resolve_default_https_port_number() {
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "default_https_port".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -698,7 +700,7 @@ mod tests {
 
     #[test]
     fn test_resolve_default_https_port_false() {
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "default_https_port".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -714,7 +716,7 @@ mod tests {
     #[test]
     fn test_register_blocks_with_disabled_defaults() {
         // Test that host blocks without explicit ports are skipped when both defaults are false
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "default_http_port".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -733,7 +735,7 @@ mod tests {
         );
 
         let mut ports = BTreeMap::new();
-        let host = make_host_block(Some("example.com"), StdHashMap::new());
+        let host = make_host_block(Some("example.com"), FxHashMap::default());
         ports.insert(
             "http".to_string(),
             vec![ServerConfigurationPort {
@@ -744,7 +746,7 @@ mod tests {
 
         let config = make_config_with_directives(directives, ports);
         let mut loader = BasicHttpModuleLoader::default();
-        let mut registry = StdHashMap::new();
+        let mut registry = HashMap::new();
 
         loader.register_per_protocol_configuration_blocks(&config, &mut registry);
 
@@ -755,7 +757,7 @@ mod tests {
     #[test]
     fn test_register_blocks_with_explicit_port_and_disabled_defaults() {
         // Test that explicit ports still work when defaults are disabled
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "default_http_port".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -774,7 +776,7 @@ mod tests {
         );
 
         let mut ports = BTreeMap::new();
-        let host = make_host_block(Some("example.com"), StdHashMap::new());
+        let host = make_host_block(Some("example.com"), FxHashMap::default());
         ports.insert(
             "http".to_string(),
             vec![ServerConfigurationPort {
@@ -785,7 +787,7 @@ mod tests {
 
         let config = make_config_with_directives(directives, ports);
         let mut loader = BasicHttpModuleLoader::default();
-        let mut registry = StdHashMap::new();
+        let mut registry = HashMap::new();
 
         loader.register_per_protocol_configuration_blocks(&config, &mut registry);
 
@@ -798,7 +800,7 @@ mod tests {
     #[test]
     fn test_register_blocks_with_http_enabled_https_disabled() {
         // Test that only HTTP listener is created when HTTPS is disabled
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "default_https_port".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -809,7 +811,7 @@ mod tests {
         );
 
         let mut ports = BTreeMap::new();
-        let host = make_host_block(Some("example.com"), StdHashMap::new());
+        let host = make_host_block(Some("example.com"), FxHashMap::default());
         ports.insert(
             "http".to_string(),
             vec![ServerConfigurationPort {
@@ -820,7 +822,7 @@ mod tests {
 
         let config = make_config_with_directives(directives, ports);
         let mut loader = BasicHttpModuleLoader::default();
-        let mut registry = StdHashMap::new();
+        let mut registry = HashMap::new();
 
         loader.register_per_protocol_configuration_blocks(&config, &mut registry);
 

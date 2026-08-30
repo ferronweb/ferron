@@ -1,4 +1,5 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
+use rustc_hash::FxHashMap;
 use std::fs;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
@@ -38,8 +39,8 @@ struct SnippetDefinition {
 
 #[derive(Debug, Clone, Default)]
 struct TranslationScope {
-    matchers: HashMap<String, ServerConfigurationMatcher>,
-    snippets: HashMap<String, SnippetDefinition>,
+    matchers: FxHashMap<String, ServerConfigurationMatcher>,
+    snippets: FxHashMap<String, SnippetDefinition>,
 }
 
 impl TranslationScope {
@@ -57,8 +58,8 @@ impl TranslationScope {
 
 #[derive(Debug, Clone, Default)]
 struct MergedBlock {
-    directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
-    matchers: HashMap<String, ServerConfigurationMatcher>,
+    directives: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+    matchers: FxHashMap<String, ServerConfigurationMatcher>,
     span: Option<ServerConfigurationSpan>,
 }
 
@@ -66,8 +67,8 @@ impl MergedBlock {
     #[inline]
     fn new(span: Option<ServerConfigurationSpan>) -> Self {
         Self {
-            directives: HashMap::new(),
-            matchers: HashMap::new(),
+            directives: FxHashMap::default(),
+            matchers: FxHashMap::default(),
             span,
         }
     }

@@ -262,7 +262,8 @@ impl Stage<HttpContext> for AbuseProtectionStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap as StdHashMap;
+    use rustc_hash::FxHashMap;
+use std::collections::HashMap as StdHashMap;
     use std::net::SocketAddr;
 
     use bytes::Bytes;
@@ -294,15 +295,15 @@ mod tests {
     }
 
     fn make_config_with_abuse() -> LayeredConfiguration {
-        let inner = StdHashMap::new();
-        let mut outer = StdHashMap::new();
+        let inner = FxHashMap::default();
+        let mut outer = FxHashMap::default();
         outer.insert(
             "abuse_protection".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![],
                 children: Some(ServerConfigurationBlock {
                     directives: Arc::new(inner),
-                    matchers: StdHashMap::new(),
+                    matchers: FxHashMap::default(),
                     span: None,
                 }),
                 span: None,
@@ -312,7 +313,7 @@ mod tests {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(outer),
-            matchers: StdHashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         }));
         config

@@ -1,6 +1,7 @@
 mod config;
 mod validator;
 
+use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::net::SocketAddr;
@@ -969,7 +970,7 @@ mod tests {
 
         // Feed a metric event through the sink machinery. The consumer parses
         // the target address from the event's log configuration.
-        let mut directives = HashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "host".to_string(),
             vec![ferron_core::config::ServerConfigurationDirectiveEntry {
@@ -1015,7 +1016,7 @@ mod tests {
         );
         let block = ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: HashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         };
         let sink = StatsdEventSink {

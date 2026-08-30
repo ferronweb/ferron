@@ -30,6 +30,7 @@ pub mod validator;
 
 pub use builder::*;
 
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::net::IpAddr;
@@ -96,9 +97,9 @@ pub struct ServerConfigurationHostFilters {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationBlock {
     /// All directives in this block, indexed by name
-    pub directives: Arc<HashMap<String, Vec<ServerConfigurationDirectiveEntry>>>,
+    pub directives: Arc<FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>>>,
     /// Named matcher expressions for conditional directives
-    pub matchers: HashMap<String, ServerConfigurationMatcher>,
+    pub matchers: FxHashMap<String, ServerConfigurationMatcher>,
     /// Source location of this block
     pub span: Option<ServerConfigurationSpan>,
 }
@@ -157,7 +158,7 @@ impl ServerConfigurationBlock {
     /// The merged block has empty directive entries (only keys matter), since
     /// `has_directive` only checks key presence.
     pub fn merge_from<'a>(blocks: impl IntoIterator<Item = &'a Self>) -> Self {
-        let mut all_keys = std::collections::HashMap::new();
+        let mut all_keys = FxHashMap::default();
         for block in blocks {
             for key in block.directives.keys() {
                 all_keys.entry(key.clone()).or_insert_with(Vec::new);
@@ -165,7 +166,7 @@ impl ServerConfigurationBlock {
         }
         ServerConfigurationBlock {
             directives: Arc::new(all_keys),
-            matchers: HashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         }
     }

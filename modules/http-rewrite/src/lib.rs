@@ -6,6 +6,7 @@
 mod config;
 mod validator;
 
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -336,7 +337,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use std::collections::HashMap as StdHashMap;
+    use rustc_hash::FxHashMap as StdHashMap;
 
     fn make_test_context(path: &str, config: Option<LayeredConfiguration>) -> HttpContext {
         let req: HttpRequest = Request::builder()
@@ -357,7 +358,7 @@ mod tests {
     fn make_rewrite_config(
         rules: Vec<(&str, &str, Option<ServerConfigurationBlock>)>,
     ) -> LayeredConfiguration {
-        let mut directives = StdHashMap::new();
+        let mut directives = StdHashMap::default();
         let mut entries = Vec::new();
         for (regex, replacement, children) in rules {
             entries.push(ServerConfigurationDirectiveEntry {
@@ -374,14 +375,14 @@ mod tests {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         }));
         config
     }
 
     fn make_options_block(options: &[(&str, bool)]) -> ServerConfigurationBlock {
-        let mut directives = StdHashMap::new();
+        let mut directives = StdHashMap::default();
         for (name, value) in options {
             directives.insert(
                 name.to_string(),
@@ -394,7 +395,7 @@ mod tests {
         }
         ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         }
     }

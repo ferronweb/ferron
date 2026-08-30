@@ -4,6 +4,7 @@
 //! If any rule's bucket is exhausted, the request is rejected with a 429
 //! (or configured) status code and a `Retry-After` header.
 
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -446,7 +447,7 @@ mod tests {
     }
 
     fn make_rate_limit_config(rate: u64, burst: u64) -> LayeredConfiguration {
-        let mut inner_directives = StdHashMap::new();
+        let mut inner_directives = FxHashMap::default();
         inner_directives.insert(
             "rate".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -464,14 +465,14 @@ mod tests {
             }],
         );
 
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "rate_limit".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![],
                 children: Some(ServerConfigurationBlock {
                     directives: Arc::new(inner_directives),
-                    matchers: StdHashMap::new(),
+                    matchers: FxHashMap::default(),
                     span: None,
                 }),
                 span: None,
@@ -481,7 +482,7 @@ mod tests {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: StdHashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         }));
         config

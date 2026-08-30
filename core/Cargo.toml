@@ -14,6 +14,7 @@ anyhow = "1.0"
 chrono = "0.4"
 zincio = { version = "0.2.22", default-features = false, features = ["time", "blocking-default"] }
 core_affinity = "0.8.3"
+rustc-hash = "2.1"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [

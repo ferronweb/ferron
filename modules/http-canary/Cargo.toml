@@ -4,6 +4,7 @@ version = "3.0.0-beta.10"
 edition = "2021"
 
 [dependencies]
+rustc-hash = "2.1"
 async-trait = "0.1"
 ahash = "0.8"
 http = "1"

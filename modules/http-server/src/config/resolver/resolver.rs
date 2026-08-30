@@ -333,7 +333,7 @@ impl ThreeStageResolver {
         Arc::new(CompiledBlock {
             layer: Arc::new(ServerConfigurationBlock {
                 directives: Arc::clone(&block.directives),
-                matchers: HashMap::new(),
+                matchers: FxHashMap::default(),
                 span: None,
             }),
             branches,

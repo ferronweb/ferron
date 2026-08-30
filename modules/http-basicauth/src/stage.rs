@@ -370,7 +370,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use std::collections::HashMap as StdHashMap;
+    use rustc_hash::FxHashMap;
     use std::sync::Arc;
 
     fn make_test_context_with_auth_header(
@@ -396,9 +396,9 @@ mod tests {
     }
 
     fn make_basicauth_config(users: Vec<(&str, &str)>) -> LayeredConfiguration {
-        let mut inner_directives = StdHashMap::new();
+        let mut inner_directives = FxHashMap::default();
 
-        let mut users_block_directives = StdHashMap::new();
+        let mut users_block_directives = FxHashMap::default();
         for (username, hash) in users {
             users_block_directives.insert(
                 username.to_string(),
@@ -416,21 +416,21 @@ mod tests {
                 args: vec![],
                 children: Some(ServerConfigurationBlock {
                     directives: Arc::new(users_block_directives),
-                    matchers: StdHashMap::new(),
+                    matchers: FxHashMap::default(),
                     span: None,
                 }),
                 span: None,
             }],
         );
 
-        let mut directives = StdHashMap::new();
+        let mut directives = FxHashMap::default();
         directives.insert(
             "basic_auth".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![],
                 children: Some(ServerConfigurationBlock {
                     directives: Arc::new(inner_directives),
-                    matchers: StdHashMap::new(),
+                    matchers: FxHashMap::default(),
                     span: None,
                 }),
                 span: None,
@@ -440,7 +440,7 @@ mod tests {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: StdHashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         }));
         config

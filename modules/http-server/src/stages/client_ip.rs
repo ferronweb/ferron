@@ -101,7 +101,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use std::collections::HashMap as StdHashMap;
+    use rustc_hash::FxHashMap as StdHashMap;
     use std::sync::Arc;
 
     fn make_test_context(
@@ -134,7 +134,7 @@ mod tests {
         ctx.remote_address = Some("10.0.0.1:12345".parse().unwrap());
 
         if let Some(directive) = config_directive {
-            let mut directives = StdHashMap::new();
+            let mut directives = StdHashMap::default();
             directives.insert(
                 "client_ip_from_header".to_string(),
                 vec![ServerConfigurationDirectiveEntry {
@@ -145,7 +145,7 @@ mod tests {
                     children: if trusted_proxies.is_empty() {
                         None
                     } else {
-                        let mut nested_directives = StdHashMap::new();
+                        let mut nested_directives = StdHashMap::default();
                         nested_directives.insert(
                             "trusted_proxy".to_string(),
                             vec![ServerConfigurationDirectiveEntry {
@@ -161,7 +161,7 @@ mod tests {
                         );
                         Some(ServerConfigurationBlock {
                             directives: Arc::new(nested_directives),
-                            matchers: StdHashMap::new(),
+                            matchers: StdHashMap::default(),
                             span: None,
                         })
                     },
@@ -172,7 +172,7 @@ mod tests {
                 .layers
                 .push(Arc::new(ServerConfigurationBlock {
                     directives: Arc::new(directives),
-                    matchers: StdHashMap::new(),
+                    matchers: StdHashMap::default(),
                     span: None,
                 }));
         }

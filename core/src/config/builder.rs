@@ -11,6 +11,7 @@ use super::{
     ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator, ServerConfigurationPort,
     ServerConfigurationSpan, ServerConfigurationValue,
 };
+use rustc_hash::FxHashMap;
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -311,7 +312,7 @@ impl ServerConfigurationBlockBuilder {
 
     /// Builds the [`ServerConfigurationBlock`].
     pub fn build(self) -> ServerConfigurationBlock {
-        let mut directives_map = std::collections::HashMap::new();
+        let mut directives_map = rustc_hash::FxHashMap::default();
         for (name, entry) in self.directives {
             directives_map
                 .entry(name)
@@ -319,7 +320,7 @@ impl ServerConfigurationBlockBuilder {
                 .push(entry);
         }
 
-        let mut matchers_map = std::collections::HashMap::new();
+        let mut matchers_map = rustc_hash::FxHashMap::default();
         for (name, matcher) in self.matchers {
             matchers_map.entry(name).or_insert(matcher);
         }

@@ -7,6 +7,7 @@
 mod config;
 mod validator;
 
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -191,7 +192,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use std::collections::HashMap as StdHashMap;
+    use rustc_hash::FxHashMap as StdHashMap;
 
     fn make_test_context(path: &str, config: Option<LayeredConfiguration>) -> HttpContext {
         let req: HttpRequest = Request::builder()
@@ -230,7 +231,7 @@ mod tests {
         variable: &str,
         block: Option<ServerConfigurationBlock>,
     ) -> LayeredConfiguration {
-        let mut top_directives = StdHashMap::new();
+        let mut top_directives = StdHashMap::default();
         top_directives.insert(
             "set_var".to_string(),
             vec![make_entry(
@@ -246,7 +247,7 @@ mod tests {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(top_directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         }));
         config
@@ -257,7 +258,7 @@ mod tests {
         ci: Option<bool>,
         negate: Option<bool>,
     ) -> ServerConfigurationBlock {
-        let mut directives = StdHashMap::new();
+        let mut directives = StdHashMap::default();
 
         if let Some(v) = value {
             directives.insert(
@@ -286,7 +287,7 @@ mod tests {
 
         ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         }
     }

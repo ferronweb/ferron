@@ -549,6 +549,7 @@ dependencies = [
  "chrono",
  "core_affinity",
  "parking_lot",
+ "rustc-hash",
  "serde",
  "tokio",
  "tokio-util",
@@ -738,6 +739,7 @@ version = "3.0.0-beta.10"
 dependencies = [
  "async-channel",
  "ferron-core",
+ "rustc-hash",
  "tokio-util",
  "urlencoding",
  "xxhash-rust",

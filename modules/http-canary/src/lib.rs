@@ -15,6 +15,7 @@ mod config;
 mod ring;
 mod validator;
 
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -530,7 +531,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use std::collections::HashMap as StdHashMap;
+    use rustc_hash::FxHashMap as StdHashMap;
 
     fn make_test_context(path: &str, config: Option<LayeredConfiguration>) -> HttpContext {
         let req: HttpRequest = Request::builder()
@@ -576,7 +577,7 @@ mod tests {
         variants: &[(&str, i64)],
         set_cookie: bool,
     ) -> LayeredConfiguration {
-        let mut block_directives = StdHashMap::new();
+        let mut block_directives = StdHashMap::default();
         if !affinity.is_empty() {
             block_directives.insert(
                 "affinity".to_string(),
@@ -602,14 +603,14 @@ mod tests {
             block_directives.insert("set_cookie".to_string(), vec![make_entry(vec![], None)]);
         }
 
-        let mut top_directives = StdHashMap::new();
+        let mut top_directives = StdHashMap::default();
         top_directives.insert(
             "canary".to_string(),
             vec![make_entry(
                 vec![make_value_string("ab_test")],
                 Some(ServerConfigurationBlock {
                     directives: Arc::new(block_directives),
-                    matchers: StdHashMap::new(),
+                    matchers: StdHashMap::default(),
                     span: None,
                 }),
             )],
@@ -618,7 +619,7 @@ mod tests {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(top_directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         }));
         config
@@ -630,7 +631,7 @@ mod tests {
         set_cookie: bool,
         cookie: Vec<(&str, Option<&str>)>,
     ) -> LayeredConfiguration {
-        let mut block_directives = StdHashMap::new();
+        let mut block_directives = StdHashMap::default();
         if !affinity.is_empty() {
             block_directives.insert(
                 "affinity".to_string(),
@@ -673,21 +674,21 @@ mod tests {
                     vec![],
                     Some(ServerConfigurationBlock {
                         directives: Arc::new(cookie_directives),
-                        matchers: StdHashMap::new(),
+                        matchers: StdHashMap::default(),
                         span: None,
                     }),
                 )],
             );
         }
 
-        let mut top_directives = StdHashMap::new();
+        let mut top_directives = StdHashMap::default();
         top_directives.insert(
             "canary".to_string(),
             vec![make_entry(
                 vec![make_value_string("ab_test")],
                 Some(ServerConfigurationBlock {
                     directives: Arc::new(block_directives),
-                    matchers: StdHashMap::new(),
+                    matchers: StdHashMap::default(),
                     span: None,
                 }),
             )],
@@ -696,7 +697,7 @@ mod tests {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(top_directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         }));
         config

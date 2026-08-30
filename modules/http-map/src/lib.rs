@@ -6,6 +6,7 @@
 mod config;
 mod validator;
 
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -121,7 +122,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use std::collections::HashMap as StdHashMap;
+    use rustc_hash::FxHashMap as StdHashMap;
 
     fn make_test_context(path: &str, config: Option<LayeredConfiguration>) -> HttpContext {
         let req: HttpRequest = Request::builder()
@@ -165,7 +166,7 @@ mod tests {
         exact_entries: Vec<ServerConfigurationDirectiveEntry>,
         regex_entries: Vec<ServerConfigurationDirectiveEntry>,
     ) -> LayeredConfiguration {
-        let mut directives = StdHashMap::new();
+        let mut directives = StdHashMap::default();
 
         if let Some(d) = default {
             directives.insert(
@@ -184,11 +185,11 @@ mod tests {
 
         let map_block = ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         };
 
-        let mut top_directives = StdHashMap::new();
+        let mut top_directives = StdHashMap::default();
         top_directives.insert(
             "map".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -201,7 +202,7 @@ mod tests {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(top_directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         }));
         config
@@ -308,7 +309,7 @@ mod tests {
 
     #[tokio::test]
     async fn map_case_insensitive_regex() {
-        let mut opts = StdHashMap::new();
+        let mut opts = FxHashMap::default();
         opts.insert(
             "case_insensitive".to_string(),
             vec![make_map_entry(vec![make_value_bool(true)], None)],
@@ -317,21 +318,21 @@ mod tests {
             vec![make_value_string("^/api/.*"), make_value_string("api")],
             Some(ServerConfigurationBlock {
                 directives: Arc::new(opts),
-                matchers: StdHashMap::new(),
+                matchers: StdHashMap::default(),
                 span: None,
             }),
         );
 
-        let mut directives = StdHashMap::new();
+        let mut directives = StdHashMap::default();
         directives.insert("regex".to_string(), vec![regex_entry]);
 
         let map_block = ServerConfigurationBlock {
             directives: Arc::new(directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         };
 
-        let mut top_directives = StdHashMap::new();
+        let mut top_directives = StdHashMap::default();
         top_directives.insert(
             "map".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -347,7 +348,7 @@ mod tests {
         let mut config = LayeredConfiguration::new();
         config.layers.push(Arc::new(ServerConfigurationBlock {
             directives: Arc::new(top_directives),
-            matchers: StdHashMap::new(),
+            matchers: StdHashMap::default(),
             span: None,
         }));
 

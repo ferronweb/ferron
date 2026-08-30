@@ -170,7 +170,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::Empty;
-    use std::collections::HashMap as StdHashMap;
+    use rustc_hash::FxHashMap as StdHashMap;
     use std::sync::Arc;
 
     fn make_test_context(
@@ -287,7 +287,7 @@ mod tests {
     async fn disabled_by_config() {
         let mut ctx = make_test_context(Some("example.com"), false, Some(443), None);
         // Simulate https_redirect false in configuration
-        let mut directives = StdHashMap::new();
+        let mut directives = StdHashMap::default();
         directives.insert(
             "https_redirect".to_string(),
             vec![ServerConfigurationDirectiveEntry {
@@ -300,7 +300,7 @@ mod tests {
             .layers
             .push(Arc::new(ServerConfigurationBlock {
                 directives: Arc::new(directives),
-                matchers: StdHashMap::new(),
+                matchers: StdHashMap::default(),
                 span: None,
             }));
 

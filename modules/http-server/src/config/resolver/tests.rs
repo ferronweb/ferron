@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -35,7 +36,7 @@ fn empty_request() -> HttpRequest {
 }
 
 fn string_block(name: &str, value: &str) -> PreparedHostConfigurationBlock {
-    let mut directives = HashMap::new();
+    let mut directives = FxHashMap::default();
     directives.insert(
         name.to_string(),
         vec![ServerConfigurationDirectiveEntry {
@@ -146,7 +147,7 @@ fn resolves_wildcard_hosts_using_lookup_tree_keys() {
 #[test]
 fn layers_multiple_matching_locations_additively() {
     let host = PreparedHostConfigurationBlock {
-        directives: Arc::new(HashMap::new()),
+        directives: Arc::new(FxHashMap::default()),
         matches: vec![
             PreparedHostConfigurationMatch {
                 matcher: PreparedHostConfigurationMatcher::Location("/".to_string()),
@@ -201,7 +202,7 @@ fn layers_multiple_matching_conditionals_additively() {
     };
 
     let block = PreparedHostConfigurationBlock {
-        directives: Arc::new(HashMap::new()),
+        directives: Arc::new(FxHashMap::default()),
         matches: vec![
             PreparedHostConfigurationMatch {
                 matcher: PreparedHostConfigurationMatcher::IfConditional(vec![expr_get]),
@@ -251,7 +252,7 @@ fn resolves_nested_location_inside_a_conditional_scope() {
     };
 
     let conditional_block = PreparedHostConfigurationBlock {
-        directives: Arc::new(HashMap::new()),
+        directives: Arc::new(FxHashMap::default()),
         matches: vec![PreparedHostConfigurationMatch {
             matcher: PreparedHostConfigurationMatcher::Location("/admin".to_string()),
             config: Arc::new(string_block("nested", "hit")),
@@ -260,7 +261,7 @@ fn resolves_nested_location_inside_a_conditional_scope() {
     };
 
     let host = PreparedHostConfigurationBlock {
-        directives: Arc::new(HashMap::new()),
+        directives: Arc::new(FxHashMap::default()),
         matches: vec![PreparedHostConfigurationMatch {
             matcher: PreparedHostConfigurationMatcher::IfConditional(vec![expr_post]),
             config: Arc::new(conditional_block),
@@ -301,7 +302,7 @@ fn resolves_nested_location_inside_a_conditional_scope() {
 #[test]
 fn layers_error_handlers_from_matching_scopes() {
     let api_location = PreparedHostConfigurationBlock {
-        directives: Arc::new(HashMap::new()),
+        directives: Arc::new(FxHashMap::default()),
         matches: Vec::new(),
         error_config: vec![PreparedHostConfigurationErrorConfig {
             error_code: Some(404),
@@ -310,7 +311,7 @@ fn layers_error_handlers_from_matching_scopes() {
     };
 
     let host = PreparedHostConfigurationBlock {
-        directives: Arc::new(HashMap::new()),
+        directives: Arc::new(FxHashMap::default()),
         matches: vec![PreparedHostConfigurationMatch {
             matcher: PreparedHostConfigurationMatcher::Location("/api".to_string()),
             config: Arc::new(api_location),

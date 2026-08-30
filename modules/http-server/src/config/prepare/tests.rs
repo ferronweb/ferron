@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use super::*;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationHostFilters,
@@ -13,7 +14,7 @@ fn create_block_with_directives(
         Option<ServerConfigurationBlock>,
     )>,
 ) -> ServerConfigurationBlock {
-    let mut directive_map: HashMap<String, Vec<ServerConfigurationDirectiveEntry>> = HashMap::new();
+    let mut directive_map: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>> = FxHashMap::default();
 
     for (name, args, children) in directives {
         let entry = ServerConfigurationDirectiveEntry {
@@ -26,7 +27,7 @@ fn create_block_with_directives(
 
     ServerConfigurationBlock {
         directives: Arc::new(directive_map),
-        matchers: HashMap::new(),
+        matchers: FxHashMap::default(),
         span: None,
     }
 }
@@ -42,8 +43,8 @@ fn create_eq_expr(identifier: &str, value: &str) -> ServerConfigurationMatcherEx
 #[test]
 fn test_empty_block() {
     let block = ServerConfigurationBlock {
-        directives: Arc::new(HashMap::new()),
-        matchers: HashMap::new(),
+        directives: Arc::new(FxHashMap::default()),
+        matchers: FxHashMap::default(),
         span: None,
     };
 
@@ -220,7 +221,7 @@ fn test_location_directive_nested_locations() {
 
 #[test]
 fn test_if_directive_single() {
-    let mut matchers = HashMap::new();
+    let mut matchers = FxHashMap::default();
     matchers.insert(
         "is_mobile".to_string(),
         ServerConfigurationMatcher {
@@ -235,7 +236,7 @@ fn test_if_directive_single() {
         None,
     )]);
 
-    let mut directives_map = HashMap::new();
+    let mut directives_map = FxHashMap::default();
     directives_map.insert(
         "if".to_string(),
         vec![ServerConfigurationDirectiveEntry {
@@ -285,7 +286,7 @@ fn test_if_directive_undefined_matcher_error() {
 
 #[test]
 fn test_if_not_directive_single() {
-    let mut matchers = HashMap::new();
+    let mut matchers = FxHashMap::default();
     matchers.insert(
         "is_bot".to_string(),
         ServerConfigurationMatcher {
@@ -300,7 +301,7 @@ fn test_if_not_directive_single() {
         None,
     )]);
 
-    let mut directives_map = HashMap::new();
+    let mut directives_map = FxHashMap::default();
     directives_map.insert(
         "if_not".to_string(),
         vec![ServerConfigurationDirectiveEntry {
@@ -329,7 +330,7 @@ fn test_if_not_directive_single() {
 
 #[test]
 fn test_mixed_location_and_conditional_matches() {
-    let mut matchers = HashMap::new();
+    let mut matchers = FxHashMap::default();
     matchers.insert(
         "is_secure".to_string(),
         ServerConfigurationMatcher {
@@ -353,7 +354,7 @@ fn test_mixed_location_and_conditional_matches() {
         None,
     )]);
 
-    let mut directives_map = HashMap::new();
+    let mut directives_map = FxHashMap::default();
     directives_map.insert(
         "location".to_string(),
         vec![ServerConfigurationDirectiveEntry {
@@ -675,7 +676,7 @@ fn test_location_missing_children_error() {
 
 #[test]
 fn test_if_not_missing_children_error() {
-    let mut matchers = HashMap::new();
+    let mut matchers = FxHashMap::default();
     matchers.insert(
         "test".to_string(),
         ServerConfigurationMatcher {
@@ -684,7 +685,7 @@ fn test_if_not_missing_children_error() {
         },
     );
 
-    let mut directives_map = HashMap::new();
+    let mut directives_map = FxHashMap::default();
     directives_map.insert(
         "if_not".to_string(),
         vec![ServerConfigurationDirectiveEntry {

@@ -227,11 +227,12 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Full};
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
+use std::collections::HashMap;
     use std::sync::Arc;
 
     fn make_layered_config(directives: Vec<(&str, i64)>) -> LayeredConfiguration {
-        let mut d = HashMap::new();
+        let mut d = FxHashMap::default();
         for (name, value) in directives {
             d.insert(
                 name.to_string(),
@@ -244,7 +245,7 @@ mod tests {
         }
         let block = Arc::new(ServerConfigurationBlock {
             directives: Arc::new(d),
-            matchers: HashMap::new(),
+            matchers: FxHashMap::default(),
             span: None,
         });
         let mut config = LayeredConfiguration::new();
