@@ -34,12 +34,12 @@ impl Runtime {
     ///
     /// # Arguments
     ///
-    /// * `io_uring_enabled` - Whether to enable io_uring on primary threads (if supported)
+    /// * `settings` - settings for the runtime
     ///
     /// # Errors
     ///
     /// Returns `std::io::Error` if runtime creation fails.
-    pub fn new(io_uring_enabled: bool) -> Result<Self, std::io::Error> {
+    pub fn new(settings: RuntimeSettings) -> Result<Self, std::io::Error> {
         // Spawn multiple threads (with pinning to each CPU core) to run primary tasks
         let core_ids = core_affinity::get_core_ids();
         let available_parallelism = core_ids.as_ref().map_or_else(
@@ -61,6 +61,7 @@ impl Runtime {
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<
                 Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync + 'static>,
             >();
+            let io_uring_enabled = settings.io_uring_enabled;
             std::thread::Builder::new()
                 .name("Primary runtime".to_string())
                 .spawn(move || {
@@ -172,6 +173,14 @@ impl Runtime {
     {
         self.secondary_runtime.block_on(task)
     }
+}
+
+/// Settings for the Ferron runtime.
+#[derive(Default)]
+#[non_exhaustive]
+pub struct RuntimeSettings {
+    /// Whether to enable io_uring on primary threads (if supported)
+    pub io_uring_enabled: bool,
 }
 
 static GLOBAL_BLOCKING_POOL: LazyLock<DefaultBlockingThreadPool> =

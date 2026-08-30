@@ -18,7 +18,7 @@ use ferron_core::config::ServerConfigurationSpan;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::logging::LogLevel;
 use ferron_core::registry::{Registry, RegistryBuilder};
-use ferron_core::runtime::Runtime;
+use ferron_core::runtime::{Runtime, RuntimeSettings};
 use ferron_core::shutdown::{ReloadState, RELOAD_STATE, RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
 use serde::Serialize;
@@ -852,7 +852,9 @@ fn load_modules(
                     .unwrap_or(false);
 
                 if runtime.is_none() {
-                    runtime = Some(Runtime::new(io_uring_enabled)?);
+                    let mut runtime_settings = RuntimeSettings::default();
+                    runtime_settings.io_uring_enabled = io_uring_enabled;
+                    runtime = Some(Runtime::new(runtime_settings)?);
                 }
                 let runtime = runtime
                     .as_mut()
