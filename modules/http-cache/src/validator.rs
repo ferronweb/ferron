@@ -1,11 +1,11 @@
 use cidr::IpCidr;
+use ferron_core::config::parse_duration;
 use ferron_core::config::validator::{
     entry_span, ConfigurationValidationError, ConfigurationValidator,
 };
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
 };
-use ferron_core::util::parse_duration;
 use http::header::HeaderName;
 
 use crate::config::MIN_PERSIST_INTERVAL;

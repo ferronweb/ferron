@@ -24,11 +24,13 @@
 
 pub mod adapter;
 mod builder;
+mod duration;
 pub mod layer;
 pub mod macros;
 pub mod validator;
 
 pub use builder::*;
+pub use duration::*;
 
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -36,8 +38,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
-
-use crate::util::parse_duration;
 
 /// Source location information for configuration elements.
 ///

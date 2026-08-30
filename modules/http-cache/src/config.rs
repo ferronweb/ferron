@@ -5,8 +5,8 @@ use cidr::IpCidr;
 use http::header::HeaderName;
 
 use ferron_core::config::layer::LayeredConfiguration;
+use ferron_core::config::parse_duration;
 use ferron_core::config::ServerConfigurationBlock;
-use ferron_core::util::parse_duration;
 
 pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 1024;
 pub const DEFAULT_MAX_CACHE_RESPONSE_SIZE: usize = 2 * 1024 * 1024;

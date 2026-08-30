@@ -1,5 +1,3 @@
-//! Utility functions shared across Ferron modules.
-
 use std::time::Duration;
 
 #[inline]
@@ -34,7 +32,7 @@ fn checked_secs(value: f64, multiplier: f64, label: &str) -> Result<Duration, St
 /// # Examples
 ///
 /// ```
-/// use ferron_core::util::parse_duration;
+/// use ferron_core::config::parse_duration;
 /// use std::time::Duration;
 ///
 /// assert_eq!(parse_duration("12h").unwrap(), Duration::from_secs(12 * 3600));

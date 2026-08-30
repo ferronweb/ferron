@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use ferron_core::config::parse_duration;
 use ferron_core::config::validator::{
     entry_span, first_entry_span, ConfigurationValidationError, ConfigurationValidator,
     ConfigurationValidatorContext,
@@ -9,7 +10,6 @@ use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
     ServerConfigurationInterpolatedStringPart, ServerConfigurationValue,
 };
-use ferron_core::util::parse_duration;
 use http::header::HeaderName;
 
 pub struct ProxyConfigurationValidator;
