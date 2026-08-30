@@ -192,7 +192,7 @@ fn validate_control_plane_directives(
     });
 }
 
-pub fn validate_observability_directives(
+fn validate_observability_directives(
     config: &crate::config::ServerConfigurationBlock,
     ctx: &mut crate::config::validator::ConfigurationValidatorContext,
 ) -> Result<(), ConfigurationValidationError> {
