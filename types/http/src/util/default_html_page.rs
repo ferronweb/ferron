@@ -1,4 +1,15 @@
-/// Formats a page with the given contents, title, and CSS stylesheets.
+//! HTML page formatting macro for default error and directory listing pages.
+
+/// Formats an HTML page with the given contents, title, and CSS stylesheets.
+///
+/// Produces a complete `<!doctype html>` document with the title HTML-escaped
+/// via [`anti_xss`](crate::util::anti_xss::anti_xss).
+///
+/// # Usage
+///
+/// ```ignore
+/// let html = format_page!("<h1>Not Found</h1>", "404", [CSS_COMMON]);
+/// ```
 #[macro_export]
 macro_rules! format_page {
     ($contents:expr, $title:expr, $css:expr) => {{

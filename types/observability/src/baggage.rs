@@ -3,19 +3,26 @@
 pub struct SignalSet(u8);
 
 impl SignalSet {
+    /// Traces signal.
     pub const TRACES: SignalSet = SignalSet(1);
+    /// Logs signal.
     pub const LOGS: SignalSet = SignalSet(2);
+    /// Metrics signal.
     pub const METRICS: SignalSet = SignalSet(4);
+    /// All signals (traces, logs, and metrics).
     pub const ALL: SignalSet = SignalSet(7);
 
+    /// Create an empty signal set with no signals selected.
     pub const fn empty() -> Self {
         SignalSet(0)
     }
 
+    /// Returns `true` if this set contains all signals in `other`.
     pub const fn contains(self, other: SignalSet) -> bool {
         (self.0 & other.0) == other.0
     }
 
+    /// Return a new set that contains all signals from both `self` and `other`.
     pub const fn insert(self, other: SignalSet) -> Self {
         SignalSet(self.0 | other.0)
     }
@@ -52,7 +59,9 @@ impl BaggageKeyPromotion {
 /// A single extracted baggage key-value pair ready to become an attribute.
 #[derive(Debug, Clone)]
 pub struct ExtractedBaggageAttr {
+    /// The OpenTelemetry attribute name for this baggage entry.
     pub attribute_name: String,
+    /// The baggage value.
     pub value: String,
 }
 
@@ -66,6 +75,7 @@ pub struct DistinctValueTracker {
 }
 
 impl DistinctValueTracker {
+    /// Create a new tracker with no previously seen values.
     pub fn new() -> Self {
         Self {
             seen: std::collections::HashMap::new(),

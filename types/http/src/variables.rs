@@ -1,27 +1,56 @@
+//! HTTP variable resolution for templates and access logs.
+//!
+//! This module provides the [`resolve_variable`] function and the
+//! [`var`] constants module. Variables are resolved from the HTTP
+//! request, configuration, and per-request state stored in
+//! [`HttpContext`](crate::HttpContext).
+
 use std::borrow::Cow;
 
 use crate::HttpContext;
 
-/// Variable name constants to avoid magic strings throughout the codebase.
+/// Variable name constants for use in templates and access logs.
+///
+/// These constants avoid magic strings throughout the codebase and
+/// serve as the canonical reference for supported variable names.
 pub mod var {
+    /// The HTTP request method (e.g. `"GET"`, `"POST"`).
     pub const REQUEST_METHOD: &str = "request.method";
+    /// The URI path component (e.g. `"/index.html"`).
     pub const REQUEST_URI_PATH: &str = "request.uri.path";
+    /// The URI query string component (without leading `?`).
     pub const REQUEST_URI_QUERY: &str = "request.uri.query";
+    /// The full URI path and query (e.g. `"/index.html?q=1"`).
     pub const REQUEST_URI: &str = "request.uri";
+    /// The HTTP version string (e.g. `"HTTP/1.1"`, `"HTTP/2.0"`).
     pub const REQUEST_VERSION: &str = "request.version";
+    /// The `Host` header value.
     pub const REQUEST_HOST: &str = "request.host";
+    /// The request scheme: `"http"` or `"https"`.
     pub const REQUEST_SCHEME: &str = "request.scheme";
+    /// Path info appended after a script filename (e.g. `"/test"` in `"/index.php/test"`).
     pub const REQUEST_PATH_INFO: &str = "request.path_info";
+    /// Prefix for header variables: `request.header.<name>`.
     pub const REQUEST_HEADER_PREFIX: &str = "request.header.";
+    /// Prefix for query parameter variables: `request.uri.query.<name>`.
     pub const REQUEST_URI_QUERY_PREFIX: &str = "request.uri.query.";
+    /// Prefix for cookie variables: `request.cookie.<name>`.
     pub const REQUEST_COOKIE_PREFIX: &str = "request.cookie.";
+    /// The server's local IP address.
     pub const SERVER_IP: &str = "server.ip";
+    /// The server's local port number.
     pub const SERVER_PORT: &str = "server.port";
+    /// The remote client's IP address.
     pub const REMOTE_IP: &str = "remote.ip";
+    /// The remote client's port number.
     pub const REMOTE_PORT: &str = "remote.port";
+    /// The authenticated username (if authentication is enabled).
     pub const AUTH_USER: &str = "auth.user";
+    /// The current W3C trace ID (32 hex chars).
     pub const TRACE_ID: &str = "trace.id";
+    /// The current W3C span ID (16 hex chars).
     pub const TRACE_SPANID: &str = "trace.spanid";
+    /// The client certificate Common Name (mTLS only).
     #[cfg(feature = "mtls")]
     pub const MTLS_CN: &str = "mtls.cn";
 }

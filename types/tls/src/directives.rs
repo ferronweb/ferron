@@ -1,5 +1,21 @@
+//! TLS directive registration for the configuration system.
+//!
+//! This module registers common TLS directives (`cert`, `key`,
+//! `client_auth`, `cipher_suite`, `ecdh_curve`, `min_version`,
+//! `max_version`, `ocsp`, `ticket_keys`) with the directive registry.
+//! TLS provider modules call [`register_tls_common_directives`] during
+//! initialization so the configuration parser recognizes these directives.
+
 use ferron_core::directives::{Directive, DirectiveRegistry, DirectiveSubblock};
 
+/// Register the common TLS configuration directives with the directive registry.
+///
+/// This registers directives for `cert`, `key`, `client_auth`, `client_auth_ca`,
+/// `cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `ocsp`, and
+/// `ticket_keys` (with sub-directives `file`, `auto_rotate`, `rotation_interval`,
+/// `max_keys`).
+///
+/// Called by TLS provider modules during initialization.
 pub fn register_tls_common_directives(
     registry: &mut DirectiveRegistry,
     subblock: DirectiveSubblock,

@@ -1,3 +1,20 @@
+//! TLS types shared by all TLS provider modules.
+//!
+//! This crate defines the traits and configuration types that TLS providers
+//! (manual, ACME, HTTP, local) implement to deliver TLS termination.
+//!
+//! # Key types
+//!
+//! - [`TlsContext`] — configuration context passed to TLS providers.
+//! - [`TlsResolver`] — trait for resolving TLS configuration at handshake time.
+//! - [`TlsInnerSocket`] — the underlying TCP or Unix socket before TLS wrapping.
+//!
+//! # For module authors
+//!
+//! Implement [`TlsResolver`] to provide TLS certificates and configuration
+//! for a specific host. The resolver is called during the TLS handshake to
+//! obtain the `rustls::ServerConfig`.
+
 use std::sync::Arc;
 
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationHostFilters};
@@ -5,11 +22,16 @@ use rustls::ServerConfig;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::StartHandshake;
 
+/// Reusable TLS builder utilities (crypto providers, ticketers, client verifiers).
 pub mod builder;
+/// Shared TLS configuration types and parsing.
 pub mod config;
+/// TLS directive registration for the configuration system.
 pub mod directives;
+/// Unified TLS observability helpers shared by every TLS provider.
 #[cfg(feature = "observability")]
 pub mod observability;
+/// TLS session ticket key management.
 pub mod tickets;
 
 /// TLS connection parameters extracted after a successful handshake.
@@ -25,16 +47,36 @@ pub struct TlsConnectionParams {
     pub cipher_suite: String,
 }
 
+/// Configuration context passed to TLS provider implementations.
+///
+/// A TLS provider reads the configuration block, ALPN protocols, host
+/// filters, and port to produce a [`TlsResolver`] that rustls calls
+/// during each TLS handshake.
 pub struct TlsContext<'a> {
+    /// The server configuration block for the TLS provider.
     pub config: &'a ServerConfigurationBlock,
+    /// ALPN protocol negotiation values (e.g. `["h2", "http/1.1"]`).
     pub alpn: Option<Vec<Vec<u8>>>,
+    /// Host filter rules for this TLS configuration.
     pub domain: ServerConfigurationHostFilters,
+    /// The port this TLS configuration applies to.
     pub port: u16,
+    /// The resolver that provides TLS configuration at handshake time.
     pub resolver: Option<Arc<dyn TlsResolver>>,
 }
 
+/// Resolves TLS configuration for incoming connections.
+///
+/// Implement this trait to provide per-host or per-connection TLS
+/// configuration. The resolver is called during the TLS handshake to
+/// obtain the `rustls::ServerConfig` and optional TLS connection parameters.
 #[async_trait::async_trait(?Send)]
 pub trait TlsResolver: Send + Sync {
+    /// Complete a TLS handshake on the given connection.
+    ///
+    /// The default implementation calls [`get_tls_config`](TlsResolver::get_tls_config)
+    /// and completes the handshake. Override this to customize handshake behavior
+    /// (e.g. SNI-based certificate selection, logging).
     #[inline]
     async fn handshake(
         &self,
@@ -43,14 +85,23 @@ pub trait TlsResolver: Send + Sync {
         Ok(Some(io.into_stream(self.get_tls_config()).await?))
     }
 
+    /// Get the `rustls::ServerConfig` for this connection.
     fn get_tls_config(&self) -> Arc<ServerConfig>;
 
+    /// Get a background error message, if any.
+    ///
+    /// Returns a diagnostic message when the resolver encounters a
+    /// non-fatal error (e.g. certificate reload failure).
     #[inline]
     fn get_tls_background_error(&self) -> Option<String> {
         None
     }
 }
 
+/// The underlying transport socket before TLS wrapping.
+///
+/// Supports both TCP and Unix domain sockets. This is passed to the
+/// [`TlsResolver::handshake`] method to complete the TLS handshake.
 pub enum TlsInnerSocket {
     Tcp(zincio::net::PollTcpStream),
     #[cfg(unix)]

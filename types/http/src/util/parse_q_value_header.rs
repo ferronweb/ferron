@@ -1,9 +1,18 @@
+//! HTTP quality-value header parsing.
+//!
+//! Parses headers like `Accept`, `Accept-Encoding`, and `Accept-Language`
+//! that use the `value; q=weight` format. Values without an explicit `q`
+//! parameter default to `1.0`. Results are sorted by descending quality.
+
 use std::cmp::Ordering;
 use std::str::FromStr;
 
+/// A parsed header value with an optional quality weight.
 #[derive(Debug, PartialEq)]
 struct HeaderValue {
+    /// The header value (e.g. `"text/html"`).
     value: String,
+    /// The quality weight (0.0-1.0), or `None` if not specified.
     q_value: Option<f32>,
 }
 
@@ -26,6 +35,18 @@ impl FromStr for HeaderValue {
     }
 }
 
+/// Parse an HTTP quality-value header into a sorted list of values.
+///
+/// Values are returned in descending quality order. Values without an
+/// explicit `q` parameter default to `1.0`. Values with the same quality
+/// retain their original order.
+///
+/// # Example
+///
+/// ```ignore
+/// let values = parse_q_value_header("text/html; q=0.8, text/plain; q=0.5");
+/// assert_eq!(values, vec!["text/html", "text/plain"]);
+/// ```
 pub fn parse_q_value_header(header: &str) -> Vec<String> {
     let mut values: Vec<HeaderValue> = header
         .split(',')

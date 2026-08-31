@@ -1,3 +1,9 @@
+//! Client IP address resolution from proxy headers.
+//!
+//! This module provides [`ClientIpFromHeaderConfig`] for extracting the
+//! real client IP from `X-Forwarded-For` or `Forwarded` (RFC 7239) headers.
+//! The `client_ip_from_header` directive enables this feature.
+
 use std::net::IpAddr;
 
 use cidr::IpCidr;
@@ -32,6 +38,11 @@ impl ClientIpHeader {
     }
 }
 
+/// Configuration for client IP extraction from a proxy header.
+///
+/// Parsed from the `client_ip_from_header` directive. Supports
+/// `X-Forwarded-For` and `Forwarded` (RFC 7239) headers with an
+/// optional trusted proxy allowlist.
 #[derive(Clone, Debug)]
 pub struct ClientIpFromHeaderConfig {
     header: ClientIpHeader,

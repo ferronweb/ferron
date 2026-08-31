@@ -3,7 +3,16 @@ use std::sync::Arc;
 use crate::sampler::TraceSampler;
 use crate::{Event, TraceEvent};
 
+/// A sink that receives and processes observability events.
+///
+/// Implement this trait to create a new observability backend (console,
+/// file, OTLP, Prometheus, etc.). The server calls [`emit`](EventSink::emit)
+/// for every event that should be processed by this sink.
+///
+/// Override [`emit_arc`](EventSink::emit_arc) when your sink can work with
+/// a shared reference to avoid cloning the full `Event` for multi-sink dispatch.
 pub trait EventSink: Send + Sync {
+    /// Receive and process a single event.
     fn emit(&self, event: Event);
 
     /// Emit an event shared via `Arc`. Override this to avoid cloning the full
@@ -30,6 +39,11 @@ pub trait EventSink: Send + Sync {
     }
 }
 
+/// An event sink that dispatches events to multiple inner sinks.
+///
+/// The composite sink is the per-host event hub. It evaluates trace sampling
+/// before dispatching and uses `Arc` wrapping to avoid cloning events when
+/// multiple sinks are registered.
 #[derive(Clone)]
 pub struct CompositeEventSink {
     sinks: Vec<Arc<dyn EventSink>>,
@@ -42,6 +56,7 @@ pub struct CompositeEventSink {
 }
 
 impl CompositeEventSink {
+    /// Create a new composite sink without a trace sampler.
     #[inline]
     pub fn new(sinks: Vec<Arc<dyn EventSink>>) -> Self {
         let has_trace_sinks = sinks.iter().any(|s| s.processes_traces());
@@ -71,6 +86,7 @@ impl CompositeEventSink {
         }
     }
 
+    /// Add an event sink to the composite sink.
     #[inline]
     pub fn add_sink(&mut self, sink: Arc<dyn EventSink>) {
         if sink.processes_traces() {
@@ -96,6 +112,7 @@ impl CompositeEventSink {
         self.has_access_sinks
     }
 
+    /// Returns `true` if no sinks are registered.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.sinks.is_empty()
@@ -107,6 +124,10 @@ impl CompositeEventSink {
         self.trace_sampler.as_ref()
     }
 
+    /// Emit an event to all registered sinks.
+    ///
+    /// Returns `true` if the event was dispatched (or dropped by sampling),
+    /// `false` if the event was dropped due to sampling.
     #[inline]
     pub fn emit(&self, event: Event) -> bool {
         // Apply trace sampling before dispatching

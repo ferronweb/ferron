@@ -1,10 +1,20 @@
+//! HTTP quality-value header parsing with q-value grouping.
+//!
+//! Like [`parse_q_value_header`](super::parse_q_value_header::parse_q_value_header),
+//! but groups values that share the same quality weight into sets. This is
+//! useful for content negotiation where multiple values at the same quality
+//! are equivalent and can be tried in any order.
+
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::str::FromStr;
 
+/// A parsed header value with an optional quality weight.
 #[derive(Debug, Clone, PartialEq)]
 struct HeaderValue {
+    /// The header value (e.g. `"text/html"`).
     value: String,
+    /// The quality weight (0.0-1.0), or `None` if not specified.
     q_value: Option<f32>,
 }
 
@@ -27,6 +37,20 @@ impl FromStr for HeaderValue {
     }
 }
 
+/// Parse an HTTP quality-value header into groups of values sorted by quality.
+///
+/// Values with the same quality weight are grouped into a single [`BTreeSet`].
+/// Groups are returned in descending quality order.
+///
+/// # Example
+///
+/// ```ignore
+/// let groups = parse_q_value_header_grouped(
+///     "text/html; q=0.8, text/plain; q=0.8, text/xml; q=0.5"
+/// );
+/// // groups[0] = {"text/html", "text/plain"} (q=0.8)
+/// // groups[1] = {"text/xml"} (q=0.5)
+/// ```
 pub fn parse_q_value_header_grouped(header: &str) -> Vec<BTreeSet<String>> {
     let mut values: Vec<HeaderValue> = header
         .split(',')

@@ -15,16 +15,25 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TlsCipherSuite {
     // TLS 1.3 cipher suites
+    /// `TLS_AES_128_GCM_SHA256` (TLS 1.3)
     Tls13Aes128GcmSha256,
+    /// `TLS_AES_256_GCM_SHA384` (TLS 1.3)
     Tls13Aes256GcmSha384,
+    /// `TLS_CHACHA20_POLY1305_SHA256` (TLS 1.3)
     Tls13Chacha20Poly1305Sha256,
     // TLS 1.2 cipher suites (ECDHE_ECDSA)
+    /// `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` (TLS 1.2)
     Tls12EcdheEcdsaAes128GcmSha256,
+    /// `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384` (TLS 1.2)
     Tls12EcdheEcdsaAes256GcmSha384,
+    /// `TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256` (TLS 1.2)
     Tls12EcdheEcdsaChacha20Poly1305Sha256,
     // TLS 1.2 cipher suites (ECDHE_RSA)
+    /// `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` (TLS 1.2)
     Tls12EcdheRsaAes128GcmSha256,
+    /// `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384` (TLS 1.2)
     Tls12EcdheRsaAes256GcmSha384,
+    /// `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256` (TLS 1.2)
     Tls12EcdheRsaChacha20Poly1305Sha256,
 }
 
@@ -53,10 +62,15 @@ impl TlsCipherSuite {
 /// Supported ECDH key exchange groups.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TlsKxGroup {
+    /// NIST P-256 (secp256r1).
     Secp256r1,
+    /// NIST P-384 (secp384r1).
     Secp384r1,
+    /// X25519 (Curve25519).
     X25519,
+    /// X25519 with ML-KEM-768 hybrid key exchange (post-quantum).
     X25519Mlkem768,
+    /// ML-KEM-768 standalone (post-quantum).
     Mlkem768,
 }
 
@@ -77,7 +91,9 @@ impl TlsKxGroup {
 /// Supported TLS protocol versions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TlsVersion {
+    /// TLS 1.2.
     Tls12,
+    /// TLS 1.3.
     Tls13,
 }
 
@@ -429,6 +445,15 @@ fn ticket_keys_auto_rotate(block: &ServerConfigurationBlock) -> bool {
         .is_some_and(ServerConfigurationDirectiveEntry::get_flag)
 }
 
+/// Emit best-practice diagnostics for common TLS misconfigurations.
+///
+/// Checks for:
+/// - `max_version TLSv1.2` (disables TLS 1.3)
+/// - `client_auth` with public trust stores (should use private CA)
+/// - `ocsp` disabled
+/// - `ticket_keys` without `auto_rotate`
+/// - `ticket_keys.max_keys` outside 2-5 range
+/// - `ticket_keys.rotation_interval` longer than 24 hours
 pub fn add_tls_common_best_practice_diagnostics(
     config: &ServerConfigurationBlock,
     validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
@@ -513,6 +538,17 @@ pub fn add_tls_common_best_practice_diagnostics(
     }
 }
 
+/// Validate common TLS configuration directives and emit best-practice diagnostics.
+///
+/// This macro validates the standard TLS directives (`cert`, `key`, `client_auth`,
+/// `cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `ocsp`, `ticket_keys`)
+/// and calls [`add_tls_common_best_practice_diagnostics`] for advisory checks.
+///
+/// # Usage
+///
+/// ```ignore
+/// validate_tls_common!(config, validator_ctx);
+/// ```
 #[macro_export]
 macro_rules! validate_tls_common {
     ($config:expr, $validator_ctx: expr) => {

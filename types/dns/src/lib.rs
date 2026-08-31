@@ -1,3 +1,15 @@
+//! DNS provider types for certificate management.
+//!
+//! This crate defines the types used by DNS-based certificate providers
+//! (e.g. ACME DNS-01 challenges). Modules implement [`DnsClient`] to
+//! interact with a specific DNS provider API.
+//!
+//! # For module authors
+//!
+//! To implement a DNS provider, create a struct that implements
+//! [`DnsClient`] and a [`Provider<DnsContext>`](ferron_core::providers::Provider)
+//! that initializes the client from configuration.
+
 use std::fmt;
 use std::sync::Arc;
 
@@ -20,15 +32,25 @@ pub struct DnsRecord {
 /// Well-known DNS record types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DnsRecordType {
+    /// IPv4 address record.
     A,
+    /// IPv6 address record.
     AAAA,
+    /// Canonical name record.
     CNAME,
+    /// Text record (used for ACME DNS-01 challenges).
     TXT,
+    /// Mail exchange record.
     MX,
+    /// Name server record.
     NS,
+    /// Service locator record.
     SRV,
+    /// Certification authority authorization record.
     CAA,
+    /// DANE TLS association record.
     TLSA,
+    /// HTTPS binding record.
     HTTPS,
 }
 
@@ -74,6 +96,7 @@ impl std::str::FromStr for DnsRecordType {
 pub struct DnsProviderError(String);
 
 impl DnsProviderError {
+    /// Create a new DNS provider error with the given message.
     pub fn new(msg: impl Into<String>) -> Self {
         Self(msg.into())
     }

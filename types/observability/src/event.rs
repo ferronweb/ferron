@@ -1,3 +1,9 @@
+//! Event types for the observability subsystem.
+//!
+//! Every observable action in Ferron is represented as an [`Event`].
+//! Sinks receive events and forward them to their respective backends
+//! (logs to file, metrics to Prometheus, traces to OTLP, etc.).
+
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -9,11 +15,19 @@ const SPAN_ID_LEN: usize = 16;
 
 pub use super::access::*;
 
+/// A top-level observability event.
+///
+/// Modules construct and emit events through a [`CompositeEventSink`](crate::CompositeEventSink).
+/// The sink dispatches each variant to the sinks that handle it.
 #[derive(Clone)]
 pub enum Event {
+    /// A structured access log event (e.g. HTTP request/response).
     Access(Arc<dyn AccessEvent>),
+    /// A traditional application log message.
     Log(LogEvent),
+    /// A numeric metric (counter, gauge, histogram).
     Metric(MetricEvent),
+    /// A distributed trace event (span start or end).
     Trace(TraceEvent),
 }
 
@@ -24,16 +38,19 @@ pub enum Event {
 /// `attributes` are emitted as typed OpenTelemetry attributes instead.
 #[derive(Clone)]
 pub struct LogEvent {
+    /// Severity level of this log message.
     pub level: LogLevel,
     /// Traditional full-text message. Always rendered by `console` and `file`
     /// sinks and by OTLP `log_style legacy`.
     pub message: String,
     /// Short summary used by OTLP `log_style modern` as the log body.
     pub summary: Cow<'static, str>,
-    pub target: &'static str, // "where this log came from"
+    /// Module or component that produced this log (e.g. `"ferron_http_server"`).
+    pub target: &'static str,
     /// Typed structured attributes. Emitted as OpenTelemetry log record
     /// attributes in OTLP `log_style modern`. Ignored by other sinks.
     pub attributes: Vec<(&'static str, LogAttributeValue)>,
+    /// Optional trace context for correlating with trace events.
     pub trace_context: Option<EventTraceContext>,
 }
 
@@ -57,11 +74,16 @@ pub enum LogAttributeValue {
     F64(f64),
 }
 
+/// Log severity level.
 #[derive(Copy, Clone)]
 pub enum LogLevel {
+    /// Error: something failed and requires attention.
     Error,
+    /// Warn: something unexpected but non-fatal happened.
     Warn,
+    /// Info: normal operational messages.
     Info,
+    /// Debug: detailed diagnostic information.
     Debug,
 }
 
@@ -100,12 +122,15 @@ pub enum MetricType {
     Histogram(Option<Cow<'static, [f64]>>),
 }
 
-/// Represents a value for a metric.
+/// A metric value.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum MetricValue {
+    /// Floating-point value.
     F64(f64),
+    /// Unsigned integer value.
     U64(u64),
+    /// Signed integer value (for up-down counters).
     I64(i64),
 }
 
@@ -148,12 +173,20 @@ pub enum TraceAttributeValue {
     F64(f64),
 }
 
+/// W3C trace context attached to an event.
+///
+/// Carries trace and span IDs as raw byte arrays (not hex-encoded) for
+/// efficient storage. The hex encoding is done only when emitting to
+/// backends that require string representations.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EventTraceContext {
+    /// 32-byte W3C trace ID (hex-encoded as 32 chars).
     pub trace_id: [u8; TRACE_ID_LEN],
+    /// 16-byte W3C parent span ID (hex-encoded as 16 chars).
     pub span_id: [u8; SPAN_ID_LEN],
     /// Baggage associated with the event.
     pub baggage: Option<String>,
+    /// Whether the trace was sampled, if known.
     pub sampled: Option<bool>,
 }
 
@@ -175,18 +208,25 @@ pub struct SpanLink {
     pub attributes: Vec<(String, TraceAttributeValue)>,
 }
 
-/// Represents a trace event with its name, attributes, and optional span ID.
+/// Identifies a span's parent, either by lookup key or by explicit trace/span IDs.
 #[derive(Clone)]
 pub enum Parent {
+    /// Reference a parent span by a logical key (resolved at emission time).
     ByKey(String),
+    /// Reference a parent span by explicit trace and span IDs.
     ById {
+        /// The trace ID of the parent span (32 hex chars).
         trace_id: String,
+        /// The span ID of the parent span (16 hex chars).
         span_id: String,
+        /// Whether the parent span was sampled.
         sampled: Option<bool>,
+        /// W3C baggage associated with the parent span.
         baggage: Option<String>,
     },
 }
 
+/// A distributed trace event: either start or end a span.
 #[derive(Clone)]
 pub enum TraceEvent {
     /// Start a new span with the given name, optional parent, and attributes.
@@ -197,12 +237,19 @@ pub enum TraceEvent {
     /// `links` connect this span to causally related spans without a
     /// parent-child relationship.
     StartSpan {
+        /// Unique key identifying this span (used to match StartSpan/EndSpan).
         key: Cow<'static, str>,
+        /// Human-readable span name (e.g. `"GET /api/users"`).
         name: Cow<'static, str>,
+        /// Parent span reference, if any.
         parent: Option<Parent>,
+        /// W3C trace context for this span.
         trace_context: Option<EventTraceContext>,
+        /// Attributes set on the SpanBuilder before building (visible to the sampler).
         builder_attributes: Vec<(Cow<'static, str>, TraceAttributeValue)>,
+        /// Attributes set after the span is built (not visible to the sampler).
         attributes: Vec<(&'static str, TraceAttributeValue)>,
+        /// Links to causally related spans.
         links: Vec<SpanLink>,
         /// Control plane metadata to include as `ferron.control_plane.*` attributes.
         control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
@@ -211,9 +258,13 @@ pub enum TraceEvent {
     /// Attributes here are merged with those from StartSpan and are useful for values
     /// only known at response time (e.g. `http.response.status_code`).
     EndSpan {
+        /// Unique key identifying this span (must match the corresponding StartSpan).
         key: Cow<'static, str>,
+        /// Human-readable span name (should match the corresponding StartSpan).
         name: Cow<'static, str>,
+        /// Optional error description if the span ended with a failure.
         error: Option<String>,
+        /// Final attributes merged with those from StartSpan (e.g. response status code).
         attributes: Vec<(&'static str, TraceAttributeValue)>,
         /// Control plane metadata to include as `ferron.control_plane.*` attributes.
         control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,

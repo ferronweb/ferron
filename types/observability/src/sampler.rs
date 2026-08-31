@@ -15,12 +15,20 @@ pub enum TraceSamplingMode {
     /// Respect the parent span's sampling decision; AlwaysOn for root spans.
     ParentBasedAlwaysOn,
     /// Sample a fixed ratio of traces based on trace ID.
-    TraceIdRatioBased { ratio: f64 },
+    TraceIdRatioBased {
+        /// Sampling ratio in [0.0, 1.0]. 0.0 means never sample, 1.0 means always sample.
+        ratio: f64,
+    },
     /// Parent-based with TraceIdRatioBased for root spans.
-    ParentBasedTraceIdRatio { ratio: f64 },
+    ParentBasedTraceIdRatio {
+        /// Sampling ratio for root spans in [0.0, 1.0].
+        ratio: f64,
+    },
     /// Sample based on span attributes set before the span is built.
     AttributeBased {
+        /// Rules evaluated in order; the first matching rule causes sampling.
         rules: Vec<AttributeSamplingRule>,
+        /// Action when no rule matches.
         default_action: AttributeBasedDefaultAction,
     },
 }
@@ -58,6 +66,7 @@ pub enum AttributeBasedDefaultAction {
 /// Trace sampling configuration.
 #[derive(Debug, Clone)]
 pub struct TraceSamplingConfig {
+    /// The sampling mode to use.
     pub mode: TraceSamplingMode,
 }
 

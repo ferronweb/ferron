@@ -129,10 +129,12 @@ pub const OBSERVABILITY_ALIAS_DIRECTIVES: &[&str] = &["log", "error_log", "conso
 /// Extract observability configuration from a ServerConfigurationBlock.
 /// This processes both explicit `observability` blocks and alias directives (log, error_log, console_log).
 pub struct ObservabilityConfigExtractor<'a> {
+    /// The configuration block to extract observability settings from.
     pub config: &'a ServerConfigurationBlock,
 }
 
 impl<'a> ObservabilityConfigExtractor<'a> {
+    /// Create a new extractor for the given configuration block.
     pub fn new(config: &'a ServerConfigurationBlock) -> Self {
         Self { config }
     }

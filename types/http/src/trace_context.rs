@@ -1,14 +1,29 @@
+//! W3C Trace Context support for distributed tracing.
+//!
+//! This module provides types and functions for parsing, generating, and
+//! injecting W3C `traceparent`, `tracestate`, and `baggage` headers.
+//! The [`TraceContext`] is stored in [`HttpContext::extensions`](crate::HttpContext::extensions)
+//! via the [`TraceContextKey`] and is available throughout the request pipeline.
+
 use http::header::HeaderValue;
 use http::HeaderMap;
 use rand::Rng;
 
-/// Minimal W3C trace context representation used by http-server and other modules.
+/// A W3C Trace Context representation for distributed tracing.
+///
+/// Carries trace ID, span ID, sampling decision, and optional baggage
+/// and tracestate values. Used to propagate context across service boundaries.
 #[derive(Debug, Clone)]
 pub struct TraceContext {
-    pub trace_id: String, // 32 hex chars
-    pub span_id: String,  // 16 hex chars
+    /// 32-character lowercase hex trace ID.
+    pub trace_id: String,
+    /// 16-character lowercase hex span ID.
+    pub span_id: String,
+    /// Whether this span should be sampled.
     pub sampled: bool,
+    /// Optional W3C Baggage value.
     pub baggage: Option<String>,
+    /// Optional W3C Tracestate value.
     pub tracestate: Option<String>,
 }
 
@@ -98,9 +113,10 @@ pub fn inject_trace_headers(headers: &mut HeaderMap, tc: &TraceContext) {
 
 use typemap_rev::TypeMapKey;
 
-/// TypeMap key for storing TraceContext in HttpContext extensions.
+/// TypeMap key for storing a [`TraceContext`] in [`HttpContext::extensions`](crate::HttpContext::extensions).
 pub struct TraceContextKey;
 impl TypeMapKey for TraceContextKey {
+    /// The stored value is a [`TraceContext`].
     type Value = TraceContext;
 }
 

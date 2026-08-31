@@ -1,22 +1,30 @@
+//! Types used by observability sink modules.
+
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Once};
 
 use crate::{AccessEvent, Event};
 
-/// Wrapper that carries an event with its configuration through the channel.
-/// Shared by all observability backend modules (console, file, prometheus,
-/// statsd, otlp).
+/// An event bundled with its configuration for channel transport.
+///
+/// Observability backend modules (console, file, Prometheus, StatsD, OTLP)
+/// receive events through an `async_channel`. This wrapper carries the event
+/// along with the configuration block and control plane metadata needed
+/// to format and emit it.
 pub struct ConfiguredEvent {
+    /// The observability event.
     pub event: Arc<Event>,
+    /// The observability configuration block for the target backend.
     pub log_config: Arc<ferron_core::config::ServerConfigurationBlock>,
+    /// Control plane metadata to include as attributes.
     pub control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
 }
 
-/// A minimal [`AccessEvent`] implementation used as a placeholder during
-/// provider initialization. Prometheus and StatsD providers send this fake
-/// event to capture the initial log configuration without requiring a real
-/// access event.
+/// A no-op [`AccessEvent`] used during provider initialization.
+///
+/// Prometheus and StatsD providers send this fake event to capture the
+/// initial log configuration without requiring a real access event.
 pub struct InitAccessEvent;
 
 impl AccessEvent for InitAccessEvent {
@@ -32,8 +40,9 @@ impl AccessEvent for InitAccessEvent {
 /// sufficient.
 static DROPPED_EVENT: Once = Once::new();
 
-/// Send a configured event through the channel, updating queue-length and
-/// dropped-event metrics on success and failure respectively.
+/// Send an event through the channel, updating queue and drop metrics.
+///
+/// If the channel is full, the event is dropped and a warn-once log is emitted.
 pub fn try_send_event(
     sender: &async_channel::Sender<ConfiguredEvent>,
     event: Arc<Event>,
@@ -67,7 +76,9 @@ pub fn try_send_event(
     }
 }
 
-/// Format control-plane metadata as a `[k=v ...] ` prefix string for log lines.
+/// Format control-plane metadata as a `[k=v ...] ` prefix for log lines.
+///
+/// Returns an empty string when there is no metadata.
 pub fn format_metadata_prefix(metadata: Option<&Arc<BTreeMap<String, String>>>) -> String {
     match metadata {
         Some(meta) if !meta.is_empty() => {

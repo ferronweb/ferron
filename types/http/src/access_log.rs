@@ -1,13 +1,23 @@
+//! Custom access log field storage.
+//!
+//! Modules can attach typed custom fields to an [`HttpContext`] that
+//! access log formatters retrieve when building log lines. Fields are
+//! stored in the extensions type map via [`CustomAccessLogFields`].
+
 use rustc_hash::FxHashMap;
 use typemap_rev::TypeMapKey;
 
 use crate::HttpContext;
 
-/// Represents a field for custom access logging.
+/// A typed value for a custom access log field.
 pub enum CustomAccessLogField {
+    /// A string value.
     String(String),
+    /// An unsigned integer value.
     U64(u64),
+    /// A floating-point value.
     F64(f64),
+    /// A boolean value.
     Bool(bool),
 }
 
@@ -39,7 +49,7 @@ impl From<bool> for CustomAccessLogField {
     }
 }
 
-/// A mutable reference to the custom access log fields in an [`HttpContext`].
+/// TypeMap key for custom access log fields in [`HttpContext::extensions`](crate::HttpContext::extensions).
 pub struct CustomAccessLogFields;
 
 impl TypeMapKey for CustomAccessLogFields {

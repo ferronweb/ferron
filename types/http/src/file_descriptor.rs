@@ -1,3 +1,13 @@
+//! File descriptor reuse pool and symlink-safe path resolution.
+//!
+//! This module provides [`ReusedFile`], a file handle that is returned to a
+//! per-thread pool on drop for reuse by subsequent requests. This avoids
+//! redundant `open` syscalls while maintaining correctness (the cursor is
+//! always rewound to the beginning).
+//!
+//! The [`SymlinkMode`] enum controls how symbolic links are handled during
+//! path traversal to prevent path-traversal attacks.
+
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::io::{self, Seek};
@@ -11,14 +21,19 @@ use ferron_core::config::ServerConfigurationValue;
 use std::collections::HashMap;
 
 /// Symlink handling mode for path resolution.
+///
+/// Controls how the file-serving stage handles symbolic links during
+/// path traversal. This mitigates path-traversal attacks that use
+/// symlinks to escape the document root.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum SymlinkMode {
-    /// Allow all symlinks.
+    /// Allow all symlinks without restriction.
     Off,
     /// Reject all symlinks encountered during traversal (default).
     #[default]
     On,
-    /// Allow symlinks only if owned by the same UID as target (Unix only).
+    /// Allow symlinks only if owned by the same UID as the target (Unix only).
+    /// On non-Unix platforms, behaves like `On`.
     IfNotOwner,
 }
 
