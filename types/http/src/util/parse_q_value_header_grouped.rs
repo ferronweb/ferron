@@ -1,6 +1,6 @@
 //! HTTP quality-value header parsing with q-value grouping.
 //!
-//! Like [`parse_q_value_header`](super::parse_q_value_header::parse_q_value_header),
+//! Like [`parse_q_value_header`](crate::util::parse_q_value_header::parse_q_value_header),
 //! but groups values that share the same quality weight into sets. This is
 //! useful for content negotiation where multiple values at the same quality
 //! are equivalent and can be tried in any order.

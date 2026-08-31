@@ -10,7 +10,7 @@
 //! # Writing an adapter
 //!
 //! 1. Implement [`ConfigurationAdapter`]. Return a
-//!    [`ServerConfiguration`](crate::config::ServerConfiguration), a boxed
+//!    [`ServerConfiguration`], a boxed
 //!    [`ConfigurationWatcher`], and [`ConfigurationMetadata`].
 //! 2. Register it in your [`ModuleLoader`](crate::loader::ModuleLoader) via
 //!    `registry.insert("my_adapter", Box::new(MyAdapter))`.
@@ -114,7 +114,7 @@ pub type AdaptResult = Result<
 /// Adapter for loading server configuration from a specific source.
 ///
 /// Adapters are responsible for parsing configuration from their source
-/// and producing a [`ServerConfiguration`](crate::config::ServerConfiguration).
+/// and producing a [`ServerConfiguration`].
 /// They are registered by name in
 /// [`ModuleLoader::register_configuration_adapters`](crate::loader::ModuleLoader::register_configuration_adapters)
 /// and selected by the user via `--config-adapter <name>`.
@@ -158,7 +158,7 @@ pub trait ConfigurationAdapter {
     ///
     /// A tuple of:
     ///
-    /// 1. The parsed [`ServerConfiguration`](crate::config::ServerConfiguration).
+    /// 1. The parsed [`ServerConfiguration`].
     /// 2. A [`ConfigurationWatcher`] for detecting future changes.
     /// 3. [`ConfigurationMetadata`] with content hash and modification time.
     fn adapt(&self, params: &HashMap<String, String>) -> AdaptResult;

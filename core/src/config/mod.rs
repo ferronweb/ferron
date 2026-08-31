@@ -89,7 +89,7 @@ pub struct ServerConfiguration {
 ///
 /// Each port entry binds a port number (or inherits the protocol default)
 /// and maps it to a list of
-/// ([`ServerConfigurationHostFilters`](ServerConfigurationHostFilters), [`ServerConfigurationBlock`])
+/// ([`ServerConfigurationHostFilters`], [`ServerConfigurationBlock`])
 /// pairs. The filters determine which incoming connections match the host
 /// block (by SNI hostname or local IP address).
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

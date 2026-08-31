@@ -54,7 +54,7 @@ use crate::directives::DirectiveRegistry;
 /// # Architecture
 ///
 /// Modules do not depend on each other at compile time. Instead they
-/// communicate through the [`registry::Registry`]: stages are executed in
+/// communicate through the [`Registry`](crate::registry::Registry): stages are executed in
 /// topologically sorted order, and providers are discovered by type and name
 /// at runtime. This means any module can use functionality exported by
 /// another module without importing its crate.
@@ -135,7 +135,7 @@ pub trait ModuleLoader {
     /// Register scoped configuration validators for nested blocks.
     ///
     /// Scoped validators are keyed by
-    /// [`ConfigurationValidatorScopedKey`](crate::config::validator::ConfigurationValidatorScopedKey),
+    /// [`ConfigurationValidatorScopedKey`],
     /// which combines a namespace (e.g. `"tls"`, `"observability"`) with a
     /// provider name (e.g. `"local"`, `"cloudflare"`). They are invoked
     /// when a configuration block selects a specific provider via a
@@ -166,7 +166,7 @@ pub trait ModuleLoader {
 
     /// Register pipeline stages with optional ordering constraints.
     ///
-    /// Stages are [`pipeline::Stage`] implementations that execute in
+    /// Stages are [`Stage`](crate::pipeline::Stage) implementations that execute in
     /// topologically sorted order. Use
     /// [`RegistryBuilder::with_stage`](crate::registry::RegistryBuilder::with_stage)
     /// to register them. The generic type parameter (`C`) is the context
@@ -183,7 +183,7 @@ pub trait ModuleLoader {
 
     /// Register typed providers for domain-specific functionality.
     ///
-    /// Providers are [`providers::Provider`] implementations discovered by
+    /// Providers are [`Provider`](crate::providers::Provider) implementations discovered by
     /// type and name at runtime. Use
     /// [`RegistryBuilder::with_provider`](crate::registry::RegistryBuilder::with_provider)
     /// to register them. The generic type parameter (`C`) is the context

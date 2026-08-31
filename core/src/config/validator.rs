@@ -11,7 +11,7 @@
 //!    [`register_global_configuration_validators`](crate::loader::ModuleLoader::register_global_configuration_validators),
 //!    [`register_per_protocol_configuration_validators`](crate::loader::ModuleLoader::register_per_protocol_configuration_validators),
 //!    or [`register_scoped_configuration_validators`](crate::loader::ModuleLoader::register_scoped_configuration_validators).
-//! 3. Use the [`validate_directive!`] and [`validate_nested!`] macros to
+//! 3. Use the [`validate_directive!`](crate::validate_directive) and [`validate_nested!`](crate::validate_nested) macros to
 //!    check directive structure and argument types.
 //!
 //! # Diagnostic levels
@@ -36,7 +36,7 @@ use crate::config::{
 /// They are invoked when a configuration block selects a provider via a
 /// `provider` directive within that namespace.
 ///
-/// Use the [`config_validator_scoped_key!`] macro to create instances.
+/// Use the [`config_validator_scoped_key!`](crate::config_validator_scoped_key) macro to create instances.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ConfigurationValidatorScopedKey {
     pub namespace: &'static str,
@@ -61,7 +61,7 @@ macro_rules! config_validator_scoped_key {
 /// [`validate_block`](Self::validate_block) once per configuration block
 /// during loading.
 ///
-/// Use the [`validate_directive!`] and [`validate_nested!`] macros to check
+/// Use the [`validate_directive!`](crate::validate_directive) and [`validate_nested!`](crate::validate_nested) macros to check
 /// directive structure and argument types. Track processed directives via
 /// [`ConfigurationValidatorContext::used_directives`] and emit
 /// diagnostics via [`ConfigurationValidatorContext::add_best_practice_violation`].

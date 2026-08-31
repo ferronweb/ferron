@@ -19,10 +19,10 @@
 //!
 //! | Level | Macro | Purpose |
 //! |---|---|---|
-//! | [`Error`](LogLevel::Error) | [`log_error!`] | Fatal or recoverable errors |
-//! | [`Warn`](LogLevel::Warn) | [`log_warn!`] | Unexpected but non-fatal conditions |
-//! | [`Info`](LogLevel::Info) | [`log_info!`] | Startup, shutdown, and lifecycle events |
-//! | [`Debug`](LogLevel::Debug) | [`log_debug!`] | Detailed diagnostic information |
+//! | [`Error`](LogLevel::Error) | [`log_error!`](crate::log_error) | Fatal or recoverable errors |
+//! | [`Warn`](LogLevel::Warn) | [`log_warn!`](crate::log_warn) | Unexpected but non-fatal conditions |
+//! | [`Info`](LogLevel::Info) | [`log_info!`](crate::log_info) | Startup, shutdown, and lifecycle events |
+//! | [`Debug`](LogLevel::Debug) | [`log_debug!`](crate::log_debug) | Detailed diagnostic information |
 
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -142,7 +142,7 @@ impl Drop for WindowsEventSource {
 /// Global logger instance.
 ///
 /// There is one logger per process, initialized once via [`init`],
-/// [`init_stdio_logger`], or (on Windows) [`init_service_logger`]. All
+/// [`init_stdio_logger`], or (on Windows) `init_service_logger`. All
 /// subsequent log calls go through this instance.
 pub struct AppLogger {
     backend: LoggerBackend,

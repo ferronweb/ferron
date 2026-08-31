@@ -8,7 +8,7 @@
 //!
 //! | Concept | Purpose |
 //! |---|---|
-//! | [`Module`] / [`ModuleLoader`] | Registration and lifecycle hooks for server components |
+//! | [`Module`] / [`ModuleLoader`](crate::loader::ModuleLoader) | Registration and lifecycle hooks for server components |
 //! | [`pipeline::Stage`] | Ordered processing steps (e.g. request/response pipeline) |
 //! | [`providers::Provider`] | Pluggable domain-specific implementations (e.g. TLS, DNS, cache) |
 //! | [`registry::Registry`] | Type-erased container that holds typed stage and provider registries |
@@ -20,7 +20,7 @@
 //!
 //! # Module lifecycle
 //!
-//! 1. [`ModuleLoader`] methods are called during initialization to register
+//! 1. [`ModuleLoader`](crate::loader::ModuleLoader) methods are called during initialization to register
 //!    configuration adapters, validators, stages, providers, and directives.
 //! 2. [`Module::start`] is called for each registered module, giving it access
 //!    to the [`runtime::Runtime`] for spawning tasks.
@@ -30,7 +30,7 @@
 //!
 //! # Writing an external module
 //!
-//! Implement [`ModuleLoader`] on a `#[derive(Default)]` struct, override only
+//! Implement [`ModuleLoader`](crate::loader::ModuleLoader) on a `#[derive(Default)]` struct, override only
 //! the methods you need, and register your module in the server's entrypoint.
 //! See the [`loader`] module for details.
 
@@ -52,7 +52,7 @@ use std::any::Any;
 /// A server component that can be registered and started at runtime.
 ///
 /// Modules are the primary extension point in Ferron. Each module provides
-/// a [`ModuleLoader`] (during initialization) and a `Module` instance (at
+/// a [`ModuleLoader`](crate::loader::ModuleLoader) (during initialization) and a `Module` instance (at
 /// runtime). The module's [`start`](Self::start) method receives a mutable
 /// reference to the [`runtime::Runtime`], which it uses to spawn primary or
 /// secondary tasks.
@@ -93,7 +93,7 @@ pub trait Module: Send + Sync {
     /// across server restarts because configuration may reference it.
     fn name(&self) -> &str;
 
-    /// Returns this trait object as [`Any`](std::any::Any) for downcasting.
+    /// Returns this trait object as [`Any`] for downcasting.
     ///
     /// The default implementation returns `self`, which works for most cases.
     fn as_any(&self) -> &dyn Any;

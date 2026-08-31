@@ -1,7 +1,7 @@
 //! Layered configuration support for hierarchical configuration inheritance.
 //!
 //! A [`LayeredConfiguration`] merges multiple
-//! [`ServerConfigurationBlock`]s with override semantics: the last added
+//! [`ServerConfigurationBlock`](crate::config::ServerConfigurationBlock)s with override semantics: the last added
 //! layer has the highest priority. This supports the configuration
 //! hierarchy where:
 //!

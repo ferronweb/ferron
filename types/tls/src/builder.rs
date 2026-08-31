@@ -1,6 +1,6 @@
 //! Reusable TLS builder utilities.
 //!
-//! Functions in this module take [`TlsCryptoConfig`], [`TlsClientAuthConfig`],
+//! Functions in this module take [`TlsCryptoConfig`](crate::config::TlsCryptoConfig), [`TlsClientAuthConfig`](crate::config::TlsClientAuthConfig),
 //! and related types from the [`config`](crate::config) module and produce
 //! ready-to-use `rustls` objects. Any TLS provider can call these instead
 //! of duplicating cipher/curve/version/client-auth logic.

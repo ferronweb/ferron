@@ -3,7 +3,7 @@
 //! This module registers common TLS directives (`cert`, `key`,
 //! `client_auth`, `cipher_suite`, `ecdh_curve`, `min_version`,
 //! `max_version`, `ocsp`, `ticket_keys`) with the directive registry.
-//! TLS provider modules call [`register_tls_common_directives`] during
+//! TLS provider modules call [`register_tls_common_directives`](crate::directives::register_tls_common_directives) during
 //! initialization so the configuration parser recognizes these directives.
 
 use ferron_core::directives::{Directive, DirectiveRegistry, DirectiveSubblock};

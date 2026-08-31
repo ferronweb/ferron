@@ -3,7 +3,7 @@
 //! This module provides the [`resolve_variable`] function and the
 //! [`var`] constants module. Variables are resolved from the HTTP
 //! request, configuration, and per-request state stored in
-//! [`HttpContext`](crate::HttpContext).
+//! [`HttpContext`].
 
 use std::borrow::Cow;
 

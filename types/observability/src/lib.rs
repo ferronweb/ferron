@@ -14,7 +14,7 @@
 //! # For module authors
 //!
 //! Most modules interact with observability through the [`CompositeEventSink`]
-//! stored in [`HttpContext::events`](ferron_http::HttpContext::events). To emit
+//! stored in `HttpContext::events`. To emit
 //! structured log or metric events, construct the appropriate event variant and
 //! call `sink.emit(event)`.
 

@@ -112,7 +112,7 @@ impl std::error::Error for DnsProviderError {}
 
 /// Async trait for DNS provider clients.
 ///
-/// Implementations are created by [`Provider<DnsContext>`] implementations
+/// Implementations are created by [`Provider<DnsContext>`](ferron_core::providers::Provider) implementations
 /// and stored in [`DnsContext::client`].
 #[async_trait]
 pub trait DnsClient: Send + Sync {
