@@ -407,6 +407,18 @@
     "label": "OCSP stapling"
   },
   {
+    "href": "/docs/v3/configuration/content/rate-limit",
+    "target": "_self",
+    "sub": true,
+    "label": "Rate limiting"
+  },
+  {
+    "href": "/docs/v3/configuration/content/abuse-ban",
+    "target": "_self",
+    "sub": true,
+    "label": "Abuse protection"
+  },
+  {
     "label": "Content & traffic"
   },
   {
@@ -462,18 +474,6 @@
     "target": "_self",
     "sub": true,
     "label": "HTTP headers and CORS"
-  },
-  {
-    "href": "/docs/v3/configuration/content/rate-limit",
-    "target": "_self",
-    "sub": true,
-    "label": "Rate limiting"
-  },
-  {
-    "href": "/docs/v3/configuration/content/abuse-ban",
-    "target": "_self",
-    "sub": true,
-    "label": "Abuse protection"
   },
   {
     "href": "/docs/v3/configuration/content/json-error",
