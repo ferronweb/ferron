@@ -1,3 +1,8 @@
+//! Built-in configuration validator for core directives.
+//!
+//! Validates runtime, TCP, Unix socket, observability, and control plane
+//! directives that are part of the core server.
+
 use crate::config::validator::{validate_scoped_block, ConfigurationValidationError};
 use crate::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationSpan,
@@ -5,6 +10,11 @@ use crate::config::{
 };
 use crate::{validate_directive, validate_nested};
 
+/// Validator for core configuration directives.
+///
+/// Registered by [`BuiltinModuleLoader`](super::BuiltinModuleLoader) to
+/// validate global and per-host configuration blocks. Handles runtime,
+/// TCP, Unix socket, observability, and control plane directives.
 pub struct BuiltinConfigurationValidator;
 
 impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationValidator {

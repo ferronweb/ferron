@@ -1,7 +1,13 @@
 //! Shared admin metrics types for the admin API.
 //!
-//! Provides atomic counters for tracking server metrics
-//! across the data plane (HTTP server) and control plane (admin API).
+//! Provides atomic counters and RwLock-protected structs for tracking
+//! server metrics. The data plane (TCP listener, request handler) updates
+//! these counters, and the control plane (admin API handlers) reads them.
+//!
+//! # Thread safety
+//!
+//! All fields use lock-free atomics or [`parking_lot::RwLock`] for safe
+//! concurrent access from multiple threads.
 
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
@@ -11,11 +17,14 @@ use std::time::{Instant, SystemTime};
 /// Default mtime used before any configuration has been loaded.
 const DEFAULT_MTIME: SystemTime = SystemTime::UNIX_EPOCH;
 
-/// Metrics for the reload process.
+/// Metrics for the configuration reload process.
 #[non_exhaustive]
 pub struct ReloadMetrics {
+    /// Timestamp of the last reload attempt.
     pub last_reload_time: SystemTime,
+    /// Error message from the last failed reload, if any.
     pub last_reload_error: Option<String>,
+    /// Monotonically increasing generation counter for reloads.
     pub active_generation: u64,
 }
 
@@ -33,8 +42,11 @@ impl Default for ReloadMetrics {
 /// Metrics for the runtime.
 #[non_exhaustive]
 pub struct RuntimeMetrics {
+    /// Number of primary (per-CPU) threads.
     pub primary_threads: usize,
+    /// Whether `io_uring` is supported by the kernel.
     pub io_uring_supported: bool,
+    /// Whether `io_uring` is enabled and successfully initialized.
     pub io_uring_runtime_enabled: bool,
 }
 
@@ -51,8 +63,10 @@ impl Default for RuntimeMetrics {
 
 /// Global metrics store for admin API endpoints.
 ///
-/// Counters are updated from the data plane (HTTP server TCP listener and handler)
-/// and read by the control plane (admin API axum handlers).
+/// Counters are updated from the data plane (TCP listener and request
+/// handler) and read by the control plane (admin API axum handlers).
+///
+/// Access the singleton via [`ADMIN_METRICS`].
 #[non_exhaustive]
 pub struct AdminMetrics {
     /// Server start time, used to compute uptime.
@@ -69,7 +83,7 @@ pub struct AdminMetrics {
     pub observability_event_queue_len: AtomicU64,
     /// Metrics related to configuration reloads.
     pub reload_metrics: parking_lot::RwLock<ReloadMetrics>,
-    /// Metrics related to runtime.
+    /// Metrics related to runtime (thread count, io_uring status).
     pub runtime_metrics: parking_lot::RwLock<RuntimeMetrics>,
     /// Content hash of the loaded configuration (xxh3 hex).
     pub config_hash: parking_lot::RwLock<String>,
@@ -84,6 +98,10 @@ pub struct AdminMetrics {
 }
 
 /// Metadata used for configuration drift detection.
+///
+/// Stored after each successful configuration load. The server compares
+/// current file mtimes against [`config_mtime`](Self::config_mtime) to
+/// detect whether configuration files have changed.
 pub struct ConfigurationDriftMetadata {
     /// Files that were loaded in the last successful configuration load.
     pub config_files: Vec<std::path::PathBuf>,
@@ -125,8 +143,8 @@ pub static ADMIN_METRICS: LazyLock<AdminMetrics> = LazyLock::new(AdminMetrics::n
 
 /// Check whether configuration files have drifted from their last loaded state.
 ///
-/// Re-stats all files in the metadata and compares their mtimes against the
-/// recorded mtime. Returns `true` if any file has changed.
+/// Re-stats all files in the metadata and compares their modification times
+/// against the recorded mtime. Returns `true` if any file has changed.
 pub fn check_config_drift(metadata: &ConfigurationDriftMetadata) -> bool {
     let mut latest_mtime = std::time::UNIX_EPOCH;
     for file_path in &metadata.config_files {

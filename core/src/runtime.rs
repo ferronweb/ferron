@@ -1,8 +1,34 @@
 //! Multi-threaded async runtime supporting both io_uring and traditional async I/O.
 //!
-//! The runtime consists of:
-//! - Primary tasks: Executed on dedicated threads using zincio with optional io_uring
-//! - Secondary tasks: Executed on a tokio multi-threaded runtime
+//! The runtime uses a dual-model design:
+//!
+//! - **Primary tasks** run on dedicated per-CPU threads via
+//!   [zincio](https://crates.io/crates/zincio) with optional `io_uring`
+//!   on Linux. These are used for high-throughput I/O work (listeners,
+//!   connection loops).
+//! - **Secondary tasks** run on a standard tokio multi-threaded executor.
+//!   These are used for background work that does not need dedicated CPU
+//!   threads (metrics aggregation, certificate renewal, etc.).
+//!
+//! # Usage
+//!
+//! ```ignore
+//! use ferron_core::runtime::Runtime;
+//!
+//! let mut runtime = Runtime::new(Default::default())?;
+//!
+//! // Spawn a primary task (runs once per CPU thread)
+//! runtime.spawn_primary_task(move || {
+//!     Box::pin(async move {
+//!         // ... high-throughput I/O ...
+//!     })
+//! });
+//!
+//! // Spawn a secondary task (runs on tokio)
+//! runtime.spawn_secondary_task(async {
+//!     // ... background work ...
+//! });
+//! ```
 
 use std::future::Future;
 use std::pin::Pin;
@@ -16,9 +42,13 @@ static IO_URING_FAILED_WARNING_LOGGED: std::sync::Once = std::sync::Once::new();
 
 /// Manages async task execution across primary and secondary runtimes.
 ///
-/// The runtime uses a dual-runtime model:
-/// - Primary threads run zincio tasks (one per CPU core) with optional io_uring
-/// - Secondary runtime is a tokio multi-threaded executor for other tasks
+/// The primary runtime spawns one thread per CPU core (pinned via
+/// `core_affinity`). Each thread runs a zincio executor with optional
+/// `io_uring` on Linux. The secondary runtime is a standard tokio
+/// multi-threaded executor.
+///
+/// Modules receive a `&mut Runtime` in
+/// [`Module::start`](crate::Module::start) and use it to spawn tasks.
 #[allow(clippy::type_complexity)]
 pub struct Runtime {
     primary_task_channels: Vec<
@@ -34,11 +64,11 @@ impl Runtime {
     ///
     /// # Arguments
     ///
-    /// * `settings` - settings for the runtime
+    /// * `settings` -- Runtime configuration (e.g. whether to enable `io_uring`).
     ///
     /// # Errors
     ///
-    /// Returns `std::io::Error` if runtime creation fails.
+    /// Returns `std::io::Error` if the secondary tokio runtime fails to build.
     pub fn new(settings: RuntimeSettings) -> Result<Self, std::io::Error> {
         // Spawn multiple threads (with pinning to each CPU core) to run primary tasks
         let core_ids = core_affinity::get_core_ids();
@@ -126,8 +156,16 @@ impl Runtime {
 
     /// Spawn a task factory to all primary threads.
     ///
-    /// The factory will be called once on each primary thread, allowing
-    /// thread-local initialization for each concurrent task.
+    /// The factory is called once per primary thread (one per CPU core),
+    /// allowing thread-local initialization. The returned future runs on the
+    /// zincio executor with optional `io_uring`.
+    ///
+    /// Use this for high-throughput I/O work such as TCP accept loops.
+    ///
+    /// # Arguments
+    ///
+    /// * `task_factory` -- A closure that returns a pinned future. Called
+    ///   once per primary thread.
     pub fn spawn_primary_task<F>(&mut self, task_factory: F)
     where
         F: Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync + 'static,
@@ -139,15 +177,19 @@ impl Runtime {
     }
 
     /// Number of primary (per-CPU) threads backing this runtime.
+    #[inline]
     pub fn primary_thread_count(&self) -> usize {
         self.primary_task_channels.len()
     }
 
     /// Spawn a task factory on a single primary thread, indexed by `index`.
     ///
-    /// Unlike [`Runtime::spawn_primary_task`], the factory runs exactly once, on
-    /// the primary thread at `index`. Use this to pin a distinct task (such as
-    /// one of several QUIC endpoints) to a specific CPU.
+    /// Unlike [`spawn_primary_task`](Self::spawn_primary_task), the factory
+    /// runs exactly once, on the primary thread at `index`. Use this to pin
+    /// a distinct task (such as one of several QUIC endpoints) to a specific
+    /// CPU.
+    ///
+    /// If `index` is out of range, the call is silently ignored.
     pub fn spawn_primary_task_on<F>(&mut self, index: usize, task_factory: F)
     where
         F: Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync + 'static,
@@ -159,6 +201,9 @@ impl Runtime {
     }
 
     /// Spawn a task on the secondary (tokio) runtime.
+    ///
+    /// Use this for background work that does not need dedicated CPU threads:
+    /// metrics collection, certificate renewal, log processing, etc.
     pub fn spawn_secondary_task<F>(&self, task: F)
     where
         F: Future<Output = ()> + Send + 'static,
@@ -167,6 +212,9 @@ impl Runtime {
     }
 
     /// Block the current thread and execute a future to completion.
+    ///
+    /// Delegates to the secondary (tokio) runtime. Useful for synchronous
+    /// initialization code that needs to await a future.
     pub fn block_on<F>(&self, task: F) -> F::Output
     where
         F: Future + 'static,
@@ -179,7 +227,9 @@ impl Runtime {
 #[derive(Default)]
 #[non_exhaustive]
 pub struct RuntimeSettings {
-    /// Whether to enable io_uring on primary threads (if supported)
+    /// Whether to enable `io_uring` on primary threads (if the kernel
+    /// supports it). If initialization fails, Ferron falls back to `epoll`
+    /// and logs a warning. Default: disabled.
     pub io_uring_enabled: bool,
 }
 

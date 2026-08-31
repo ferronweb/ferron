@@ -1,14 +1,38 @@
-//! Ferron core library providing the foundation for module-based server architecture.
+//! Core library for the Ferron web server.
 //!
-//! This library provides:
-//! - Module trait for pluggable server components
-//! - Configuration system with validation and adaptation
-//! - Registry for stages and providers with DAG-based ordering
-//! - Pipeline execution with inverse operations
-//! - Logging with Windows Event Log and stdio backends
-//! - Runtime management with primary and secondary task execution
-//! - Utility functions for common operations (e.g., duration parsing)
-//! - Atomic admin metric counter
+//! This crate defines the extension points that module authors use to plug
+//! into the server. It is protocol-agnostic: it knows nothing about HTTP, TLS,
+//! DNS, or any specific wire format.
+//!
+//! # Key concepts
+//!
+//! | Concept | Purpose |
+//! |---|---|
+//! | [`Module`] / [`ModuleLoader`] | Registration and lifecycle hooks for server components |
+//! | [`pipeline::Stage`] | Ordered processing steps (e.g. request/response pipeline) |
+//! | [`providers::Provider`] | Pluggable domain-specific implementations (e.g. TLS, DNS, cache) |
+//! | [`registry::Registry`] | Type-erased container that holds typed stage and provider registries |
+//! | [`config`] | Hierarchical configuration with validation, adapters, and layered overrides |
+//! | [`runtime::Runtime`] | Dual-runtime model: primary (zincio, per-CPU) and secondary (tokio) |
+//! | [`logging`] | Lightweight logging backend (stdio on all platforms, Event Log on Windows) |
+//! | [`admin`] | Global atomic metrics shared between the data plane and admin API |
+//! | [`shutdown`] | Application-wide cancellation tokens for shutdown and reload |
+//!
+//! # Module lifecycle
+//!
+//! 1. [`ModuleLoader`] methods are called during initialization to register
+//!    configuration adapters, validators, stages, providers, and directives.
+//! 2. [`Module::start`] is called for each registered module, giving it access
+//!    to the [`runtime::Runtime`] for spawning tasks.
+//! 3. At runtime, [`pipeline::Stage`] instances execute in topologically sorted
+//!    order, with [`run_inverse`](pipeline::Stage::run_inverse) called in
+//!    reverse order on completion.
+//!
+//! # Writing an external module
+//!
+//! Implement [`ModuleLoader`] on a `#[derive(Default)]` struct, override only
+//! the methods you need, and register your module in the server's entrypoint.
+//! See the [`loader`] module for details.
 
 #[macro_use]
 pub mod config;
@@ -25,44 +49,65 @@ pub mod shutdown;
 
 use std::any::Any;
 
-/// Trait for pluggable server modules in the Ferron architecture.
+/// A server component that can be registered and started at runtime.
 ///
-/// Modules are server implementations (HTTP, TCP, etc.) that can be registered
-/// at runtime and started with access to the shared registry and runtime.
+/// Modules are the primary extension point in Ferron. Each module provides
+/// a [`ModuleLoader`] (during initialization) and a `Module` instance (at
+/// runtime). The module's [`start`](Self::start) method receives a mutable
+/// reference to the [`runtime::Runtime`], which it uses to spawn primary or
+/// secondary tasks.
 ///
-/// # Examples
+/// Modules do not interact with each other directly. Instead, they
+/// communicate through the shared [`registry::Registry`] (typed stages and
+/// providers) and the application-wide [`shutdown`] and [`admin`] state.
+///
+/// # Example
 ///
 /// ```ignore
-/// struct MyHttpModule;
+/// struct MyModule;
 ///
-/// impl Module for MyHttpModule {
+/// impl Module for MyModule {
 ///     fn name(&self) -> &str {
-///         "http"
+///         "my_module"
 ///     }
 ///
-///     fn as_any(&self) -> &dyn Any {
+///     fn as_any(&self) -> &dyn std::any::Any {
 ///         self
 ///     }
 ///
 ///     fn start(
 ///         &self,
-///         runtime: &mut Runtime,
+///         runtime: &mut ferron_core::runtime::Runtime,
 ///     ) -> Result<(), Box<dyn std::error::Error>> {
-///         // Initialize and start the module
+///         runtime.spawn_secondary_task(async {
+///             // background work
+///         });
 ///         Ok(())
 ///     }
 /// }
 /// ```
 pub trait Module: Send + Sync {
-    /// Returns the name of this module.
+    /// Returns the unique name of this module.
+    ///
+    /// The name is used for identification and logging. It must be stable
+    /// across server restarts because configuration may reference it.
     fn name(&self) -> &str;
 
-    /// Returns this trait object as `Any` for downcasting to concrete type.
+    /// Returns this trait object as [`Any`](std::any::Any) for downcasting.
+    ///
+    /// The default implementation returns `self`, which works for most cases.
     fn as_any(&self) -> &dyn Any;
 
-    /// Start the module with access to the runtime and registry.
+    /// Start the module after all configuration and stages have been registered.
     ///
-    /// This is called during server startup to initialize the module.
+    /// Use [`runtime::Runtime::spawn_primary_task`] for per-CPU I/O-intensive
+    /// work (listeners, connection loops) and
+    /// [`runtime::Runtime::spawn_secondary_task`] for background tasks that
+    /// do not need dedicated CPU threads (metrics aggregation, certificate
+    /// renewal, etc.).
+    ///
+    /// Return `Ok(())` on success. A non-zero exit from `start` is considered
+    /// a fatal initialization error.
     fn start(
         &self,
         runtime: &mut crate::runtime::Runtime,

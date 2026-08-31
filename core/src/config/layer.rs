@@ -1,7 +1,28 @@
 //! Layered configuration support for hierarchical configuration inheritance.
 //!
-//! Layered configurations allow directives to be overridden at different levels
-//! (global, protocol, host) with proper inheritance.
+//! A [`LayeredConfiguration`] merges multiple
+//! [`ServerConfigurationBlock`]s with override semantics: the last added
+//! layer has the highest priority. This supports the configuration
+//! hierarchy where:
+//!
+//! - Global directives provide defaults.
+//! - Protocol-level directives override globals.
+//! - Host-level directives override protocol-level.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use std::sync::Arc;
+//! use ferron_core::config::layer::LayeredConfiguration;
+//!
+//! let mut layered = LayeredConfiguration::new();
+//! layered.add_layer(Arc::new(global_block));   // lowest priority
+//! layered.add_layer(Arc::new(host_block));     // highest priority
+//!
+//! // "root" resolves from host_block if present, otherwise global_block
+//! let root = layered.get_value("root", true)
+//!     .and_then(|v| v.as_str());
+//! ```
 
 use std::sync::{Arc, LazyLock};
 
@@ -10,11 +31,23 @@ static EMPTY_LAYERS: LazyLock<Arc<Vec<Arc<crate::config::ServerConfigurationBloc
 
 /// A configuration composed of multiple layers for inheritance.
 ///
-/// Layers are searched in reverse order (last added first) to implement
-/// override semantics. This supports configuration hierarchies where:
-/// - Global directives provide defaults
-/// - Protocol-level directives override globals
-/// - Host-level directives override protocol-level
+/// Layers are stored in order and searched in reverse (last added first) to
+/// implement override semantics. This supports configuration hierarchies
+/// where more specific layers override less specific ones.
+///
+/// # Example
+///
+/// ```ignore
+/// use std::sync::Arc;
+/// use ferron_core::config::layer::LayeredConfiguration;
+///
+/// let mut layered = LayeredConfiguration::new();
+/// layered.add_layer(Arc::new(global_block));
+/// layered.add_layer(Arc::new(host_block));
+///
+/// let root = layered.get_value("root", true)
+///     .and_then(|v| v.as_str());
+/// ```
 #[derive(Clone)]
 pub struct LayeredConfiguration {
     /// Configuration layers, searched in reverse order
@@ -41,8 +74,8 @@ impl LayeredConfiguration {
 
     /// Add a configuration layer.
     ///
-    /// Layers are searched in reverse order, so this layer will have higher priority
-    /// than previously added layers.
+    /// New layers are appended to the end and have higher priority than
+    /// previously added layers when `inherit` is `true`.
     #[inline]
     pub fn add_layer(&mut self, layer: Arc<crate::config::ServerConfigurationBlock>) {
         Arc::make_mut(&mut self.layers).push(layer);
@@ -52,9 +85,10 @@ impl LayeredConfiguration {
     ///
     /// # Arguments
     ///
-    /// * `directive` - The directive name to search for
-    /// * `inherit` - If true, search all layers in reverse order. If false, search only
-    ///   the first layer containing the directive.
+    /// * `directive` -- The directive name to search for.
+    /// * `inherit` -- If `true`, search all layers in reverse order (highest
+    ///   priority first). If `false`, search only the first layer that
+    ///   contains the directive.
     ///
     /// # Returns
     ///
@@ -79,14 +113,9 @@ impl LayeredConfiguration {
 
     /// Get the first entry for a directive across layers.
     ///
-    /// # Arguments
-    ///
-    /// * `directive` - The directive name to search for
-    /// * `inherit` - If true, search all layers. If false, search only the first layer.
-    ///
-    /// # Returns
-    ///
-    /// The highest-priority (most recent) matching entry, or None if not found.
+    /// Returns the highest-priority matching entry, or `None` if not found.
+    /// When `inherit` is `false`, only the most recently added layer is
+    /// checked.
     #[inline]
     pub fn get_entry<'a>(
         &'a self,
@@ -110,14 +139,9 @@ impl LayeredConfiguration {
 
     /// Get the first value for a directive across layers.
     ///
-    /// # Arguments
-    ///
-    /// * `directive` - The directive name to search for
-    /// * `inherit` - If true, search all layers. If false, search only the first layer.
-    ///
-    /// # Returns
-    ///
-    /// The first argument value of the highest-priority matching entry.
+    /// Returns the first argument of the highest-priority matching entry.
+    /// When `inherit` is `false`, only the most recently added layer is
+    /// checked.
     #[inline]
     pub fn get_value(
         &self,
@@ -142,14 +166,9 @@ impl LayeredConfiguration {
 
     /// Get a directive as a boolean flag across layers.
     ///
-    /// # Arguments
-    ///
-    /// * `directive` - The directive name to search for
-    /// * `inherit` - If true, search all layers. If false, search only the first layer.
-    ///
-    /// # Returns
-    ///
-    /// The boolean value if found, or true as default for flag-style directives.
+    /// Returns `true` if the directive is present and its first argument is
+    /// a boolean with value `true`, or if the directive is present with no
+    /// arguments. Returns `false` if the directive is absent.
     #[inline]
     pub fn get_flag(&self, directive: &str, inherit: bool) -> bool {
         for layer in self.layers.iter().rev() {

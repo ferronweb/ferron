@@ -1,8 +1,44 @@
 //! Configuration adapters and watchers for loading and monitoring configuration sources.
 //!
-//! This module defines the interfaces for:
-//! - Loading configuration from various sources (files, databases, APIs)
-//! - Watching for configuration changes to support reload
+//! An [`ConfigurationAdapter`] loads server configuration from a specific
+//! source (file, database, API, etc.) and returns a
+//! [`ConfigurationWatcher`] for detecting future changes. Adapters are
+//! registered by name in
+//! [`ModuleLoader::register_configuration_adapters`](crate::loader::ModuleLoader::register_configuration_adapters)
+//! and selected by the user via the `--config-adapter` CLI flag.
+//!
+//! # Writing an adapter
+//!
+//! 1. Implement [`ConfigurationAdapter`]. Return a
+//!    [`ServerConfiguration`](crate::config::ServerConfiguration), a boxed
+//!    [`ConfigurationWatcher`], and [`ConfigurationMetadata`].
+//! 2. Register it in your [`ModuleLoader`](crate::loader::ModuleLoader) via
+//!    `registry.insert("my_adapter", Box::new(MyAdapter))`.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use ferron_core::config::adapter::{ConfigurationAdapter, AdaptResult};
+//!
+//! struct JsonAdapter;
+//!
+//! impl ConfigurationAdapter for JsonAdapter {
+//!     fn adapt(
+//!         &self,
+//!         params: &HashMap<String, String>,
+//!     ) -> AdaptResult {
+//!         let path = params.get("file").ok_or("missing 'file' param")?;
+//!         let config = std::fs::read_to_string(path)?;
+//!         let parsed: ServerConfiguration = serde_json::from_str(&config)?;
+//!         // ... create watcher and metadata ...
+//!         Ok((parsed, Box::new(watcher), metadata))
+//!     }
+//!
+//!     fn file_extension(&self) -> Vec<&'static str> {
+//!         vec!["json"]
+//!     }
+//! }
+//! ```
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -19,8 +55,13 @@ pub type ConfigurationAdapterError = ConfigurationValidationError;
 
 /// Watches for changes in a configuration source.
 ///
-/// Implementations can monitor files, databases, or other sources for changes
-/// and notify when a reload is needed.
+/// Implement this trait to detect when the underlying configuration source
+/// has changed (e.g. file modification, database update). The server calls
+/// [`watch`](Self::watch) in a loop to block until a change is detected,
+/// then triggers a configuration reload.
+///
+/// For lightweight change detection without full re-parsing, implement
+/// [`check_drift`](Self::check_drift).
 #[async_trait]
 pub trait ConfigurationWatcher: Send + Sync {
     /// Wait until the configuration changes, then return.
@@ -42,10 +83,12 @@ pub trait ConfigurationWatcher: Send + Sync {
     }
 }
 
-/// Metadata about the loaded configuration source.
+/// Metadata about a loaded configuration source.
 ///
 /// Returned alongside the parsed configuration to enable drift detection
-/// and observability without re-reading the source.
+/// and observability without re-reading the source. The server stores
+/// this metadata in [`AdminMetrics`](crate::admin::AdminMetrics) and uses
+/// it for the `doctor` subcommand.
 pub struct ConfigurationMetadata {
     /// Content hash of the configuration source (e.g., xxh3 hex of all loaded files).
     pub config_hash: String,
@@ -71,24 +114,30 @@ pub type AdaptResult = Result<
 /// Adapter for loading server configuration from a specific source.
 ///
 /// Adapters are responsible for parsing configuration from their source
-/// (files, databases, etc.) and producing a `ServerConfiguration`.
+/// and producing a [`ServerConfiguration`](crate::config::ServerConfiguration).
+/// They are registered by name in
+/// [`ModuleLoader::register_configuration_adapters`](crate::loader::ModuleLoader::register_configuration_adapters)
+/// and selected by the user via `--config-adapter <name>`.
+///
+/// # Arguments
+///
+/// The `params` HashMap contains source-specific parameters passed by the
+/// user via `--config-params key=value`. For file-based adapters, the
+/// `file` key is conventional.
 ///
 /// # Example
 ///
 /// ```ignore
-/// struct YamlConfigAdapter;
-/// impl ConfigurationAdapter for YamlConfigAdapter {
+/// struct YamlAdapter;
+/// impl ConfigurationAdapter for YamlAdapter {
 ///     fn adapt(
 ///         &self,
 ///         params: &HashMap<String, String>,
-///     ) -> Result<(ServerConfiguration, Box<dyn ConfigurationWatcher>, ConfigurationMetadata), ConfigurationAdapterError> {
-///         let path = params.get("path").ok_or("missing path")?;
-///         let config = load_yaml_config(path)?;
+///     ) -> AdaptResult {
+///         let path = params.get("file").ok_or("missing 'file' param")?;
+///         let config = load_yaml(path)?;
 ///         let watcher = FileWatcher::new(path.into());
-///         let metadata = ConfigurationMetadata {
-///             config_hash: compute_hash(path),
-///             config_mtime: std::fs::metadata(path)?.modified()?,
-///         };
+///         let metadata = ConfigurationMetadata { /* ... */ };
 ///         Ok((config, Box::new(watcher), metadata))
 ///     }
 ///
@@ -102,20 +151,22 @@ pub trait ConfigurationAdapter {
     ///
     /// # Arguments
     ///
-    /// * `params` - Source-specific parameters (e.g., file paths, database URLs)
+    /// * `params` -- Source-specific parameters (e.g. file paths, database
+    ///   URLs). Passed from the user via `--config-params`.
     ///
     /// # Returns
     ///
-    /// A tuple containing:
-    /// - The parsed `ServerConfiguration`
-    /// - A `ConfigurationWatcher` to detect future changes
-    /// - `ConfigurationMetadata` with content hash and modification time
+    /// A tuple of:
+    ///
+    /// 1. The parsed [`ServerConfiguration`](crate::config::ServerConfiguration).
+    /// 2. A [`ConfigurationWatcher`] for detecting future changes.
+    /// 3. [`ConfigurationMetadata`] with content hash and modification time.
     fn adapt(&self, params: &HashMap<String, String>) -> AdaptResult;
 
     /// File extensions this adapter can handle.
     ///
-    /// Used for file-based adapters to filter which files can be loaded.
-    /// Return an empty vector for non-file-based adapters.
+    /// Used by file-based adapters to select the right adapter from a list
+    /// of loaded files. Return an empty vector for non-file-based adapters.
     fn file_extension(&self) -> Vec<&'static str> {
         vec![]
     }

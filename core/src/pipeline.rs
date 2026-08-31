@@ -1,7 +1,23 @@
 //! Pipeline execution framework with ordered stages and inverse operations.
 //!
-//! Pipelines execute stages sequentially, with support for early termination
-//! and inverse operations (like cleanup) in reverse order.
+//! A [`Pipeline`] is an ordered sequence of [`Stage`] implementations that
+//! execute sequentially. After all stages complete, their
+//! [`run_inverse`](Stage::run_inverse) methods are called in reverse order
+//! for cleanup.
+//!
+//! Stages are typically built by [`StageRegistry::build_all`](crate::registry::StageRegistry::build_all)
+//! or [`StageRegistry::build_with_config`](crate::registry::StageRegistry::build_with_config),
+//! which resolves ordering constraints into a deterministic execution order.
+//!
+//! # Stage lifecycle
+//!
+//! 1. `run` is called for each stage in order.
+//!    - `Ok(true)` -- continue to the next stage.
+//!    - `Ok(false)` -- stop the pipeline gracefully (no error).
+//!    - `Err(PipelineError)` -- stop the pipeline with an error.
+//! 2. After the forward pass, `run_inverse` is called for every stage that
+//!    successfully ran, in reverse order.
+//! 3. If any `run_inverse` returns `Err`, the pipeline stops immediately.
 
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -10,6 +26,10 @@ use crate::config::ServerConfigurationBlock;
 use crate::registry::StageConstraint;
 
 /// Error type for pipeline execution failures.
+///
+/// A [`PipelineError::Terminated`] indicates that a stage requested early
+/// but graceful pipeline termination. A [`PipelineError::Custom`] carries
+/// a human-readable message from the failing stage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PipelineError {
     /// Stage requested early pipeline termination
@@ -38,20 +58,75 @@ impl std::fmt::Display for PipelineError {
 
 impl std::error::Error for PipelineError {}
 
-/// A stage in the execution pipeline.
+/// A processing step in the execution pipeline.
 ///
-/// Stages are ordered components that execute sequentially. They can:
-/// - Continue to the next stage (return `Ok(true)`)
-/// - Stop the pipeline gracefully (return `Ok(false)`)
-/// - Terminate with an error (return `Err`)
-/// - Define ordering constraints (Before/After other stages)
-/// - Optionally run inverse operations for cleanup
+/// Stages are the core abstraction for request/response processing in Ferron.
+/// Each stage receives a mutable reference to a context `C` and decides
+/// whether to continue, stop, or error.
+///
+/// # Lifecycle
+///
+/// 1. [`run`](Self::run) is called during the forward pass.
+/// 2. [`run_inverse`](Self::run_inverse) is called during the reverse pass
+///    (cleanup), only for stages that successfully executed.
+///
+/// # Ordering
+///
+/// Stages declare [`Before`](StageConstraint::Before) /
+/// [`After`](StageConstraint::After) constraints via [`constraints`](Self::constraints).
+/// The [`StageRegistry`](crate::registry::StageRegistry) resolves these
+/// into a total order using topological sort.
+///
+/// # Example
+///
+/// ```ignore
+/// use async_trait::async_trait;
+/// use ferron_core::pipeline::{Stage, PipelineError};
+/// use ferron_core::registry::StageConstraint;
+///
+/// struct AuthStage;
+///
+/// #[async_trait(?Send)]
+/// impl Stage<MyContext> for AuthStage {
+///     fn name(&self) -> &str { "auth" }
+///
+///     fn constraints(&self) -> Vec<StageConstraint> {
+///         vec![StageConstraint::After("logging".to_string())]
+///     }
+///
+///     async fn run(&self, ctx: &mut MyContext) -> Result<bool, PipelineError> {
+///         // ... authenticate request ...
+///         Ok(true) // continue to next stage
+///     }
+///
+///     async fn run_inverse(&self, ctx: &mut MyContext) -> Result<(), PipelineError> {
+///         // ... cleanup auth state ...
+///         Ok(())
+///     }
+/// }
+/// ```
 #[async_trait(?Send)]
 pub trait Stage<C>: Send + Sync {
-    /// Returns the name of this stage (used for ordering constraints).
+    /// Returns the unique name of this stage.
+    ///
+    /// The name is used for [`StageConstraint::Before`] and
+    /// [`StageConstraint::After`] references from other stages. It must
+    /// be unique within a single [`StageRegistry`](crate::registry::StageRegistry).
     fn name(&self) -> &str;
 
     /// Returns ordering constraints for this stage.
+    ///
+    /// Override this method to declare that this stage must run before or
+    /// after another named stage. Return an empty `Vec` (the default) if
+    /// there are no ordering requirements.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// fn constraints(&self) -> Vec<StageConstraint> {
+    ///     vec![StageConstraint::After("logging".to_string())]
+    /// }
+    /// ```
     #[inline]
     fn constraints(&self) -> Vec<StageConstraint> {
         Vec::new()
@@ -59,32 +134,55 @@ pub trait Stage<C>: Send + Sync {
 
     /// Execute the stage with the given context.
     ///
-    /// # Returns
+    /// # Return values
     ///
-    /// - `Ok(true)` - Continue to next stage
-    /// - `Ok(false)` - Terminate pipeline gracefully
-    /// - `Err` - Terminate pipeline with error
+    /// - `Ok(true)` -- continue to the next stage.
+    /// - `Ok(false)` -- stop the pipeline gracefully (no error, remaining
+    ///   stages are skipped).
+    /// - `Err(PipelineError)` -- stop the pipeline with an error. Inverse
+    ///   operations still run for stages that already executed.
+    ///
+    /// # Data sharing
+    ///
+    /// Use `ctx.extensions` (a type map) to store data during `run` that
+    /// `run_inverse` will read later.
     async fn run(&self, ctx: &mut C) -> Result<bool, PipelineError>;
 
-    /// Inverse operation for this stage (e.g., cleanup).
+    /// Cleanup operation for this stage, called in reverse execution order.
     ///
-    /// Called during pipeline finalization or error handling in reverse execution order.
-    /// Only called for stages that successfully executed.
+    /// `run_inverse` is called after the forward pass completes (successfully
+    /// or with error) for every stage whose `run` returned `Ok(true)` or
+    /// `Ok(false)`. Stages whose `run` returned `Err` are not cleaned up.
+    ///
+    /// Use this to release resources, flush buffers, or inject response
+    /// headers. If you stored data in `ctx.extensions` during `run`, retrieve
+    /// it here (and remove it with `ctx.extensions.remove::<T>()`).
     #[inline]
     async fn run_inverse(&self, _ctx: &mut C) -> Result<(), PipelineError> {
         Ok(())
     }
 
+    /// Returns whether this stage should be included in the pipeline for the
+    /// given configuration block.
+    ///
+    /// Called once per stage when building a pipeline with
+    /// [`StageRegistry::build_with_config`](crate::registry::StageRegistry::build_with_config).
+    /// Return `false` to exclude the stage entirely (it will not appear in
+    /// the pipeline at all). The default returns `true`.
     #[inline]
     fn is_applicable(&self, _config: Option<&ServerConfigurationBlock>) -> bool {
         true
     }
 }
 
-/// Hooks invoked around each stage during pipeline execution.
+/// Observability hooks invoked around each stage during pipeline execution.
 ///
-/// Implement this trait to observe or instrument stage execution (e.g., emit
-/// per-stage trace spans) without coupling the Pipeline to observability code.
+/// Implement this trait to instrument stage execution (e.g. emit per-stage
+/// trace spans, log timing) without coupling the [`Pipeline`] to
+/// observability code. Pass the hooks to
+/// [`Pipeline::execute_with_hooks`].
+///
+/// All methods have default no-op implementations.
 #[async_trait(?Send)]
 pub trait StageHooks<C>: Send + Sync {
     /// Called before a stage's `run` method is invoked.
@@ -117,10 +215,24 @@ pub trait StageHooks<C>: Send + Sync {
     }
 }
 
-/// An ordered sequence of stages to be executed.
+/// An ordered sequence of [`Stage`] instances to be executed.
 ///
-/// Pipelines execute stages in order and support early termination.
-/// After all stages complete, inverse operations are run in reverse order.
+/// Pipelines are built by [`StageRegistry::build_all`](crate::registry::StageRegistry::build_all)
+/// or [`StageRegistry::build_with_config`](crate::registry::StageRegistry::build_with_config).
+/// They execute stages in order and run inverse (cleanup) operations in
+/// reverse order after the forward pass completes.
+///
+/// # Execution modes
+///
+/// | Method | Inverse pass | Hooks |
+/// |---|---|---|
+/// | [`execute`](Self::execute) | automatic | no |
+/// | [`execute_with_hooks`](Self::execute_with_hooks) | automatic | yes |
+/// | [`execute_without_inverse`](Self::execute_without_inverse) | manual | no |
+/// | [`execute_without_inverse_with_hooks`](Self::execute_without_inverse_with_hooks) | manual | yes |
+///
+/// Use the `*_without_inverse` variants when you need fine-grained control
+/// over when cleanup runs (e.g. to hold a lock across the entire pipeline).
 #[derive(Clone, Default)]
 pub struct Pipeline<C> {
     stages: Vec<Arc<dyn Stage<C>>>,
@@ -128,12 +240,18 @@ pub struct Pipeline<C> {
 
 impl<C> Pipeline<C> {
     /// Create a new empty pipeline.
+    ///
+    /// Prefer building pipelines via
+    /// [`StageRegistry::build_all`](crate::registry::StageRegistry::build_all)
+    /// rather than constructing them manually.
     #[inline]
     pub fn new() -> Self {
         Self { stages: vec![] }
     }
 
     /// Add a stage to the end of the pipeline.
+    ///
+    /// The stage will execute after all previously added stages.
     #[inline]
     pub fn add_stage(mut self, stage: Arc<dyn Stage<C>>) -> Self {
         self.stages.push(stage);
@@ -142,9 +260,10 @@ impl<C> Pipeline<C> {
 
     /// Execute the pipeline, running inverse operations in reverse order on completion.
     ///
-    /// Stages are executed in order until one returns `Ok(false)` or an error.
-    /// After execution completes (successfully or with error), inverse operations
-    /// are run for all executed stages in reverse order.
+    /// Stages execute in order until one returns `Ok(false)` or an error.
+    /// After the forward pass, [`run_inverse`](Stage::run_inverse) is called
+    /// for all executed stages in reverse order. If any `run_inverse` returns
+    /// `Err`, execution stops immediately.
     #[inline]
     pub async fn execute(&self, ctx: &mut C) -> Result<(), PipelineError> {
         let mut executed_stages = Vec::with_capacity(self.stages.len());
@@ -164,10 +283,10 @@ impl<C> Pipeline<C> {
         Ok(())
     }
 
-    /// Execute stages without running inverse operations, returning executed stages.
+    /// Execute stages without running inverse operations, returning the executed stages.
     ///
-    /// This allows manual control over when inverse operations are run.
-    /// Use with `execute_inverse` to separate stage execution from cleanup.
+    /// This gives you manual control over when cleanup runs. Use the returned
+    /// stage list with [`execute_inverse`](Self::execute_inverse) later.
     #[inline]
     pub async fn execute_without_inverse<'a>(
         &'a self,
@@ -185,7 +304,9 @@ impl<C> Pipeline<C> {
         Ok(executed_stages)
     }
 
-    /// Execute inverse operations for the given stages in reverse order.
+    /// Execute inverse (cleanup) operations for the given stages in reverse order.
+    ///
+    /// Pass the list returned by [`execute_without_inverse`](Self::execute_without_inverse).
     #[inline]
     pub async fn execute_inverse<'a>(
         &'a self,
@@ -199,6 +320,10 @@ impl<C> Pipeline<C> {
     }
 
     /// Execute inverse operations for the given stages with per-stage hooks.
+    ///
+    /// Same as [`execute_inverse`](Self::execute_inverse), but invokes
+    /// [`StageHooks::before_stage_inverse`] and
+    /// [`StageHooks::after_stage_inverse`] around each cleanup call.
     #[inline]
     pub async fn execute_inverse_with_hooks<'a, H: StageHooks<C>>(
         &'a self,

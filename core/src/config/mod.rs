@@ -1,13 +1,10 @@
 //! Configuration system for server setup with hierarchical structures and value interpolation.
 //!
-//! This module provides:
-//! - Hierarchical configuration blocks (global, per-port, per-host)
-//! - Type-safe configuration values with interpolation support
-//! - Configuration matching and filtering
-//! - Validation and adaptation frameworks
-//! - Configuration watching for reload detection
+//! This module provides the data model for Ferron's configuration. It is
+//! protocol-agnostic: the types here represent the parsed configuration
+//! without interpreting any specific directives.
 //!
-//! # Configuration Hierarchy
+//! # Configuration hierarchy
 //!
 //! ```text
 //! Global Configuration
@@ -20,6 +17,22 @@
 //!               |
 //!               +-- Error Handling
 //! ```
+//!
+//! # Key types
+//!
+//! | Type | Purpose |
+//! |---|---|
+//! | [`ServerConfiguration`] | Top-level configuration: global block + per-port entries |
+//! | [`ServerConfigurationBlock`] | A block of directives with optional nested children |
+//! | [`ServerConfigurationDirectiveEntry`] | One occurrence of a directive (args + children) |
+//! | [`ServerConfigurationValue`] | A typed value: string, number, float, bool, or interpolated |
+//! | [`LayeredConfiguration`](layer::LayeredConfiguration) | Multiple blocks merged with override semantics |
+//!
+//! # Module authors
+//!
+//! Modules typically read configuration through [`LayeredConfiguration`](layer::LayeredConfiguration)
+//! in their [`Stage::run`](crate::pipeline::Stage::run) implementation. Configuration
+//! adapters and validators are registered via [`ModuleLoader`](crate::loader::ModuleLoader).
 
 pub mod adapter;
 mod duration;
@@ -37,9 +50,11 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Source location information for configuration elements.
+/// Source location of a configuration element for error reporting.
 ///
-/// Stores line, column, and file information for error reporting and debugging.
+/// Tracks line, column, and file path so that validation errors and
+/// diagnostics can point back to the exact position in the configuration
+/// file.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationSpan {
     /// Line number (1-indexed)
@@ -50,11 +65,18 @@ pub struct ServerConfigurationSpan {
     pub file: Option<String>,
 }
 
-/// Top-level server configuration containing global and per-protocol settings.
+/// Top-level server configuration containing global and per-port settings.
 ///
 /// The configuration is organized hierarchically:
-/// - Global configuration applies to all protocols
-/// - Per-protocol ports and their associated hosts/SNI filters
+///
+/// - [`global_config`](Self::global_config) -- applies to all protocols.
+/// - [`ports`](Self::ports) -- maps protocol names to lists of
+///   [`ServerConfigurationPort`], each binding a port to one or more host
+///   blocks with optional SNI/IP filters.
+///
+/// Modules receive an `Arc<ServerConfiguration>` in
+/// [`ModuleLoader::register_modules`](crate::loader::ModuleLoader::register_modules)
+/// and typically read from `global_config` or per-host blocks.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfiguration {
     /// Global configuration block applying to all protocols
@@ -63,9 +85,13 @@ pub struct ServerConfiguration {
     pub ports: BTreeMap<String, Vec<ServerConfigurationPort>>,
 }
 
-/// Configuration for a specific port and its associated hosts/SNI filters.
+/// Configuration for a specific port and its associated host blocks.
 ///
-/// Allows multiple host configurations on the same port with different filters.
+/// Each port entry binds a port number (or inherits the protocol default)
+/// and maps it to a list of
+/// ([`ServerConfigurationHostFilters`](ServerConfigurationHostFilters), [`ServerConfigurationBlock`])
+/// pairs. The filters determine which incoming connections match the host
+/// block (by SNI hostname or local IP address).
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationPort {
     /// Port number (optional, may be inherited from protocol defaults)
@@ -74,9 +100,13 @@ pub struct ServerConfigurationPort {
     pub hosts: Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>,
 }
 
-/// Filters for matching port configurations to specific hosts or IPs.
+/// Filters for matching incoming connections to a specific host block.
 ///
-/// Used for SNI (Server Name Indication) hostname matching and IP-based routing.
+/// When a connection arrives, the server evaluates these filters to
+/// determine which [`ServerConfigurationBlock`] applies:
+///
+/// - `ip` matches the local IP address the connection was accepted on.
+/// - `host` matches the SNI hostname (TLS) or the `Host` header (HTTP).
 #[derive(Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationHostFilters {
     /// IP address to match (for multi-homed servers)
@@ -85,13 +115,19 @@ pub struct ServerConfigurationHostFilters {
     pub host: Option<String>,
 }
 
-/// A block of configuration directives with optional nested structure.
+/// A block of configuration directives with optional nested children.
 ///
-/// Directives are organized by name, with support for:
-/// - Multiple values per directive
-/// - Nested child blocks
-/// - Source location tracking for error reporting
-/// - String interpolation support
+/// This is the primary unit of configuration in Ferron. Directives are
+/// organized by name, with support for:
+///
+/// - Multiple values per directive (each value is a
+///   [`ServerConfigurationValue`]).
+/// - Nested child blocks (e.g. `runtime { io_uring true }`).
+/// - Named matchers for conditional directives.
+/// - Source location tracking for error reporting.
+///
+/// Modules typically read directives via [`get_value`](Self::get_value),
+/// [`get_flag`](Self::get_flag), or [`has_directive`](Self::has_directive).
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationBlock {
     /// All directives in this block, indexed by name
@@ -105,7 +141,18 @@ pub struct ServerConfigurationBlock {
 impl ServerConfigurationBlock {
     /// Get the first value for a directive.
     ///
-    /// Returns the first argument of the first entry for the directive, or None if not found.
+    /// Returns the first argument of the first entry for the given directive
+    /// name, or `None` if the directive does not exist.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// if let Some(port) = block.get_value("port") {
+    ///     if let Some(n) = port.as_number() {
+    ///         // use port number
+    ///     }
+    /// }
+    /// ```
     #[inline]
     pub fn get_value(&self, directive: &str) -> Option<&ServerConfigurationValue> {
         self.directives
@@ -116,7 +163,9 @@ impl ServerConfigurationBlock {
 
     /// Get a directive as a boolean flag.
     ///
-    /// Returns the boolean value if present, or true as default for flag-style directives.
+    /// Returns `true` if the directive is present and its first argument is
+    /// a boolean with value `true`, or if the directive is present with no
+    /// arguments (flag-style). Returns `false` if the directive is absent.
     #[inline]
     pub fn get_flag(&self, directive: &str) -> bool {
         if let Some(e) = self
@@ -130,9 +179,10 @@ impl ServerConfigurationBlock {
         }
     }
 
-    /// Check if a directive is present anywhere in this block tree (recursively).
+    /// Check if a directive exists anywhere in this block tree (recursively).
     ///
-    /// Returns `true` if the directive exists at this level or in any nested child block.
+    /// Returns `true` if the directive is present at this level or in any
+    /// nested child block. Useful for `is_applicable` checks in stages.
     pub fn has_directive(&self, directive: &str) -> bool {
         if self.directives.contains_key(directive) {
             return true;
@@ -149,9 +199,10 @@ impl ServerConfigurationBlock {
     /// Build a merged block containing the union of all directive keys from
     /// multiple configuration blocks.
     ///
-    /// This is useful for `is_applicable` checks at server initialization: if
-    /// any host block (or the global config) uses a directive, the
-    /// corresponding stage should be included in the pipeline.
+    /// This is useful for [`is_applicable`](crate::pipeline::Stage::is_applicable)
+    /// checks at server initialization: if any host block (or the global config)
+    /// uses a directive, the corresponding stage should be included in the
+    /// pipeline.
     ///
     /// The merged block has empty directive entries (only keys matter), since
     /// `has_directive` only checks key presence.
@@ -172,7 +223,9 @@ impl ServerConfigurationBlock {
 
 /// A single directive entry with arguments and optional nested configuration.
 ///
-/// Represents one occurrence of a directive within a configuration block.
+/// A configuration block may contain multiple entries for the same directive
+/// name (e.g. multiple `listen` directives). Each entry holds its own
+/// arguments and optional child block.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationDirectiveEntry {
     /// Arguments provided to this directive
@@ -205,7 +258,16 @@ impl ServerConfigurationDirectiveEntry {
 
 /// A typed configuration value with optional source location.
 ///
-/// Supports strings (with optional interpolation), numbers, floats, and booleans.
+/// Supports four base types (string, integer, float, boolean) plus an
+/// interpolated string variant that contains `{{variable}}` references.
+/// Use the `as_*` methods to extract typed values:
+///
+/// - [`as_str`](Self::as_str) -- plain string reference
+/// - [`as_string_with_interpolations`](Self::as_string_with_interpolations) -- string with variable substitution
+/// - [`as_number`](Self::as_number) -- integer
+/// - [`as_float`](Self::as_float) -- floating-point
+/// - [`as_boolean`](Self::as_boolean) -- boolean
+/// - [`as_duration`](Self::as_duration) -- duration (parses `"12h"`, `"30m"`, etc.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerConfigurationValue {
     /// Plain string value
@@ -323,27 +385,32 @@ pub enum ServerConfigurationInterpolatedStringPart {
 
 /// A matcher for conditional configuration directives.
 ///
-/// Used to evaluate expressions like `$request_method == "GET"` for conditional routing.
+/// Matchers evaluate expressions like `$request_method == "GET"` to
+/// conditionally apply directives. The server evaluates all expressions
+/// in the matcher; if all pass, the associated directives are applied.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationMatcher {
-    /// List of expressions to evaluate
+    /// List of expressions to evaluate (all must pass).
     pub exprs: Vec<ServerConfigurationMatcherExpr>,
-    /// Source location
+    /// Source location.
     pub span: Option<ServerConfigurationSpan>,
 }
 
 /// A single matcher expression: `left op right`.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationMatcherExpr {
-    /// Left operand
+    /// Left operand (typically a variable like `$request_method`).
     pub left: ServerConfigurationMatcherOperand,
-    /// Right operand
+    /// Right operand (typically a literal value).
     pub right: ServerConfigurationMatcherOperand,
-    /// Comparison operator
+    /// Comparison operator.
     pub op: ServerConfigurationMatcherOperator,
 }
 
 /// An operand in a matcher expression: identifier, string, integer, or float.
+///
+/// Identifiers (e.g. `$request_method`) are resolved at runtime from the
+/// request context. Literals are compared directly.
 #[allow(clippy::derive_ord_xor_partial_ord)]
 #[derive(Debug, PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
 pub enum ServerConfigurationMatcherOperand {
@@ -381,6 +448,9 @@ impl Ord for ServerConfigurationMatcherOperand {
 }
 
 /// Comparison operators for matcher expressions.
+///
+/// Used in [`ServerConfigurationMatcherExpr`] to compare left and right
+/// operands.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Serialize, Deserialize)]
 pub enum ServerConfigurationMatcherOperator {
     /// Equal: `==`
@@ -391,13 +461,16 @@ pub enum ServerConfigurationMatcherOperator {
     Regex,
     /// Regular expression non-match: `!~`
     NotRegex,
-    /// Membership: `in`
+    /// Membership test: `in`
     In,
 }
 
 /// Trait for resolving variables in configuration values.
 ///
-/// Implementations can resolve configuration variables by name.
+/// Implement this trait to provide custom variable resolution for
+/// interpolated strings. The default implementation for
+/// [`HashMap<String, String>`](std::collections::HashMap) does direct
+/// key lookup.
 pub trait Variables {
     /// Resolve a variable by name, returning its string value if found.
     fn resolve(&self, name: &str) -> Option<String>;

@@ -1,6 +1,37 @@
+//! Directive metadata for the `ferron directives` CLI subcommand.
+//!
+//! Directives are descriptive metadata that the server exposes as JSON for
+//! editor support (autocomplete, validation). Modules register their
+//! directives in
+//! [`ModuleLoader::register_directives`](crate::loader::ModuleLoader::register_directives).
+//!
+//! # Example
+//!
+//! ```ignore
+//! use ferron_core::directives::{Directive, DirectiveSubblock, DirectiveRegistry};
+//!
+//! fn register(registry: &mut DirectiveRegistry) {
+//!     registry.register(
+//!         Directive {
+//!             name: "cache",
+//!             usage: "cache [bool] | cache { ... }",
+//!             description: "Enable or configure response caching.",
+//!             applicable_protocols: Some(&["http"]),
+//!             global_only: false,
+//!             subblock_link: Some(DirectiveSubblock::custom("cache")),
+//!         },
+//!         DirectiveSubblock::default(),
+//!     );
+//! }
+//! ```
+
 use std::collections::HashMap;
 
-/// Represents a subblock for directives for `ferron directives`.
+/// A subblock grouping for directives in the `ferron directives` output.
+///
+/// Directives are organized into subblocks for the JSON output. The
+/// [`Default`] variant is the top-level group. Use
+/// [`DirectiveSubblock::custom`] for module-specific groups.
 #[derive(Default, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum DirectiveSubblock {
     /// The default subblock for directives.
@@ -35,7 +66,11 @@ impl serde::Serialize for DirectiveSubblock {
     }
 }
 
-/// Represents a directive for `ferron directives`.
+/// Descriptive metadata for a single directive.
+///
+/// Used by the `ferron directives` CLI subcommand to produce JSON output
+/// for editor integration. Modules register instances via
+/// [`DirectiveRegistry::register`].
 #[derive(Default, serde::Serialize)]
 pub struct Directive {
     /// The name of the directive.
@@ -52,7 +87,11 @@ pub struct Directive {
     pub subblock_link: Option<DirectiveSubblock>,
 }
 
-/// Represents a registry of directives for `ferron directives`.
+/// Registry of directive metadata, organized by subblock.
+///
+/// Modules populate this in
+/// [`ModuleLoader::register_directives`](crate::loader::ModuleLoader::register_directives).
+/// The server serializes it as JSON for the `ferron directives` subcommand.
 #[derive(Default)]
 pub struct DirectiveRegistry {
     pub directives: HashMap<DirectiveSubblock, Vec<Directive>>,
@@ -64,7 +103,9 @@ impl DirectiveRegistry {
         Self::default()
     }
 
-    /// Registers a directive with the given name, usage, description, and subblock.
+    /// Register a directive under the given subblock.
+    ///
+    /// Returns `&mut Self` for chaining.
     pub fn register(&mut self, directive: Directive, subblock: DirectiveSubblock) -> &mut Self {
         self.directives.entry(subblock).or_default().push(directive);
         self

@@ -1,3 +1,10 @@
+//! Built-in module loader for core directives and validators.
+//!
+//! [`BuiltinModuleLoader`] registers the configuration validators and
+//! directive metadata for directives that are part of the core server
+//! (runtime, TCP, Unix socket, observability, control plane). These are
+//! always present regardless of which optional modules are enabled.
+
 use crate::{
     directives::{Directive, DirectiveSubblock},
     loader::ModuleLoader,
@@ -7,6 +14,12 @@ mod validator;
 
 pub use validator::*;
 
+/// Built-in module loader for core directives and validators.
+///
+/// This loader is always registered. It provides:
+/// - A [`BuiltinConfigurationValidator`] for global configuration validation.
+/// - Directive metadata for runtime, TCP, Unix, observability, and control
+///   plane directives.
 #[derive(Default)]
 pub struct BuiltinModuleLoader;
 

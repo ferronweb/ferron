@@ -1,4 +1,18 @@
 //! Macros for configuration validation and building.
+//!
+//! These macros reduce boilerplate in [`ConfigurationValidator`](crate::config::validator::ConfigurationValidator)
+//! implementations by providing declarative syntax for checking directive
+//! structure, argument counts, and argument types.
+//!
+//! # Key macros
+//!
+//! | Macro | Purpose |
+//! |---|---|
+//! | [`validate_directive!`] | Validate a top-level directive (required or optional) |
+//! | [`validate_nested!`] | Validate subdirectives within a block |
+//! | [`validate_args!`] | Check argument types within a directive |
+//! | [`check_unused_subdirectives!`] | Emit diagnostics for unrecognized subdirectives |
+//! | [`require_directive!`] | Require a directive to exist (error if missing) |
 
 #[macro_use]
 mod args;

@@ -1,13 +1,49 @@
 //! Global registry for stages and providers with DAG-based ordering.
 //!
-//! This module provides:
-//! - `StageRegistry<C>`: Ordered pipeline stages for a specific context type
-//! - `ProviderRegistry<P>`: Named providers categorized by type
-//! - `Registry`: Type-erased container for multiple typed registries
-//! - `RegistryBuilder`: Fluent API for building the registry
+//! The registry is the central coordination point for all modules. It holds
+//! two kinds of typed sub-registries:
 //!
-//! Stages can define ordering constraints (Before/After) that are resolved
-//! using topological sort to build deterministic execution order.
+//! - [`StageRegistry<C>`] -- ordered pipeline stages for a context type `C`.
+//! - [`ProviderRegistry<P>`] -- named providers categorized by a trait type `P`.
+//!
+//! Both sub-registries are generic. The [`Registry`] provides type erasure
+//! so they can be stored in a single container and retrieved by their type
+//! at runtime.
+//!
+//! # How modules use the registry
+//!
+//! Modules register stages and providers in their
+//! [`ModuleLoader::register_stages`](crate::loader::ModuleLoader::register_stages)
+//! and [`ModuleLoader::register_providers`](crate::loader::ModuleLoader::register_providers)
+//! methods via the [`RegistryBuilder`] fluent API. At runtime, other modules
+//! (or the same module) retrieve them through [`Registry::get_stage_registry`]
+//! or [`Registry::get_provider_registry`].
+//!
+//! # Stage ordering
+//!
+//! Stages declare [`Before`](StageConstraint::Before) /
+//! [`After`](StageConstraint::After) constraints relative to other named
+//! stages. The [`StageRegistry`] resolves these into a total order using
+//! Kahn's algorithm (topological sort). Cycles are detected and cause a
+//! panic with a descriptive message.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use std::sync::Arc;
+//! use ferron_core::registry::{Registry, RegistryBuilder, StageConstraint};
+//!
+//! let registry = Registry::new();
+//!
+//! // Register stages (typically done via RegistryBuilder in ModuleLoader)
+//! registry.register_stage::<MyContext, _>(|| Arc::new(LoggingStage));
+//! registry.register_stage::<MyContext, _>(|| Arc::new(AuthStage));
+//!
+//! // Retrieve and build pipeline
+//! if let Some(stages) = registry.get_stage_registry::<MyContext>() {
+//!     let pipeline = stages.build_all();
+//! }
+//! ```
 
 use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
@@ -16,12 +52,22 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 /// Global registry for DNS provider lookup, set once during module initialization.
+///
+/// This is a convenience singleton. Modules that need the registry before
+/// it is passed through [`ModuleLoader::register_modules`](crate::loader::ModuleLoader::register_modules)
+/// (e.g. for DNS resolution during startup) can read it from here.
 pub static GLOBAL_REGISTRY: std::sync::OnceLock<Arc<Registry>> = std::sync::OnceLock::new();
 
 /// Factory function for creating provider instances.
+///
+/// Each call to the factory should produce a fresh provider. This allows
+/// thread-local or stateful provider initialization.
 pub type ProviderFactory<P> = Arc<dyn Fn() -> Arc<dyn crate::providers::Provider<P>> + Send + Sync>;
 
 /// Entry for a registered provider factory.
+///
+/// Stores the factory closure alongside the provider's name (obtained by
+/// calling the factory once during registration).
 pub struct ProviderEntry<P> {
     pub factory: ProviderFactory<P>,
     pub name: String,
@@ -29,15 +75,19 @@ pub struct ProviderEntry<P> {
 
 /// Registry for providers organized by type.
 ///
-/// Providers are looked up by name and can be enumerated. This registry
-/// supports type erasure through downcasting.
+/// Each `ProviderRegistry<P>` holds providers that implement
+/// [`Provider<P>`](crate::providers::Provider) for the same context type `P`.
+/// Providers are looked up by name and can be enumerated.
 ///
 /// # Example
 ///
 /// ```ignore
-/// let registry = ProviderRegistry::<DnsProvider>::new();
-/// registry.register(|| Arc::new(CloudflareDns));
-/// let provider = registry.get("cloudflare");
+/// use std::sync::Arc;
+/// use ferron_core::registry::ProviderRegistry;
+///
+/// let registry = ProviderRegistry::<MyProviderContext>::new();
+/// registry.register(|| Arc::new(CloudProvider));
+/// let provider = registry.get("cloud");
 /// ```
 pub struct ProviderRegistry<P> {
     providers: RwLock<Vec<ProviderEntry<P>>>,
@@ -135,19 +185,39 @@ impl<P: 'static> TypedProviderRegistry<P> {
 
 /// Constraint for ordering stages in execution order.
 ///
-/// Used by stages to declare ordering requirements relative to other named stages.
+/// Stages declare constraints relative to other named stages. The
+/// [`StageRegistry`] resolves these into a total order via topological
+/// sort (Kahn's algorithm).
+///
+/// # Example
+///
+/// ```ignore
+/// // This stage must run after "logging" and before "handler"
+/// fn constraints(&self) -> Vec<StageConstraint> {
+///     vec![
+///         StageConstraint::After("logging".to_string()),
+///         StageConstraint::Before("handler".to_string()),
+///     ]
+/// }
+/// ```
 #[derive(Clone, Debug)]
 pub enum StageConstraint {
-    /// This stage must run before the named stage
+    /// This stage must run **before** the named stage.
     Before(String),
-    /// This stage must run after the named stage
+    /// This stage must run **after** the named stage.
     After(String),
 }
 
 /// Factory function for creating stage instances.
+///
+/// Each call to the factory should produce a fresh stage. The factory is
+/// called when building a pipeline or when checking `is_applicable`.
 pub type StageFactory<C> = Arc<dyn Fn() -> Arc<dyn crate::pipeline::Stage<C>> + Send + Sync>;
 
 /// Entry for a registered stage.
+///
+/// Stores the factory closure, the stage's name, and its ordering
+/// constraints. These are extracted from the stage during registration.
 pub struct StageEntry<C> {
     pub factory: StageFactory<C>,
     pub name: String,
@@ -156,18 +226,22 @@ pub struct StageEntry<C> {
 
 /// Registry for pipeline stages with DAG-based topological ordering.
 ///
-/// This registry allows modules to register stages with Before/After constraints,
-/// and automatically orders them for execution. Cycles are detected and fall back
-/// to registration order.
+/// Stages are registered with [`Before`](StageConstraint::Before) /
+/// [`After`](StageConstraint::After) constraints and automatically ordered
+/// via topological sort. Use [`build_all`](Self::build_all) to create a
+/// [`Pipeline`](crate::pipeline::Pipeline) with all registered stages, or
+/// [`build_with_config`](Self::build_with_config) to include only stages
+/// that are applicable to a given configuration block.
 ///
 /// # Example
 ///
 /// ```ignore
-/// let registry = StageRegistry::<HttpContext>::new();
+/// use std::sync::Arc;
+/// use ferron_core::registry::{StageRegistry, StageConstraint};
+///
+/// let registry = StageRegistry::<MyContext>::new();
 /// registry.register(|| Arc::new(LoggingStage));
-/// registry.register(|| Arc::new(AuthStage::with_constraints(vec![
-///     StageConstraint::After("logging".to_string())
-/// ])));
+/// registry.register(|| Arc::new(AuthStage));
 /// let pipeline = registry.build_all();
 /// ```
 pub struct StageRegistry<C> {
@@ -382,23 +456,28 @@ impl<C: 'static> TypedStageRegistry<C> {
     }
 }
 
-/// Global registry for stages and providers across all context types.
+/// Type-erased container for multiple typed stage and provider registries.
 ///
-/// This registry uses type erasure to support multiple stage and provider types
-/// in a single container. Modules register context-specific stages and providers,
-/// and can retrieve them later using their context type.
+/// The [`Registry`] uses `TypeId`-based dispatch to store and retrieve
+/// [`StageRegistry<C>`] and [`ProviderRegistry<P>`] instances for different
+/// context types. Modules register their stages and providers through the
+/// [`RegistryBuilder`] (which wraps a `Registry`) and retrieve them later
+/// by specifying the context type.
 ///
 /// # Example
 ///
 /// ```ignore
+/// use std::sync::Arc;
+/// use ferron_core::registry::Registry;
+///
 /// let registry = Registry::new();
 ///
-/// // Register HTTP stages
-/// registry.register_stage::<HttpContext, _>(|| Arc::new(LoggingStage));
+/// // Register stages for a context type
+/// registry.register_stage::<MyContext, _>(|| Arc::new(LoggingStage));
 ///
-/// // Retrieve and use
-/// if let Some(http_stages) = registry.get_stage_registry::<HttpContext>() {
-///     let pipeline = http_stages.build_all();
+/// // Retrieve the typed registry and build a pipeline
+/// if let Some(stages) = registry.get_stage_registry::<MyContext>() {
+///     let pipeline = stages.build_all();
 /// }
 /// ```
 pub struct Registry {
@@ -425,18 +504,20 @@ impl Registry {
 
     /// Register a stage for a specific context type.
     ///
-    /// Stages are used by modules to build ordered pipelines. For example,
-    /// HTTP modules register stages with Before/After constraints to define
-    /// request processing order (logging -> auth -> handler -> response).
+    /// The factory is called once during registration to extract the stage's
+    /// name and constraints. It is called again each time a pipeline is built.
+    ///
+    /// If no [`StageRegistry`] exists for this context type, one is created
+    /// automatically.
     ///
     /// # Arguments
     ///
-    /// * `factory` - A function that creates stage instances
+    /// * `factory` -- A closure that creates a fresh stage instance.
     ///
     /// # Example
     ///
     /// ```ignore
-    /// registry.register_stage::<HttpContext, _>(|| Arc::new(LoggingStage));
+    /// registry.register_stage::<MyContext, _>(|| Arc::new(LoggingStage));
     /// ```
     pub fn register_stage<C, F>(&self, factory: F)
     where
@@ -463,13 +544,11 @@ impl Registry {
 
     /// Get the stage registry for a specific context type.
     ///
-    /// Returns the registry if stages have been registered for this type.
-    /// Used by modules to retrieve and build pipelines.
-    ///
-    /// # Example
+    /// Returns `None` if no stages have been registered for `C`.
+    /// Use this to build pipelines at runtime:
     ///
     /// ```ignore
-    /// if let Some(stages) = registry.get_stage_registry::<HttpContext>() {
+    /// if let Some(stages) = registry.get_stage_registry::<MyContext>() {
     ///     let pipeline = stages.build_all();
     /// }
     /// ```
@@ -490,17 +569,21 @@ impl Registry {
 
     /// Register a provider for a specific provider trait type.
     ///
-    /// Providers are discovered by their trait type and name, allowing modules
-    /// to extend functionality without compile-time dependencies.
+    /// The factory is called once during registration to extract the
+    /// provider's name. It is called again each time the provider is
+    /// retrieved via [`ProviderRegistry::get`].
+    ///
+    /// If no [`ProviderRegistry`] exists for this type, one is created
+    /// automatically.
     ///
     /// # Arguments
     ///
-    /// * `factory` - A function that creates provider instances
+    /// * `factory` -- A closure that creates a fresh provider instance.
     ///
     /// # Example
     ///
     /// ```ignore
-    /// registry.register_provider::<DnsProvider, _>(|| Arc::new(CloudflareDns));
+    /// registry.register_provider::<MyContext, _>(|| Arc::new(MyProvider));
     /// ```
     pub fn register_provider<C, F>(&self, factory: F)
     where
@@ -527,13 +610,11 @@ impl Registry {
 
     /// Get the provider registry for a specific provider trait type.
     ///
-    /// Returns the registry if providers have been registered for this type.
-    ///
-    /// # Example
+    /// Returns `None` if no providers have been registered for `C`.
     ///
     /// ```ignore
-    /// if let Some(dns_providers) = registry.get_provider_registry::<DnsProvider>() {
-    ///     let provider = dns_providers.get("cloudflare");
+    /// if let Some(providers) = registry.get_provider_registry::<MyContext>() {
+    ///     let provider = providers.get("my_provider");
     /// }
     /// ```
     pub fn get_provider_registry<C>(&self) -> Option<Arc<ProviderRegistry<C>>>
@@ -552,17 +633,23 @@ impl Registry {
     }
 }
 
-/// Builder for creating a Registry with a fluent API.
+/// Fluent builder for constructing a [`Registry`].
 ///
-/// The builder pattern allows convenient chaining of register calls.
+/// The builder wraps an `Arc<Registry>` and provides chainable methods
+/// for registering stages and providers. It is passed to
+/// [`ModuleLoader::register_stages`](crate::loader::ModuleLoader::register_stages)
+/// and [`ModuleLoader::register_providers`](crate::loader::ModuleLoader::register_providers).
 ///
 /// # Example
 ///
 /// ```ignore
+/// use std::sync::Arc;
+/// use ferron_core::registry::RegistryBuilder;
+///
 /// let registry = RegistryBuilder::new()
-///     .with_stage::<HttpContext, _>(|| Arc::new(LoggingStage))
-///     .with_stage::<HttpContext, _>(|| Arc::new(AuthStage))
-///     .with_provider::<DnsProvider, _>(|| Arc::new(CloudflareDns))
+///     .with_stage::<MyContext, _>(|| Arc::new(LoggingStage))
+///     .with_stage::<MyContext, _>(|| Arc::new(AuthStage))
+///     .with_provider::<MyProvider, _>(|| Arc::new(MyCache))
 ///     .build();
 /// ```
 pub struct RegistryBuilder {
@@ -586,8 +673,10 @@ impl RegistryBuilder {
 
     /// Register a stage for a specific context type.
     ///
-    /// Stages are used by modules to build ordered pipelines.
-    /// For example, HTTP stages are registered and then used to process requests.
+    /// The generic type parameter `C` determines which typed
+    /// [`StageRegistry`] the stage goes into. The factory closure is
+    /// called once to extract metadata and again each time a pipeline is
+    /// built.
     pub fn with_stage<C, F>(self, factory: F) -> Self
     where
         C: 'static,
@@ -597,10 +686,12 @@ impl RegistryBuilder {
         self
     }
 
-    /// Register a provider.
+    /// Register a provider for a specific provider trait type.
     ///
-    /// Providers are typed implementations that can be retrieved by trait type and name.
-    /// For example, DNS providers are registered and used to resolve domains.
+    /// The generic type parameter `C` determines which typed
+    /// [`ProviderRegistry`] the provider goes into. The factory closure is
+    /// called once to extract the provider's name and again each time the
+    /// provider is retrieved.
     pub fn with_provider<C, F>(self, factory: F) -> Self
     where
         C: 'static,
@@ -610,7 +701,10 @@ impl RegistryBuilder {
         self
     }
 
-    /// Build the registry and return it.
+    /// Consume the builder and return the finalized [`Registry`].
+    ///
+    /// The returned `Arc<Registry>` is shared across the server and
+    /// passed to [`ModuleLoader::register_modules`](crate::loader::ModuleLoader::register_modules).
     #[inline]
     pub fn build(self) -> Arc<Registry> {
         self.registry

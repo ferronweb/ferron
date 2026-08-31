@@ -1,8 +1,28 @@
-//! Logging module supporting Windows Event Log and stdout/stderr backends.
+//! Lightweight logging module with stdio and Windows Event Log backends.
 //!
-//! This module provides a unified logging interface that automatically routes
-//! logs to the Windows Event Log when running as a Windows service, or to
-//! stdout/stderr when running as a regular console application.
+//! This module provides a simple, low-overhead logging interface. On all
+//! platforms logs go to stdout/stderr. On Windows, when running as a
+//! service, logs are routed to the Windows Event Log instead.
+//!
+//! # Usage
+//!
+//! ```ignore
+//! // Initialize once at startup
+//! ferron_core::logging::init_stdio_logger(ferron_core::logging::LogLevel::Info)?;
+//!
+//! // Log messages via macros
+//! ferron_core::log_info!("Server started on port {}", 8080);
+//! ferron_core::log_error!("Failed to bind: {}", err);
+//! ```
+//!
+//! # Log levels
+//!
+//! | Level | Macro | Purpose |
+//! |---|---|---|
+//! | [`Error`](LogLevel::Error) | [`log_error!`] | Fatal or recoverable errors |
+//! | [`Warn`](LogLevel::Warn) | [`log_warn!`] | Unexpected but non-fatal conditions |
+//! | [`Info`](LogLevel::Info) | [`log_info!`] | Startup, shutdown, and lifecycle events |
+//! | [`Debug`](LogLevel::Debug) | [`log_debug!`] | Detailed diagnostic information |
 
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -11,12 +31,16 @@ use std::sync::OnceLock;
 #[cfg(windows)]
 use std::sync::Mutex;
 
-/// Log levels
+/// Log severity levels, ordered from most to least severe.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum LogLevel {
+    /// Fatal or recoverable errors.
     Error = 0,
+    /// Unexpected but non-fatal conditions.
     Warn = 1,
+    /// Startup, shutdown, and lifecycle events.
     Info = 2,
+    /// Detailed diagnostic information.
     Debug = 3,
 }
 
@@ -42,13 +66,13 @@ impl LogLevel {
     }
 }
 
-/// Logger backend types
+/// Logger backend types.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum LoggerBackend {
-    /// Windows Event Log (Windows only)
+    /// Windows Event Log (only available on Windows).
     #[cfg(windows)]
     EventLog,
-    /// Standard output/error streams
+    /// Standard output for info/debug, standard error for warnings/errors.
     Stdio,
 }
 
@@ -115,7 +139,11 @@ impl Drop for WindowsEventSource {
     }
 }
 
-/// Global logger instance
+/// Global logger instance.
+///
+/// There is one logger per process, initialized once via [`init`],
+/// [`init_stdio_logger`], or (on Windows) [`init_service_logger`]. All
+/// subsequent log calls go through this instance.
 pub struct AppLogger {
     backend: LoggerBackend,
     max_level: AtomicUsize,
@@ -142,13 +170,16 @@ fn get_logger() -> Option<&'static AppLogger> {
     GLOBAL_LOGGER.get()
 }
 
-/// Check if a logger is initialized
+/// Check whether the global logger has been initialized.
 #[inline]
 pub fn is_init() -> bool {
     get_logger().is_some()
 }
 
-/// Initialize the logger with the specified backend
+/// Initialize the logger with the specified backend and maximum level.
+///
+/// Returns an error if the logger has already been initialized.
+/// Call this once at server startup before any log macros.
 pub fn init(backend: LoggerBackend, level: LogLevel) -> anyhow::Result<()> {
     let is_tty = if !matches!(backend, LoggerBackend::Stdio) {
         false
@@ -170,7 +201,7 @@ pub fn init(backend: LoggerBackend, level: LogLevel) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Initialize logger for Windows service (uses Event Log)
+/// Initialize logger for Windows service (uses Event Log).
 #[cfg(windows)]
 pub fn init_service_logger(service_name: &str, level: LogLevel) -> anyhow::Result<()> {
     let logger = AppLogger {
@@ -187,7 +218,8 @@ pub fn init_service_logger(service_name: &str, level: LogLevel) -> anyhow::Resul
     Ok(())
 }
 
-/// Initialize logger for console application (uses stdout/stderr)
+/// Initialize logger for console application (uses stdout/stderr).
+#[inline]
 pub fn init_stdio_logger(level: LogLevel) -> anyhow::Result<()> {
     let is_tty = std::io::stdout().is_terminal();
     let logger = AppLogger {
@@ -262,14 +294,16 @@ impl AppLogger {
     }
 }
 
-/// Set the maximum log level
+/// Set the maximum log level at runtime.
+///
+/// Messages above this level are silently dropped.
 pub fn set_max_level(level: LogLevel) {
     if let Some(logger) = get_logger() {
         logger.set_max_level(level);
     }
 }
 
-/// Get the current maximum log level
+/// Get the current maximum log level.
 #[inline]
 pub fn max_level() -> LogLevel {
     get_logger()
@@ -283,13 +317,13 @@ pub fn max_level() -> LogLevel {
         .unwrap_or(LogLevel::Error)
 }
 
-/// Check if a log level is enabled
+/// Check if a log level is currently enabled.
 #[inline]
 pub fn enabled(level: LogLevel) -> bool {
     level <= max_level()
 }
 
-/// Internal log function used by macros
+/// Internal log function used by the logging macros.
 #[inline]
 pub fn log(level: LogLevel, message: &str) {
     if let Some(logger) = get_logger() {
@@ -297,7 +331,7 @@ pub fn log(level: LogLevel, message: &str) {
     }
 }
 
-/// Flush the logger
+/// Flush the logger's output streams.
 #[inline]
 pub fn flush() {
     if let Some(logger) = get_logger() {
