@@ -48,19 +48,21 @@ implementation:
 
 ```ferron
 {
-    tls {
-        provider selfsigned
-        selfsigned {
-            days 365
-        }
-    }
+    # tls {
+    #     provider selfsigned
+    #     selfsigned {
+    #         days 365
+    #     }
+    # }
 
-    observability {
-        provider memory
-        memory {
-            max_events 1000
-        }
-    }
+    # observability {
+    #     provider memory
+    #     memory {
+    #         max_events 1000
+    #     }
+    # }
+
+    console_log
 }
 ```
 
