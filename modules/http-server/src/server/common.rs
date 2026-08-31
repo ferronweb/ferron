@@ -160,7 +160,7 @@ fn initialize_sinks_from_providers(
 #[inline]
 pub fn resolve_root_observability_sink(
     observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
-    trace_sampler: Option<&ferron_observability::TraceSampler>,
+    trace_sampler: Option<&ferron_observability::sampler::TraceSampler>,
 ) -> CompositeEventSink {
     let sinks = observability_resolver
         .root_data()

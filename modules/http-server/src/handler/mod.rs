@@ -146,10 +146,10 @@ pub async fn request_handler(
                     .and_then(|entries| entries.first())
             })
             .map(|entry| {
-                let config = ferron_observability::parse_trace_sampling_config(entry);
+                let config = ferron_observability::sampler::parse_trace_sampling_config(entry);
                 !matches!(
                     config.mode,
-                    ferron_observability::TraceSamplingMode::AlwaysOff
+                    ferron_observability::sampler::TraceSamplingMode::AlwaysOff
                 )
             })
             .unwrap_or(true);
@@ -818,7 +818,7 @@ async fn request_handler_inner(
 
     // Extract resolved control plane metadata for post-resolution events
     let resolved_control_plane_metadata =
-        ferron_observability::ControlPlaneConfig::from_layered(&ctx.configuration)
+        ferron_observability::control_plane::ControlPlaneConfig::from_layered(&ctx.configuration)
             .map(|cp| cp.metadata);
 
     // Handle OPTIONS * requests (RFC 2616 Section 9.2)

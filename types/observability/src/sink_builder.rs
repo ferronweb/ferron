@@ -3,10 +3,9 @@ use std::sync::Arc;
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::registry::Registry;
 
-use crate::{
-    CompositeEventSink, ControlPlaneConfig, ObservabilityConfigExtractor, ObservabilityContext,
-    TraceSampler, TraceSamplingConfig,
-};
+use crate::control_plane::ControlPlaneConfig;
+use crate::sampler::{TraceSampler, TraceSamplingConfig};
+use crate::{CompositeEventSink, ObservabilityConfigExtractor, ObservabilityContext};
 
 /// Materializes sinks from observability providers using the global config.
 ///

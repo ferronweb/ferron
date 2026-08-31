@@ -302,7 +302,7 @@ async fn run_endpoint(
                 None,
                 &CompositeEventSink::with_sampler(
                     vec![],
-                    Some(ferron_observability::TraceSampler::new(
+                    Some(ferron_observability::sampler::TraceSampler::new(
                         &server_config.trace_sampling,
                     )),
                 ),

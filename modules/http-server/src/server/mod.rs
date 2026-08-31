@@ -36,9 +36,8 @@ use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
-use ferron_observability::{
-    ObservabilityConfigExtractor, ObservabilityContext, TraceSamplingConfig,
-};
+use ferron_observability::sampler::TraceSamplingConfig;
+use ferron_observability::{ObservabilityConfigExtractor, ObservabilityContext};
 use ferron_tls::{TlsContext, TlsResolver};
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -78,7 +77,7 @@ pub struct HttpServerConfig {
         Arc<self::tls_resolve::RadixTree<common::HttpConnectionOptions>>,
     pub observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<ObservabilityProviderEntry>>>,
     /// Parsed trace sampling configuration from `http { trace_sampling ... }`.
-    pub trace_sampling: ferron_observability::TraceSamplingConfig,
+    pub trace_sampling: ferron_observability::sampler::TraceSamplingConfig,
     /// Token that is cancelled when configuration is reloaded to gracefully shut down existing connections.
     pub reload_token: CancellationToken,
     /// The canonical HTTPS port for this server (default: 443).
@@ -491,7 +490,7 @@ impl BasicHttpModule {
                                 .map(|provider| {
                                     let observability_block_arc = Arc::new(observability_block);
                                     let cp_config =
-                                        ferron_observability::ControlPlaneConfig::from_block(
+                                        ferron_observability::control_plane::ControlPlaneConfig::from_block(
                                             &global_config,
                                         );
                                     let cp_metadata =
@@ -603,7 +602,9 @@ impl BasicHttpModule {
 
                     // Extract control_plane metadata and span links from the host block
                     let cp_config =
-                        ferron_observability::ControlPlaneConfig::from_block(&host_config.1);
+                        ferron_observability::control_plane::ControlPlaneConfig::from_block(
+                            &host_config.1,
+                        );
                     let cp_metadata = cp_config.as_ref().map(|c| c.metadata.clone());
                     let cp_span_links = cp_config.as_ref().map(|c| c.span_links.clone());
 
@@ -784,7 +785,7 @@ impl BasicHttpModule {
                 .and_then(|entries| entries.first())
                 .map_or(
                     TraceSamplingConfig::default(),
-                    ferron_observability::parse_trace_sampling_config,
+                    ferron_observability::sampler::parse_trace_sampling_config,
                 ),
             reload_token: CancellationToken::new(),
             https_port,

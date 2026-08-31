@@ -10,7 +10,8 @@ use std::time::{Duration, Instant};
 
 use ferron_core::runtime::Runtime;
 use ferron_core::{log_error, log_info, log_warn};
-use ferron_observability::{CompositeEventSink, LogAttributeValue, TraceSampler};
+use ferron_observability::sampler::TraceSampler;
+use ferron_observability::{CompositeEventSink, LogAttributeValue};
 use ferron_tls::observability::{
     emit_connections_active, emit_handshake_duration, emit_handshake_total,
 };
