@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
-use ferron_core::config::ServerConfigurationBlockBuilder;
+use ferron_core::config::{
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+};
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_http::HttpContext;
+use rustc_hash::FxHashMap;
 
 use crate::config::CgiConfiguration;
 
@@ -48,9 +51,23 @@ impl Stage<HttpContext> for CgiInjectStage {
                 index_inject_ext.insert(0, "index.php".to_string());
             }
             if index_inject_ext.len() > 3 {
-                let block = ServerConfigurationBlockBuilder::new()
-                    .directive_str("index", index_inject_ext)
-                    .build();
+                let mut directives = FxHashMap::default();
+                directives.insert(
+                    "index".to_string(),
+                    vec![ServerConfigurationDirectiveEntry {
+                        args: index_inject_ext
+                            .into_iter()
+                            .map(|s| ServerConfigurationValue::String(s, None))
+                            .collect(),
+                        children: None,
+                        span: None,
+                    }],
+                );
+                let block = ServerConfigurationBlock {
+                    directives: Arc::new(directives),
+                    matchers: FxHashMap::default(),
+                    span: None,
+                };
                 ctx.configuration.add_layer(Arc::new(block));
             }
         }

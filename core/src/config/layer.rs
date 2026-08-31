@@ -176,21 +176,45 @@ impl LayeredConfiguration {
 #[cfg(test)]
 mod tests {
     use super::LayeredConfiguration;
-    use crate::config::ServerConfigurationBlockBuilder;
+    use crate::config::{
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+    };
+    use rustc_hash::FxHashMap;
+    use std::sync::Arc;
+
+    fn make_block(directives: Vec<(&str, Vec<&str>)>) -> ServerConfigurationBlock {
+        let mut map = FxHashMap::default();
+        for (name, args) in directives {
+            let entry = ServerConfigurationDirectiveEntry {
+                args: args
+                    .into_iter()
+                    .map(|s| ServerConfigurationValue::String(s.into(), None))
+                    .collect(),
+                children: None,
+                span: None,
+            };
+            map.entry(name.to_string())
+                .or_insert_with(Vec::new)
+                .push(entry);
+        }
+        ServerConfigurationBlock {
+            directives: Arc::new(map),
+            matchers: FxHashMap::default(),
+            span: None,
+        }
+    }
 
     #[test]
     fn get_value_prefers_last_entry_in_highest_priority_layer() {
-        let low = ServerConfigurationBlockBuilder::new()
-            .directive_str("root", vec!["/srv/low"])
-            .build();
-        let high = ServerConfigurationBlockBuilder::new()
-            .directive_str("root", vec!["/srv/high-initial"])
-            .directive_str("root", vec!["/srv/high-final"])
-            .build();
+        let low = make_block(vec![("root", vec!["/srv/low"])]);
+        let high = make_block(vec![
+            ("root", vec!["/srv/high-initial"]),
+            ("root", vec!["/srv/high-final"]),
+        ]);
 
         let mut layered = LayeredConfiguration::new();
-        layered.add_layer(std::sync::Arc::new(low));
-        layered.add_layer(std::sync::Arc::new(high));
+        layered.add_layer(Arc::new(low));
+        layered.add_layer(Arc::new(high));
 
         assert_eq!(
             layered
@@ -202,14 +226,12 @@ mod tests {
 
     #[test]
     fn get_value_without_inheritance_only_checks_highest_priority_layer() {
-        let low = ServerConfigurationBlockBuilder::new()
-            .directive_str("root", vec!["/srv/low"])
-            .build();
-        let high = ServerConfigurationBlockBuilder::new().build();
+        let low = make_block(vec![("root", vec!["/srv/low"])]);
+        let high = make_block(vec![]);
 
         let mut layered = LayeredConfiguration::new();
-        layered.add_layer(std::sync::Arc::new(low));
-        layered.add_layer(std::sync::Arc::new(high));
+        layered.add_layer(Arc::new(low));
+        layered.add_layer(Arc::new(high));
 
         assert!(layered.get_value("root", false).is_none());
         assert_eq!(

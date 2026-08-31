@@ -834,27 +834,46 @@ fn get_or_build_retries_failed_builds() {
 fn coalesce_timeout_defaults_and_parses() {
     use ferron_core::config::layer::LayeredConfiguration;
     use ferron_core::config::{
-        ServerConfigurationBlockBuilder, ServerConfigurationDirectiveEntry,
-        ServerConfigurationValue,
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
     };
+    use rustc_hash::FxHashMap;
+    use std::sync::Arc;
 
     fn layered_config(coalesce_timeout: Option<u64>) -> LayeredConfiguration {
-        let mut builder = ServerConfigurationBlockBuilder::new();
+        let mut inner_directives = FxHashMap::default();
         if let Some(secs) = coalesce_timeout {
-            builder = builder.directive(
-                "coalesce_timeout",
-                ServerConfigurationDirectiveEntry {
+            inner_directives.insert(
+                "coalesce_timeout".to_string(),
+                vec![ServerConfigurationDirectiveEntry {
                     args: vec![ServerConfigurationValue::Number(secs as i64, None)],
                     children: None,
                     span: None,
-                },
+                }],
             );
         }
-        let block = ServerConfigurationBlockBuilder::new()
-            .directive_with_block("cache", Vec::<String>::new(), builder.build())
-            .build();
+        let inner_block = ServerConfigurationBlock {
+            directives: Arc::new(inner_directives),
+            matchers: FxHashMap::default(),
+            span: None,
+        };
+
+        let mut outer_directives = FxHashMap::default();
+        outer_directives.insert(
+            "cache".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(inner_block),
+                span: None,
+            }],
+        );
+        let block = ServerConfigurationBlock {
+            directives: Arc::new(outer_directives),
+            matchers: FxHashMap::default(),
+            span: None,
+        };
+
         let mut layered = LayeredConfiguration::new();
-        layered.add_layer(std::sync::Arc::new(block));
+        layered.add_layer(Arc::new(block));
         layered
     }
 
@@ -876,10 +895,13 @@ fn coalesce_timeout_defaults_and_parses() {
 #[test]
 fn config_cache_is_keyed_per_host_and_cleared_on_reload() {
     use ferron_core::config::layer::LayeredConfiguration;
-    use ferron_core::config::ServerConfigurationBlockBuilder;
+    use ferron_core::config::{
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+    };
+    use rustc_hash::FxHashMap;
+    use std::sync::Arc;
 
     fn layered_config(max_response_size: u64) -> LayeredConfiguration {
-        use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
         let entry = ServerConfigurationDirectiveEntry {
             args: vec![ServerConfigurationValue::Number(
                 max_response_size as i64,
@@ -888,17 +910,32 @@ fn config_cache_is_keyed_per_host_and_cleared_on_reload() {
             children: None,
             span: None,
         };
-        let block = ServerConfigurationBlockBuilder::new()
-            .directive_with_block(
-                "cache",
-                Vec::<String>::new(),
-                ServerConfigurationBlockBuilder::new()
-                    .directive("max_response_size", entry)
-                    .build(),
-            )
-            .build();
+
+        let mut inner_directives = FxHashMap::default();
+        inner_directives.insert("max_response_size".to_string(), vec![entry]);
+        let inner_block = ServerConfigurationBlock {
+            directives: Arc::new(inner_directives),
+            matchers: FxHashMap::default(),
+            span: None,
+        };
+
+        let mut outer_directives = FxHashMap::default();
+        outer_directives.insert(
+            "cache".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(inner_block),
+                span: None,
+            }],
+        );
+        let block = ServerConfigurationBlock {
+            directives: Arc::new(outer_directives),
+            matchers: FxHashMap::default(),
+            span: None,
+        };
+
         let mut layered = LayeredConfiguration::new();
-        layered.add_layer(std::sync::Arc::new(block));
+        layered.add_layer(Arc::new(block));
         layered
     }
 

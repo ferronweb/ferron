@@ -4,7 +4,6 @@
 //! - Hierarchical configuration blocks (global, per-port, per-host)
 //! - Type-safe configuration values with interpolation support
 //! - Configuration matching and filtering
-//! - Builder patterns for constructing configurations
 //! - Validation and adaptation frameworks
 //! - Configuration watching for reload detection
 //!
@@ -23,13 +22,11 @@
 //! ```
 
 pub mod adapter;
-mod builder;
 mod duration;
 pub mod layer;
 mod macros;
 pub mod validator;
 
-pub use builder::*;
 pub use duration::*;
 //pub use macros::*;
 
