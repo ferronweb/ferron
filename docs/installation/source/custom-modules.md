@@ -94,6 +94,93 @@ Run your custom server with a configuration file:
 ./target/release/my-custom-ferron run -c ferron.conf
 ```
 
+## Packaging a custom build
+
+You can package a custom Ferron binary in the same way as the default
+build. The `packaging/` scripts and `just` commands expect compiled binaries
+in `target/`. Because custom binaries live outside the main repository, you
+copy the built `target/` directory into a clone of the stock Ferron source
+and run the packaging commands there.
+
+### 1. Build the custom binary
+
+In your custom binary project, build a release binary:
+
+```bash
+cargo build --release
+```
+
+This creates `target/release/my-custom-ferron` (or
+`target/x86_64-unknown-linux-gnu/release/my-custom-ferron` when you build with
+`--target`).
+
+### 2. Clone the stock Ferron source
+
+```bash
+git clone https://github.com/ferronweb/ferron -b 3.x ferron-stock
+cd ferron-stock
+```
+
+Keep this clone clean. It provides the packaging scripts (`packaging/`,
+`Justfile`, `cross-build/`) and the default configuration files (`configs/`,
+`wwwroot/`).
+
+### 3. Copy the `target` directory
+
+Copy the entire `target` directory from your custom project into the stock
+clone. The packaging scripts look for binaries in `target/release` or
+`target/<triple>/release`.
+
+```bash
+# From the stock clone directory
+rm -rf target
+cp -r /path/to/my-custom-ferron/target target
+```
+
+> [!note]
+> The packaging scripts pick up every file in `target/release` that has no
+> extension (or `*.exe`, `*.so`, `*.dll`, `*.dylib` on Windows). Make sure the
+> custom binary name does not clash with build artifacts you do not want to
+> ship. The `packaging/archive/package.sh` script copies the binary plus
+> `configs/ferron.release.conf` and `wwwroot/`.
+
+### 4. Run packaging commands via `just`
+
+Install `just` from `https://just.systems/` and run the packaging command
+you need. Examples:
+
+```bash
+just package                           # archive for host triple (tar.gz or zip)
+just package x86_64-unknown-linux-musl # archive for explicit target
+just package-deb x86_64-unknown-linux-musl  # Debian package (uses Docker)
+just package-rpm x86_64-unknown-linux-musl  # RPM package (uses Docker)
+
+# Windows (run in PowerShell)
+just package                           # zip for host
+just package-windows x86_64-pc-windows-msvc
+```
+
+For FIPS builds, pass the FIPS flag:
+
+```bash
+just package "" true                   # FIPS archive for host
+just package x86_64-unknown-linux-musl true
+just package-deb x86_64-unknown-linux-musl true
+```
+
+The output appears in `dist/` in the stock clone directory, for example
+`dist/ferron-3.0.0-beta.11-x86_64-unknown-linux-musl.tar.gz`.
+
+> [!tip]
+> For cross-compilation, use `just cross-build <target> true` in the
+> custom project first, then copy `target/` and run `just package <target>`.
+
+### 5. Verify the package
+
+Check that the archive contains your custom binary under the expected name
+and that `ferron version` or `ferron directives` reports your module
+directives.
+
 ## How it works
 
 Ferron uses a module profile system. The `ferron-entrypoint` crate contains the CLI logic and runtime management. It does not know the specific modules until you register them in the `Vec<Box<dyn ModuleLoader>>` passed to its `main` function.

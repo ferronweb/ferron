@@ -531,5 +531,56 @@
     "target": "_self",
     "label": "Cross-plane traceability",
     "sub": true
+  },
+  {
+    "label": "Module development",
+    "category": true
+  },
+  {
+    "href": "/docs/v3/module-development",
+    "target": "_self",
+    "label": "Overview"
+  },
+  {
+    "label": "Concepts"
+  },
+  {
+    "href": "/docs/v3/module-development/architecture",
+    "target": "_self",
+    "label": "Architecture",
+    "sub": true
+  },
+  {
+    "href": "/docs/v3/module-development/module-api",
+    "target": "_self",
+    "label": "Module API",
+    "sub": true
+  },
+  {
+    "label": "Guides"
+  },
+  {
+    "href": "/docs/v3/module-development/creating-a-module",
+    "target": "_self",
+    "label": "Creating a module",
+    "sub": true
+  },
+  {
+    "href": "/docs/v3/module-development/naming-conventions",
+    "target": "_self",
+    "label": "Naming conventions",
+    "sub": true
+  },
+  {
+    "href": "/docs/v3/module-development/examples",
+    "target": "_self",
+    "label": "Example modules",
+    "sub": true
+  },
+  {
+    "href": "/docs/v3/module-development/obtaining-api-docs",
+    "target": "_self",
+    "label": "Obtaining API docs",
+    "sub": true
   }
 ]
