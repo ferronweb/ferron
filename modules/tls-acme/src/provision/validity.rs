@@ -64,6 +64,8 @@ pub async fn check_certificate_validity_or_install_cached(
                     if SystemTime::now() < renewal_info.0.suggested_window.start {
                         return Ok(true);
                     }
+                } else if check_certificate_validity(certificate, None)? {
+                    return Ok(true);
                 }
             } else if check_certificate_validity(certificate, None)? {
                 return Ok(true);
@@ -127,9 +129,10 @@ fn cert_id_from_cert<'a>(
             else {
                 return None;
             };
-            Some(rustls_pki_types::Der::from(
-                rasn::der::encode(&aki_parsed).ok()?,
-            ))
+            let ki = aki_parsed.key_identifier?;
+            // Use raw key identifier bytes (without OCTET STRING tag/length) per RFC 9773 §4.1.
+            // This is the DER-encoded OCTET STRING value without the tag and length bytes.
+            Some(rustls_pki_types::Der::from(ki.as_ref().to_vec()))
         } else {
             None
         }
@@ -137,12 +140,10 @@ fn cert_id_from_cert<'a>(
         return Err("x509 certificate does not have an AKI extension".into());
     };
 
+    let serial_number_der = get_raw_x509_serial(certificate.as_ref());
     Ok(instant_acme::CertificateIdentifier::new(
         authority_key_identifier,
-        rustls_pki_types::Der::from(
-            rasn::der::encode(&parsed.tbs_certificate.serial_number)
-                .map_err(|e| format!("failed to encode serial number: {e}"))?,
-        ),
+        rustls_pki_types::Der::from(serial_number_der),
     ))
 }
 
@@ -182,4 +183,110 @@ async fn get_ari_renewal_info(
         }
     }
     None
+}
+
+fn get_raw_x509_serial(x509_cert_der: &[u8]) -> Vec<u8> {
+    // Extract the raw DER-encoded serialNumber value bytes (without tag and length)
+    // directly from the original certificate DER, without re-encoding via rasn.
+    // This preserves the exact bytes as encoded (including leading 0x00 for
+    // positive integers with MSB set) per RFC 9773 §4.1: "DER-encoded Serial
+    // Number field (without the tag and length bytes)".
+    //
+    // ASN.1 structure:
+    //   Certificate  ::= SEQUENCE { tbsCertificate TBSCertificate, ... }
+    //   TBSCertificate ::= SEQUENCE { [0] EXPLICIT Version DEFAULT v1,
+    //                                 serialNumber CertificateSerialNumber,
+    //                                 ... }
+    // So we parse: outer SEQUENCE -> inner TBSCertificate SEQUENCE -> optional
+    // [0] version -> INTEGER serialNumber. We return the INTEGER value bytes.
+
+    fn parse_length(data: &[u8]) -> Option<(usize, usize)> {
+        if data.is_empty() {
+            return None;
+        }
+        let first = data[0];
+        if first & 0x80 == 0 {
+            // Short form
+            Some((first as usize, 1))
+        } else {
+            let num_bytes = (first & 0x7F) as usize;
+            // 0 means indefinite length, not allowed in DER
+            if num_bytes == 0 || num_bytes > 4 {
+                return None;
+            }
+            if data.len() < 1 + num_bytes {
+                return None;
+            }
+            let mut len = 0usize;
+            for &b in &data[1..1 + num_bytes] {
+                len = (len << 8) | b as usize;
+            }
+            Some((len, 1 + num_bytes))
+        }
+    }
+
+    let mut pos = 0usize;
+
+    // Outer Certificate SEQUENCE (tag 0x30)
+    if x509_cert_der.get(pos) != Some(&0x30) {
+        return vec![];
+    }
+    pos += 1;
+    let (outer_len, outer_len_bytes) = match parse_length(&x509_cert_der[pos..]) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    pos += outer_len_bytes;
+    let outer_end = pos + outer_len;
+    if outer_end > x509_cert_der.len() {
+        return vec![];
+    }
+
+    // TBSCertificate SEQUENCE (tag 0x30), first element of Certificate
+    if x509_cert_der.get(pos) != Some(&0x30) {
+        return vec![];
+    }
+    pos += 1;
+    let (tbs_len, tbs_len_bytes) = match parse_length(&x509_cert_der[pos..]) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    pos += tbs_len_bytes;
+    let tbs_start = pos;
+    let tbs_end = tbs_start + tbs_len;
+    if tbs_end > x509_cert_der.len() || tbs_end > outer_end {
+        return vec![];
+    }
+
+    // Optional [0] EXPLICIT version (tag 0xA0, constructed)
+    if pos < tbs_end && x509_cert_der[pos] == 0xA0 {
+        pos += 1;
+        let (v_len, v_len_bytes) = match parse_length(&x509_cert_der[pos..]) {
+            Some(v) => v,
+            None => return vec![],
+        };
+        pos += v_len_bytes;
+        if pos + v_len > tbs_end {
+            return vec![];
+        }
+        pos += v_len;
+    }
+
+    // serialNumber INTEGER (tag 0x02)
+    if pos >= tbs_end || x509_cert_der[pos] != 0x02 {
+        return vec![];
+    }
+    pos += 1;
+    let (serial_len, serial_len_bytes) = match parse_length(&x509_cert_der[pos..]) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    pos += serial_len_bytes;
+    if pos + serial_len > tbs_end {
+        return vec![];
+    }
+
+    // Return the INTEGER value bytes (without tag and length), preserving
+    // the exact encoding including any leading 0x00 for positive integers.
+    x509_cert_der[pos..pos + serial_len].to_vec()
 }
