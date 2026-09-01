@@ -263,9 +263,9 @@ The sidecar parses lines matching this pattern:
 
 | Reason prefix         | AbuseIPDB category       | Category ID |
 | --------------------- | ------------------------ | ----------- |
-| `Rate limit`          | Web App Attack           | 14          |
-| `Brute-force`         | Brute-Force              | 21          |
-| `Custom abuse event:` | Web App Attack (default) | 14          |
+| `Rate limit`          | Web App Attack           | 21          |
+| `Brute-force`         | Brute-Force              | 18          |
+| `Custom abuse event:` | Web App Attack (default) | 21          |
 
 ### Sample script
 
@@ -287,10 +287,10 @@ import urllib.error
 ABUSEIPDB_URL = "https://api.abuseipdb.com/api/v2/report"
 
 CATEGORY_MAP = {
-    "Rate limit": 14,       # Web App Attack
-    "Brute-force": 21,      # Brute-Force
+    "Rate limit": 21,       # Web App Attack
+    "Brute-force": 18,      # Brute-Force
 }
-DEFAULT_CATEGORY = 14
+DEFAULT_CATEGORY = 21
 
 LOG_PATTERN = re.compile(
     r"^\[.* WARN\] (\[trace=[^\]]+\] )?Ban triggered: IP (\S+) - (.+)$"
