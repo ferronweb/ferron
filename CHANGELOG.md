@@ -10,6 +10,10 @@
 
 - **OCSP status logging and metrics**: added `ferron.ocsp.cert.status` attribute to log records and metric labels, allowing the certificate's OCSP status (`good`, `revoked`, `unknown`) to be logged and monitored.
 
+#### Observability
+
+- **No metric exemplars linking to sampled-out traces**: metric exemplars are no longer linked to traces that are sampled out (and thus not exported) to avoid misleading observability tools and reduce debugging friction.
+
 ### Fixed
 
 #### Automatic TLS

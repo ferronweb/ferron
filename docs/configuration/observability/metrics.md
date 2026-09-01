@@ -57,6 +57,10 @@ Exemplars are available for all counter metrics by default. For Prometheus histo
 
 > [!note]
 >
+> To use metric exemplars with Ferron, you need to configure a tracing backend (for example OTLP) in the web server configuration.
+
+> [!info]
+>
 > - For Prometheus exemplar configuration options and format details, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus#metric-exemplars).
 > - For OTLP exemplar configuration options and format details, see [OTLP observability](/docs/v3/configuration/observability/otlp#metrics).
 

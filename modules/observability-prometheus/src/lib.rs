@@ -370,18 +370,22 @@ fn exemplar_histogram_constructor() -> HistogramWithExemplars<Vec<(String, Strin
 
 fn exemplar_labels(event: &MetricEvent) -> Option<Vec<(String, String)>> {
     // Trace and span IDs are already hex-encoded...
-    event.trace_context.as_ref().map(|tc| {
-        vec![
-            (
-                "trace_id".to_string(),
-                String::from_utf8_lossy(&tc.trace_id).to_string(),
-            ),
-            (
-                "span_id".to_string(),
-                String::from_utf8_lossy(&tc.span_id).to_string(),
-            ),
-        ]
-    })
+    event
+        .trace_context
+        .as_ref()
+        .filter(|tc| tc.sampled != Some(false))
+        .map(|tc| {
+            vec![
+                (
+                    "trace_id".to_string(),
+                    String::from_utf8_lossy(&tc.trace_id).to_string(),
+                ),
+                (
+                    "span_id".to_string(),
+                    String::from_utf8_lossy(&tc.span_id).to_string(),
+                ),
+            ]
+        })
 }
 
 async fn emit_metric(

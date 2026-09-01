@@ -287,15 +287,17 @@ impl Series {
         }
         if capture {
             if let Some(ctx) = &event.trace_context {
-                if let (Some(trace_id), Some(span_id)) =
-                    (decode_trace_id(&ctx.trace_id), decode_span_id(&ctx.span_id))
-                {
-                    self.exemplar = Some(StoredExemplar {
-                        trace_id,
-                        span_id,
-                        time: now,
-                        value: Scalar::of(event.value),
-                    });
+                if ctx.sampled != Some(false) {
+                    if let (Some(trace_id), Some(span_id)) =
+                        (decode_trace_id(&ctx.trace_id), decode_span_id(&ctx.span_id))
+                    {
+                        self.exemplar = Some(StoredExemplar {
+                            trace_id,
+                            span_id,
+                            time: now,
+                            value: Scalar::of(event.value),
+                        });
+                    }
                 }
             }
         }

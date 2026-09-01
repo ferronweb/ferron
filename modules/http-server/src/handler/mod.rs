@@ -111,7 +111,7 @@ pub async fn request_handler(
         .then(|| remote_address.map(|a| canonicalize_ip(a.ip())))
         .flatten();
 
-    let (request_trace_context, external_parent) = {
+    let (mut request_trace_context, external_parent) = {
         let global_config = config_resolver.global();
 
         // Read trace { generate } toggle
@@ -235,6 +235,13 @@ pub async fn request_handler(
         } else {
             None
         };
+
+    if request_span_key.is_none() {
+        // Maybe trace is sampled away...
+        if let Some(ctx) = &mut request_trace_context {
+            ctx.sampled = false;
+        }
+    }
 
     ferron_core::admin::ADMIN_METRICS
         .requests_total
