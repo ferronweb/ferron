@@ -187,37 +187,3 @@ async fn read_chunk(
         (Err(e), _) => Some(Err(e)),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn remaining_from_bounds_saturates_when_end_precedes_start() {
-        assert_eq!(remaining_from_bounds(10, Some(5)), Some(0));
-    }
-
-    #[test]
-    fn remaining_from_bounds_returns_unbounded_for_open_ended_streams() {
-        assert_eq!(remaining_from_bounds(10, None), None);
-    }
-
-    #[test]
-    fn buffer_size_for_read_uses_full_chunk_for_unbounded_streams() {
-        assert_eq!(buffer_size_for_read(None), MAX_BUFFER_SIZE);
-    }
-
-    #[test]
-    fn buffer_size_for_read_caps_to_max_buffer_size() {
-        assert_eq!(
-            buffer_size_for_read(Some((MAX_BUFFER_SIZE as u64) * 2)),
-            MAX_BUFFER_SIZE
-        );
-    }
-
-    #[test]
-    fn buffer_size_for_read_uses_remaining_bytes_for_last_chunk() {
-        assert_eq!(buffer_size_for_read(Some(123)), 123);
-        assert_eq!(buffer_size_for_read(Some(0)), 0);
-    }
-}

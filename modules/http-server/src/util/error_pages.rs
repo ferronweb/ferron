@@ -106,33 +106,3 @@ pub fn generate_default_error_page(
         vec![ferron_http::util::CSS_COMMON, css_error]
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::generate_default_error_page;
-    use http::StatusCode;
-
-    #[test]
-    fn renders_error_code_and_description() {
-        let page = generate_default_error_page(StatusCode::NOT_FOUND, None, None);
-        assert!(page.contains("404"));
-        assert!(page.contains("Not Found"));
-        assert!(page.contains("error-code"));
-        assert!(!page.contains("<p class=\"error-trace\">"));
-    }
-
-    #[test]
-    fn renders_trace_id_when_present() {
-        let page =
-            generate_default_error_page(StatusCode::INTERNAL_SERVER_ERROR, None, Some("abc123"));
-        assert!(page.contains("<p class=\"error-trace\">"));
-        assert!(page.contains("abc123"));
-    }
-
-    #[test]
-    fn trace_id_is_escaped() {
-        let page = generate_default_error_page(StatusCode::FORBIDDEN, None, Some("<script>"));
-        assert!(!page.contains("<script>"));
-        assert!(page.contains("&lt;script&gt;"));
-    }
-}

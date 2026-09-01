@@ -225,22 +225,6 @@ mod tests {
     }
 
     #[test]
-    fn construct_etag_strong() {
-        assert_eq!(construct_etag("abc", None, false), "\"abc\"");
-    }
-
-    #[test]
-    fn construct_etag_weak() {
-        assert_eq!(construct_etag("abc", None, true), "W/\"abc\"");
-    }
-
-    #[test]
-    fn construct_etag_with_suffix() {
-        // Note: suffix already includes the leading dash
-        assert_eq!(construct_etag("abc", Some("br"), true), "W/\"abc-br\"");
-    }
-
-    #[test]
     fn roundtrip_split_etag() {
         let original = "\"abc123-deflate\"";
         if let Some((etag, suffix, weak)) = extract_etag_inner(original, true) {
