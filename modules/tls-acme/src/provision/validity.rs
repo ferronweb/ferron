@@ -4,8 +4,9 @@ use std::time::{Duration, SystemTime};
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::CertificateDer;
 
-use crate::cache::{get_certificate_cache_key, CertificateCacheData};
+use crate::cache::{get_account_cache_key, get_certificate_cache_key, CertificateCacheData};
 use crate::config::AcmeConfig;
+use crate::provision::account::HttpsClientForAcme;
 
 use super::install_certified_key;
 
@@ -58,12 +59,10 @@ pub async fn check_certificate_validity_or_install_cached(
     // Check if currently loaded cert is still valid
     if let Some(certified_key) = config.certified_key_lock.read().await.as_deref() {
         if let Some(certificate) = certified_key.cert.first() {
-            if let Some(acme_account) = &config.account {
-                if let Ok(certificate_id) = cert_id_from_cert(certificate) {
-                    if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
-                        if SystemTime::now() < renewal_info.0.suggested_window.start {
-                            return Ok(true);
-                        }
+            if let Ok(certificate_id) = cert_id_from_cert(certificate) {
+                if let Some(renewal_info) = get_ari_renewal_info(&config, &certificate_id).await {
+                    if SystemTime::now() < renewal_info.0.suggested_window.start {
+                        return Ok(true);
                     }
                 }
             } else if check_certificate_validity(certificate, None)? {
@@ -80,15 +79,11 @@ pub async fn check_certificate_validity_or_install_cached(
                 .collect::<Result<Vec<_>, _>>()
             {
                 if let Some(certificate) = certs.first() {
-                    let is_valid = if let Some(acme_account) = &config.account {
-                        if let Ok(certificate_id) = cert_id_from_cert(certificate) {
-                            if let Ok(renewal_info) =
-                                acme_account.renewal_info(&certificate_id).await
-                            {
-                                SystemTime::now() < renewal_info.0.suggested_window.start
-                            } else {
-                                check_certificate_validity(certificate, None).unwrap_or(false)
-                            }
+                    let is_valid = if let Ok(certificate_id) = cert_id_from_cert(certificate) {
+                        if let Some(renewal_info) =
+                            get_ari_renewal_info(&config, &certificate_id).await
+                        {
+                            SystemTime::now() < renewal_info.0.suggested_window.start
                         } else {
                             check_certificate_validity(certificate, None).unwrap_or(false)
                         }
@@ -149,4 +144,42 @@ fn cert_id_from_cert<'a>(
                 .map_err(|e| format!("failed to encode serial number: {e}"))?,
         ),
     ))
+}
+
+async fn get_ari_renewal_info(
+    config: &AcmeConfig,
+    certificate_id: &instant_acme::CertificateIdentifier<'_>,
+) -> Option<(instant_acme::RenewalInfo, std::time::Duration)> {
+    let mut acme_accounts = Vec::new();
+    if let Some(a) = config.account.clone() {
+        acme_accounts.push(a);
+    }
+    if acme_accounts.is_empty() {
+        // ACME account may be installer later on into configuration during the provisioning,
+        // so temporary obtain ACME accounts from cache
+        let list = config.provider_list.read().await;
+        for provider in std::iter::once(&list.primary).chain(list.fallbacks.iter()) {
+            let account_cache_key = get_account_cache_key(&provider.contact, &provider.directory);
+            if let Some(credentials_bytes) = config.account_cache.get(&account_cache_key).await {
+                if let Ok(credentials) =
+                    serde_json::from_slice::<instant_acme::AccountCredentials>(&credentials_bytes)
+                {
+                    if let Ok(account) = instant_acme::Account::builder_with_http(Box::new(
+                        HttpsClientForAcme::new(config.rustls_client_config.clone()),
+                    ))
+                    .from_credentials(credentials)
+                    .await
+                    {
+                        acme_accounts.push(account);
+                    }
+                }
+            }
+        }
+    }
+    for acme_account in acme_accounts {
+        if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
+            return Some(renewal_info);
+        }
+    }
+    None
 }

@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+#### Automatic TLS
+
+- **Automatic renewal info fix** - Fixed an issue where automatic renewal information was not applied correctly, leading to confusion about certificate expiration.
+
 ## Ferron 3.0.0-beta.11
 
 **Released in August 31, 2026**
