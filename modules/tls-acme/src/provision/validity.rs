@@ -60,7 +60,7 @@ pub async fn check_certificate_validity_or_install_cached(
     if let Some(certified_key) = config.certified_key_lock.read().await.as_deref() {
         if let Some(certificate) = certified_key.cert.first() {
             if let Ok(certificate_id) = cert_id_from_cert(certificate) {
-                if let Some(renewal_info) = get_ari_renewal_info(&config, &certificate_id).await {
+                if let Some(renewal_info) = get_ari_renewal_info(config, &certificate_id).await {
                     if SystemTime::now() < renewal_info.0.suggested_window.start {
                         return Ok(true);
                     }
@@ -81,7 +81,7 @@ pub async fn check_certificate_validity_or_install_cached(
                 if let Some(certificate) = certs.first() {
                     let is_valid = if let Ok(certificate_id) = cert_id_from_cert(certificate) {
                         if let Some(renewal_info) =
-                            get_ari_renewal_info(&config, &certificate_id).await
+                            get_ari_renewal_info(config, &certificate_id).await
                         {
                             SystemTime::now() < renewal_info.0.suggested_window.start
                         } else {
@@ -177,7 +177,7 @@ async fn get_ari_renewal_info(
         }
     }
     for acme_account in acme_accounts {
-        if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
+        if let Ok(renewal_info) = acme_account.renewal_info(certificate_id).await {
             return Some(renewal_info);
         }
     }
