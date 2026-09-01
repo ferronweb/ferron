@@ -24,8 +24,8 @@ pub use round_robin::WeightedRoundRobinState;
 pub enum LoadBalancerAlgorithmInner {
     Random,
     RoundRobin(WeightedRoundRobinState),
-    #[default]
     LeastConnections,
+    #[default]
     TwoRandomChoices,
     P2cEwma,
 }
