@@ -1,10 +1,4 @@
 //! SRV record resolution for dynamic upstream discovery.
-//!
-//! This module is placed in `types/` rather than `upstream/` to avoid a circular
-//! dependency: `types/` needs the SRV resolution function for `Upstream::resolve`,
-//! and `upstream/` needs `types/` for its type definitions. By keeping `resolve_srv`
-//! here, `upstream/resolution.rs` can call it via `crate::types::resolve_srv`
-//! without creating a cycle.
 
 #[inline]
 pub async fn resolve_srv(
