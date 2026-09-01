@@ -117,7 +117,12 @@ pub async fn background_ocsp_task(
             if let Some(cert) = known_certs.get(&key) {
                 let start = std::time::Instant::now();
                 match fetch_ocsp_response(&client, cert).await {
-                    Ok(Some((response_der, next_update_time))) => {
+                    Ok(Some((response_der, next_update_time, cert_status))) => {
+                        let cert_status_str = match cert_status {
+                            Some(rasn_ocsp::CertStatus::Good) => "good",
+                            Some(rasn_ocsp::CertStatus::Revoked(_)) => "revoked",
+                            Some(rasn_ocsp::CertStatus::Unknown(_)) | None => "unknown",
+                        };
                         let duration = start.elapsed().as_secs_f64();
                         let ident = cert::cert_identifier(cert);
                         let next_update_ts = next_update_time
@@ -138,6 +143,10 @@ pub async fn background_ocsp_task(
                             (
                                 "ferron.ocsp.next_update",
                                 LogAttributeValue::I64(next_update_ts),
+                            ),
+                            (
+                                "ferron.ocsp.cert.status",
+                                LogAttributeValue::StaticStr(cert_status_str),
                             ),
                         ];
                         if let Some(san) = &primary_san {
@@ -173,6 +182,10 @@ pub async fn background_ocsp_task(
                                 (
                                     "ferron.host",
                                     MetricAttributeValue::String(host_for_key(&host_map, &key)),
+                                ),
+                                (
+                                    "ferron.ocsp.cert.status",
+                                    MetricAttributeValue::StaticStr(cert_status_str),
                                 ),
                             ],
                         );

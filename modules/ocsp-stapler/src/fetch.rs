@@ -125,7 +125,7 @@ fn ocsp_hash_oid(use_sha256: bool) -> ObjectIdentifier {
 pub(crate) async fn fetch_ocsp_response(
     client: &OcspHttpClient,
     chain: &[CertificateDer<'_>],
-) -> anyhow::Result<Option<(Vec<u8>, SystemTime)>> {
+) -> anyhow::Result<Option<(Vec<u8>, SystemTime, Option<rasn_ocsp::CertStatus>)>> {
     // Try SHA-256 first (preferred algorithm)
     let response = fetch_ocsp_response_inner(client, chain, true).await;
 
@@ -158,7 +158,7 @@ async fn fetch_ocsp_response_inner(
     client: &OcspHttpClient,
     chain: &[CertificateDer<'_>],
     use_sha256: bool,
-) -> anyhow::Result<Option<(Vec<u8>, SystemTime)>> {
+) -> anyhow::Result<Option<(Vec<u8>, SystemTime, Option<rasn_ocsp::CertStatus>)>> {
     if chain.len() < 2 {
         return Ok(None);
     }
@@ -227,6 +227,7 @@ async fn fetch_ocsp_response_inner(
 
     // Compute next_update across all single responses.
     let mut min_next_update: Option<SystemTime> = None;
+    let mut cert_status = None;
     for single_res in basic_response.tbs_response_data.responses {
         crate::verify::verify_single_res(&single_res, &leaf_cert, &issuer_cert)?;
 
@@ -242,11 +243,12 @@ async fn fetch_ocsp_response_inner(
             Some(min) => nu.min(min),
             None => nu,
         });
+        cert_status = Some(single_res.cert_status.clone());
     }
 
     let next_update =
         min_next_update.unwrap_or_else(|| SystemTime::now() + Duration::from_secs(300));
-    Ok(Some((response_der, next_update)))
+    Ok(Some((response_der, next_update, cert_status)))
 }
 
 fn extract_ocsp_url(cert: &rasn_pkix::Certificate) -> Option<String> {

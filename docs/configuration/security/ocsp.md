@@ -102,23 +102,23 @@ The OCSP background task emits log events and metrics through the configured obs
 
 In OTLP `log_style modern`, the `summary` field is the log body. The system types `attributes` as OpenTelemetry log record attributes.
 
-| Summary                          | Level | Attributes                                                                                                                                              |
-| -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OCSP HTTPS initialization failed | INFO  | none                                                                                                                                                    |
-| OCSP response cached             | INFO  | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.next_update` (int): Unix timestamp of next update, `ferron.ocsp.cert.primary_san` (string): first SAN |
-| OCSP fetch triggered             | DEBUG | `ferron.ocsp.cert.subject` (string): certificate subject                                                                                                |
-| OCSP stapling skipped            | DEBUG | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.reason` (string): reason for skipping                                                                 |
-| OCSP fetch failed                | WARN  | `ferron.ocsp.cert.subject` (string), `error.message` (string)                                                                                           |
+| Summary                          | Level | Attributes                                                                                                                                                                                                                                 |
+| -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| OCSP HTTPS initialization failed | INFO  | none                                                                                                                                                                                                                                       |
+| OCSP response cached             | INFO  | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.next_update` (int): Unix timestamp of next update, `ferron.ocsp.cert.primary_san` (string): first SAN, `ferron.ocsp.cert.status` (`good`, `revoked`, `unknown`): certificate OCSP status |
+| OCSP fetch triggered             | DEBUG | `ferron.ocsp.cert.subject` (string): certificate subject                                                                                                                                                                                   |
+| OCSP stapling skipped            | DEBUG | `ferron.ocsp.cert.subject` (string), `ferron.ocsp.reason` (string): reason for skipping                                                                                                                                                    |
+| OCSP fetch failed                | WARN  | `ferron.ocsp.cert.subject` (string), `error.message` (string)                                                                                                                                                                              |
 
 ### Metrics
 
-| Metric                                   | Type      | Attributes                                                          | Description                               |
-| ---------------------------------------- | --------- | ------------------------------------------------------------------- | ----------------------------------------- |
-| `ferron.ocsp.fetches_total`              | Counter   | `ferron.ocsp.status` (`success`, `error`, `skipped`), `ferron.host` | Total OCSP fetch attempts per host        |
-| `ferron.ocsp.fetch_duration_seconds`     | Histogram | `ferron.host`                                                       | Time to fetch OCSP response               |
-| `ferron.ocsp.stapling.hit_total`         | Counter   | `ferron.host`                                                       | OCSP responses served to clients per host |
-| `ferron.ocsp.cached_certificates`        | Gauge     | None                                                                | Number of certificates tracked            |
-| `ferron.ocsp.certificates_with_stapling` | Gauge     | None                                                                | Certificates with valid stapled responses |
+| Metric                                   | Type      | Attributes                                                                                                                    | Description                               |
+| ---------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `ferron.ocsp.fetches_total`              | Counter   | `ferron.ocsp.status` (`success`, `error`, `skipped`), `ferron.host`, `ferron.ocsp.cert.status` (`good`, `revoked`, `unknown`) | Total OCSP fetch attempts per host        |
+| `ferron.ocsp.fetch_duration_seconds`     | Histogram | `ferron.host`                                                                                                                 | Time to fetch OCSP response               |
+| `ferron.ocsp.stapling.hit_total`         | Counter   | `ferron.host`                                                                                                                 | OCSP responses served to clients per host |
+| `ferron.ocsp.cached_certificates`        | Gauge     | None                                                                                                                          | Number of certificates tracked            |
+| `ferron.ocsp.certificates_with_stapling` | Gauge     | None                                                                                                                          | Certificates with valid stapled responses |
 
 ## See also
 
