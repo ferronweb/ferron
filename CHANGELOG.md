@@ -14,7 +14,7 @@
 
 #### Automatic TLS
 
-- **Automatic renewal info fix** - Fixed an issue where automatic renewal information was not applied correctly, leading to confusion about certificate expiration.
+- **Automatic renewal info fix**: fixed an issue where automatic renewal information was not applied correctly, leading to confusion about certificate expiration.
 
 ## Ferron 3.0.0-beta.11
 
