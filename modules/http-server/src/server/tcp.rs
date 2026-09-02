@@ -669,7 +669,7 @@ fn build_tcp_listener(
     }
 
     listener_socket.bind(&address.into())?;
-    listener_socket.listen(backlog.unwrap_or(-1))?;
+    listener_socket.listen(backlog.unwrap_or(DEFAULT_SOCKET_BACKLOG))?;
 
     Ok(listener_socket.into())
 }

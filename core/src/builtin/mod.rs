@@ -86,7 +86,8 @@ fn register_unix_directives(registry: &mut crate::directives::DirectiveRegistry)
             name: "backlog",
             usage: "backlog <size>",
             description: "This directive specifies the maximum number of pending \
-            connections allowed on the Unix socket. Default: -1 (unlimited)",
+            connections allowed on the Unix socket. Default: -1 (Windows, *BSD, macOS), \
+            4096 (others)",
             applicable_protocols: None,
             global_only: true,
             subblock_link: None,
@@ -187,7 +188,8 @@ fn register_tcp_directives(registry: &mut crate::directives::DirectiveRegistry) 
                 name: "backlog",
                 usage: "backlog <size>",
                 description: "This directive specifies the maximum number of pending \
-                connections allowed on the listener socket. Default: -1 (unlimited)",
+                connections allowed on the listener socket. Default: -1 (Windows, *BSD, macOS), \
+                4096 (others)",
                 applicable_protocols: None,
                 global_only: true,
                 subblock_link: None,

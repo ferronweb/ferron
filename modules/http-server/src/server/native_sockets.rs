@@ -17,6 +17,29 @@ use crate::server::tls_resolve::RadixTree;
 
 use super::common::*;
 
+// Backlog size of -1 is supported on macOS, *BSD and Windows (Winsock)
+#[cfg(any(
+    windows,
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "dragonfly"
+))]
+pub const DEFAULT_SOCKET_BACKLOG: i32 = -1;
+// Otherwise, use the default backlog size of 4096
+#[cfg(not(any(
+    windows,
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "dragonfly"
+)))]
+pub const DEFAULT_SOCKET_BACKLOG: i32 = 4096;
+
 /// Distinguishes TCP connections (with peer/listen addresses) from Unix domain
 /// socket connections (with a filesystem path).
 #[derive(Clone, Debug)]

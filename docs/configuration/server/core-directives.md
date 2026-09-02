@@ -90,7 +90,7 @@ This page documents directives that belong in top-level global blocks:
   - This directive sets the TCP receive buffer size. It must resolve to a non-negative integer at runtime. Default: OS default
 
 - `backlog <size: integer>`
-  - This directive sets the maximum number of pending connections allowed on the listener socket. Default: `-1` (unlimited)
+  - This directive sets the maximum number of pending connections allowed on the listener socket. Default: `-1` (Windows, *BSD, macOS), `4096` (others)
 
 - `multipath <bool>`
   - This directive turns on Multipath TCP (MPTCP) for the listener. MPTCP allows a single TCP connection to use multiple network interfaces at the same time, improving throughput and resilience. When enabled, Ferron attempts to create an MPTCP socket. If the kernel lacks MPTCP support or MPTCP is off, Ferron logs a warning and falls back to standard TCP. Default: disabled

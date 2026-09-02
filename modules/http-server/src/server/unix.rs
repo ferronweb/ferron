@@ -579,7 +579,7 @@ fn build_unix_listener(
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
     // Allow reuse? not needed for unix
     socket.bind(&addr)?;
-    let backlog = options.backlog.unwrap_or(-1);
+    let backlog = options.backlog.unwrap_or(DEFAULT_SOCKET_BACKLOG);
     socket.listen(backlog)?;
     // Convert to std listener
     let std_listener: std::os::unix::net::UnixListener = socket.into();

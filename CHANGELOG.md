@@ -20,6 +20,10 @@
 
 ### Fixed
 
+#### HTTP server core
+
+- **Backlog size fix**: the default backlog size is now 4096 on Linux, and -1 on Windows, *BSD, and macOS. It was -1 on all platforms before this change (which would be equivalent to 0 on Linux).
+
 #### Automatic TLS
 
 - **Automatic renewal info fix**: fixed an issue where automatic renewal information was not applied correctly, leading to confusion about certificate expiration.
