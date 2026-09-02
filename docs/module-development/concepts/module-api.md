@@ -105,6 +105,40 @@ Drift detection uses `ConfigurationMetadata` (`config_hash`, `config_mtime`,
   `config_validator_scoped_key!`.
 - `types/http`: `HttpContext`, `HttpRequest`, `HttpResponse`, `HttpFileContext`.
 
+## Observability
+
+Ferron has two observability channels. Use the right one for each situation.
+
+### Application logging macros
+
+`ferron_core::log_info!`, `log_warn!`, `log_error!`, and `log_debug!` write
+to stdout (or Windows Event Log). These are synchronous and unstructured. Use
+them for server-infrastructure events: startup, shutdown, TLS configuration,
+and file rotation errors.
+
+```rust
+ferron_core::log_info!("Listening on port {}", port);
+ferron_core::log_error!("TLS handshake failed: {}", err);
+```
+
+The macros check a global level guard. The lowest level is `Debug`.
+
+### Structured event system
+
+Request processing uses `Event` values emitted through `ctx.events`
+(`CompositeEventSink`) on `HttpContext`.
+
+A `CompositeEventSink` wraps multiple `EventSink` implementations. It applies
+trace sampling before dispatch and optimizes the one-sink and zero-sink cases.
+Use `CompositeEventSink::default()` for tests and no-op sinks.
+
+The `Event` enum has these variants:
+
+- `Event::Log`: a log event.
+- `Event::Metric`: a metric event.
+- `Event::Trace`: a trace event (can be start or end of span).
+- `Event::Access`: an access log event.
+
 ## Where to read more
 
 - Source files listed above (each has module-level docs and examples).

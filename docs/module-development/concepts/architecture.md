@@ -71,6 +71,41 @@ Common provider families:
 Providers do not depend on each other at compile time. The registry is the
 only shared type, so any module can use a provider without importing its crate.
 
+## Observability
+
+Ferron has two observability channels that serve different purposes.
+
+### Application logging macros
+
+`ferron_core::log_info!`, `log_warn!`, `log_error!`, and `log_debug!` write to
+stdout (or Windows Event Log). These are synchronous and unstructured. Use them
+for server-infrastructure events: startup, shutdown, TLS configuration, file
+rotation failures, and daemon lifecycle.
+
+These macros check a global level guard before formatting. The lowest level is
+`Debug`. There is no `Trace` level. The logger initializes once at startup via
+`logging::init_stdio_logger(level)`.
+
+### Structured event system
+
+Request processing uses the structured event system in `types/observability`.
+Modules emit `Event` values through `ctx.events` (`CompositeEventSink`) on
+`HttpContext`. The `Event` enum has four variants:
+
+- `Event::Access(Arc<dyn AccessEvent>)`: structured access log using a
+  visitor pattern. The visitor receives typed fields (strings, integers,
+  booleans) without allocating a formatted string.
+- `Event::Log(LogEvent)`: a structured log with level, message, target,
+  key-value attributes, and optional trace context.
+- `Event::Metric(MetricEvent)`: a numeric metric (counter, gauge,
+  up/down counter, or histogram) with attributes and optional unit.
+- `Event::Trace(TraceEvent)`: a distributed trace span (start or end)
+  with parent, attributes, links, and control plane metadata.
+
+Each event carries an optional `EventTraceContext` that links the event to
+a W3C traceparent. The trace sampler evaluates this context before
+dispatch. Events not sampled are silently dropped.
+
 ## Dual runtime
 
 Ferron uses two runtimes:
@@ -107,3 +142,7 @@ for graceful stop.
 - `core/src/pipeline.rs`: `Stage`, `Pipeline`, `StageHooks`.
 - `core/src/registry.rs`: `Registry`, `StageRegistry`, `ProviderRegistry`.
 - `core/src/runtime.rs`: `Runtime` and `RuntimeSettings`.
+- `core/src/logging.rs`: application logging macros and `AppLogger`.
+- `types/observability/src/sink.rs`: `EventSink` trait and `CompositeEventSink`.
+- `types/observability/src/event.rs`: `Event` enum and event types.
+- `types/observability/src/provider.rs`: `ObservabilityContext`.
