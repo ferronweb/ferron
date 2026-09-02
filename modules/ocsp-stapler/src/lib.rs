@@ -53,7 +53,6 @@ impl Module for OcspStaplerModule {
                     cancel_token,
                     event_sink,
                 ));
-                log_debug!("OCSP stapling service initialized (module-owned task)");
             }
             Err(ferron_ocsp::AlreadyInitialized) => {
                 log_debug!("OCSP stapling service already running (reusing existing instance)")
