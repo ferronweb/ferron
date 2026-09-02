@@ -109,6 +109,6 @@ Drift detection uses `ConfigurationMetadata` (`config_hash`, `config_mtime`,
 
 - Source files listed above (each has module-level docs and examples).
 - Generated Rust docs via `cargo doc --no-deps` (see
-  [Obtaining API docs](/docs/v3/module-development/obtaining-api-docs)).
+  [Obtaining API docs](/docs/v3/module-development/guides/obtaining-api-docs)).
 - Runnable examples in `https://github.com/ferronweb/ferron3-example-modules`
   (each crate is ~150 lines and has inline comments).

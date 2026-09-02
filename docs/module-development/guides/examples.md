@@ -24,16 +24,16 @@ cargo test --workspace
 
 ## What each example shows
 
-| Crate | Extension point | Config |
-| --- | --- | --- |
-| `ferron-http-header-append` | `Stage<HttpContext>` | `example_header <value>` |
-| `ferron-http-hello` | `Stage<HttpContext>` short-circuit | `hello_path`, `hello_message` |
-| `ferron-echo-server` | `Module` + `Runtime` | `echo_server { listen <addr> }` |
-| `ferron-observability-memory` | `Provider<ObservabilityContext>` | `observability { provider memory }` |
-| `ferron-tls-selfsigned` | `Provider<TlsContext>` | `tls { provider selfsigned }` |
-| `ferron-dns-memory` | `Provider<DnsContext>` | `dns { provider memory }` |
-| `ferron-config-toml` | `ConfigurationAdapter` | `--config-adapter toml` |
-| `ferron-logformat-csv` | `Provider<LogFormatterContext>` | `format csv` |
+| Crate                         | Extension point                    | Config                              |
+| ----------------------------- | ---------------------------------- | ----------------------------------- |
+| `ferron-http-header-append`   | `Stage<HttpContext>`               | `example_header <value>`            |
+| `ferron-http-hello`           | `Stage<HttpContext>` short-circuit | `hello_path`, `hello_message`       |
+| `ferron-echo-server`          | `Module` + `Runtime`               | `echo_server { listen <addr> }`     |
+| `ferron-observability-memory` | `Provider<ObservabilityContext>`   | `observability { provider memory }` |
+| `ferron-tls-selfsigned`       | `Provider<TlsContext>`             | `tls { provider selfsigned }`       |
+| `ferron-dns-memory`           | `Provider<DnsContext>`             | `dns { provider memory }`           |
+| `ferron-config-toml`          | `ConfigurationAdapter`             | `--config-adapter toml`             |
+| `ferron-logformat-csv`        | `Provider<LogFormatterContext>`    | `format csv`                        |
 
 Each `src/lib.rs` starts with a doc comment that shows the `ferron` config
 block, explains the flow, and points to the relevant Ferron source file.
@@ -77,7 +77,7 @@ See `e2e/Dockerfile.test` and `e2e/tests/` for the pattern. The tests are
 2. Rename the package and `name()` strings.
 3. Adjust the directive and validator.
 4. Add it to your custom binary (see
-   [Creating a module](/docs/v3/module-development/creating-a-module)).
+   [Creating a module](/docs/v3/module-development/guides/creating-a-module)).
 5. Run `ferron validate`, `ferron directives`, and unit tests.
 
 > [!tip]

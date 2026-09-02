@@ -172,17 +172,17 @@ fn main() {
 
 ## Choosing the right extension point
 
-| Need | Use |
-| --- | --- |
-| Per-request logic | `Stage<C>` |
-| Long-lived listener or background task | `Module` + `Runtime` |
-| Pluggable backend (TLS, DNS, observability, log format) | `Provider<C>` |
-| New config source | `ConfigurationAdapter` |
-| Editor support | `Directive` + `DirectiveRegistry` |
-| Config errors / warnings | `ConfigurationValidator` |
+| Need                                                    | Use                               |
+| ------------------------------------------------------- | --------------------------------- |
+| Per-request logic                                       | `Stage<C>`                        |
+| Long-lived listener or background task                  | `Module` + `Runtime`              |
+| Pluggable backend (TLS, DNS, observability, log format) | `Provider<C>`                     |
+| New config source                                       | `ConfigurationAdapter`            |
+| Editor support                                          | `Directive` + `DirectiveRegistry` |
+| Config errors / warnings                                | `ConfigurationValidator`          |
 
 ## Next steps
 
-- Read [Module API](/docs/v3/module-development/module-api) for trait details and helpers.
-- Check [Examples](/docs/v3/module-development/examples) for runnable crates to copy.
-- See [Naming conventions](/docs/v3/module-development/naming-conventions) for directive and crate names.
+- Read [Module API](/docs/v3/module-development/concepts/module-api) for trait details and helpers.
+- Check [Examples](/docs/v3/module-development/guides/examples) for runnable crates to copy.
+- See [Naming conventions](/docs/v3/module-development/guides/naming-conventions) for directive and crate names.

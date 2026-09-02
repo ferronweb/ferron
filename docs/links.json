@@ -545,13 +545,13 @@
     "label": "Concepts"
   },
   {
-    "href": "/docs/v3/module-development/architecture",
+    "href": "/docs/v3/module-development/concepts/architecture",
     "target": "_self",
     "label": "Architecture",
     "sub": true
   },
   {
-    "href": "/docs/v3/module-development/module-api",
+    "href": "/docs/v3/module-development/concepts/module-api",
     "target": "_self",
     "label": "Module API",
     "sub": true
@@ -560,25 +560,25 @@
     "label": "Guides"
   },
   {
-    "href": "/docs/v3/module-development/creating-a-module",
+    "href": "/docs/v3/module-development/guides/creating-a-module",
     "target": "_self",
     "label": "Creating a module",
     "sub": true
   },
   {
-    "href": "/docs/v3/module-development/naming-conventions",
+    "href": "/docs/v3/module-development/guides/naming-conventions",
     "target": "_self",
     "label": "Naming conventions",
     "sub": true
   },
   {
-    "href": "/docs/v3/module-development/examples",
+    "href": "/docs/v3/module-development/guides/examples",
     "target": "_self",
     "label": "Example modules",
     "sub": true
   },
   {
-    "href": "/docs/v3/module-development/obtaining-api-docs",
+    "href": "/docs/v3/module-development/guides/obtaining-api-docs",
     "target": "_self",
     "label": "Obtaining API docs",
     "sub": true
