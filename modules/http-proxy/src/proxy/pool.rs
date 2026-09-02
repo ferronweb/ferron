@@ -247,10 +247,16 @@ async fn wait_for_returned(
     loop {
         // Pull from the pool (waits if at capacity, otherwise returns immediately)
         let mut next_item = if let Some(limit) = local_limit {
-            cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit), idle_timeout)
-                .await
+            cm.pull_existing_with_local_limit(
+                upstream.clone(),
+                client_ip,
+                Some(limit),
+                idle_timeout,
+            )
+            .await
         } else {
-            cm.pull(upstream.clone(), client_ip, idle_timeout).await
+            cm.pull_existing(upstream.clone(), client_ip, idle_timeout)
+                .await
         };
 
         if let Some(wrapper) = next_item.inner_mut() {
@@ -269,14 +275,13 @@ async fn wait_for_returned(
                     .expect("pool item state is invalid at this point");
                 return Some((next_item, w));
             }
-            // Dead or not ready after wait — discard and continue
+            // Dead or not ready after wait, discard and continue
             let _ = next_item.take();
             continue;
         } else {
-            // No idle connection available; drop the empty slot and wait briefly
-            // This is acceptable, because there's also pending connection task during the racing.
+            // No idle connection available; drop the empty slot
+            // The wait happens in .pull_existing*()
             drop(next_item);
-            zincio::time::sleep(Duration::from_millis(1)).await;
             continue;
         }
     }

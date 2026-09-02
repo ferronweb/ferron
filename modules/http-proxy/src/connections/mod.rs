@@ -233,6 +233,61 @@ impl ConnectionManager {
             .store(per_thread, Ordering::Relaxed);
     }
 
+    #[inline]
+    async fn wait_until_available(&self, upstream: Arc<UpstreamInner>, local_limit: Option<usize>) {
+        // Check if local limit is exceeded
+        let at_local_limit = if let Some(ll) = local_limit {
+            TLS_POOLS.with(|c| {
+                let ptr = c.get();
+                let opt = unsafe { &mut *ptr };
+                opt.as_ref().is_some_and(|p| {
+                    if upstream.proxy_unix.is_some() {
+                        #[cfg(unix)]
+                        let r = p.unix_pool.is_at_local_limit(&upstream, ll);
+                        #[cfg(not(unix))]
+                        let r = false;
+
+                        r
+                    } else {
+                        p.tcp_pool.is_at_local_limit(&upstream, ll)
+                    }
+                })
+            })
+        } else {
+            false
+        };
+
+        // Pool likely under capacity, wait for a connection to become available
+        // Had to wrap in `{ ... }` to prevent subtle `PENDING_PULLS` deadlock,
+        // because the lock was held across async boundary.
+        PENDING_PULL_COUNT.fetch_add(1, Ordering::Relaxed);
+        let cancel_token = {
+            // Fast path: concurrent read lock (multiple threads can access simultaneously)
+            let pending_pulls_key = (
+                at_local_limit.then_some(upstream.clone()),
+                upstream.proxy_unix.is_some(),
+            );
+            let cancel_token = CancellationToken::new();
+
+            let pending_pulls_read = PENDING_PULLS.read();
+            let queue_opt = pending_pulls_read.get(&pending_pulls_key);
+            if let Some(queue) = queue_opt {
+                queue.push(cancel_token.clone());
+            } else {
+                drop(pending_pulls_read);
+                // Slow path: upgrade to write lock only if the queue doesn't exist yet
+                let mut write_lock = PENDING_PULLS.write();
+                let queue = write_lock.entry(pending_pulls_key).or_default();
+                queue.push(cancel_token.clone());
+            }
+
+            cancel_token
+        };
+
+        // Wait for the connection to be available.
+        cancel_token.cancelled().await;
+    }
+
     /// Pulls a connection from the pool, waiting if necessary for one to become available.
     #[inline]
     pub async fn pull(
@@ -247,36 +302,12 @@ impl ConnectionManager {
                 return conn;
             }
 
-            // Pool likely under capacity, wait for a connection to become available
-            // Had to wrap in `{ ... }` to prevent subtle `PENDING_PULLS` deadlock,
-            // because the lock was held across async boundary.
-            PENDING_PULL_COUNT.fetch_add(1, Ordering::Relaxed);
-            let cancel_token = {
-                // Fast path: concurrent read lock (multiple threads can access simultaneously)
-                let pending_pulls_key = (None, upstream.proxy_unix.is_some());
-                let cancel_token = CancellationToken::new();
-
-                let pending_pulls_read = PENDING_PULLS.read();
-                let queue_opt = pending_pulls_read.get(&pending_pulls_key);
-                if let Some(queue) = queue_opt {
-                    queue.push(cancel_token.clone());
-                } else {
-                    drop(pending_pulls_read);
-                    // Slow path: upgrade to write lock only if the queue doesn't exist yet
-                    let mut write_lock = PENDING_PULLS.write();
-                    let queue = write_lock.entry(pending_pulls_key).or_default();
-                    queue.push(cancel_token.clone());
-                }
-
-                cancel_token
-            };
-
-            // Wait for the connection to be available.
-            cancel_token.cancelled().await;
+            self.wait_until_available(upstream.clone(), None).await;
         }
     }
 
-    /// Pull a connection from the pool, returning immediately.
+    /// Pull a connection from the pool with local limit, waiting if necessary for one to become
+    /// available.
     ///
     /// Returns `None` if the pool is at capacity (caller should establish a new connection).
     #[inline]
@@ -298,57 +329,55 @@ impl ConnectionManager {
                 return conn;
             }
 
-            // Check if local limit is exceeded
-            let at_local_limit = if let Some(ll) = local_limit {
-                TLS_POOLS.with(|c| {
-                    let ptr = c.get();
-                    let opt = unsafe { &mut *ptr };
-                    opt.as_ref().is_some_and(|p| {
-                        if upstream.proxy_unix.is_some() {
-                            #[cfg(unix)]
-                            let r = p.unix_pool.is_at_local_limit(&upstream, ll);
-                            #[cfg(not(unix))]
-                            let r = false;
+            self.wait_until_available(upstream.clone(), local_limit)
+                .await;
+        }
+    }
 
-                            r
-                        } else {
-                            p.tcp_pool.is_at_local_limit(&upstream, ll)
-                        }
-                    })
-                })
-            } else {
-                false
-            };
+    /// Pulls an existing connection from the pool, waiting if necessary for one to become available.
+    #[inline]
+    pub async fn pull_existing(
+        &self,
+        upstream: Arc<UpstreamInner>,
+        client_ip: Option<IpAddr>,
+        idle_timeout: Duration,
+    ) -> PooledConnection {
+        loop {
+            if let Some(conn) = self
+                .try_pull(upstream.clone(), client_ip, idle_timeout)
+                .filter(|c| c.inner().is_some())
+            {
+                // Pool not under capacity.
+                return conn;
+            }
 
-            // Pool likely under capacity, wait for a connection to become available
-            // Had to wrap in `{ ... }` to prevent subtle `PENDING_PULLS` deadlock,
-            // because the lock was held across async boundary.
-            PENDING_PULL_COUNT.fetch_add(1, Ordering::Relaxed);
-            let cancel_token = {
-                // Fast path: concurrent read lock (multiple threads can access simultaneously)
-                let pending_pulls_key = (
-                    at_local_limit.then_some(upstream.clone()),
-                    upstream.proxy_unix.is_some(),
-                );
-                let cancel_token = CancellationToken::new();
+            self.wait_until_available(upstream.clone(), None).await;
+        }
+    }
 
-                let pending_pulls_read = PENDING_PULLS.read();
-                let queue_opt = pending_pulls_read.get(&pending_pulls_key);
-                if let Some(queue) = queue_opt {
-                    queue.push(cancel_token.clone());
-                } else {
-                    drop(pending_pulls_read);
-                    // Slow path: upgrade to write lock only if the queue doesn't exist yet
-                    let mut write_lock = PENDING_PULLS.write();
-                    let queue = write_lock.entry(pending_pulls_key).or_default();
-                    queue.push(cancel_token.clone());
-                }
+    /// Pull an existing connection from the pool with local limit, waiting if necessary for
+    /// one to become available.
+    ///
+    /// Returns `None` if the pool is at capacity (caller should establish a new connection).
+    #[inline]
+    pub async fn pull_existing_with_local_limit(
+        &self,
+        upstream: Arc<UpstreamInner>,
+        client_ip: Option<IpAddr>,
+        local_limit: Option<usize>,
+        idle_timeout: Duration,
+    ) -> PooledConnection {
+        loop {
+            if let Some(conn) = self
+                .try_pull_with_local_limit(upstream.clone(), client_ip, local_limit, idle_timeout)
+                .filter(|c| c.inner().is_some())
+            {
+                // Pool not under capacity.
+                return conn;
+            }
 
-                cancel_token
-            };
-
-            // Wait for the connection to be available.
-            cancel_token.cancelled().await;
+            self.wait_until_available(upstream.clone(), local_limit)
+                .await;
         }
     }
 
