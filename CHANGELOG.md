@@ -14,6 +14,10 @@
 
 - **No metric exemplars linking to sampled-out traces**: metric exemplars are no longer linked to traces that are sampled out (and thus not exported) to avoid misleading observability tools and reduce debugging friction.
 
+#### Reverse proxy
+
+- **Connection pool racing improvements**: when the connection pool is racing and multiple connections are being established simultaneously, the connection pool now selects the connection that is ready first, avoiding unnecessary delays and improving overall performance.
+
 ### Fixed
 
 #### Automatic TLS

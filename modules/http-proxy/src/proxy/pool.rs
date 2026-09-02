@@ -28,13 +28,16 @@ use crate::types::ConnectionsTrackState;
 use crate::ProxyMetrics;
 use ferron_http::HttpContext;
 
-/// Try to send a request using the connection pool with racing of
-/// non-ready pooled connections against a newly established connection.
+/// Try to send a request using the connection pool.
 ///
-/// When pooled connections are not ready (but alive), they are collected
-/// and raced against establishing a brand-new connection, avoiding the
-/// cost of unnecessary duplicate connection establishments.
-#[allow(clippy::too_many_arguments)]
+/// Steps:
+/// 1. Obtains an item from the connection pool.
+/// 2. Waits either for the connection from the item to be ready,
+///    or for a new connection to be established (raced).
+///    If the item doesn't contain a connection, step 2 also involves
+///    waiting until an item with an existing connection is returned.
+/// 3. Uses that connection to send the request.
+#[allow(clippy::too_many_arguments, clippy::needless_return)]
 #[inline]
 pub async fn try_send_with_pool(
     ctx: &mut HttpContext,
@@ -50,7 +53,6 @@ pub async fn try_send_with_pool(
     tracked_connection: Option<Arc<()>>,
     metrics: &mut ProxyMetrics,
 ) -> Result<ferron_http::HttpResponse, ProxyError> {
-    // Pull one connection from the pool and check readiness
     let mut pull_start = None;
     let item_fut = async {
         if let Some(limit) = local_limit {
@@ -87,8 +89,6 @@ pub async fn try_send_with_pool(
     if is_ready {
         metrics.connection_reused = true;
         metrics.pool_hit = true;
-        // Here, `item.inner_mut()` is guaranteed to be `Some`,
-        // because if it would be `None`, `is_ready` would be always `false`
         let wrapper = item
             .inner_mut()
             .take()
@@ -108,42 +108,162 @@ pub async fn try_send_with_pool(
         .await;
     }
 
-    if should_keep && item.inner().is_some() && wait_for_ready(&mut item, idle_timeout).await {
-        metrics.connection_reused = true;
-        metrics.pool_hit = true;
-        let wrapper = item
-            .inner_mut()
-            .take()
-            .expect("pending item should have inner value");
-        return send_via_wrapper(
-            ctx,
-            config,
-            wrapper,
-            item,
-            proxy_url,
-            tracked_connection,
-            true,
-            upstream.proxy_unix.is_some(),
-            local_limit,
-            metrics,
-        )
-        .await;
+    let is_unix = upstream.proxy_unix.is_some();
+
+    if item.inner().is_some() && should_keep {
+        // Item contains a pending (alive but not ready) connection.
+        // Race waiting for it to become ready against establishing a new connection.
+        tokio::select! {
+            ready = wait_for_ready(&mut item, idle_timeout) => {
+                if ready {
+                    metrics.connection_reused = true;
+                    metrics.pool_hit = true;
+                    let wrapper = item
+                        .inner_mut()
+                        .take()
+                        .expect("pending item should have inner value");
+                    return send_via_wrapper(
+                        ctx,
+                        config,
+                        wrapper,
+                        item,
+                        proxy_url,
+                        tracked_connection,
+                        true,
+                        is_unix,
+                        local_limit,
+                        metrics,
+                    )
+                    .await;
+                } else {
+                    // Pooled connection became dead / idle-expired, fall back to new connection
+                    // New connection logic is below
+                }
+            },
+            res = establish_wrapper(ctx, config, upstream.clone(), proxy_url, client_ip, is_https, metrics) => {
+                match res {
+                    Ok(wrapper) => {
+                        metrics.pool_miss = true;
+                        *item.inner_mut() = None;
+                        return send_via_wrapper(
+                            ctx,
+                            config,
+                            wrapper,
+                            item,
+                            proxy_url,
+                            tracked_connection,
+                            config.keepalive,
+                            is_unix,
+                            local_limit,
+                            metrics,
+                        )
+                        .await;
+                    },
+                    Err(e) => {
+                        // New connection failed; try to use pooled if it becomes ready
+                        if wait_for_ready(&mut item, idle_timeout).await {
+                            metrics.connection_reused = true;
+                            metrics.pool_hit = true;
+                            let wrapper = item
+                                .inner_mut()
+                                .take()
+                                .expect("pending item should have inner value");
+                            return send_via_wrapper(
+                                ctx,
+                                config,
+                                wrapper,
+                                item,
+                                proxy_url,
+                                tracked_connection,
+                                true,
+                                is_unix,
+                                local_limit,
+                                metrics,
+                            )
+                            .await;
+                        }
+                        return Err(e);
+                    }
+                }
+            }
+        }
     }
 
-    establish_and_send(
-        ctx,
-        config,
-        upstream,
-        proxy_url,
-        client_ip,
-        local_limit,
-        is_https,
-        _conn_state,
-        tracked_connection,
-        item,
-        metrics,
-    )
-    .await
+    // Item has no connection (empty slot) or dead connection.
+    // Clear dead wrapper if any and race waiting for a returned pooled connection
+    // against establishing a new connection.
+    if item.inner().is_some() {
+        *item.inner_mut() = None;
+    }
+    let mut original_item = Some(item);
+
+    tokio::select! {
+        pooled = wait_for_returned(cm, upstream.clone(), client_ip, local_limit, idle_timeout) => {
+            if let Some((pooled_item, wrapper)) = pooled {
+                // Use the returned pooled connection
+                drop(original_item.take());
+                metrics.connection_reused = true;
+                metrics.pool_hit = true;
+                return send_via_wrapper(
+                    ctx,
+                    config,
+                    wrapper,
+                    pooled_item,
+                    proxy_url,
+                    tracked_connection,
+                    true,
+                    is_unix,
+                    local_limit,
+                    metrics,
+                )
+                .await;
+            } else {
+                // Should not happen (loops forever), fall back to new
+                let wrapper = establish_wrapper(ctx, config, upstream.clone(), proxy_url, client_ip, is_https, metrics).await?;
+                metrics.pool_miss = true;
+                let item = original_item.take().expect("original item missing");
+                return send_via_wrapper(
+                    ctx,
+                    config,
+                    wrapper,
+                    item,
+                    proxy_url,
+                    tracked_connection,
+                    config.keepalive,
+                    is_unix,
+                    local_limit,
+                    metrics,
+                )
+                .await;
+            }
+        },
+        res = establish_wrapper(ctx, config, upstream.clone(), proxy_url, client_ip, is_https, metrics) => {
+            match res {
+                Ok(wrapper) => {
+                    metrics.pool_miss = true;
+                    let item = original_item.take().expect("original item missing");
+                    return send_via_wrapper(
+                        ctx,
+                        config,
+                        wrapper,
+                        item,
+                        proxy_url,
+                        tracked_connection,
+                        config.keepalive,
+                        is_unix,
+                        local_limit,
+                        metrics,
+                    )
+                    .await;
+                },
+                Err(e) => {
+                    // New connection failed; don't wait for a returned pooled connection
+                    // so to not time out
+                    return Err(e);
+                }
+            }
+        }
+    }
 }
 
 /// Wait for the pending connection to become ready.
@@ -156,6 +276,58 @@ async fn wait_for_ready(pending_item: &mut PooledConnection, idle_timeout: Durat
     }
 
     false
+}
+
+/// Wait until a pooled item with an existing connection is returned.
+///
+/// This is used when the initially pulled item contained no connection.
+/// The function loops, pulling from the pool and waiting for a returned
+/// connection to appear. It is raced against establishing a new connection,
+/// so it is cancelled as soon as the new connection wins.
+#[inline]
+async fn wait_for_returned(
+    cm: &ConnectionManager,
+    upstream: Arc<UpstreamInner>,
+    client_ip: Option<IpAddr>,
+    local_limit: Option<usize>,
+    idle_timeout: Duration,
+) -> Option<(PooledConnection, SendRequestWrapper)> {
+    loop {
+        // Pull from the pool (waits if at capacity, otherwise returns immediately)
+        let mut next_item = if let Some(limit) = local_limit {
+            cm.pull_with_local_limit(upstream.clone(), client_ip, Some(limit), idle_timeout)
+                .await
+        } else {
+            cm.pull(upstream.clone(), client_ip, idle_timeout).await
+        };
+
+        if let Some(wrapper) = next_item.inner_mut() {
+            let (is_ready, should_keep) = wrapper.check_ready(Some(idle_timeout));
+            if is_ready {
+                let w = next_item
+                    .inner_mut()
+                    .take()
+                    .expect("pool item state is invalid at this point");
+                return Some((next_item, w));
+            }
+            if should_keep && wrapper.wait_ready(Some(idle_timeout)).await {
+                let w = next_item
+                    .inner_mut()
+                    .take()
+                    .expect("pool item state is invalid at this point");
+                return Some((next_item, w));
+            }
+            // Dead or not ready after wait — discard and continue
+            let _ = next_item.take();
+            continue;
+        } else {
+            // No idle connection available; drop the empty slot and wait briefly
+            // This is acceptable, because there's also pending connection task during the racing.
+            drop(next_item);
+            zincio::time::sleep(Duration::from_millis(1)).await;
+            continue;
+        }
+    }
 }
 
 /// Classify a connect failure into a proxy error. `scheme` is used only in
@@ -314,29 +486,22 @@ where
     }
 }
 
-/// Establish a new connection and send the request.
+/// Establish a new upstream connection (TCP or Unix) and perform TLS/HTTP handshakes.
 ///
-/// If `existing_item` is provided, it is reused instead of pulling a new one
-/// from the pool, avoiding a double semaphore acquisition.
+/// This helper contains the connection establishment part of the former
+/// without the final `send_via_wrapper` call so that the caller can race it
+/// against waiting for a pooled connection.
 #[allow(clippy::too_many_arguments)]
 #[inline]
-pub async fn establish_and_send(
+async fn establish_wrapper(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     upstream: Arc<UpstreamInner>,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
-    local_limit: Option<usize>,
     is_https: bool,
-    _conn_state: Option<&ConnectionsTrackState>,
-    tracked_connection: Option<Arc<()>>,
-    mut item: PooledConnection,
     metrics: &mut ProxyMetrics,
-) -> Result<ferron_http::HttpResponse, ProxyError> {
-    metrics.pool_miss = true;
-
-    *item.inner_mut() = None;
-
+) -> Result<SendRequestWrapper, ProxyError> {
     let connect_start = std::time::Instant::now();
 
     #[cfg(unix)]
@@ -394,29 +559,13 @@ pub async fn establish_and_send(
 
     metrics.connect_time_secs += connect_start.elapsed().as_secs_f64();
 
-    let wrapper = match wrapper_result {
-        Ok(Ok(w)) => w,
-        Ok(Err(e)) => return Err(e),
-        Err(_) => {
-            return Err(ProxyError::Timeout(
-                "configured connection timeout elapsed".into(),
-            ))
-        }
-    };
-
-    send_via_wrapper(
-        ctx,
-        config,
-        wrapper,
-        item,
-        proxy_url,
-        tracked_connection,
-        config.keepalive,
-        is_unix,
-        local_limit,
-        metrics,
-    )
-    .await
+    match wrapper_result {
+        Ok(Ok(w)) => Ok(w),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err(ProxyError::Timeout(
+            "configured connection timeout elapsed".into(),
+        )),
+    }
 }
 
 /// Send request via a SendRequestWrapper and handle the response.
