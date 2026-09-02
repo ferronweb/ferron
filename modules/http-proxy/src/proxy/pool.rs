@@ -112,80 +112,30 @@ pub async fn try_send_with_pool(
 
     if item.inner().is_some() && should_keep {
         // Item contains a pending (alive but not ready) connection.
-        // Race waiting for it to become ready against establishing a new connection.
-        tokio::select! {
-            ready = wait_for_ready(&mut item, idle_timeout) => {
-                if ready {
-                    metrics.connection_reused = true;
-                    metrics.pool_hit = true;
-                    let wrapper = item
-                        .inner_mut()
-                        .take()
-                        .expect("pending item should have inner value");
-                    return send_via_wrapper(
-                        ctx,
-                        config,
-                        wrapper,
-                        item,
-                        proxy_url,
-                        tracked_connection,
-                        true,
-                        is_unix,
-                        local_limit,
-                        metrics,
-                    )
-                    .await;
-                } else {
-                    // Pooled connection became dead / idle-expired, fall back to new connection
-                    // New connection logic is below
-                }
-            },
-            res = establish_wrapper(ctx, config, upstream.clone(), proxy_url, client_ip, is_https, metrics) => {
-                match res {
-                    Ok(wrapper) => {
-                        metrics.pool_miss = true;
-                        *item.inner_mut() = None;
-                        return send_via_wrapper(
-                            ctx,
-                            config,
-                            wrapper,
-                            item,
-                            proxy_url,
-                            tracked_connection,
-                            config.keepalive,
-                            is_unix,
-                            local_limit,
-                            metrics,
-                        )
-                        .await;
-                    },
-                    Err(e) => {
-                        // New connection failed; try to use pooled if it becomes ready
-                        if wait_for_ready(&mut item, idle_timeout).await {
-                            metrics.connection_reused = true;
-                            metrics.pool_hit = true;
-                            let wrapper = item
-                                .inner_mut()
-                                .take()
-                                .expect("pending item should have inner value");
-                            return send_via_wrapper(
-                                ctx,
-                                config,
-                                wrapper,
-                                item,
-                                proxy_url,
-                                tracked_connection,
-                                true,
-                                is_unix,
-                                local_limit,
-                                metrics,
-                            )
-                            .await;
-                        }
-                        return Err(e);
-                    }
-                }
-            }
+        // Don't establish a new connection in the meantime, to prevent handle exhaustion.
+        if wait_for_ready(&mut item, idle_timeout).await {
+            metrics.connection_reused = true;
+            metrics.pool_hit = true;
+            let wrapper = item
+                .inner_mut()
+                .take()
+                .expect("pending item should have inner value");
+            return send_via_wrapper(
+                ctx,
+                config,
+                wrapper,
+                item,
+                proxy_url,
+                tracked_connection,
+                true,
+                is_unix,
+                local_limit,
+                metrics,
+            )
+            .await;
+        } else {
+            // Pooled connection became dead / idle-expired, fall back to new connection
+            // New connection logic is below
         }
     }
 
@@ -198,6 +148,8 @@ pub async fn try_send_with_pool(
     let mut original_item = Some(item);
 
     tokio::select! {
+        biased;
+
         pooled = wait_for_returned(cm, upstream.clone(), client_ip, local_limit, idle_timeout) => {
             if let Some((pooled_item, wrapper)) = pooled {
                 // Use the returned pooled connection
