@@ -3,7 +3,7 @@ title: "Module development: overview"
 description: "Overview of Ferron 3 module development, what modules are, and where to start."
 ---
 
-Ferron can be extended through custom external modules that provide custom functionality for your Ferron server.
+Ferron can be extended through custom external modules written in Rust that add various custom functionality to a Ferron server.
 
 Ferron 3 modules are Rust library crates. The server loads them at compile
 time through the `ferron-entrypoint` crate. You add a module to a custom
