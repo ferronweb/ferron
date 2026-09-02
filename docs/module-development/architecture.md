@@ -99,8 +99,7 @@ for graceful stop.
   validators (`config_validator_scoped_key!(ns, name)`) run when a block
   selects a provider (e.g. `tls { provider selfsigned }` runs the
   `tls.selfsigned` validator).
-- At runtime, handlers read `LayeredConfiguration`, which merges global + host
-  - location blocks with child-over-parent semantics.
+- At runtime, handlers read `LayeredConfiguration`, which merges global + host + location blocks with child-over-parent semantics.
 
 ## See also
 
