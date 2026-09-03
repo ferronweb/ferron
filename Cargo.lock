@@ -1396,7 +1396,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1479,7 +1479,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3634,7 +3634,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4000,7 +4000,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4058,7 +4058,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4540,7 +4540,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4550,7 +4550,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5013,9 +5013,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vibeio"
-version = "0.2.20"
+version = "0.2.22+zincio.0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38bd92ee1ca08a43adc9c6675247774e8375a639125d64baba67d2ef75e1f1b6"
+checksum = "20efc1f8b810edd9887471c99c4bca41ba72b5670af8a91d1a6b2d4e1ce082ac"
 dependencies = [
  "async-channel",
  "crossbeam-queue",
@@ -5029,6 +5029,7 @@ dependencies = [
  "rustc-hash",
  "rusty_pool",
  "slab",
+ "smallvec",
  "tokio",
  "windows-sys 0.61.2",
 ]
@@ -5060,9 +5061,9 @@ dependencies = [
 
 [[package]]
 name = "vibeio-hyper"
-version = "0.2.20"
+version = "0.2.22+zincio.0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6a3705dee4482773cb67a1cab04088824dd190b8b876c219d0624c0dffd79d9"
+checksum = "f288c97ee4f5d9875d78bd2f606cafb0a454de4338e1637d984187bfe4afe0f7"
 dependencies = [
  "hyper",
  "tokio",
