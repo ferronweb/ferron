@@ -254,7 +254,7 @@ async fn provision_certificate_inner(
                     ),
                 ],
             );
-            config.account_cache.remove(&account_cache_key).await;
+            config.account_cache.remove(account_cache_key).await;
             let client_config = build_rustls_client_config(false)?;
             let account_builder = instant_acme::Account::builder_with_http(Box::new(
                 HttpsClientForAcme::new(client_config),
@@ -266,7 +266,7 @@ async fn provision_certificate_inner(
                 config.eab_key.as_ref(),
                 config.profile.as_deref(),
                 account_builder,
-                &account_cache_key,
+                account_cache_key,
                 event_sink,
             )
             .await?;
@@ -708,7 +708,7 @@ async fn provision_certificate_inner(
 
     if let Err(err) = config
         .certificate_cache
-        .set(&certificate_cache_key, serde_json::to_vec(&cache_data)?)
+        .set(certificate_cache_key, serde_json::to_vec(&cache_data)?)
         .await
     {
         emit_log(
