@@ -27,6 +27,7 @@
 #### HTTP server core
 
 - **Backlog size fix**: the default backlog size is now 4096 on Linux, and -1 on Windows, *BSD, and macOS. It was -1 on all platforms before this change (which would be equivalent to 0 on Linux).
+- **Response body streaming fix**: response body streaming is now fixed to avoid buffering instead of streaming, improving performance and memory usage. This also allows Ferron to be used as a reverse proxy for web applications that use SSE (Server-Sent Events). ([GitHub issue](https://github.com/ferronweb/ferron/issues/899))
 
 #### Automatic TLS
 
