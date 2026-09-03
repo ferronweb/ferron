@@ -21,7 +21,7 @@ hyper-util = { version = "0.1.13", features = ["client"] }
 http-body-util = "0.1.3"
 password-auth = { workspace = true }
 xxhash-rust = { version = "0.8.15", features = ["std", "xxh3"], optional = true }
-base64 = "0.22.1"
+base64 = "0.23.0"
 
 # Async Runtime & Concurrency
 tokio = { version = "1.45.0", features = [

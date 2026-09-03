@@ -71,7 +71,7 @@ rcgen = { version = "0.14.1", default-features = false, features = [
     "aws_lc_rs",
     "pem",
 ] }
-base64 = "0.22.1"
+base64 = "0.23.0"
 xxhash-rust = { version = "0.8.15", features = ["std", "xxh3"] }
 rasn = "0.28.8"
 rasn-ocsp = "0.28.8"
