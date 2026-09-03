@@ -12,7 +12,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use instant_acme::{Account, AuthorizationStatus, Identifier, NewOrder, OrderStatus, RetryPolicy};
+use instant_acme::{AuthorizationStatus, Identifier, NewOrder, OrderStatus, RetryPolicy};
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
@@ -43,14 +43,6 @@ pub async fn provision_certificate(
     if check_certificate_validity_or_install_cached(config, event_sink).await? {
         return Ok(false);
     }
-
-    let mut acme_account: Option<Account> = None;
-    let mut selected_directory: Option<String> = None;
-    let mut selected_contact: Option<Vec<String>> = None;
-    let mut selected_eab_key: Option<Option<Arc<instant_acme::ExternalAccountKey>>> = None;
-    let mut selected_profile: Option<Option<String>> = None;
-    let mut selected_account_cache_key: Option<String> = None;
-    let mut selected_certificate_cache_key: Option<String> = None;
 
     for (idx, provider) in providers.iter().enumerate() {
         let provider_name = if idx == 0 { "primary" } else { "fallback" };
@@ -129,14 +121,33 @@ pub async fn provision_certificate(
 
         match account_result {
             Ok(account) => {
-                acme_account = Some(account);
-                selected_contact = Some(contact);
-                selected_eab_key = Some(eab_key);
-                selected_profile = Some(profile);
-                selected_directory = Some(directory);
-                selected_account_cache_key = Some(account_cache_key);
-                selected_certificate_cache_key = Some(certificate_cache_key);
-                break;
+                config.account = Some(account);
+                config.contact = contact;
+                config.eab_key = eab_key;
+                config.profile = profile;
+                config.directory = directory;
+
+                if let Err(e) = provision_certificate_inner(
+                    config,
+                    &account_cache_key,
+                    &certificate_cache_key,
+                    event_sink,
+                    provider_name,
+                )
+                .await
+                {
+                    // Try the next provider
+                    if idx == providers.len() - 1 {
+                        return Err(anyhow::anyhow!(
+                            "Error provisioning certificate from {} provider: {}",
+                            provider_name,
+                            e
+                        )
+                        .into_boxed_dyn_error());
+                    }
+                } else {
+                    break;
+                }
             }
             Err(e) => {
                 emit_log(
@@ -174,32 +185,21 @@ pub async fn provision_certificate(
         }
     }
 
-    // At this point, we have a valid account (or failed all providers)
-    let acme_account = acme_account.ok_or_else(|| {
+    Ok(true)
+}
+
+#[inline]
+async fn provision_certificate_inner(
+    config: &mut AcmeConfig,
+    account_cache_key: &str,
+    certificate_cache_key: &str,
+    event_sink: &Arc<ferron_observability::CompositeEventSink>,
+    provider_name: &'static str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let acme_account = config.account.as_ref().ok_or_else(|| {
         anyhow::anyhow!("No valid ACME account obtained after trying all providers")
     })?;
-
-    let directory = selected_directory.ok_or_else(|| {
-        anyhow::anyhow!("No valid ACME directory obtained after trying all providers")
-    })?;
-    let account_cache_key = selected_account_cache_key.ok_or_else(|| {
-        anyhow::anyhow!("No valid ACME account cache key obtained after trying all providers")
-    })?;
-    let certificate_cache_key = selected_certificate_cache_key.ok_or_else(|| {
-        anyhow::anyhow!("No valid ACME certificate cache key obtained after trying all providers")
-    })?;
-
-    config.account.replace(acme_account.clone());
-    if let Some(contact) = selected_contact {
-        config.contact = contact;
-    }
-    if let Some(eab_key) = selected_eab_key {
-        config.eab_key = eab_key;
-    }
-    if let Some(profile) = selected_profile {
-        config.profile = profile;
-    }
-
+    let domains = config.domains.join(", ");
     let acme_identifiers: Vec<Identifier> = config
         .domains
         .iter()
@@ -240,7 +240,7 @@ pub async fn provision_certificate(
                 "ACME account recreated",
                 &format!(
                     "ACME account not found on server for {directory}, recreating",
-                    directory = directory
+                    directory = config.directory
                 ),
                 "ferron-tls-acme",
                 vec![
@@ -250,7 +250,7 @@ pub async fn provision_certificate(
                     ),
                     (
                         "ferron.acme.directory",
-                        ferron_observability::LogAttributeValue::String(directory.to_string()),
+                        ferron_observability::LogAttributeValue::String(config.directory.clone()),
                     ),
                 ],
             );
@@ -261,7 +261,7 @@ pub async fn provision_certificate(
             ));
             let new_account = create_new_account(
                 config,
-                &directory,
+                &config.directory,
                 &config.contact,
                 config.eab_key.as_ref(),
                 config.profile.as_deref(),
@@ -278,7 +278,7 @@ pub async fn provision_certificate(
                 ferron_observability::LogLevel::Error,
                 "ACME order creation failed",
                 &format!(
-                    "Failed to create ACME order for {domains}: {}",
+                    "Failed to create ACME order for {domains} from {provider_name}: {}",
                     acme_error_to_string(&e)
                 ),
                 "ferron-tls-acme",
@@ -290,6 +290,10 @@ pub async fn provision_certificate(
                     (
                         "error.message",
                         ferron_observability::LogAttributeValue::String(acme_error_to_string(&e)),
+                    ),
+                    (
+                        "ferron.acme.provider",
+                        ferron_observability::LogAttributeValue::StaticStr(provider_name),
                     ),
                 ],
             );
@@ -310,7 +314,7 @@ pub async fn provision_certificate(
                     ferron_observability::LogLevel::Error,
                     "ACME authorization failed",
                     &format!(
-                        "ACME authorization failed — status: {:?}, domains: {domains}",
+                        "ACME authorization failed — status: {:?}, domains: {domains}, provider: {provider_name}",
                         auth.status,
                     ),
                     "ferron-tls-acme",
@@ -326,6 +330,10 @@ pub async fn provision_certificate(
                                 auth.status
                             )),
                         ),
+                        (
+                            "ferron.acme.provider",
+                            ferron_observability::LogAttributeValue::StaticStr(provider_name),
+                        ),
                     ],
                 );
                 return Err(anyhow::anyhow!("Invalid ACME authorization status").into());
@@ -333,32 +341,36 @@ pub async fn provision_certificate(
         }
 
         let mut challenge = auth
-            .challenge(config.challenge_type.clone())
-            .ok_or_else(|| {
-                    emit_log(
-                        event_sink,
-                        ferron_observability::LogLevel::Error,
-                        "ACME challenge type unsupported",
-                        &format!(
-                            "ACME server doesn't support the requested challenge type {:?} for {domains}",
-                            config.challenge_type
+        .challenge(config.challenge_type.clone())
+        .ok_or_else(|| {
+                emit_log(
+                    event_sink,
+                    ferron_observability::LogLevel::Error,
+                    "ACME challenge type unsupported",
+                    &format!(
+                        "ACME server doesn't support the requested challenge type {:?} for {domains}, provider: {provider_name}",
+                        config.challenge_type
+                    ),
+                    "ferron-tls-acme",
+                    vec![
+                        (
+                            "ferron.acme.domains",
+                            ferron_observability::LogAttributeValue::String(domains.clone()),
                         ),
-                        "ferron-tls-acme",
-                        vec![
-                            (
-                                "ferron.acme.domains",
-                                ferron_observability::LogAttributeValue::String(domains.clone()),
+                        (
+                            "ferron.acme.challenge_type",
+                            ferron_observability::LogAttributeValue::String(
+                                format!("{:?}", config.challenge_type),
                             ),
-                            (
-                                "ferron.acme.challenge_type",
-                                ferron_observability::LogAttributeValue::String(
-                                    format!("{:?}", config.challenge_type),
-                                ),
-                            ),
-                        ],
-                    );
-                    anyhow::anyhow!("The ACME server doesn't support the requested challenge type")
-            })?;
+                        ),
+                        (
+                            "ferron.acme.provider",
+                            ferron_observability::LogAttributeValue::StaticStr(provider_name),
+                        ),
+                    ],
+                );
+                anyhow::anyhow!("The ACME server doesn't support the requested challenge type")
+        })?;
 
         let identifier = match &challenge.identifier().identifier {
             Identifier::Dns(name) => name.to_string(),
@@ -369,7 +381,7 @@ pub async fn provision_certificate(
                     ferron_observability::LogLevel::Error,
                     "ACME identifier type unsupported",
                     &format!(
-                        "Unsupported ACME identifier type for {domains}: {:?}",
+                        "Unsupported ACME identifier type for {domains}, provider: {provider_name}: {:?}",
                         challenge.identifier().identifier
                     ),
                     "ferron-tls-acme",
@@ -384,6 +396,10 @@ pub async fn provision_certificate(
                                 "{:?}",
                                 challenge.identifier().identifier
                             )),
+                        ),
+                        (
+                            "ferron.acme.provider",
+                            ferron_observability::LogAttributeValue::StaticStr(provider_name),
                         ),
                     ],
                 );
@@ -487,7 +503,7 @@ pub async fn provision_certificate(
                 ferron_observability::LogLevel::Error,
                 "ACME challenge ready failed",
                 &format!(
-                    "Failed to set ACME challenge ready for {domains}: {}",
+                    "Failed to set ACME challenge ready for {domains}, provider: {provider_name}: {}",
                     acme_error_to_string(&err)
                 ),
                 "ferron-tls-acme",
@@ -499,6 +515,10 @@ pub async fn provision_certificate(
                     (
                         "error.message",
                         ferron_observability::LogAttributeValue::String(acme_error_to_string(&err)),
+                    ),
+                    (
+                        "ferron.acme.provider",
+                        ferron_observability::LogAttributeValue::StaticStr(provider_name),
                     ),
                 ],
             );
@@ -537,7 +557,7 @@ pub async fn provision_certificate(
                 ferron_observability::LogLevel::Error,
                 "ACME order finalization failed",
                 &format!(
-                    "Failed to finalize ACME order for {domains}: {}",
+                    "Failed to finalize ACME order for {domains}, provider: {provider_name}: {}",
                     acme_error_to_string(&e)
                 ),
                 "ferron-tls-acme",
@@ -549,6 +569,10 @@ pub async fn provision_certificate(
                     (
                         "error.message",
                         ferron_observability::LogAttributeValue::String(acme_error_to_string(&e)),
+                    ),
+                    (
+                        "ferron.acme.provider",
+                        ferron_observability::LogAttributeValue::StaticStr(provider_name),
                     ),
                 ],
             );
@@ -612,7 +636,7 @@ pub async fn provision_certificate(
                 ferron_observability::LogLevel::Error,
                 "ACME finalize failed",
                 &format!(
-                    "Failed to finalize ACME order for {domains}: {}",
+                    "Failed to finalize ACME order for {domains}, provider: {provider_name}: {}",
                     acme_error_to_string(&e)
                 ),
                 "ferron-tls-acme",
@@ -624,6 +648,10 @@ pub async fn provision_certificate(
                     (
                         "error.message",
                         ferron_observability::LogAttributeValue::String(acme_error_to_string(&e)),
+                    ),
+                    (
+                        "ferron.acme.provider",
+                        ferron_observability::LogAttributeValue::StaticStr(provider_name),
                     ),
                 ],
             );
@@ -638,7 +666,7 @@ pub async fn provision_certificate(
                 ferron_observability::LogLevel::Error,
                 "ACME certificate obtain failed",
                 &format!(
-                    "Failed to obtain ACME certificate for {domains}: {}",
+                    "Failed to obtain ACME certificate for {domains}, provider: {provider_name}: {}",
                     acme_error_to_string(&e)
                 ),
                 "ferron-tls-acme",
@@ -650,6 +678,10 @@ pub async fn provision_certificate(
                     (
                         "error.message",
                         ferron_observability::LogAttributeValue::String(acme_error_to_string(&e)),
+                    ),
+                    (
+                        "ferron.acme.provider",
+                        ferron_observability::LogAttributeValue::StaticStr(provider_name),
                     ),
                 ],
             );
@@ -693,10 +725,9 @@ pub async fn provision_certificate(
     }
 
     install_certified_key(config, certs, private_key, &cache_data, event_sink).await?;
-    config.account.replace(acme_account);
 
     // Don't leave stale DNS records...
     cleanup_challenge_data(config, &dns_01_domains, event_sink).await;
 
-    Ok(true)
+    Ok(())
 }

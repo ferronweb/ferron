@@ -6,6 +6,10 @@
 
 ### Changed
 
+#### Automatic TLS
+
+- **ACME fallback improvements**: Ferron now tries each configured fallback provider when the primary provider fails when provisioning a certificate (not just on account creation).
+
 #### OCSP stapling
 
 - **OCSP status logging and metrics**: added `ferron.ocsp.cert.status` attribute to log records and metric labels, allowing the certificate's OCSP status (`good`, `revoked`, `unknown`) to be logged and monitored.

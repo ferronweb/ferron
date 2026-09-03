@@ -207,7 +207,7 @@ The HMAC secret must be base64url-encoded (without padding).
 
 ## Fallback providers
 
-When high availability is critical, you can configure fallback ACME providers. If the primary provider fails (for example, the CA is down or unreachable), Ferron tries the next configured fallback provider.
+When high availability is critical, you can configure fallback ACME providers. If the primary provider fails (for example, the CA is down or unreachable), Ferron tries the next configured fallback provider when certificate provisioning fails.
 
 ```ferron
 example.com {
@@ -232,13 +232,6 @@ example.com {
 ```
 
 Each `fallback` block accepts the same provider-level directives as the primary configuration: `directory`, `contact`, `eab`, and `profile`. The `fallback` block inherits the settings of the primary provider. You only need to specify the fields that differ.
-
-### How fallback works
-
-- Ferron tries providers **sequentially**: the primary first, then each `fallback` block in order.
-- Ferron triggers a fallback when account creation with the previous provider fails.
-- Once a provider succeeds, later operations (order creation, challenge solving, certificate installation) use that same provider.
-- Ferron scopes account cache keys per-provider, so each provider maintains its own cached credentials.
 
 ### Example: primary with staging fallback
 
