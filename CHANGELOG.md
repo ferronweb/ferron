@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron 3.0.0-rc.2
+
+**Released in September 4, 2026**
+
+### Fixed
+
+#### HTTP server core
+
+- **HTTP/2 empty body error fix**: HTTP/2 requests with empty bodies no longer cause server errors. This is the only significant change in the emergency Ferron 3.0.0-rc.2 release.
+
 ## Ferron 3.0.0-rc.1
 
 **Released in September 4, 2026**
