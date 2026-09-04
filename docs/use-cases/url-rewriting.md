@@ -56,5 +56,5 @@ example.com {
 - Use `file=#false` and `directory=#false` for front-controller/SPA rewrites so existing files/directories are still served directly.
 - Keep `allow_double_slashes` disabled unless your app explicitly requires double-slash URLs.
 - Avoid `disable_url_sanitizer` unless you have a concrete compatibility reason and have reviewed path traversal risk.
-- For reverse-proxy routing patterns, see [Reverse proxying](/docs/use-cases/reverse-proxy).
-- For directive reference (`rewrite`, `rewrite_log`, `allow_double_slashes`, `disable_url_sanitizer`), see [Configuration: routing & URL processing](/docs/configuration/routing-url-processing).
+- For reverse-proxy routing patterns, see [Reverse proxying](/docs/v2/use-cases/reverse-proxy).
+- For directive reference (`rewrite`, `rewrite_log`, `allow_double_slashes`, `disable_url_sanitizer`), see [Configuration: routing & URL processing](/docs/v2/configuration/routing-url-processing).

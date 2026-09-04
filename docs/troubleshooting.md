@@ -36,7 +36,7 @@ If Ferron is not running, restart it and re-check logs right away.
 If you are testing the wrong port, the server can be healthy but still appear down.
 
 Relevant directives: `default_http_port`, `default_https_port`, `listen_ip`.
-See [Configuration: core directives](/docs/configuration/core-directives).
+See [Configuration: core directives](/docs/v2/configuration/core-directives).
 
 ### Is the firewall open?
 
@@ -54,7 +54,7 @@ Use at least one access log output and one error log output.
 - Container-friendly streams - `log_stdout`, `error_log_stderr`
 - Common package paths - `/var/log/ferron/access.log`, `/var/log/ferron/error.log` (Linux packages) and `%SystemDrive%\ferron\log\access.log`, `%SystemDrive%\ferron\log\error.log` (Windows installer)
 
-See [Logging & observability](/docs/use-cases/logging-observability) and [Configuration: observability & logging](/docs/configuration/observability-logging).
+See [Logging & observability](/docs/v2/use-cases/logging-observability) and [Configuration: observability & logging](/docs/v2/configuration/observability-logging).
 
 ### What does the log say?
 
@@ -91,7 +91,7 @@ For HTTPS upstreams with private/self-signed certs:
 - `connection refused` - wrong port/host, or service down.
 - timeout - route/firewall/DNS issue, or upstream accepted but did not respond in time.
 
-See [Reverse proxying](/docs/use-cases/reverse-proxy) and [Configuration: reverse proxying](/docs/configuration/reverse-proxying).
+See [Reverse proxying](/docs/v2/use-cases/reverse-proxy) and [Configuration: reverse proxying](/docs/v2/configuration/reverse-proxying).
 
 ## TLS issues
 
@@ -128,7 +128,7 @@ If noise is high, reduce impact with targeted controls:
 - Use `allow`/`block` rules where appropriate.
 - Keep authentication and admin paths narrow and explicit.
 
-See [Automatic TLS](/docs/use-cases/automatic-tls) and [Configuration: security & TLS](/docs/configuration/security-tls).
+See [Automatic TLS](/docs/v2/use-cases/automatic-tls) and [Configuration: security & TLS](/docs/v2/configuration/security-tls).
 
 ## Static file issues
 
@@ -144,7 +144,7 @@ Ferron must be able to read files and traverse directories (`x` on directories f
 
 For SPAs, route fallback rewrites are commonly required. If rewrites are involved, enable `rewrite_log` while diagnosing.
 
-See [Static file serving](/docs/use-cases/static-file-serving), [URL rewriting](/docs/use-cases/url-rewriting), and [Configuration: routing & URL processing](/docs/configuration/routing-url-processing).
+See [Static file serving](/docs/v2/use-cases/static-file-serving), [URL rewriting](/docs/v2/use-cases/url-rewriting), and [Configuration: routing & URL processing](/docs/v2/configuration/routing-url-processing).
 
 ## Rate limiting and access control
 
@@ -160,7 +160,7 @@ If Ferron is behind a proxy/load balancer and IP handling is wrong, access-contr
 
 Set `trust_x_forwarded_for` only when behind a trusted proxy path that sets `X-Forwarded-For`. For PROXY protocol frontends, use `protocol_proxy`.
 
-See [Client IP](/docs/use-cases/client-ip), [Rate limiting](/docs/use-cases/rate-limiting), [Access control](/docs/use-cases/access-control), and [Configuration: conditionals](/docs/configuration/conditionals).
+See [Client IP](/docs/v2/use-cases/client-ip), [Rate limiting](/docs/v2/use-cases/rate-limiting), [Access control](/docs/v2/use-cases/access-control), and [Configuration: conditionals](/docs/v2/configuration/conditionals).
 
 ## Configuration mistakes
 
@@ -184,7 +184,7 @@ All subconditions in one `condition` block must pass. If one fails, the conditio
 
 Start with a minimal known-good config, confirm it works, then add one change at a time.
 
-See [Getting started](/docs/getting-started), [Configuration: fundamentals](/docs/configuration/fundamentals), and [Configuration: examples](/docs/configuration/examples).
+See [Getting started](/docs/v2/getting-started), [Configuration: fundamentals](/docs/v2/configuration/fundamentals), and [Configuration: examples](/docs/v2/configuration/examples).
 
 ## Observability & logs
 
@@ -209,7 +209,7 @@ Ferron's default access-log format is:
 
 `{client_ip} - {auth_user} [{timestamp}] "{method} {path_and_query} {version}" {status_code} {content_length} "{header:Referer}" "{header:User-Agent}"`
 
-This matches the default `log_format` directive in [Configuration: observability & logging](/docs/configuration/observability-logging).
+This matches the default `log_format` directive in [Configuration: observability & logging](/docs/v2/configuration/observability-logging).
 
 Example line:
 

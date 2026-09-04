@@ -208,4 +208,4 @@ For `http://calender.example.net:5000/agenda/example`, you will probably have to
 - If requests return unexpected `404 Not Found` at the backend, test with and without `disable_url_sanitizer` and confirm backend path handling before disabling URL sanitization.
 - For mixed static + API setups, keep API routes in a dedicated prefix like `/api` and use a catch-all `/` location for static files or SPA fallback.
 - For gRPC upstreams, enable `proxy_http2_only`; without HTTP/2-only proxying, many gRPC backends will fail.
-- If Ferron is behind an HTTPS-terminating proxy and you also use automatic TLS, use HTTP-01 challenge instead of TLS-ALPN-01. See [Automatic TLS](/docs/use-cases/automatic-tls#note-about-cloudflare-proxies-and-other-https-proxies).
+- If Ferron is behind an HTTPS-terminating proxy and you also use automatic TLS, use HTTP-01 challenge instead of TLS-ALPN-01. See [Automatic TLS](/docs/v2/use-cases/automatic-tls#note-about-cloudflare-proxies-and-other-https-proxies).

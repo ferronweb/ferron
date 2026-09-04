@@ -79,5 +79,5 @@ example.com {
 - If CGI scripts fail with `500 Internal Server Error`, confirm executable permissions and interpreter paths.
 - If using PHP via CGI, you may need `cgi.force_redirect = 0` in the CGI `php.ini`, depending on your PHP-CGI build.
 - Keep upload/download directories outside `cgi-bin` to reduce the risk of accidental execution of uploaded files.
-- For PHP-specific guidance, see [PHP hosting](/docs/use-cases/php).
-- For directive reference (`cgi`, `cgi_extension`, `cgi_interpreter`, `cgi_environment`), see [Configuration: application backends](/docs/configuration/application-backends).
+- For PHP-specific guidance, see [PHP hosting](/docs/v2/use-cases/php).
+- For directive reference (`cgi`, `cgi_extension`, `cgi_interpreter`, `cgi_environment`), see [Configuration: application backends](/docs/v2/configuration/application-backends).

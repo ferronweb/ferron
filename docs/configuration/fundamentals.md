@@ -200,7 +200,7 @@ example.com {
 }
 ```
 
-For a full list of subconditions, see [Configuration: conditionals](/docs/configuration/conditionals). For larger real-world patterns, see [Configuration: configuration examples](/docs/configuration/examples).
+For a full list of subconditions, see [Configuration: conditionals](/docs/v2/configuration/conditionals). For larger real-world patterns, see [Configuration: configuration examples](/docs/v2/configuration/examples).
 
 ## Inheritance and override behavior
 

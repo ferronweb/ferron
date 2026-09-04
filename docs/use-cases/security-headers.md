@@ -52,4 +52,4 @@ example.com {
 - Keep `Strict-Transport-Security` only on HTTPS hosts you intend to keep on HTTPS permanently.
 - Treat `Content-Security-Policy` as application-specific; start simple, then tighten based on real asset/script needs.
 - If a header appears multiple times, use `header_replace` when you need one canonical value.
-- For directive details, see [Configuration: routing & URL processing](/docs/configuration/routing-url-processing).
+- For directive details, see [Configuration: routing & URL processing](/docs/v2/configuration/routing-url-processing).

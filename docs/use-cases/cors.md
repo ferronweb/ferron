@@ -99,4 +99,4 @@ api.example.com {
 - Apply CORS headers only where needed (for example under `/api`) to avoid exposing unnecessary cross-origin access on unrelated routes.
 - If browser preflight fails, verify `OPTIONS` is handled either by Ferron (`status 204`) or by your backend.
 - If you use custom request headers from frontend code, include them in `Access-Control-Allow-Headers`.
-- For directive details, see [Configuration: routing & URL processing](/docs/configuration/routing-url-processing), [Configuration: conditionals](/docs/configuration/conditionals), and [Configuration: security & TLS](/docs/configuration/security-tls).
+- For directive details, see [Configuration: routing & URL processing](/docs/v2/configuration/routing-url-processing), [Configuration: conditionals](/docs/v2/configuration/conditionals), and [Configuration: security & TLS](/docs/v2/configuration/security-tls).

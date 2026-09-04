@@ -41,7 +41,7 @@ example.com {
 - Conditions can be nested by placing `if`/`if_not` blocks inside other conditional blocks.
 - In Ferron 2.1.0 and newer, snippets containing subconditions can be reused in condition blocks with `use`.
 
-For broader block structure and ordering details, see [Configuration: fundamentals](/docs/configuration/fundamentals).
+For broader block structure and ordering details, see [Configuration: fundamentals](/docs/v2/configuration/fundamentals).
 
 ## Subconditions reference
 
@@ -70,7 +70,7 @@ Supported subconditions:
 - `is_language <language: string>` (Ferron 2.1.0 or newer)
   - Checks whether the language is preferred in the `Accept-Language` header. This uses the `LANGUAGES` constant (comma-separated language codes such as `en-US` or `fr-FR`).
 
-Placeholders can be used in subconditions where applicable (for example `{path}` and `{client_ip}`). See [Configuration: placeholders](/docs/configuration/placeholders).
+Placeholders can be used in subconditions where applicable (for example `{path}` and `{client_ip}`). See [Configuration: placeholders](/docs/v2/configuration/placeholders).
 
 ## Rego in conditionals
 
@@ -101,7 +101,7 @@ Inputs for Rego-based subconditions (`input`) are as follows:
 - `input.socket_data.encrypted` (boolean) - whether the connection is encrypted.
 - `input.constants` (array<string, string>; Ferron 2.1.0 or newer) - the constants set by `set_constant` subconditions.
 
-You can read more about Rego in [Open Policy Agent documentation](https://www.openpolicyagent.org/docs/policy-language).
+You can read more about Rego in [Open Policy Agent documentation](https://www.openpolicyagent.org/docs/v2/policy-language).
 
 **Configuration example with Rego (`curl` user-agent deny):**
 

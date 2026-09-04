@@ -41,4 +41,4 @@ api.example.com {
 - Ensure the certificate file includes any required intermediate certificates when needed by your CA.
 - If you rotate certificates externally, reload or restart Ferron so updated files are used.
 - If you do not want automatic TLS on a host, set `auto_tls #false` explicitly.
-- For all TLS-related directives (`tls`, `tls_min_version`, `tls_max_version`, `tls_client_certificate`, `ocsp_stapling`), see [Configuration: security & TLS](/docs/configuration/security-tls).
+- For all TLS-related directives (`tls`, `tls_min_version`, `tls_max_version`, `tls_client_certificate`, `ocsp_stapling`), see [Configuration: security & TLS](/docs/v2/configuration/security-tls).

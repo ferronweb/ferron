@@ -88,5 +88,5 @@ ferron-precompress /var/www/html
 - If SPA routes (for example `/dashboard/settings`) return `404 Not Found`, add the rewrite rule from the SPA section so unknown paths fall back to `/`.
 - If precompressed assets are not served, check that matching files exist (for example `app.js.br` or `app.js.gz`) and regenerate them after changing source assets.
 - If responses look stale while using `cache`, reduce cache lifetime (`file_cache_control`) or temporarily disable cache while debugging.
-- If your site serves both static files and API traffic, split routing with `location` blocks (for example `/api` for proxying, `/` for static files). See [Reverse proxying](/docs/use-cases/reverse-proxy).
-- If you enable automatic TLS for static hosting behind an HTTPS-terminating proxy (for example Cloudflare), use HTTP-01 ACME challenge. See [Automatic TLS](/docs/use-cases/automatic-tls#note-about-cloudflare-proxies-and-other-https-proxies).
+- If your site serves both static files and API traffic, split routing with `location` blocks (for example `/api` for proxying, `/` for static files). See [Reverse proxying](/docs/v2/use-cases/reverse-proxy).
+- If you enable automatic TLS for static hosting behind an HTTPS-terminating proxy (for example Cloudflare), use HTTP-01 ACME challenge. See [Automatic TLS](/docs/v2/use-cases/automatic-tls#note-about-cloudflare-proxies-and-other-https-proxies).

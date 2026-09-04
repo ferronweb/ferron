@@ -45,4 +45,4 @@ example.com {
 - Enable `trust_x_forwarded_for` only when traffic is coming through a trusted proxy path.
 - Enable `protocol_proxy` only when your frontend actually sends PROXY protocol headers.
 - Validate behavior using access logs before relying on IP-based `allow`, `block`, or `limit` policies.
-- For directive details, see [Configuration: security & TLS](/docs/configuration/security-tls), [Configuration: core directives](/docs/configuration/core-directives), and [Configuration: reverse proxying](/docs/configuration/reverse-proxying).
+- For directive details, see [Configuration: security & TLS](/docs/v2/configuration/security-tls), [Configuration: core directives](/docs/v2/configuration/core-directives), and [Configuration: reverse proxying](/docs/v2/configuration/reverse-proxying).

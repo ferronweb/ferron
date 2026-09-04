@@ -75,14 +75,14 @@ example.com {
 ## Recommended path for first-time users
 
 1. Install Ferron using one of these guides:
-   - [Debian/Ubuntu](/docs/installation/debian)
-   - [RHEL/Fedora](/docs/installation/rpm)
-   - [Docker](/docs/installation/docker)
-   - [Linux installer](/docs/installation/installer-linux)
-   - [Windows installer](/docs/installation/installer-windows)
-   - [Manual installation](/docs/installation/manual)
+   - [Debian/Ubuntu](/docs/v2/installation/debian)
+   - [RHEL/Fedora](/docs/v2/installation/rpm)
+   - [Docker](/docs/v2/installation/docker)
+   - [Linux installer](/docs/v2/installation/installer-linux)
+   - [Windows installer](/docs/v2/installation/installer-windows)
+   - [Manual installation](/docs/v2/installation/manual)
 2. Pick one setup from this page.
-3. Use a related use-case guide, such as [Static file serving](/docs/use-cases/static-file-serving), [Reverse proxying](/docs/use-cases/reverse-proxy), or [Web applications](/docs/use-cases/web-applications).
+3. Use a related use-case guide, such as [Static file serving](/docs/v2/use-cases/static-file-serving), [Reverse proxying](/docs/v2/use-cases/reverse-proxy), or [Web applications](/docs/v2/use-cases/web-applications).
 4. Start with a minimal config first, then add TLS/security/routing features.
 
 ## Common beginner mistakes
@@ -94,6 +94,6 @@ example.com {
 
 ## Next reads
 
-- [Playground](/docs/playground) for trying Ferron quickly.
-- [Configuration fundamentals](/docs/configuration/fundamentals) for KDL structure.
-- [Automatic TLS](/docs/use-cases/automatic-tls) once your basic setup works.
+- [Playground](/docs/v2/playground) for trying Ferron quickly.
+- [Configuration fundamentals](/docs/v2/configuration/fundamentals) for KDL structure.
+- [Automatic TLS](/docs/v2/use-cases/automatic-tls) once your basic setup works.

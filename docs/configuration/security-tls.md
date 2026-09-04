@@ -221,7 +221,7 @@ auto_tls_challenge "dns-01" provider="dnsimple" oauth_token="your_oauth_token" a
 
 ### Google Cloud DNS (`googlecloud`)
 
-This DNS provider uses [Google Cloud DNS API](https://cloud.google.com/dns/docs/reference/v1) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.8.0.
+This DNS provider uses [Google Cloud DNS API](https://cloud.google.com/dns/docs/v2/reference/v1) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.8.0.
 
 #### Example directive specification
 

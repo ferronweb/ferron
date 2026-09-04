@@ -1,24 +1,24 @@
 [
   {
-    "href": "/docs",
+    "href": "/docs/v2",
     "target": "_self",
     "sub": false,
     "label": "Welcome to the documentation!"
   },
   {
-    "href": "/docs/playground",
+    "href": "/docs/v2/playground",
     "target": "_self",
     "sub": false,
     "label": "Playground"
   },
   {
-    "href": "/docs/getting-started",
+    "href": "/docs/v2/getting-started",
     "target": "_self",
     "sub": false,
     "label": "Getting started"
   },
   {
-    "href": "/docs/troubleshooting",
+    "href": "/docs/v2/troubleshooting",
     "target": "_self",
     "sub": false,
     "label": "Troubleshooting"
@@ -31,19 +31,19 @@
     "label": "GNU/Linux"
   },
   {
-    "href": "/docs/installation/debian",
+    "href": "/docs/v2/installation/debian",
     "target": "_self",
     "sub": true,
     "label": "Debian/Ubuntu"
   },
   {
-    "href": "/docs/installation/rpm",
+    "href": "/docs/v2/installation/rpm",
     "target": "_self",
     "sub": true,
     "label": "RHEL/Fedora"
   },
   {
-    "href": "/docs/installation/installer-linux",
+    "href": "/docs/v2/installation/installer-linux",
     "target": "_self",
     "sub": true,
     "label": "Installer"
@@ -52,23 +52,23 @@
     "label": "Windows Server"
   },
   {
-    "href": "/docs/installation/installer-windows",
+    "href": "/docs/v2/installation/installer-windows",
     "target": "_self",
     "sub": true,
     "label": "Installer"
   },
   {
-    "href": "/docs/installation/docker",
+    "href": "/docs/v2/installation/docker",
     "target": "_self",
     "label": "Docker"
   },
   {
-    "href": "/docs/installation/package-managers",
+    "href": "/docs/v2/installation/package-managers",
     "target": "_self",
     "label": "Package managers (community)"
   },
   {
-    "href": "/docs/installation/manual",
+    "href": "/docs/v2/installation/manual",
     "target": "_self",
     "label": "Manual installation"
   },
@@ -80,25 +80,25 @@
     "label": "Static & content"
   },
   {
-    "href": "/docs/use-cases/static-file-serving",
+    "href": "/docs/v2/use-cases/static-file-serving",
     "target": "_self",
     "sub": true,
     "label": "Static file serving"
   },
   {
-    "href": "/docs/use-cases/php",
+    "href": "/docs/v2/use-cases/php",
     "target": "_self",
     "sub": true,
     "label": "PHP hosting"
   },
   {
-    "href": "/docs/use-cases/cgi-applications",
+    "href": "/docs/v2/use-cases/cgi-applications",
     "target": "_self",
     "sub": true,
     "label": "CGI applications"
   },
   {
-    "href": "/docs/use-cases/web-applications",
+    "href": "/docs/v2/use-cases/web-applications",
     "target": "_self",
     "sub": true,
     "label": "Web applications"
@@ -107,43 +107,43 @@
     "label": "Traffic & routing"
   },
   {
-    "href": "/docs/use-cases/reverse-proxy",
+    "href": "/docs/v2/use-cases/reverse-proxy",
     "target": "_self",
     "sub": true,
     "label": "Reverse proxying"
   },
   {
-    "href": "/docs/use-cases/forward-auth",
+    "href": "/docs/v2/use-cases/forward-auth",
     "target": "_self",
     "sub": true,
     "label": "Forward auth"
   },
   {
-    "href": "/docs/use-cases/client-ip",
+    "href": "/docs/v2/use-cases/client-ip",
     "target": "_self",
     "sub": true,
     "label": "Client IP"
   },
   {
-    "href": "/docs/use-cases/rate-limiting",
+    "href": "/docs/v2/use-cases/rate-limiting",
     "target": "_self",
     "sub": true,
     "label": "Rate limiting"
   },
   {
-    "href": "/docs/use-cases/error-pages",
+    "href": "/docs/v2/use-cases/error-pages",
     "target": "_self",
     "sub": true,
     "label": "Error pages"
   },
   {
-    "href": "/docs/use-cases/url-rewriting",
+    "href": "/docs/v2/use-cases/url-rewriting",
     "target": "_self",
     "sub": true,
     "label": "URL rewriting"
   },
   {
-    "href": "/docs/use-cases/redirecting",
+    "href": "/docs/v2/use-cases/redirecting",
     "target": "_self",
     "sub": true,
     "label": "Redirecting"
@@ -152,48 +152,48 @@
     "label": "Security"
   },
   {
-    "href": "/docs/use-cases/automatic-tls",
+    "href": "/docs/v2/use-cases/automatic-tls",
     "target": "_self",
     "sub": true,
     "label": "Automatic TLS"
   },
   {
-    "href": "/docs/use-cases/manual-tls",
+    "href": "/docs/v2/use-cases/manual-tls",
     "target": "_self",
     "sub": true,
     "label": "Manual TLS"
   },
   {
-    "href": "/docs/use-cases/mtls",
+    "href": "/docs/v2/use-cases/mtls",
     "target": "_self",
     "sub": true,
     "label": "mTLS"
   },
   {
-    "href": "/docs/use-cases/access-control",
+    "href": "/docs/v2/use-cases/access-control",
     "target": "_self",
     "sub": true,
     "label": "Access control"
   },
   {
-    "href": "/docs/use-cases/security-headers",
+    "href": "/docs/v2/use-cases/security-headers",
     "target": "_self",
     "sub": true,
     "label": "Security headers"
   },
   {
-    "href": "/docs/use-cases/cors",
+    "href": "/docs/v2/use-cases/cors",
     "target": "_self",
     "sub": true,
     "label": "CORS headers"
   },
   {
-    "href": "/docs/use-cases/logging-observability",
+    "href": "/docs/v2/use-cases/logging-observability",
     "target": "_self",
     "label": "Logging & observability"
   },
   {
-    "href": "/docs/use-cases/ferron-serve",
+    "href": "/docs/v2/use-cases/ferron-serve",
     "target": "_self",
     "label": "`ferron serve` subcommand"
   },
@@ -202,7 +202,7 @@
     "category": true
   },
   {
-    "href": "/docs/configuration/fundamentals",
+    "href": "/docs/v2/configuration/fundamentals",
     "target": "_self",
     "label": "Fundamentals"
   },
@@ -210,65 +210,65 @@
     "label": "Directives"
   },
   {
-    "href": "/docs/configuration/core-directives",
+    "href": "/docs/v2/configuration/core-directives",
     "target": "_self",
     "sub": true,
     "label": "Core directives"
   },
   {
-    "href": "/docs/configuration/security-tls",
+    "href": "/docs/v2/configuration/security-tls",
     "target": "_self",
     "sub": true,
     "label": "Security & TLS"
   },
   {
-    "href": "/docs/configuration/reverse-proxying",
+    "href": "/docs/v2/configuration/reverse-proxying",
     "target": "_self",
     "sub": true,
     "label": "Reverse proxying"
   },
   {
-    "href": "/docs/configuration/static-content",
+    "href": "/docs/v2/configuration/static-content",
     "target": "_self",
     "sub": true,
     "label": "Static & content handling"
   },
   {
-    "href": "/docs/configuration/routing-url-processing",
+    "href": "/docs/v2/configuration/routing-url-processing",
     "target": "_self",
     "sub": true,
     "label": "Routing & URL processing"
   },
   {
-    "href": "/docs/configuration/application-backends",
+    "href": "/docs/v2/configuration/application-backends",
     "target": "_self",
     "sub": true,
     "label": "Application backends"
   },
   {
-    "href": "/docs/configuration/traffic-control",
+    "href": "/docs/v2/configuration/traffic-control",
     "target": "_self",
     "sub": true,
     "label": "Traffic control"
   },
   {
-    "href": "/docs/configuration/observability-logging",
+    "href": "/docs/v2/configuration/observability-logging",
     "target": "_self",
     "sub": true,
     "label": "Observability & logging"
   },
   {
-    "href": "/docs/configuration/placeholders",
+    "href": "/docs/v2/configuration/placeholders",
     "target": "_self",
     "label": "Placeholders"
   },
   {
-    "href": "/docs/configuration/conditionals",
+    "href": "/docs/v2/configuration/conditionals",
     "target": "_self",
     "label": "Conditionals"
   },
   {
-    "href": "/docs/configuration/examples",
+    "href": "/docs/v2/configuration/examples",
     "target": "_self",
     "label": "Examples"
   },
@@ -277,22 +277,22 @@
     "category": true
   },
   {
-    "href": "/docs/reference/configuration-legacy",
+    "href": "/docs/v2/reference/configuration-legacy",
     "target": "_self",
     "label": "Server configuration (legacy)"
   },
   {
-    "href": "/docs/reference/modules",
+    "href": "/docs/v2/reference/modules",
     "target": "_self",
     "label": "Server modules"
   },
   {
-    "href": "/docs/reference/observability",
+    "href": "/docs/v2/reference/observability",
     "target": "_self",
     "label": "Observability backends"
   },
   {
-    "href": "/docs/reference/commands",
+    "href": "/docs/v2/reference/commands",
     "target": "_self",
     "label": "Commands"
   },

@@ -5,7 +5,7 @@ description: "Practical Ferron setups for access/error logs, container-friendly 
 
 Ferron supports multiple observability outputs, so you can start with local log files and later move to centralized telemetry without changing your application stack.
 
-This page focuses on common deployment patterns. For directive-level details, see [Configuration: observability & logging](/docs/configuration/observability-logging) and [Observability backends reference](/docs/reference/observability).
+This page focuses on common deployment patterns. For directive-level details, see [Configuration: observability & logging](/docs/v2/configuration/observability-logging) and [Observability backends reference](/docs/v2/reference/observability).
 
 ## Basic production logs to files
 
@@ -177,4 +177,4 @@ example.com {
 - Keep `otlp_no_verification #false` unless you are in a controlled test environment.
 - If logs are missing, verify backend support in your Ferron build and check endpoint/protocol pairing.
 - If Ferron is behind a reverse proxy, use either `trust_x_forwarded_for` (when using a proxy that sends `X-Forwarded-For` header) or `protocol_proxy` (when using a proxy that send PROXY protocol header) to ensure correct client IP logging.
-- Use [placeholders reference](/docs/configuration/placeholders) when customizing `log_format`.
+- Use [placeholders reference](/docs/v2/configuration/placeholders) when customizing `log_format`.

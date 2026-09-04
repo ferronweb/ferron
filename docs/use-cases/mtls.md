@@ -39,4 +39,4 @@ globals {
 - Ensure the client certificate chain is issued by the CA you configured in `tls_client_certificate`.
 - Keep private internal CA material protected and rotate client certificates regularly.
 - If requests fail during TLS handshake, verify certificate validity dates and CA chain.
-- For directive details, see [Configuration: security & TLS](/docs/configuration/security-tls).
+- For directive details, see [Configuration: security & TLS](/docs/v2/configuration/security-tls).

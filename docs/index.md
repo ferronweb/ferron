@@ -9,13 +9,13 @@ To explore the documentation, either click on one of the positions in the sideba
 
 ## First time?
 
-**Are you new to Ferron? No problem.** Start with the [Getting started guide](/docs/getting-started) to learn web server basics and decide whether you should use static file serving, reverse proxying, or a mixed setup.
+**Are you new to Ferron? No problem.** Start with the [Getting started guide](/docs/v2/getting-started) to learn web server basics and decide whether you should use static file serving, reverse proxying, or a mixed setup.
 
 After that, install Ferron using one of the available installation methods, and then read about the common use cases.
 
-If you'd like to learn more about Ferron's configuration, you can read about it in the [configuration reference](/docs/configuration/fundamentals).
+If you'd like to learn more about Ferron's configuration, you can read about it in the [configuration reference](/docs/v2/configuration/fundamentals).
 
-If something goes wrong, start with the [troubleshooting guide](/docs/troubleshooting).
+If something goes wrong, start with the [troubleshooting guide](/docs/v2/troubleshooting).
 
 **Whatever you do, enjoy using your new Ferron server!** 😄
 

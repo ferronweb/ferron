@@ -136,7 +136,7 @@ example.com {
 }
 ```
 
-For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/configuration/security-tls#dns-providers-for-acme-dns-01-challenge)
+For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/v2/configuration/security-tls#dns-providers-for-acme-dns-01-challenge)
 
 ## Notes and troubleshooting
 

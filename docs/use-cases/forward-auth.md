@@ -59,4 +59,4 @@ globals {
 - Keep `auth_to_no_verification #false` unless you are in a controlled test environment.
 - If you see redirect loops, verify your auth service's allowlist/bypass rules for login or callback paths.
 - Start by forwarding only required headers via `auth_to_copy` (commonly `Authorization` and `Cookie`).
-- For directive details, see [Configuration: reverse proxying](/docs/configuration/reverse-proxying) and `fauth` behavior notes in [Server modules](/docs/reference/modules).
+- For directive details, see [Configuration: reverse proxying](/docs/v2/configuration/reverse-proxying) and `fauth` behavior notes in [Server modules](/docs/v2/reference/modules).

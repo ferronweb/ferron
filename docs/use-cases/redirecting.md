@@ -27,7 +27,7 @@ example.org {
 }
 ```
 
-For example, `/docs/page` on `example.org` redirects to `/docs/page` on `www.example.com`.
+For example, `/docs/v2/page` on `example.org` redirects to `/docs/v2/page` on `www.example.com`.
 
 ## Canonical host redirect (non-www -> www)
 
@@ -66,6 +66,6 @@ example.com {
 - If browsers keep using old redirects after config changes, clear browser cache or test with a private window; `301` responses are cached aggressively.
 - Use `302` while testing and switch to `301` only when you are confident the redirect is final.
 - If redirect chains occur, verify only one host/protocol canonicalization rule applies for each request.
-- For automatic `www` redirects, see `wwwredirect` in [Configuration: routing & URL processing](/docs/configuration/routing-url-processing).
-- For URL rewriting (internal path transforms), see [URL rewriting](/docs/use-cases/url-rewriting).
-- For reference of `status` directive and its props, see [Configuration: security & TLS](/docs/configuration/security-tls).
+- For automatic `www` redirects, see `wwwredirect` in [Configuration: routing & URL processing](/docs/v2/configuration/routing-url-processing).
+- For URL rewriting (internal path transforms), see [URL rewriting](/docs/v2/use-cases/url-rewriting).
+- For reference of `status` directive and its props, see [Configuration: security & TLS](/docs/v2/configuration/security-tls).

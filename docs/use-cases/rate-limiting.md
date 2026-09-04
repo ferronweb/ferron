@@ -56,5 +56,5 @@ api.example.com {
 - Rate limiting is per client IP. If Ferron is behind another proxy/load balancer, configure `trust_x_forwarded_for` or `protocol_proxy` so Ferron can see real client IPs.
 - Start with permissive values and tighten after observing production traffic patterns.
 - Keep login and token endpoints on stricter limits than read-only API endpoints.
-- For directive details, see [Configuration: traffic control](/docs/configuration/traffic-control).
-- For proxy/IP directives, see [Configuration: security & TLS](/docs/configuration/security-tls) and [Configuration: core directives](/docs/configuration/core-directives).
+- For directive details, see [Configuration: traffic control](/docs/v2/configuration/traffic-control).
+- For proxy/IP directives, see [Configuration: security & TLS](/docs/v2/configuration/security-tls) and [Configuration: core directives](/docs/v2/configuration/core-directives).

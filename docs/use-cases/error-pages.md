@@ -41,4 +41,4 @@ app.example.com {
 - Without `proxy_intercept_errors`, backend error responses are passed through from the upstream service.
 - Keep error-page files lightweight and readable by the Ferron process.
 - Use status-specific pages (`502`, `503`, `504`) for better incident messaging.
-- For directive details, see [Configuration: routing & URL processing](/docs/configuration/routing-url-processing) and [Configuration: reverse proxying](/docs/configuration/reverse-proxying).
+- For directive details, see [Configuration: routing & URL processing](/docs/v2/configuration/routing-url-processing) and [Configuration: reverse proxying](/docs/v2/configuration/reverse-proxying).
