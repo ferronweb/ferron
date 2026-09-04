@@ -455,6 +455,44 @@ async fn run_acme_background_task(
         Vec::new(),
     );
 
+    {
+        use rustls_pki_types::pem::PemObject;
+
+        for config in configs.read().await.iter() {
+            // Install TLS certificates from cache early
+            let certificate_cache_key =
+                crate::cache::get_certificate_cache_key(&config.domains, config.profile.as_deref());
+            if let Some(serialized_data) =
+                config.certificate_cache.get(&certificate_cache_key).await
+            {
+                if let Ok(data) =
+                    serde_json::from_slice::<crate::cache::CertificateCacheData>(&serialized_data)
+                {
+                    if let Ok(certs) = rustls_pki_types::CertificateDer::pem_slice_iter(
+                        data.certificate_chain_pem.as_bytes(),
+                    )
+                    .collect::<Result<Vec<_>, _>>()
+                    {
+                        if let Ok(private_key) = rustls_pki_types::PrivateKeyDer::from_pem_slice(
+                            data.private_key_pem.as_bytes(),
+                        ) {
+                            // If installation fails, continue anyway.
+                            // This is early and best-effort certificate installation from cache...
+                            let _ = crate::provision::cert_install::install_certified_key(
+                                config,
+                                certs,
+                                private_key,
+                                &data,
+                                &event_sink,
+                            )
+                            .await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Don't spawn on-demand request loop task when config struct is empty
     if !on_demand_configs.is_empty() {
         let event_sink2 = event_sink.clone();

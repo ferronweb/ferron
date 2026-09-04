@@ -9,6 +9,7 @@
 #### Automatic TLS
 
 - **ACME fallback improvements**: Ferron now tries each configured fallback provider when the primary provider fails when provisioning a certificate (not just on account creation).
+- **ACME certificate installation**: Certificates are now reused from cache early before ACME provisioning cycles to mitigate TLS certificate errors after reloading the configuration.
 
 #### OCSP stapling
 

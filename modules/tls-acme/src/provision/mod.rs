@@ -4,7 +4,7 @@
 //! certificate finalization, and caching.
 
 mod account;
-mod cert_install;
+pub(crate) mod cert_install;
 mod challenge;
 mod validity;
 
