@@ -7,15 +7,12 @@
 
 # **Ferron** - a fast, modern web server built for production debugging.
 
-[![Static Badge](https://img.shields.io/badge/Documentation-orange?style=flat-square)](https://ferron.sh/docs/v3)
+[![Static Badge](https://img.shields.io/badge/Documentation-orange?style=flat-square)](https://ferron.sh/docs)
 [![Website](https://img.shields.io/website?url=https%3A%2F%2Fferron.sh&style=flat-square)](https://ferron.sh)
 [![Chat](https://img.shields.io/matrix/ferronweb%3Amatrix.org?style=flat-square)](https://matrix.to/#/#ferronweb:matrix.org)
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/ferron_web?style=flat-square)](https://x.com/ferron_web)
 [![Docker Pulls](https://img.shields.io/docker/pulls/ferronserver/ferron?style=flat-square)](https://hub.docker.com/r/ferronserver/ferron)
 [![GitHub Repo stars](https://img.shields.io/github/stars/ferronweb/ferron?style=flat-square)](https://github.com/ferronweb/ferron)
-
-> [!note]
-> **Status: beta** - this release can be considered feature-complete, but is not yet recommended for production deployments. If you experience any issues when testing it, [opening an issue](https://github.com/ferronweb/ferron/issues/new/choose) is welcome.
 
 ## Why Ferron?
 
