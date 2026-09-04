@@ -91,7 +91,7 @@ example.com {
 Ferron supports A/B testing (traffic splitting) between multiple backends using weighted load balancing and session affinity. This helps a lot when you migrate between tech stacks. There, application-level routing logic would be difficult or impossible to implement.
 
 > [!note]
-> To split traffic between static content variants on the same server, use the [canary deployment](/docs/v3/configuration/routing/canary) directive instead. It needs no backend server.
+> To split traffic between static content variants on the same server, use the [canary deployment](/docs/configuration/routing/canary) directive instead. It needs no backend server.
 
 ### Weighted traffic splitting
 
@@ -307,7 +307,7 @@ example.com {
 > Circuit breaking counts transport failures by default. Upstream `5xx` responses count only when you set `record_5xx true`. Circuit breaking does not automatically retry upstream `5xx` responses.
 
 > [!info]
-> For circuit breaker configuration details, see [Reverse proxying configuration reference](/docs/v3/configuration/proxy/reverse-proxy#circuit-breaking).
+> For circuit breaker configuration details, see [Reverse proxying configuration reference](/docs/configuration/proxy/reverse-proxy#circuit-breaking).
 
 ## Active health checks
 
@@ -331,7 +331,7 @@ example.com {
 ```
 
 > [!info]
-> For active health check configuration, see [Reverse proxying configuration reference](/docs/v3/configuration/proxy/reverse-proxy).
+> For active health check configuration, see [Reverse proxying configuration reference](/docs/configuration/proxy/reverse-proxy).
 
 ## Reverse proxy to backends listening on Unix sockets
 
@@ -416,13 +416,13 @@ For `http://calender.example.net:5000/agenda/example`, you probably need to conf
 The reverse proxy automatically injects W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) into outgoing upstream requests. It does this when a trace context exists. This enables end-to-end distributed tracing. Your backend services can then read the headers and create child spans that join the trace Ferron started.
 
 > [!info]
-> For details on trace context configuration, sampling, and header behavior, see [Tracing configuration](/docs/v3/configuration/observability/tracing) and [Reverse proxy configuration](/docs/v3/configuration/proxy/reverse-proxy#trace-context-injection).
+> For details on trace context configuration, sampling, and header behavior, see [Tracing configuration](/docs/configuration/observability/tracing) and [Reverse proxy configuration](/docs/configuration/proxy/reverse-proxy#trace-context-injection).
 
 ## Security considerations
 
 ### SSRF risk with interpolated upstream URLs
 
-The upstream URL supports [interpolation syntax](/docs/v3/configuration/fundamentals/conditionals#built-in-variables) for dynamic values.
+The upstream URL supports [interpolation syntax](/docs/configuration/fundamentals/conditionals#built-in-variables) for dynamic values.
 
 **Never use user-controlled request headers** (for example `request.header.host`, `request.header.x_forwarded_host`, `request.header.x_forwarded_proto`) in upstream URLs. An attacker can craft requests that redirect the proxy to internal services.
 

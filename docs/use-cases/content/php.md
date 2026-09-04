@@ -63,7 +63,7 @@ example.com {
 }
 ```
 
-CGI is functional but usually slower than FastCGI for production workloads. Ferron starts a PHP process per request. For more control, see [Configuration: FastCGI support](/docs/v3/configuration/content/fastcgi).
+CGI is functional but usually slower than FastCGI for production workloads. Ferron starts a PHP process per request. For more control, see [Configuration: FastCGI support](/docs/configuration/content/fastcgi).
 
 > [!tip]
 >
@@ -77,11 +77,11 @@ PHP applications that use CGI or FastCGI automatically receive W3C Trace Context
 With the official [OpenTelemetry SDK for PHP](https://opentelemetry.io/docs/languages/php/), these headers enable distributed tracing out of the box. The SDK reads the incoming `traceparent` header and creates child spans. This connects your PHP backend traces to the rest of your infrastructure.
 
 > [!info]
-> You need only install and configure the OpenTelemetry SDK. No other PHP-side configuration is required. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling in Ferron.
+> You need only install and configure the OpenTelemetry SDK. No other PHP-side configuration is required. See [Tracing configuration](/docs/configuration/observability/tracing) for details on enabling trace generation and sampling in Ferron.
 
 > [!important]
 > Keep upload/download directories outside of `cgi-bin` when using CGI to avoid accidental CGI execution of uploaded files.
 
 ## See also
 
-- [PHP edge caching (LSCache)](/docs/v3/use-cases/content/php-edge-cache): Use Ferron as an edge caching proxy in front of Apache. This setup supports the LSCache plugin for PHP hosting.
+- [PHP edge caching (LSCache)](/docs/use-cases/content/php-edge-cache): Use Ferron as an edge caching proxy in front of Apache. This setup supports the LSCache plugin for PHP hosting.

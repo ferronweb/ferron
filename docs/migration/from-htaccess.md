@@ -3,7 +3,7 @@ title: "Migrating from Apache .htaccess to Ferron 3 (PHP hosting)"
 description: "A practical guide for moving Apache-based PHP, WordPress, and Joomla hosting to Ferron 3 with PHP-FPM."
 ---
 
-This guide helps you replace an Apache + `mod_php`/`mod_rewrite` setup with Ferron 3 in front of [PHP-FPM](/docs/v3/use-cases/content/php). It maps the `.htaccess` patterns you know to Ferron 3 directives. It also highlights differences in how the two servers approach configuration.
+This guide helps you replace an Apache + `mod_php`/`mod_rewrite` setup with Ferron 3 in front of [PHP-FPM](/docs/use-cases/content/php). It maps the `.htaccess` patterns you know to Ferron 3 directives. It also highlights differences in how the two servers approach configuration.
 
 The examples assume a single WordPress-style site served through PHP-FPM over a Unix socket. The patterns apply equally to Joomla and other PHP applications.
 
@@ -590,9 +590,9 @@ example.com {
 
 ## See also
 
-- [PHP hosting](/docs/v3/use-cases/content/php): use FastCGI and CGI for PHP, plus troubleshooting.
-- [FastCGI support](/docs/v3/configuration/content/fastcgi): configure the `fcgi`/`fcgi_php` directives and environment variables.
-- [URL rewriting](/docs/v3/configuration/routing/rewrite): see `rewrite` syntax and the regex engine.
-- [Access control](/docs/v3/use-cases/security/access-control): combine `allow`/`block`, `basic_auth`, and `auth_to`.
-- [Error pages](/docs/v3/use-cases/traffic/error-pages): use `error_page` and `intercept_errors`.
-- [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals): use `match`/`if` and available variables.
+- [PHP hosting](/docs/use-cases/content/php): use FastCGI and CGI for PHP, plus troubleshooting.
+- [FastCGI support](/docs/configuration/content/fastcgi): configure the `fcgi`/`fcgi_php` directives and environment variables.
+- [URL rewriting](/docs/configuration/routing/rewrite): see `rewrite` syntax and the regex engine.
+- [Access control](/docs/use-cases/security/access-control): combine `allow`/`block`, `basic_auth`, and `auth_to`.
+- [Error pages](/docs/use-cases/traffic/error-pages): use `error_page` and `intercept_errors`.
+- [Conditionals and variables](/docs/configuration/fundamentals/conditionals): use `match`/`if` and available variables.

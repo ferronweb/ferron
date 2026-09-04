@@ -189,7 +189,7 @@ On Unix systems, scripts without a matching `interpreter` directive must have th
 When you enable tracing in Ferron, CGI scripts automatically receive W3C Trace Context headers (`traceparent`, `tracestate`, `baggage`) as CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). This enables end-to-end distributed tracing without any CGI-side configuration.
 
 > [!info]
-> See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
+> See [Tracing configuration](/docs/configuration/observability/tracing) for details on enabling trace generation and sampling.
 
 ## Default index files
 

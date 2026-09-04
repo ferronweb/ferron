@@ -230,7 +230,7 @@ The output should show `127.0.0.1:8081`, not `0.0.0.0:8081`.
 
 ## See also
 
-- [Core directives](/docs/v3/configuration/server/core-directives), full admin block configuration reference.
-- [Security and TLS](/docs/v3/configuration/security/tls), TLS configuration for your web server hosts.
-- [Observability & logging](/docs/v3/configuration/observability/logging), configure observability sinks to audit admin API access.
-- [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy), front the admin API with an authenticating reverse proxy.
+- [Core directives](/docs/configuration/server/core-directives), full admin block configuration reference.
+- [Security and TLS](/docs/configuration/security/tls), TLS configuration for your web server hosts.
+- [Observability & logging](/docs/configuration/observability/logging), configure observability sinks to audit admin API access.
+- [Reverse proxying](/docs/use-cases/traffic/reverse-proxy), front the admin API with an authenticating reverse proxy.

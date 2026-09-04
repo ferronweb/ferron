@@ -143,6 +143,6 @@ Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 
 ## See also
 
-- [Security and TLS](/docs/v3/configuration/security/tls): cipher suites, ECDH curves, mTLS
-- [ACME automatic TLS](/docs/v3/configuration/security/acme): session tickets with ACME-obtained certificates
-- [OCSP stapling](/docs/v3/configuration/security/ocsp)
+- [Security and TLS](/docs/configuration/security/tls): cipher suites, ECDH curves, mTLS
+- [ACME automatic TLS](/docs/configuration/security/acme): session tickets with ACME-obtained certificates
+- [OCSP stapling](/docs/configuration/security/ocsp)

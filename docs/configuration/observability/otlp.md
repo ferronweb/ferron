@@ -132,7 +132,7 @@ Each `key` entry configures one baggage key to promote:
 > Ferron parses the `baggage` header and attaches it to spans automatically. Use the `baggage` sub-directive to promote specific keys into telemetry attributes.
 
 > [!info]
-> You configure trace sampling in the `http` block. See [Tracing](/docs/v3/configuration/observability/tracing#trace-sampling) for details on configuring sampling modes, ratio-based sampling, and attribute-based sampling.
+> You configure trace sampling in the `http` block. See [Tracing](/docs/configuration/observability/tracing#trace-sampling) for details on configuring sampling modes, ratio-based sampling, and attribute-based sampling.
 
 ### Log style
 
@@ -390,7 +390,7 @@ Metrics exported through OTLP do not carry per-request trace or span IDs. Correl
 
 ## See also
 
-- [Observability and logging](/docs/v3/configuration/observability/logging) for general observability configuration
-- [Tracing](/docs/v3/configuration/observability/tracing) for W3C Trace Context and Baggage propagation details
-- [Prometheus metrics](/docs/v3/configuration/observability/prometheus) for native Prometheus metrics export
-- [Core directives](/docs/v3/configuration/server/core-directives#observability) for global observability settings
+- [Observability and logging](/docs/configuration/observability/logging) for general observability configuration
+- [Tracing](/docs/configuration/observability/tracing) for W3C Trace Context and Baggage propagation details
+- [Prometheus metrics](/docs/configuration/observability/prometheus) for native Prometheus metrics export
+- [Core directives](/docs/configuration/server/core-directives#observability) for global observability settings

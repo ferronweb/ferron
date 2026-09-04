@@ -6,7 +6,7 @@ description: On-the-fly and pre-compressed HTTP response body compression, algor
 This page documents the Ferron HTTP compression system. It covers the algorithm preference order, supported algorithms, and configuration options.
 
 > [!info]
-> The `http-compression` module handles compression. For static file compression specifically, see [Static file serving](/docs/v3/configuration/content/static-files#compression).
+> The `http-compression` module handles compression. For static file compression specifically, see [Static file serving](/docs/configuration/content/static-files#compression).
 
 ## Algorithm preference
 

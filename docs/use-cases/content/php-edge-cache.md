@@ -107,7 +107,7 @@ Add explicit headers with `mod_headers` and `mod_expires`:
 
 Use `immutable` only for assets with a hashed or versioned filename (for example `app.a1b2c3.js`), since it tells clients and Ferron never to revalidate the entry for the lifetime of `max-age`.
 
-For unversioned assets that change in place, drop `immutable` and pick a shorter `max-age`, or plan to `PURGE` the entry after a deploy (see [PURGE method cache invalidation](/docs/v3/configuration/content/cache#purge-method-cache-invalidation)).
+For unversioned assets that change in place, drop `immutable` and pick a shorter `max-age`, or plan to `PURGE` the entry after a deploy (see [PURGE method cache invalidation](/docs/configuration/content/cache#purge-method-cache-invalidation)).
 
 With that header in place, the flow looks like this:
 
@@ -117,10 +117,10 @@ With that header in place, the flow looks like this:
 4. Every later request for that asset, from any client, is served directly from Ferron's in-memory cache. Apache never sees it again until the entry expires or is purged.
 
 > [!tip]
-> Static assets are usually far larger than typical PHP HTML responses. If images or bundled JS exceed the default `max_response_size` (2 MB), Ferron proxies them correctly but does not cache them. Raise `max_response_size` in the `cache` block, or give static assets their own [named zone](/docs/v3/configuration/content/cache#cache-zones) so a few large files do not crowd out cached HTML pages.
+> Static assets are usually far larger than typical PHP HTML responses. If images or bundled JS exceed the default `max_response_size` (2 MB), Ferron proxies them correctly but does not cache them. Raise `max_response_size` in the `cache` block, or give static assets their own [named zone](/docs/configuration/content/cache#cache-zones) so a few large files do not crowd out cached HTML pages.
 
 > [!note]
-> This pattern only removes the Apache round trip for GET/HEAD requests that qualify for caching. Requests with `Authorization` headers, or responses that carry `Set-Cookie`, still bypass the cache unless the response also authorizes shared caching (`public` or `s-maxage`). See [Public and private cache behavior](/docs/v3/configuration/content/cache#public-and-private-cache-behavior).
+> This pattern only removes the Apache round trip for GET/HEAD requests that qualify for caching. Requests with `Authorization` headers, or responses that carry `Set-Cookie`, still bypass the cache unless the response also authorizes shared caching (`public` or `s-maxage`). See [Public and private cache behavior](/docs/configuration/content/cache#public-and-private-cache-behavior).
 
 ## Cache purging from PHP
 
@@ -147,18 +147,18 @@ Replace `127.0.0.1` with Ferron's actual IP if running on a different host.
 
 Because Ferron terminates client connections before they reach Apache, you can add edge-level features that apply to all traffic. These features apply to cached responses that never touch the backend:
 
-- **TLS termination.** Offload HTTPS at Ferron with automatic (ACME) or manual certificates. See [Automatic TLS](/docs/v3/use-cases/security/automatic-tls) and [Manual TLS](/docs/v3/use-cases/security/manual-tls).
-- **Rate limiting.** Protect Apache and PHP from traffic spikes and brute-force attacks. See [Rate limiting](/docs/v3/use-cases/security/rate-limiting).
-- **Abuse protection.** Drop malicious requests before they reach the backend. See [Abuse protection](/docs/v3/use-cases/security/abuse-protection).
-- **Security headers.** Add headers like `Strict-Transport-Security`, `Content-Security-Policy`, and `X-Frame-Options` at the edge. See [Security headers](/docs/v3/use-cases/security/security-headers).
-- **Observability.** Log requests, monitor cache hits/misses, and track performance metrics. See [Logging & observability](/docs/v3/use-cases/operations/logging-observability).
+- **TLS termination.** Offload HTTPS at Ferron with automatic (ACME) or manual certificates. See [Automatic TLS](/docs/use-cases/security/automatic-tls) and [Manual TLS](/docs/use-cases/security/manual-tls).
+- **Rate limiting.** Protect Apache and PHP from traffic spikes and brute-force attacks. See [Rate limiting](/docs/use-cases/security/rate-limiting).
+- **Abuse protection.** Drop malicious requests before they reach the backend. See [Abuse protection](/docs/use-cases/security/abuse-protection).
+- **Security headers.** Add headers like `Strict-Transport-Security`, `Content-Security-Policy`, and `X-Frame-Options` at the edge. See [Security headers](/docs/use-cases/security/security-headers).
+- **Observability.** Log requests, monitor cache hits/misses, and track performance metrics. See [Logging & observability](/docs/use-cases/operations/logging-observability).
 
 > [!note]
 > Ferron serves cached responses directly from its in-memory cache. Cached responses never reach Apache. This means edge-level features like rate limiting and security headers still apply. Backend-side logic (`.htaccess` rewrites, Apache access controls) does not run on cache hits.
 
 ## See also
 
-- [HTTP caching](/docs/v3/use-cases/content/caching): general caching patterns and LSCache overview
-- [PHP hosting](/docs/v3/use-cases/content/php): running PHP directly on Ferron without Apache
-- [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy): proxy configuration reference
-- [Configuration: HTTP cache](/docs/v3/configuration/content/cache): full cache directive reference
+- [HTTP caching](/docs/use-cases/content/caching): general caching patterns and LSCache overview
+- [PHP hosting](/docs/use-cases/content/php): running PHP directly on Ferron without Apache
+- [Reverse proxying](/docs/use-cases/traffic/reverse-proxy): proxy configuration reference
+- [Configuration: HTTP cache](/docs/configuration/content/cache): full cache directive reference

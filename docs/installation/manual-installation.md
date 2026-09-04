@@ -78,7 +78,7 @@ After extraction, you see these files and directories:
 
 ### 4. Configure Ferron
 
-Open the `ferron.conf` file in a text editor. Modify it to suit your server requirements. This file includes settings for server ports, logging, modules, and more. Detailed configuration options are in the [server configuration reference](/docs/v3/configuration/server/core-directives).
+Open the `ferron.conf` file in a text editor. Modify it to suit your server requirements. This file includes settings for server ports, logging, modules, and more. Detailed configuration options are in the [server configuration reference](/docs/configuration/server/core-directives).
 
 ### 5. Run Ferron
 

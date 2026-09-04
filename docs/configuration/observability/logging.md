@@ -7,22 +7,22 @@ This page documents logging configuration for Ferron. It covers log signals, log
 
 > [!info]
 >
-> - For trace context propagation, Baggage, and trace sampling, see [Tracing](/docs/v3/configuration/observability/tracing).
-> - For OTLP export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
+> - For trace context propagation, Baggage, and trace sampling, see [Tracing](/docs/configuration/observability/tracing).
+> - For OTLP export configuration, see [OTLP observability](/docs/configuration/observability/otlp).
 
 ## Log signals
 
 Ferron emits two log signals: access logs and application logs.
 
-| Signal           | What it captures                                                              |
-| ---------------- | ----------------------------------------------------------------------------- |
+| Signal           | What it captures                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------- |
 | Access logs      | Per-request HTTP request/response data (method, path, status, duration, and so on) |
-| Application logs | Server-level messages (startup, config reloads, errors, debug output)         |
+| Application logs | Server-level messages (startup, config reloads, errors, debug output)              |
 
 Configure access logs per-host with the `log` directive. Configure application logs with the `console_log` and `error_log` directives (core-directives) or the `observability` block with `provider console` or `provider file`. There is no separate "error log" signal. The `error_log` directive is the file sink for the application log signal.
 
 > [!tip]
-> If log files are not written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/v3/configuration/server/core-directives#observability).
+> If log files are not written, verify file paths are accessible and the Ferron process has write permissions. For global observability configuration, see [Core directives](/docs/configuration/server/core-directives#observability).
 
 ## Directives
 

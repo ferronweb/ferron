@@ -121,7 +121,7 @@ For editors without a dedicated extension, configure them to:
 
 ## See also
 
-- [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
-- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting) (`ferron-fmt` for formatting `.conf` files)
-- [Configuration validation](/docs/v3/configuration/fundamentals/validation)
-- [Configuration doctor](/docs/v3/configuration/fundamentals/doctor)
+- [Syntax and file structure](/docs/configuration/fundamentals/syntax)
+- [Configuration formatting](/docs/configuration/fundamentals/formatting) (`ferron-fmt` for formatting `.conf` files)
+- [Configuration validation](/docs/configuration/fundamentals/validation)
+- [Configuration doctor](/docs/configuration/fundamentals/doctor)

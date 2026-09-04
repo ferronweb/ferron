@@ -8,7 +8,7 @@ If you simply need to serve files on the local filesystem, you can use the `ferr
 By default, `ferron-serve` listens on `127.0.0.1:3000` and serves files from the current directory (`.`).
 
 > [!tip]
-> For production deployments, use a proper configuration file for better control and reproducibility. If you need more control over your server configuration, consider writing a custom Ferron configuration file instead. See [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax) for details.
+> For production deployments, use a proper configuration file for better control and reproducibility. If you need more control over your server configuration, consider writing a custom Ferron configuration file instead. See [Syntax and file structure](/docs/configuration/fundamentals/syntax) for details.
 
 ## Quick start
 

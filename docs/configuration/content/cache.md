@@ -9,8 +9,8 @@ The cache applies to final HTTP responses produced by static file serving, rever
 
 > [!info]
 >
-> - For static file cache headers such as `file_cache_control` and `etag`, see [Static file serving](/docs/v3/configuration/content/static-files.md).
-> - For response headers and reverse proxy configuration, see [HTTP headers and CORS](/docs/v3/configuration/content/headers.md) and [Reverse proxying](/docs/v3/configuration/proxy/reverse-proxy.md).
+> - For static file cache headers such as `file_cache_control` and `etag`, see [Static file serving](/docs/configuration/content/static-files.md).
+> - For response headers and reverse proxy configuration, see [HTTP headers and CORS](/docs/configuration/content/headers.md) and [Reverse proxying](/docs/configuration/proxy/reverse-proxy.md).
 
 ## `cache`
 

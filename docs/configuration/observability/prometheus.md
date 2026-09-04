@@ -265,5 +265,5 @@ scrape_configs:
 
 ## See also
 
-- [Observability and logging](/docs/v3/configuration/observability/logging) for general observability configuration
-- [OTLP export](/docs/v3/configuration/observability/logging#otlp-export) for OpenTelemetry-based monitoring
+- [Observability and logging](/docs/configuration/observability/logging) for general observability configuration
+- [OTLP export](/docs/configuration/observability/logging#otlp-export) for OpenTelemetry-based monitoring

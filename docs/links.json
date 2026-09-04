@@ -1,16 +1,16 @@
 [
   {
-    "href": "/docs/v3",
+    "href": "/docs",
     "target": "_self",
     "label": "Documentation home"
   },
   {
-    "href": "/docs/v3/getting-started",
+    "href": "/docs/getting-started",
     "target": "_self",
     "label": "Getting started"
   },
   {
-    "href": "/docs/v3/troubleshooting",
+    "href": "/docs/troubleshooting",
     "target": "_self",
     "label": "Troubleshooting"
   },
@@ -22,35 +22,35 @@
     "label": "Linux"
   },
   {
-    "href": "/docs/v3/installation/linux/installer",
+    "href": "/docs/installation/linux/installer",
     "target": "_self",
     "label": "Installer",
     "sub": true
   },
   {
-    "href": "/docs/v3/installation/linux/debian-ubuntu",
+    "href": "/docs/installation/linux/debian-ubuntu",
     "target": "_self",
     "label": "Debian/Ubuntu",
     "sub": true
   },
   {
-    "href": "/docs/v3/installation/linux/rhel-fedora",
+    "href": "/docs/installation/linux/rhel-fedora",
     "target": "_self",
     "label": "RHEL/Fedora",
     "sub": true
   },
   {
-    "href": "/docs/v3/installation/windows",
+    "href": "/docs/installation/windows",
     "target": "_self",
     "label": "Windows"
   },
   {
-    "href": "/docs/v3/installation/docker",
+    "href": "/docs/installation/docker",
     "target": "_self",
     "label": "Docker"
   },
   {
-    "href": "/docs/v3/installation/manual-installation",
+    "href": "/docs/installation/manual-installation",
     "target": "_self",
     "label": "Manual installation (archive)"
   },
@@ -58,13 +58,13 @@
     "label": "Building from source"
   },
   {
-    "href": "/docs/v3/installation/source/default-modules",
+    "href": "/docs/installation/source/default-modules",
     "target": "_self",
     "label": "Default modules",
     "sub": true
   },
   {
-    "href": "/docs/v3/installation/source/custom-modules",
+    "href": "/docs/installation/source/custom-modules",
     "target": "_self",
     "label": "Custom modules",
     "sub": true
@@ -74,12 +74,12 @@
     "category": true
   },
   {
-    "href": "/docs/v3/migration/from-v2",
+    "href": "/docs/migration/from-v2",
     "target": "_self",
     "label": "From Ferron 2"
   },
   {
-    "href": "/docs/v3/migration/from-htaccess",
+    "href": "/docs/migration/from-htaccess",
     "target": "_self",
     "label": "From Apache .htaccess (PHP)"
   },
@@ -91,37 +91,37 @@
     "label": "Static & content"
   },
   {
-    "href": "/docs/v3/use-cases/content/static-files",
+    "href": "/docs/use-cases/content/static-files",
     "target": "_self",
     "label": "Static file serving",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/content/caching",
+    "href": "/docs/use-cases/content/caching",
     "target": "_self",
     "label": "HTTP caching",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/content/edge-caching",
+    "href": "/docs/use-cases/content/edge-caching",
     "target": "_self",
     "label": "Edge caching (CDN)",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/content/cgi",
+    "href": "/docs/use-cases/content/cgi",
     "target": "_self",
     "label": "CGI applications",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/content/php",
+    "href": "/docs/use-cases/content/php",
     "target": "_self",
     "label": "PHP hosting",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/content/php-edge-cache",
+    "href": "/docs/use-cases/content/php-edge-cache",
     "target": "_self",
     "label": "PHP edge caching (LSCache)",
     "sub": true
@@ -130,25 +130,25 @@
     "label": "Traffic & routing"
   },
   {
-    "href": "/docs/v3/use-cases/traffic/reverse-proxy",
+    "href": "/docs/use-cases/traffic/reverse-proxy",
     "target": "_self",
     "label": "Reverse proxying",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/traffic/status-redirects",
+    "href": "/docs/use-cases/traffic/status-redirects",
     "target": "_self",
     "label": "Status codes & redirects",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/traffic/url-rewriting",
+    "href": "/docs/use-cases/traffic/url-rewriting",
     "target": "_self",
     "label": "URL rewriting",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/traffic/error-pages",
+    "href": "/docs/use-cases/traffic/error-pages",
     "target": "_self",
     "label": "Error pages",
     "sub": true
@@ -157,49 +157,49 @@
     "label": "Security"
   },
   {
-    "href": "/docs/v3/use-cases/security/automatic-tls",
+    "href": "/docs/use-cases/security/automatic-tls",
     "target": "_self",
     "label": "Automatic TLS",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/security/rate-limiting",
+    "href": "/docs/use-cases/security/rate-limiting",
     "target": "_self",
     "label": "Rate limiting",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/security/abuse-protection",
+    "href": "/docs/use-cases/security/abuse-protection",
     "target": "_self",
     "label": "Abuse protection",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/security/security-headers",
+    "href": "/docs/use-cases/security/security-headers",
     "target": "_self",
     "label": "Security headers",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/security/manual-tls",
+    "href": "/docs/use-cases/security/manual-tls",
     "target": "_self",
     "label": "Manual TLS",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/security/mtls",
+    "href": "/docs/use-cases/security/mtls",
     "target": "_self",
     "label": "mTLS (mutual TLS)",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/security/access-control",
+    "href": "/docs/use-cases/security/access-control",
     "target": "_self",
     "label": "Access control",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/security/fail2ban",
+    "href": "/docs/use-cases/security/fail2ban",
     "target": "_self",
     "label": "Fail2ban integration",
     "sub": true
@@ -208,19 +208,19 @@
     "label": "Operations"
   },
   {
-    "href": "/docs/v3/use-cases/operations/admin-api",
+    "href": "/docs/use-cases/operations/admin-api",
     "target": "_self",
     "label": "Admin API",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/operations/logging-observability",
+    "href": "/docs/use-cases/operations/logging-observability",
     "target": "_self",
     "label": "Logging & observability",
     "sub": true
   },
   {
-    "href": "/docs/v3/use-cases/operations/ferron-serve",
+    "href": "/docs/use-cases/operations/ferron-serve",
     "target": "_self",
     "label": "'ferron-serve' command",
     "sub": true
@@ -233,49 +233,49 @@
     "label": "Fundamentals"
   },
   {
-    "href": "/docs/v3/configuration/fundamentals/syntax",
+    "href": "/docs/configuration/fundamentals/syntax",
     "target": "_self",
     "sub": true,
     "label": "Syntax and file structure"
   },
   {
-    "href": "/docs/v3/configuration/fundamentals/json-config",
+    "href": "/docs/configuration/fundamentals/json-config",
     "target": "_self",
     "sub": true,
     "label": "JSON configuration"
   },
   {
-    "href": "/docs/v3/configuration/fundamentals/validation",
+    "href": "/docs/configuration/fundamentals/validation",
     "target": "_self",
     "sub": true,
     "label": "Configuration validation"
   },
   {
-    "href": "/docs/v3/configuration/fundamentals/doctor",
+    "href": "/docs/configuration/fundamentals/doctor",
     "target": "_self",
     "sub": true,
     "label": "Configuration doctor"
   },
   {
-    "href": "/docs/v3/configuration/fundamentals/directives",
+    "href": "/docs/configuration/fundamentals/directives",
     "target": "_self",
     "sub": true,
     "label": "Configuration directives"
   },
   {
-    "href": "/docs/v3/configuration/fundamentals/formatting",
+    "href": "/docs/configuration/fundamentals/formatting",
     "target": "_self",
     "sub": true,
     "label": "Configuration formatting"
   },
   {
-    "href": "/docs/v3/configuration/fundamentals/conditionals",
+    "href": "/docs/configuration/fundamentals/conditionals",
     "target": "_self",
     "sub": true,
     "label": "Conditionals and variables"
   },
   {
-    "href": "/docs/v3/configuration/fundamentals/editor-support",
+    "href": "/docs/configuration/fundamentals/editor-support",
     "target": "_self",
     "sub": true,
     "label": "Editor support"
@@ -284,13 +284,13 @@
     "label": "Server"
   },
   {
-    "href": "/docs/v3/configuration/server/core-directives",
+    "href": "/docs/configuration/server/core-directives",
     "target": "_self",
     "sub": true,
     "label": "Core directives"
   },
   {
-    "href": "/docs/v3/configuration/server/host",
+    "href": "/docs/configuration/server/host",
     "target": "_self",
     "sub": true,
     "label": "HTTP host directives"
@@ -299,37 +299,37 @@
     "label": "Routing & control"
   },
   {
-    "href": "/docs/v3/configuration/routing/url-processing",
+    "href": "/docs/configuration/routing/url-processing",
     "target": "_self",
     "sub": true,
     "label": "Routing and URL processing"
   },
   {
-    "href": "/docs/v3/configuration/routing/response",
+    "href": "/docs/configuration/routing/response",
     "target": "_self",
     "sub": true,
     "label": "HTTP response control and early hints"
   },
   {
-    "href": "/docs/v3/configuration/routing/rewrite",
+    "href": "/docs/configuration/routing/rewrite",
     "target": "_self",
     "sub": true,
     "label": "URL rewriting"
   },
   {
-    "href": "/docs/v3/configuration/routing/map",
+    "href": "/docs/configuration/routing/map",
     "target": "_self",
     "sub": true,
     "label": "HTTP map"
   },
   {
-    "href": "/docs/v3/configuration/routing/variables",
+    "href": "/docs/configuration/routing/variables",
     "target": "_self",
     "sub": true,
     "label": "Variable setting"
   },
   {
-    "href": "/docs/v3/configuration/routing/canary",
+    "href": "/docs/configuration/routing/canary",
     "target": "_self",
     "sub": true,
     "label": "Canary deployments"
@@ -338,13 +338,13 @@
     "label": "Proxying"
   },
   {
-    "href": "/docs/v3/configuration/proxy/reverse-proxy",
+    "href": "/docs/configuration/proxy/reverse-proxy",
     "target": "_self",
     "sub": true,
     "label": "Reverse proxy"
   },
   {
-    "href": "/docs/v3/configuration/proxy/forward-proxy",
+    "href": "/docs/configuration/proxy/forward-proxy",
     "target": "_self",
     "sub": true,
     "label": "Forward proxy"
@@ -353,67 +353,67 @@
     "label": "Security"
   },
   {
-    "href": "/docs/v3/configuration/security/basic-auth",
+    "href": "/docs/configuration/security/basic-auth",
     "target": "_self",
     "sub": true,
     "label": "HTTP basic authentication"
   },
   {
-    "href": "/docs/v3/configuration/security/forwarded-auth",
+    "href": "/docs/configuration/security/forwarded-auth",
     "target": "_self",
     "sub": true,
     "label": "Forwarded authentication"
   },
   {
-    "href": "/docs/v3/configuration/security/tls",
+    "href": "/docs/configuration/security/tls",
     "target": "_self",
     "sub": true,
     "label": "Security and TLS"
   },
   {
-    "href": "/docs/v3/configuration/security/acme",
+    "href": "/docs/configuration/security/acme",
     "target": "_self",
     "sub": true,
     "label": "ACME automatic TLS"
   },
   {
-    "href": "/docs/v3/configuration/security/dns-providers",
+    "href": "/docs/configuration/security/dns-providers",
     "target": "_self",
     "sub": true,
     "label": "DNS providers"
   },
   {
-    "href": "/docs/v3/configuration/security/local-tls",
+    "href": "/docs/configuration/security/local-tls",
     "target": "_self",
     "sub": true,
     "label": "Local development TLS"
   },
   {
-    "href": "/docs/v3/configuration/security/tls-http",
+    "href": "/docs/configuration/security/tls-http",
     "target": "_self",
     "sub": true,
     "label": "HTTP TLS provider"
   },
   {
-    "href": "/docs/v3/configuration/security/session-tickets",
+    "href": "/docs/configuration/security/session-tickets",
     "target": "_self",
     "sub": true,
     "label": "TLS session ticket keys"
   },
   {
-    "href": "/docs/v3/configuration/security/ocsp",
+    "href": "/docs/configuration/security/ocsp",
     "target": "_self",
     "sub": true,
     "label": "OCSP stapling"
   },
   {
-    "href": "/docs/v3/configuration/content/rate-limit",
+    "href": "/docs/configuration/content/rate-limit",
     "target": "_self",
     "sub": true,
     "label": "Rate limiting"
   },
   {
-    "href": "/docs/v3/configuration/content/abuse-ban",
+    "href": "/docs/configuration/content/abuse-ban",
     "target": "_self",
     "sub": true,
     "label": "Abuse protection"
@@ -422,61 +422,61 @@
     "label": "Content & traffic"
   },
   {
-    "href": "/docs/v3/configuration/content/static-files",
+    "href": "/docs/configuration/content/static-files",
     "target": "_self",
     "sub": true,
     "label": "Static file serving"
   },
   {
-    "href": "/docs/v3/configuration/content/compression",
+    "href": "/docs/configuration/content/compression",
     "target": "_self",
     "sub": true,
     "label": "HTTP compression"
   },
   {
-    "href": "/docs/v3/configuration/content/cache",
+    "href": "/docs/configuration/content/cache",
     "target": "_self",
     "sub": true,
     "label": "HTTP cache"
   },
   {
-    "href": "/docs/v3/configuration/content/cgi",
+    "href": "/docs/configuration/content/cgi",
     "target": "_self",
     "sub": true,
     "label": "CGI support"
   },
   {
-    "href": "/docs/v3/configuration/content/fastcgi",
+    "href": "/docs/configuration/content/fastcgi",
     "target": "_self",
     "sub": true,
     "label": "FastCGI support"
   },
   {
-    "href": "/docs/v3/configuration/content/scgi",
+    "href": "/docs/configuration/content/scgi",
     "target": "_self",
     "sub": true,
     "label": "SCGI support"
   },
   {
-    "href": "/docs/v3/configuration/content/buffering",
+    "href": "/docs/configuration/content/buffering",
     "target": "_self",
     "sub": true,
     "label": "HTTP buffering"
   },
   {
-    "href": "/docs/v3/configuration/content/response-replace",
+    "href": "/docs/configuration/content/response-replace",
     "target": "_self",
     "sub": true,
     "label": "HTTP response body replacement"
   },
   {
-    "href": "/docs/v3/configuration/content/headers",
+    "href": "/docs/configuration/content/headers",
     "target": "_self",
     "sub": true,
     "label": "HTTP headers and CORS"
   },
   {
-    "href": "/docs/v3/configuration/content/json-error",
+    "href": "/docs/configuration/content/json-error",
     "target": "_self",
     "sub": true,
     "label": "JSON error responses"
@@ -485,49 +485,49 @@
     "label": "Observability"
   },
   {
-    "href": "/docs/v3/configuration/observability/logging",
+    "href": "/docs/configuration/observability/logging",
     "target": "_self",
     "label": "Logging",
     "sub": true
   },
   {
-    "href": "/docs/v3/configuration/observability/metrics",
+    "href": "/docs/configuration/observability/metrics",
     "target": "_self",
     "label": "Metrics",
     "sub": true
   },
   {
-    "href": "/docs/v3/configuration/observability/tracing",
+    "href": "/docs/configuration/observability/tracing",
     "target": "_self",
     "label": "Tracing",
     "sub": true
   },
   {
-    "href": "/docs/v3/configuration/observability/otlp",
+    "href": "/docs/configuration/observability/otlp",
     "target": "_self",
     "label": "OTLP observability",
     "sub": true
   },
   {
-    "href": "/docs/v3/configuration/observability/prometheus",
+    "href": "/docs/configuration/observability/prometheus",
     "target": "_self",
     "label": "Prometheus metrics",
     "sub": true
   },
   {
-    "href": "/docs/v3/configuration/observability/statsd",
+    "href": "/docs/configuration/observability/statsd",
     "target": "_self",
     "label": "StatsD metrics",
     "sub": true
   },
   {
-    "href": "/docs/v3/configuration/observability/grafana-dashboard",
+    "href": "/docs/configuration/observability/grafana-dashboard",
     "target": "_self",
     "label": "Grafana reference dashboard",
     "sub": true
   },
   {
-    "href": "/docs/v3/configuration/observability/control-plane",
+    "href": "/docs/configuration/observability/control-plane",
     "target": "_self",
     "label": "Cross-plane traceability",
     "sub": true
@@ -537,7 +537,7 @@
     "category": true
   },
   {
-    "href": "/docs/v3/module-development",
+    "href": "/docs/module-development",
     "target": "_self",
     "label": "Overview"
   },
@@ -545,13 +545,13 @@
     "label": "Concepts"
   },
   {
-    "href": "/docs/v3/module-development/concepts/architecture",
+    "href": "/docs/module-development/concepts/architecture",
     "target": "_self",
     "label": "Architecture",
     "sub": true
   },
   {
-    "href": "/docs/v3/module-development/concepts/module-api",
+    "href": "/docs/module-development/concepts/module-api",
     "target": "_self",
     "label": "Module API",
     "sub": true
@@ -560,25 +560,25 @@
     "label": "Guides"
   },
   {
-    "href": "/docs/v3/module-development/guides/creating-a-module",
+    "href": "/docs/module-development/guides/creating-a-module",
     "target": "_self",
     "label": "Creating a module",
     "sub": true
   },
   {
-    "href": "/docs/v3/module-development/guides/naming-conventions",
+    "href": "/docs/module-development/guides/naming-conventions",
     "target": "_self",
     "label": "Naming conventions",
     "sub": true
   },
   {
-    "href": "/docs/v3/module-development/guides/examples",
+    "href": "/docs/module-development/guides/examples",
     "target": "_self",
     "label": "Example modules",
     "sub": true
   },
   {
-    "href": "/docs/v3/module-development/guides/obtaining-api-docs",
+    "href": "/docs/module-development/guides/obtaining-api-docs",
     "target": "_self",
     "label": "Obtaining API docs",
     "sub": true

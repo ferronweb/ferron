@@ -109,7 +109,7 @@ example.com {
 
 #### SSRF risk with interpolated upstream URLs
 
-The upstream URL supports [interpolation syntax](/docs/v3/configuration/fundamentals/conditionals#built-in-variables) for dynamic values. Never use user-controlled request headers in upstream URLs. Examples include `request.header.host`, `request.header.x_forwarded_host`, and `request.header.x_forwarded_proto`. An attacker can craft requests to redirect the proxy to internal services.
+The upstream URL supports [interpolation syntax](/docs/configuration/fundamentals/conditionals#built-in-variables) for dynamic values. Never use user-controlled request headers in upstream URLs. Examples include `request.header.host`, `request.header.x_forwarded_host`, and `request.header.x_forwarded_proto`. An attacker can craft requests to redirect the proxy to internal services.
 
 **Unsafe: user-controlled header in upstream URL:**
 
@@ -512,7 +512,7 @@ Trace context injection happens after Ferron applies all `request_header` transf
 - `headers_to_remove` cannot remove the injected headers since injection occurs last.
 
 > [!info]
-> By default, Ferron discards incoming `traceparent` headers. Ferron creates trace context when `http { trace { generate true } }` (the default) is active and you configure trace sinks. To trust incoming trace context, enable `trust_request true` inside the `trace` block. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details.
+> By default, Ferron discards incoming `traceparent` headers. Ferron creates trace context when `http { trace { generate true } }` (the default) is active and you configure trace sinks. To trust incoming trace context, enable `trust_request true` inside the `trace` block. See [Tracing configuration](/docs/configuration/observability/tracing) for details.
 
 ## Connection pooling
 

@@ -7,9 +7,9 @@ This page documents directives for returning custom status codes, aborting conne
 
 > [!info]
 >
-> - For `location`, `if`, and `if_not` syntax, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing).
-> - For conditionals and matchers, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
-> - For HTTP host directives including `h1_enable_early_hints`, see [HTTP host directives](/docs/v3/configuration/server/host).
+> - For `location`, `if`, and `if_not` syntax, see [Routing and URL processing](/docs/configuration/routing/url-processing).
+> - For conditionals and matchers, see [Conditionals and variables](/docs/configuration/fundamentals/conditionals).
+> - For HTTP host directives including `h1_enable_early_hints`, see [HTTP host directives](/docs/configuration/server/host).
 
 ## Directives
 
@@ -132,7 +132,7 @@ You can define multiple `link` entries within a single `early_hints` block. You 
 
 #### HTTP/1.1 support
 
-By default, HTTP/2 and HTTP/3 connections support 103 Early Hints natively. For HTTP/1.1, you must enable support via the [`h1_enable_early_hints`](/docs/v3/configuration/server/host) directive in your `http` block:
+By default, HTTP/2 and HTTP/3 connections support 103 Early Hints natively. For HTTP/1.1, you must enable support via the [`h1_enable_early_hints`](/docs/configuration/server/host) directive in your `http` block:
 
 ```ferron
 {

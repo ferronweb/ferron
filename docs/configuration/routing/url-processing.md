@@ -49,7 +49,7 @@ example.com {
 ```
 
 > [!info]
-> For named matcher syntax and available variables, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
+> For named matcher syntax and available variables, see [Conditionals and variables](/docs/configuration/fundamentals/conditionals).
 
 ### Error handling
 

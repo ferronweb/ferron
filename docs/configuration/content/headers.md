@@ -42,7 +42,7 @@ example.com {
 | `{{env.NAME}}`       | Environment variable `NAME`        |
 
 > [!note]
-> For header interpolation, `remote.ip` and `server.ip` automatically canonicalize IPv4-mapped IPv6 addresses to IPv4. See [Conditionals and variables](../fundamentals/conditionals.md#ip-canonicalization) and [HTTP host directives](/docs/v3/configuration/server/host) for details.
+> For header interpolation, `remote.ip` and `server.ip` automatically canonicalize IPv4-mapped IPv6 addresses to IPv4. See [Conditionals and variables](../fundamentals/conditionals.md#ip-canonicalization) and [HTTP host directives](/docs/configuration/server/host) for details.
 
 > [!info]
 > For the complete variable reference, see [Conditionals and variables](../fundamentals/conditionals.md#built-in-variables).

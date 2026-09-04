@@ -99,7 +99,7 @@ You can purge the cache of a single edge node locally with `PURGE` requests. A C
 When a client triggers a purge (via `PURGE` request or `X-LiteSpeed-Purge` header), the edge node notifies the control-plane. The control-plane fans out the invalidation to every registered edge. A single origin webhook or admin request then invalidates content across the entire CDN.
 
 > [!info]
-> For details on the purge propagation protocol and control-plane implementation, see [HTTP caching: Multi-instance cache purge propagation](/docs/v3/use-cases/content/caching#multi-instance-cache-purge-propagation).
+> For details on the purge propagation protocol and control-plane implementation, see [HTTP caching: Multi-instance cache purge propagation](/docs/use-cases/content/caching#multi-instance-cache-purge-propagation).
 
 ## GeoDNS for traffic routing
 
@@ -181,7 +181,7 @@ This configuration creates a CDN edge node that:
 
 ## See also
 
-- [HTTP caching](/docs/v3/use-cases/content/caching): cache directives, stale-while-revalidate, stale-if-error
-- [Automatic TLS](/docs/v3/use-cases/security/automatic-tls): ACME challenge types and DNS provider configuration
-- [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy): load balancing, health checks, circuit breaking
-- [ACME configuration reference](/docs/v3/configuration/security/acme): on-demand mode, fallback providers, and ACME directory URLs
+- [HTTP caching](/docs/use-cases/content/caching): cache directives, stale-while-revalidate, stale-if-error
+- [Automatic TLS](/docs/use-cases/security/automatic-tls): ACME challenge types and DNS provider configuration
+- [Reverse proxying](/docs/use-cases/traffic/reverse-proxy): load balancing, health checks, circuit breaking
+- [ACME configuration reference](/docs/configuration/security/acme): on-demand mode, fallback providers, and ACME directory URLs

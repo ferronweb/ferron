@@ -71,6 +71,6 @@ ferron directives | jq '.default'
 
 ## See also
 
-- [Configuration validation](/docs/v3/configuration/fundamentals/validation): `ferron validate` for checking a configuration file
-- [Configuration doctor](/docs/v3/configuration/fundamentals/doctor): `ferron doctor` for best-practice checks
-- [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
+- [Configuration validation](/docs/configuration/fundamentals/validation): `ferron validate` for checking a configuration file
+- [Configuration doctor](/docs/configuration/fundamentals/doctor): `ferron doctor` for best-practice checks
+- [Syntax and file structure](/docs/configuration/fundamentals/syntax)

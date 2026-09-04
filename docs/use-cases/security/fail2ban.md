@@ -5,7 +5,7 @@ description: "Block abusive IPs at the firewall level by combining the Ferron ac
 
 Ferron access logs use an extended variant of Combined Log Format by default (the same format NGINX and Apache use). This makes them easy to parse with [Fail2ban](https://github.com/fail2ban/fail2ban). Fail2ban monitors log files, matches patterns with regex filters, and executes actions (typically `iptables` or `nftables` rules). It bans offending IPs at the firewall level.
 
-Unlike the built-in [abuse protection](/docs/v3/use-cases/security/abuse-protection), which bans IPs in memory for a fixed duration, Fail2ban gives persistent bans managed by the OS firewall. Use Fail2ban when you want bans to survive Ferron restarts. Use it also when you need to block IPs across multiple services.
+Unlike the built-in [abuse protection](/docs/use-cases/security/abuse-protection), which bans IPs in memory for a fixed duration, Fail2ban gives persistent bans managed by the OS firewall. Use Fail2ban when you want bans to survive Ferron restarts. Use it also when you need to block IPs across multiple services.
 
 > [!note]
 >
@@ -273,7 +273,7 @@ This produces standard CLF output that all default Fail2ban NGINX/Apache filters
 
 ## See also
 
-- [Abuse protection](/docs/v3/use-cases/security/abuse-protection): built-in in-memory IP banning
-- [Rate limiting](/docs/v3/use-cases/security/rate-limiting): token bucket rate limiting
-- [Logging & observability](/docs/v3/use-cases/operations/logging-observability): log configuration and formats
-- [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban): directive reference
+- [Abuse protection](/docs/use-cases/security/abuse-protection): built-in in-memory IP banning
+- [Rate limiting](/docs/use-cases/security/rate-limiting): token bucket rate limiting
+- [Logging & observability](/docs/use-cases/operations/logging-observability): log configuration and formats
+- [Configuration: abuse protection](/docs/configuration/content/abuse-ban): directive reference

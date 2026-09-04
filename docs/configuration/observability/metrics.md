@@ -5,21 +5,21 @@ description: "Process, admin API, and HTTP/proxy metrics emitted by Ferron."
 
 This page documents the metrics emitted by Ferron. Ferron emits OpenTelemetry-style metrics through the observability event system. Each module documents its own metrics, such as:
 
-- **Core HTTP server metrics**: active requests, request duration, and request count. See [HTTP host directives](/docs/v3/configuration/server/host#metrics).
-- **Cache metrics**: cache hits, misses, entries, stores, evictions, and purges, with zone scoping. See [HTTP caching](/docs/v3/configuration/content/cache#metrics).
-- **Rate limiting metrics**: allowed and rejected requests, with zone scoping. See [Rate limiting](/docs/v3/configuration/content/rate-limit#metrics).
-- **Response control metrics**: aborted connections, IP blocks, and status rule matches. See [HTTP response control](/docs/v3/configuration/routing/response#metrics).
-- **Static file metrics**: files served and bytes sent, with compression and cache hit attributes. See [Static file serving](/docs/v3/configuration/content/static-files#metrics).
-- **Rewrite metrics**: applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/v3/configuration/routing/rewrite#metrics).
-- **Proxy metrics**: backend selection, health, connection pooling, and TLS failures. See [Reverse proxying](/docs/v3/configuration/proxy/reverse-proxy#metrics).
-- **CGI/FastCGI/SCGI metrics**: request counts, failures, upstream duration, and stderr errors. See [CGI](/docs/v3/configuration/content/cgi#metrics), [FastCGI](/docs/v3/configuration/content/fastcgi#metrics), [SCGI](/docs/v3/configuration/content/scgi#metrics).
+- **Core HTTP server metrics**: active requests, request duration, and request count. See [HTTP host directives](/docs/configuration/server/host#metrics).
+- **Cache metrics**: cache hits, misses, entries, stores, evictions, and purges, with zone scoping. See [HTTP caching](/docs/configuration/content/cache#metrics).
+- **Rate limiting metrics**: allowed and rejected requests, with zone scoping. See [Rate limiting](/docs/configuration/content/rate-limit#metrics).
+- **Response control metrics**: aborted connections, IP blocks, and status rule matches. See [HTTP response control](/docs/configuration/routing/response#metrics).
+- **Static file metrics**: files served and bytes sent, with compression and cache hit attributes. See [Static file serving](/docs/configuration/content/static-files#metrics).
+- **Rewrite metrics**: applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/configuration/routing/rewrite#metrics).
+- **Proxy metrics**: backend selection, health, connection pooling, and TLS failures. See [Reverse proxying](/docs/configuration/proxy/reverse-proxy#metrics).
+- **CGI/FastCGI/SCGI metrics**: request counts, failures, upstream duration, and stderr errors. See [CGI](/docs/configuration/content/cgi#metrics), [FastCGI](/docs/configuration/content/fastcgi#metrics), [SCGI](/docs/configuration/content/scgi#metrics).
 
 > [!info]
 >
 > - This page lists core metrics emitted by Ferron. For per-module metrics, see respective configuration pages.
-> - For native Prometheus metrics export, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus).
-> - For OTLP export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
-> - For StatsD export configuration, see [StatsD metrics](/docs/v3/configuration/observability/statsd).
+> - For native Prometheus metrics export, see [Prometheus metrics](/docs/configuration/observability/prometheus).
+> - For OTLP export configuration, see [OTLP observability](/docs/configuration/observability/otlp).
+> - For StatsD export configuration, see [StatsD metrics](/docs/configuration/observability/statsd).
 
 ## Understanding metric types
 
@@ -40,7 +40,7 @@ When using the OTLP observability backend, all histogram metrics use Base2 Expon
 - **No configuration required**. The SDK applies the exponential histogram aggregation at the SDK layer via an OTel View. You do not need to change any configuration.
 
 > [!tip]
-> If you do not see histogram metrics in your observability backend, try disabling native exponential histograms using `native_histograms false` in `metrics` subblock (see [Configuration: OTLP observability](/docs/v3/configuration/observability/otlp)).
+> If you do not see histogram metrics in your observability backend, try disabling native exponential histograms using `native_histograms false` in `metrics` subblock (see [Configuration: OTLP observability](/docs/configuration/observability/otlp)).
 
 The Prometheus observability backend also supports native exponential histograms when you configure `endpoint_native_histograms` and set the output format to `"protobuf"`. In text format, it uses explicit bucket histograms with predefined boundaries.
 
@@ -61,8 +61,8 @@ Exemplars are available for all counter metrics by default. For Prometheus histo
 
 > [!info]
 >
-> - For Prometheus exemplar configuration options and format details, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus#metric-exemplars).
-> - For OTLP exemplar configuration options and format details, see [OTLP observability](/docs/v3/configuration/observability/otlp#metrics).
+> - For Prometheus exemplar configuration options and format details, see [Prometheus metrics](/docs/configuration/observability/prometheus#metric-exemplars).
+> - For OTLP exemplar configuration options and format details, see [OTLP observability](/docs/configuration/observability/otlp#metrics).
 
 ## Process metrics
 

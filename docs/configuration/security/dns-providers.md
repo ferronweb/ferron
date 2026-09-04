@@ -430,8 +430,8 @@ Choose the `endpoint` that matches where your domain resides:
 
 ## See also
 
-- [ACME automatic TLS](/docs/v3/configuration/security/acme): full ACME configuration reference
-- [Automatic TLS use case](/docs/v3/use-cases/security/automatic-tls): guided walkthrough
+- [ACME automatic TLS](/docs/configuration/security/acme): full ACME configuration reference
+- [Automatic TLS use case](/docs/use-cases/security/automatic-tls): guided walkthrough
 
 ## Best practices
 

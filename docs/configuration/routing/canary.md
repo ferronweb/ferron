@@ -186,7 +186,7 @@ The variant weights and the variant list can change on reload. Ferron keeps the 
 
 To promote a variant, increase its weight over several reloads. To roll back, decrease the weight or change it to `variant stable 100`.
 
-For weighted load balancing across multiple backend servers, see [HTTP reverse proxy](/docs/v3/configuration/proxy/reverse-proxy).
+For weighted load balancing across multiple backend servers, see [HTTP reverse proxy](/docs/configuration/proxy/reverse-proxy).
 
 ## Observability
 
@@ -212,4 +212,4 @@ The canary stage sets the following attributes on its `ferron.stage.canary` span
 Ferron writes the selected variant to the custom access log field `ferron.canary.variant`. See [Logging](../observability/logging.md) for how to enable custom fields.
 
 > [!info]
-> For variable mapping and conditional logic, see [HTTP map](/docs/v3/configuration/routing/map) and [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals). For serving each variant from its own directory, see [Static file serving](/docs/v3/configuration/content/static-files).
+> For variable mapping and conditional logic, see [HTTP map](/docs/configuration/routing/map) and [Conditionals and variables](/docs/configuration/fundamentals/conditionals). For serving each variant from its own directory, see [Static file serving](/docs/configuration/content/static-files).

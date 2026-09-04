@@ -73,7 +73,7 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 }
 ```
 
-**Requirements:** Configure a DNS provider module. The module supports wildcard domains. The `dns` block must specify the `provider` name and any provider-specific credentials. See [DNS providers](/docs/v3/configuration/security/dns-providers) for the full list of supported providers and their directives.
+**Requirements:** Configure a DNS provider module. The module supports wildcard domains. The `dns` block must specify the `provider` name and any provider-specific credentials. See [DNS providers](/docs/configuration/security/dns-providers) for the full list of supported providers and their directives.
 
 ### Configuration parameters
 
@@ -389,11 +389,11 @@ The ACME HTTP-01 challenge stage sets the following attributes on its `ferron.st
 
 ## See also
 
-- [DNS providers](/docs/v3/configuration/security/dns-providers): all supported DNS-01 provider backends and their configuration
-- [Security and TLS](/docs/v3/configuration/security/tls): cipher suites, ECDH curves, mTLS
-- [TLS session ticket keys](/docs/v3/configuration/security/session-tickets): session resumption
-- [OCSP stapling](/docs/v3/configuration/security/ocsp): OCSP response stapling
-- [HTTP host directives](/docs/v3/configuration/server/host): per-host TLS configuration
+- [DNS providers](/docs/configuration/security/dns-providers): all supported DNS-01 provider backends and their configuration
+- [Security and TLS](/docs/configuration/security/tls): cipher suites, ECDH curves, mTLS
+- [TLS session ticket keys](/docs/configuration/security/session-tickets): session resumption
+- [OCSP stapling](/docs/configuration/security/ocsp): OCSP response stapling
+- [HTTP host directives](/docs/configuration/server/host): per-host TLS configuration
 
 ## Best practices
 

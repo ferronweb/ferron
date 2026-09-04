@@ -29,7 +29,7 @@ Use this tool to make sure formatting is consistent across multiple Ferron confi
 
 ## Installation
 
-All Ferron distributions include `ferron-fmt` alongside the main server binary. See [Installation](/docs/v3/installation) for details.
+All Ferron distributions include `ferron-fmt` alongside the main server binary. See [Installation](/docs/installation) for details.
 
 ## Usage
 
@@ -283,6 +283,6 @@ example.com {
 
 ## See also
 
-- [Configuration validation](/docs/v3/configuration/fundamentals/validation)
-- [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
-- [Configuration doctor](/docs/v3/configuration/fundamentals/doctor)
+- [Configuration validation](/docs/configuration/fundamentals/validation)
+- [Syntax and file structure](/docs/configuration/fundamentals/syntax)
+- [Configuration doctor](/docs/configuration/fundamentals/doctor)

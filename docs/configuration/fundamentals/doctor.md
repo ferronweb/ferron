@@ -59,11 +59,11 @@ ferron doctor -c ferron.conf --json
 
 ## How it differs from validate
 
-| Feature | `ferron validate` | `ferron doctor` |
-|---------|-------------------|-----------------|
-| Unknown directives | Reported | Reported |
-| Invalid configuration | Reported (errors) | Reported (errors) |
-| Best practice violations | Suppressed | Reported (advisory) |
+| Feature                  | `ferron validate` | `ferron doctor`     |
+| ------------------------ | ----------------- | ------------------- |
+| Unknown directives       | Reported          | Reported            |
+| Invalid configuration    | Reported (errors) | Reported (errors)   |
+| Best practice violations | Suppressed        | Reported (advisory) |
 
 The `validate` command strips `BestPracticeViolation` diagnostics from its output. The `doctor` command retains them. All other behavior is identical. The same validators run in the same order.
 
@@ -73,7 +73,7 @@ Best-practice violations use the `"Best practice violation"` diagnostic kind. Th
 
 ## See also
 
-- [Configuration validation](/docs/v3/configuration/fundamentals/validation)
-- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting): `ferron-fmt` for formatting `.conf` files
-- [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
-- [Security and TLS](/docs/v3/configuration/security/tls)
+- [Configuration validation](/docs/configuration/fundamentals/validation)
+- [Configuration formatting](/docs/configuration/fundamentals/formatting): `ferron-fmt` for formatting `.conf` files
+- [Syntax and file structure](/docs/configuration/fundamentals/syntax)
+- [Security and TLS](/docs/configuration/security/tls)

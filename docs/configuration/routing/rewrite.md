@@ -6,7 +6,7 @@ description: "The `rewrite` directive for transforming request URLs using regula
 This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Ferron applies rewrites early in the request pipeline, before proxying or static file serving, so routing uses the rewritten URL.
 
 > [!info]
-> For `url_sanitize` interaction, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing#url-sanitation-and-redirects). For static file serving, see [Static file serving](/docs/v3/configuration/content/static-files).
+> For `url_sanitize` interaction, see [Routing and URL processing](/docs/configuration/routing/url-processing#url-sanitation-and-redirects). For static file serving, see [Static file serving](/docs/configuration/content/static-files).
 
 ## Directives
 

@@ -107,4 +107,4 @@ example.com {
 }
 ```
 
-Available variables include `{{remote.ip}}`, `{{server.ip}}`, `{{request.host}}`, and `{{env.NAME}}` for environment variables. For the complete reference, see [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals).
+Available variables include `{{remote.ip}}`, `{{server.ip}}`, `{{request.host}}`, and `{{env.NAME}}` for environment variables. For the complete reference, see [Conditionals and variables](/docs/configuration/fundamentals/conditionals).

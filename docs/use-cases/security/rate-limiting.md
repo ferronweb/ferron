@@ -45,7 +45,7 @@ example.com {
 > - Ferron stores rate limit buckets in memory. They do not survive configuration reloads.
 
 > [!important]
-> If Ferron is behind another proxy/load balancer, make sure the client IP is correctly resolved. See [HTTP host directives](/docs/v3/configuration/server/host) for `client_ip_from_header` configuration.
+> If Ferron is behind another proxy/load balancer, make sure the client IP is correctly resolved. See [HTTP host directives](/docs/configuration/server/host) for `client_ip_from_header` configuration.
 
 ## Protect APIs with tiered limits
 

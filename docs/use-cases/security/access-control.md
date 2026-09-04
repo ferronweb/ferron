@@ -30,7 +30,7 @@ example.com {
 When you configure `allow`, only the listed IPs/CIDRs receive permission. All others receive a 403 Forbidden response.
 
 > [!important]
-> If Ferron is behind a reverse proxy/load balancer, configure `client_ip_from_header`. This makes sure IP-based rules use the client IP instead of the proxy IP. See [HTTP host directives](/docs/v3/configuration/server/host).
+> If Ferron is behind a reverse proxy/load balancer, configure `client_ip_from_header`. This makes sure IP-based rules use the client IP instead of the proxy IP. See [HTTP host directives](/docs/configuration/server/host).
 
 ### Combined block and allow
 
@@ -191,4 +191,4 @@ api.example.com {
 ```
 
 > [!info]
-> For full configuration details, see [Forwarded authentication](/docs/v3/configuration/security/forwarded-auth).
+> For full configuration details, see [Forwarded authentication](/docs/configuration/security/forwarded-auth).

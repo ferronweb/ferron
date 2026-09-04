@@ -10,7 +10,7 @@ You can also use HTTP status codes for specific paths to signal temporary mainte
 Ferron has `status` directive for configuring both custom HTTP status codes, and redirects.
 
 > [!info]
-> If you want to rewrite URLs instead of redirecting them, see [URL rewriting](/docs/v3/use-cases/traffic/url-rewriting).
+> If you want to rewrite URLs instead of redirecting them, see [URL rewriting](/docs/use-cases/traffic/url-rewriting).
 
 ## Domain canonicalization
 
@@ -88,4 +88,4 @@ example.com {
 ```
 
 > [!tip]
-> You can also configure custom maintenance error page, see [Error pages](/docs/v3/use-cases/traffic/error-pages).
+> You can also configure custom maintenance error page, see [Error pages](/docs/use-cases/traffic/error-pages).

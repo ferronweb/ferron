@@ -6,7 +6,7 @@ description: "Named matchers, conditional operators, built-in variables, and int
 This page describes how to define and use conditional matchers in Ferron configuration. Named matchers let you apply configuration selectively based on request properties. The matcher system is part of the request resolution pipeline of the `http-server` module.
 
 > [!info]
-> For URL rewriting with regex, see [URL rewriting](/docs/v3/configuration/routing/rewrite). For HTTP response control with regex matching, see [HTTP response control](/docs/v3/configuration/routing/response).
+> For URL rewriting with regex, see [URL rewriting](/docs/configuration/routing/rewrite). For HTTP response control with regex matching, see [HTTP response control](/docs/configuration/routing/response).
 
 ## Named matchers
 
@@ -103,6 +103,6 @@ For startup-only TLS settings such as `cert` and `key`, the bundled `manual` TLS
 
 ## Related directives
 
-- [`if`](/docs/v3/configuration/routing/url-processing#if): applies a block when a named matcher evaluates to true
-- [`if_not`](/docs/v3/configuration/routing/url-processing#if_not): applies a block when a named matcher evaluates to false
-- [`location`](/docs/v3/configuration/routing/url-processing#path-matching): path-based matching
+- [`if`](/docs/configuration/routing/url-processing#if): applies a block when a named matcher evaluates to true
+- [`if_not`](/docs/configuration/routing/url-processing#if_not): applies a block when a named matcher evaluates to false
+- [`location`](/docs/configuration/routing/url-processing#path-matching): path-based matching

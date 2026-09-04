@@ -92,11 +92,11 @@ observability {
 
 Each `key` entry configures one baggage key to promote:
 
-| Nested directive | Arguments           | Description                                                                              | Default                 |
-| ---------------- | ------------------- | ---------------------------------------------------------------------------------------- | ----------------------- |
-| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                | none                    |
-| `attribute`      | `<string>`          | The DogStatsD tag name to use.                                                           | same as the baggage key |
-| `max_distinct`   | `<number> \| false` | Maximum distinct tag values before dropping. Prevents high-cardinality tag explosion.    | 100                     |
+| Nested directive | Arguments           | Description                                                                           | Default                 |
+| ---------------- | ------------------- | ------------------------------------------------------------------------------------- | ----------------------- |
+| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                             | none                    |
+| `attribute`      | `<string>`          | The DogStatsD tag name to use.                                                        | same as the baggage key |
+| `max_distinct`   | `<number> \| false` | Maximum distinct tag values before dropping. Prevents high-cardinality tag explosion. | 100                     |
 
 > [!warning]
 > StatsD tags with high-cardinality values can cause significant performance issues in the receiving backend. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are dropped.
@@ -114,4 +114,4 @@ observability {
 
 This configuration sends metrics such as `web.ferron.http.server.request_count:1|c` to `statsd.internal.example.com:8125`.
 
-For more information about the metrics Ferron emits, see [Metrics](/docs/v3/configuration/observability/metrics).
+For more information about the metrics Ferron emits, see [Metrics](/docs/configuration/observability/metrics).

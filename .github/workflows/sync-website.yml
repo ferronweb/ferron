@@ -50,9 +50,9 @@ jobs:
       - name: Sync website
         run: |
           # Docs
-          rm -rf website/src/content/docs/v3
-          cp -r ferron/docs website/src/content/docs/v3
-          cat << EOF > website/src/content/docs/v3/README.md
+          rm -rf website/src/content/docs/index
+          cp -r ferron/docs website/src/content/docs/index
+          cat << EOF > website/src/content/docs/index/README.md
           # Ferron documentation
 
           This Ferron documentation is automatically synchronized with https://github.com/ferronweb/ferron/tree/3.x.
@@ -61,12 +61,12 @@ jobs:
           EOF
 
           # Changelog
-          cat << EOF > website/src/content/changelogs/v3.md
+          cat << EOF > website/src/content/changelogs/index.md
           ---
           subject: Ferron 3
           ---
           EOF
-          cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/src/content/changelogs/v3.md
+          cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/src/content/changelogs/index.md
 
           # Download JSON
           cp website/src/content/downloads/v3.json v3.json

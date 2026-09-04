@@ -13,7 +13,7 @@ For many applications behind reverse proxy, rewriting is not required. Those app
 > Use `rewrite_log true` while debugging to verify which rules match. Ferron logs each rewrite operation to the error log.
 
 > [!info]
-> For directive reference, see [Configuration: URL rewriting](/docs/v3/configuration/routing/rewrite).
+> For directive reference, see [Configuration: URL rewriting](/docs/configuration/routing/rewrite).
 
 ## Single-page application fallback
 

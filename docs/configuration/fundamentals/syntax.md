@@ -234,7 +234,7 @@ The `GET /status` endpoint of the admin API also reports this state in the `conf
 
 ## See also
 
-- [Conditional and variables](/docs/v3/configuration/fundamentals/conditionals)
-- [Formatting a configuration](/docs/v3/configuration/fundamentals/formatting): `ferron-fmt` for formatting
-- [Routing and URL processing](/docs/v3/configuration/routing/url-processing) (`location`, `if`, `if_not`)
-- [Directives](/docs/v3/configuration/server/core-directives)
+- [Conditional and variables](/docs/configuration/fundamentals/conditionals)
+- [Formatting a configuration](/docs/configuration/fundamentals/formatting): `ferron-fmt` for formatting
+- [Routing and URL processing](/docs/configuration/routing/url-processing) (`location`, `if`, `if_not`)
+- [Directives](/docs/configuration/server/core-directives)

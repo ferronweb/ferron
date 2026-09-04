@@ -7,8 +7,8 @@ This page describes the tracing system of Ferron. The system covers W3C Trace Co
 
 > [!info]
 >
-> - For OTLP export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
-> - For Prometheus metrics export, see [Prometheus metrics](/docs/v3/configuration/observability/prometheus).
+> - For OTLP export configuration, see [OTLP observability](/docs/configuration/observability/otlp).
+> - For Prometheus metrics export, see [Prometheus metrics](/docs/configuration/observability/prometheus).
 
 ## W3C Trace Context
 
@@ -78,7 +78,7 @@ You can also promote specific baggage keys into OpenTelemetry attributes on tele
 ```
 
 > [!info]
-> See [OTLP observability](/docs/v3/configuration/observability/otlp#baggage-promotion) and [Prometheus metrics](/docs/v3/configuration/observability/prometheus#baggage-promotion) for complete documentation about the `baggage` directive.
+> See [OTLP observability](/docs/configuration/observability/otlp#baggage-promotion) and [Prometheus metrics](/docs/configuration/observability/prometheus#baggage-promotion) for complete documentation about the `baggage` directive.
 
 #### Examples
 
@@ -327,6 +327,6 @@ Each `rule` takes 2 or 3 arguments:
 
 - [W3C Trace Context](#w3c-trace-context): incoming trace context parsing, trace configuration, Baggage propagation, and trace ID response headers
 - [Trace sampling](#trace-sampling): trace sampling modes and configuration
-- [OTLP observability](/docs/v3/configuration/observability/otlp): export traces via OpenTelemetry Protocol
-- [Prometheus metrics](/docs/v3/configuration/observability/prometheus): native Prometheus metrics export
-- [Access logging](/docs/v3/configuration/observability/logging): access log configuration
+- [OTLP observability](/docs/configuration/observability/otlp): export traces via OpenTelemetry Protocol
+- [Prometheus metrics](/docs/configuration/observability/prometheus): native Prometheus metrics export
+- [Access logging](/docs/configuration/observability/logging): access log configuration

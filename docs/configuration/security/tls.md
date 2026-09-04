@@ -159,9 +159,9 @@ api.example.com {
 
 ## See also
 
-- [ACME automatic TLS](/docs/v3/configuration/security/acme)
-- [TLS session ticket keys](/docs/v3/configuration/security/session-tickets)
-- [OCSP stapling](/docs/v3/configuration/security/ocsp)
+- [ACME automatic TLS](/docs/configuration/security/acme)
+- [TLS session ticket keys](/docs/configuration/security/session-tickets)
+- [OCSP stapling](/docs/configuration/security/ocsp)
 
 ## Best practices
 

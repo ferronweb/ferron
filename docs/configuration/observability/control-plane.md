@@ -7,8 +7,8 @@ This page documents the `control_plane` directive. It embeds contextual metadata
 
 > [!info]
 >
-> - For OTLP export configuration, see [OTLP observability](/docs/v3/configuration/observability/otlp).
-> - For tracing configuration, see [Tracing](/docs/v3/configuration/observability/tracing).
+> - For OTLP export configuration, see [OTLP observability](/docs/configuration/observability/otlp).
+> - For tracing configuration, see [Tracing](/docs/configuration/observability/tracing).
 
 ## Directives
 
@@ -169,6 +169,6 @@ When you configure metadata `{ org_id acme team platform }`:
 
 ## See also
 
-- [OTLP observability](/docs/v3/configuration/observability/otlp): OTLP export configuration
-- [Tracing](/docs/v3/configuration/observability/tracing): W3C Trace Context and sampling
-- [Prometheus metrics](/docs/v3/configuration/observability/prometheus): native Prometheus metrics export
+- [OTLP observability](/docs/configuration/observability/otlp): OTLP export configuration
+- [Tracing](/docs/configuration/observability/tracing): W3C Trace Context and sampling
+- [Prometheus metrics](/docs/configuration/observability/prometheus): native Prometheus metrics export

@@ -319,11 +319,11 @@ If on-demand certificates are not fetched for new hostnames:
 
 ## See also
 
-- [Security and TLS](/docs/v3/configuration/security/tls): cipher suites, ECDH curves, mTLS
-- [ACME automatic TLS](/docs/v3/configuration/security/acme): production TLS certificates via ACME
-- [TLS session ticket keys](/docs/v3/configuration/security/session-tickets): session resumption
-- [OCSP stapling](/docs/v3/configuration/security/ocsp): OCSP response stapling
-- [HTTP host directives](/docs/v3/configuration/server/host): per-host TLS configuration
+- [Security and TLS](/docs/configuration/security/tls): cipher suites, ECDH curves, mTLS
+- [ACME automatic TLS](/docs/configuration/security/acme): production TLS certificates via ACME
+- [TLS session ticket keys](/docs/configuration/security/session-tickets): session resumption
+- [OCSP stapling](/docs/configuration/security/ocsp): OCSP response stapling
+- [HTTP host directives](/docs/configuration/server/host): per-host TLS configuration
 
 ## Best practices
 

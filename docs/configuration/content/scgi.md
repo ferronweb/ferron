@@ -122,7 +122,7 @@ When a trace context exists for the request, Ferron automatically injects W3C Tr
 This enables end-to-end distributed tracing with SCGI backend applications.
 
 > [!info]
-> No per-module configuration is necessary. The server controls trace context injection globally based on whether a trace context exists. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
+> No per-module configuration is necessary. The server controls trace context injection globally based on whether a trace context exists. See [Tracing configuration](/docs/configuration/observability/tracing) for details on enabling trace generation and sampling.
 
 ## Observability
 

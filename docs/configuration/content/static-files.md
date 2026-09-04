@@ -7,10 +7,10 @@ This page documents directives that configure static file serving, directory lis
 
 > [!info]
 > The `http-static` module handles static file serving.
-> For related features, see [Routing and URL processing](/docs/v3/configuration/routing/url-processing),
-> [HTTP cache](/docs/v3/configuration/content/cache), [HTTP response control](/docs/v3/configuration/routing/response),
-> [URL rewriting](/docs/v3/configuration/routing/rewrite), [HTTP compression](/docs/v3/configuration/content/compression),
-> and [Canary deployments](/docs/v3/configuration/routing/canary).
+> For related features, see [Routing and URL processing](/docs/configuration/routing/url-processing),
+> [HTTP cache](/docs/configuration/content/cache), [HTTP response control](/docs/configuration/routing/response),
+> [URL rewriting](/docs/configuration/routing/rewrite), [HTTP compression](/docs/configuration/content/compression),
+> and [Canary deployments](/docs/configuration/routing/canary).
 
 ## Directives
 

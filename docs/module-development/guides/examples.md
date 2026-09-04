@@ -77,7 +77,7 @@ See `e2e/Dockerfile.test` and `e2e/tests/` for the pattern. The tests are
 2. Rename the package and `name()` strings.
 3. Adjust the directive and validator.
 4. Add it to your custom binary (see
-   [Creating a module](/docs/v3/module-development/guides/creating-a-module)).
+   [Creating a module](/docs/module-development/guides/creating-a-module)).
 5. Run `ferron validate`, `ferron directives`, and unit tests.
 
 > [!tip]

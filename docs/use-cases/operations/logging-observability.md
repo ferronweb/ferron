@@ -5,12 +5,12 @@ description: "Practical Ferron setups for access logs, JSON formatting, containe
 
 Ferron supports multiple observability outputs. You can start with local log files and later move to centralized telemetry without changing your application stack.
 
-This page focuses on common deployment patterns. For directive-level details, see [Configuration: observability and logging](/docs/v3/configuration/observability/logging).
+This page focuses on common deployment patterns. For directive-level details, see [Configuration: observability and logging](/docs/configuration/observability/logging).
 
 For specific backend configurations:
 
-- [Prometheus metrics](/docs/v3/configuration/observability/prometheus)
-- [OTLP observability](/docs/v3/configuration/observability/otlp)
+- [Prometheus metrics](/docs/configuration/observability/prometheus)
+- [OTLP observability](/docs/configuration/observability/otlp)
 
 > [!tip]
 > Start simple: text or JSON logs first, then add Prometheus metrics, then OTLP for full observability. All three signals (logs, metrics, traces) from the same HTTP request share the same `trace_id`, enabling correlated queries.
@@ -46,7 +46,14 @@ example.com {
 Example output:
 
 ```json
-{"method":"GET","path":"/index.html","status":200,"duration_secs":0.012,"client_ip":"127.0.0.1","remote_ip":"127.0.0.1"}
+{
+  "method": "GET",
+  "path": "/index.html",
+  "status": 200,
+  "duration_secs": 0.012,
+  "client_ip": "127.0.0.1",
+  "remote_ip": "127.0.0.1"
+}
 ```
 
 You can also select specific fields:

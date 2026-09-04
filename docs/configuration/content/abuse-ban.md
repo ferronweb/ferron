@@ -263,9 +263,9 @@ The abuse protection stage sets the following attributes on its `ferron.stage.ab
 
 ## See also
 
-- [Rate limiting](/docs/v3/configuration/content/rate-limit)
-- [HTTP basic authentication](/docs/v3/configuration/security/basic-auth)
-- [Routing and URL processing](/docs/v3/configuration/routing/url-processing)
+- [Rate limiting](/docs/configuration/content/rate-limit)
+- [HTTP basic authentication](/docs/configuration/security/basic-auth)
+- [Routing and URL processing](/docs/configuration/routing/url-processing)
 
 ## Best practices
 

@@ -5,14 +5,14 @@ description: "Protect Ferron from brute-force attacks, rate limit abuse, and oth
 
 The `abuse_protection` directive of Ferron implements lightweight, Fail2ban-style IP banning. When a client exceeds configured thresholds, Ferron temporarily bans the client IP. Repeated rate limit breaches or failed login attempts are examples. Ferron stores bans in memory. They expire automatically after the configured duration.
 
-This page covers common deployment patterns. For full configuration details, see [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban).
+This page covers common deployment patterns. For full configuration details, see [Configuration: abuse protection](/docs/configuration/content/abuse-ban).
 
 > [!important]
 >
 > - Bans exist in memory only and do not survive server restarts. No admin API exists for a manual unban, so you must wait for the ban to expire naturally.
 > - If Ferron bans your IP immediately, check your thresholds. You may have `events 1` or very short `window` values that are too strict.
 > - If Ferron bans legitimate clients, add their IP or CIDR range to the `allowlist`.
-> - If Ferron runs behind a reverse proxy, configure `client_ip_from_header` so it sees the real client IP, not the proxy IP. See [HTTP host directives](/docs/v3/configuration/server/host).
+> - If Ferron runs behind a reverse proxy, configure `client_ip_from_header` so it sees the real client IP, not the proxy IP. See [HTTP host directives](/docs/configuration/server/host).
 
 ## Basic abuse protection
 
@@ -404,6 +404,6 @@ WantedBy=multi-user.target
 
 ## See also
 
-- [Configuration: abuse protection](/docs/v3/configuration/content/abuse-ban)
-- [Rate limiting](/docs/v3/configuration/content/rate-limit)
-- [HTTP basic authentication](/docs/v3/configuration/security/basic-auth)
+- [Configuration: abuse protection](/docs/configuration/content/abuse-ban)
+- [Rate limiting](/docs/configuration/content/rate-limit)
+- [HTTP basic authentication](/docs/configuration/security/basic-auth)

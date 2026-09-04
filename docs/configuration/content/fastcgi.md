@@ -262,7 +262,7 @@ Ferron automatically sets the following FastCGI environment variables:
 Additional variables that `environment` directives define override any variables with the same name.
 
 > [!tip]
-> FastCGI applications receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside `http-basicauth`. For related configuration, see [Static file serving](/docs/v3/configuration/content/static-files), [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP headers and CORS](/docs/v3/configuration/content/headers).
+> FastCGI applications receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside `http-basicauth`. For related configuration, see [Static file serving](/docs/configuration/content/static-files), [URL rewriting](/docs/configuration/routing/rewrite), and [HTTP headers and CORS](/docs/configuration/content/headers).
 
 ## Authentication
 
@@ -281,7 +281,7 @@ When a trace context exists for the request, Ferron automatically injects W3C Tr
 This works in both `pass true` and `pass false` modes. The FastCGI backend application can read the trace context headers. This enables end-to-end distributed tracing. For example, a PHP application can use the official OpenTelemetry SDK for PHP to read these headers. The application creates child spans automatically.
 
 > [!info]
-> You do not need per-module configuration. The system controls trace context injection globally based on whether a trace context exists. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on trace generation and sampling.
+> You do not need per-module configuration. The system controls trace context injection globally based on whether a trace context exists. See [Tracing configuration](/docs/configuration/observability/tracing) for details on trace generation and sampling.
 
 ## Observability
 

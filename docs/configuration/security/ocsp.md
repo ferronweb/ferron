@@ -122,6 +122,6 @@ In OTLP `log_style modern`, the `summary` field is the log body. The system type
 
 ## See also
 
-- [Security and TLS](/docs/v3/configuration/security/tls). Cipher suites, ECDH curves, mTLS.
-- [ACME automatic TLS](/docs/v3/configuration/security/acme). OCSP stapling with ACME-obtained certificates.
-- [TLS session ticket keys](/docs/v3/configuration/security/session-tickets)
+- [Security and TLS](/docs/configuration/security/tls). Cipher suites, ECDH curves, mTLS.
+- [ACME automatic TLS](/docs/configuration/security/acme). OCSP stapling with ACME-obtained certificates.
+- [TLS session ticket keys](/docs/configuration/security/session-tickets)

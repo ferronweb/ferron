@@ -157,7 +157,7 @@ When Ferron finds a matching file, it looks for an interpreter in this priority:
 4. If the file has a shebang line, Ferron parses the interpreter from the shebang.
 
 > [!tip]
-> CGI scripts receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside `http-basicauth`. For related configuration, see [Static file serving](/docs/v3/configuration/content/static-files), [URL rewriting](/docs/v3/configuration/routing/rewrite), and [HTTP headers and CORS](/docs/v3/configuration/content/headers).
+> CGI scripts receive `REMOTE_USER` and `AUTH_TYPE` only when used alongside `http-basicauth`. For related configuration, see [Static file serving](/docs/configuration/content/static-files), [URL rewriting](/docs/configuration/routing/rewrite), and [HTTP headers and CORS](/docs/configuration/content/headers).
 
 ## Environment variables
 
@@ -194,7 +194,7 @@ When the request has a trace context, Ferron injects W3C Trace Context headers i
 This enables end-to-end distributed tracing with CGI scripts. For example, a PHP script running with the official OpenTelemetry SDK for PHP can read these headers. It then creates child spans automatically.
 
 > [!info]
-> You need no per-module configuration. Trace context injection depends globally on whether a trace context exists. See [Tracing configuration](/docs/v3/configuration/observability/tracing) for details on enabling trace generation and sampling.
+> You need no per-module configuration. Trace context injection depends globally on whether a trace context exists. See [Tracing configuration](/docs/configuration/observability/tracing) for details on enabling trace generation and sampling.
 
 ## Observability
 

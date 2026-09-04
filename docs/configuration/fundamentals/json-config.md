@@ -6,7 +6,7 @@ description: "Use ferron adapt to output configuration as JSON. Work with JSON-f
 This page covers the `ferron adapt` command, the JSON configuration format, and how to work with JSON-based configurations. The `config-ferronconf` module parses `.conf` files. The `config-json` module parses `.json` files.
 
 > [!info]
-> For configuration format details, see [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax), [Conditionals and variables](/docs/v3/configuration/fundamentals/conditionals), and [Core directives](/docs/v3/configuration/server/core-directives).
+> For configuration format details, see [Syntax and file structure](/docs/configuration/fundamentals/syntax), [Conditionals and variables](/docs/configuration/fundamentals/conditionals), and [Core directives](/docs/configuration/server/core-directives).
 
 ## The adapt command
 
@@ -436,11 +436,11 @@ By default, hot-reload is off. Ferron can still detect when the JSON configurati
 ferron run --config-params 'drift_hints=false;file=ferron.json' --config-adapter json
 ```
 
-See [Configuration drift hints](/docs/v3/configuration/fundamentals/syntax#configuration-drift-hints) for details.
+See [Configuration drift hints](/docs/configuration/fundamentals/syntax#configuration-drift-hints) for details.
 
 ## See also
 
-- [Configuration validation](/docs/v3/configuration/fundamentals/validation)
-- [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
-- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting): `ferron-fmt` for formatting `.conf` files
-- [Core directives](/docs/v3/configuration/server/core-directives)
+- [Configuration validation](/docs/configuration/fundamentals/validation)
+- [Syntax and file structure](/docs/configuration/fundamentals/syntax)
+- [Configuration formatting](/docs/configuration/fundamentals/formatting): `ferron-fmt` for formatting `.conf` files
+- [Core directives](/docs/configuration/server/core-directives)

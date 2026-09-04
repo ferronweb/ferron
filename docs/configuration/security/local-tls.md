@@ -124,7 +124,7 @@ localhost:443 {
 ```
 
 > [!info]
-> For details on TLS crypto options, see [Security and TLS](/docs/v3/configuration/security/tls).
+> For details on TLS crypto options, see [Security and TLS](/docs/configuration/security/tls).
 
 ## Migration from manual certificates
 
@@ -184,9 +184,9 @@ When Ferron detects any loopback address, the local provider includes all loopba
 
 ## See also
 
-- [Security and TLS](/docs/v3/configuration/security/tls): cipher suites, ECDH curves, mTLS
-- [ACME automatic TLS](/docs/v3/configuration/security/acme): production TLS certificates
-- [HTTP host directives](/docs/v3/configuration/server/host): per-host TLS configuration
+- [Security and TLS](/docs/configuration/security/tls): cipher suites, ECDH curves, mTLS
+- [ACME automatic TLS](/docs/configuration/security/acme): production TLS certificates
+- [HTTP host directives](/docs/configuration/server/host): per-host TLS configuration
 
 ## Best practices
 

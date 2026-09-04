@@ -33,17 +33,17 @@ Each capability corresponds to a trait in `ferron-core` or a shared type in
 - Rust toolchain from [rustup.rs](https://rustup.rs/).
 - Clone of Ferron `3.x` for reference and for `cargo doc`:
   `git clone https://github.com/ferronweb/ferron -b 3.x`.
-- Read [Architecture](/docs/v3/module-development/concepts/architecture) to learn how
+- Read [Architecture](/docs/module-development/concepts/architecture) to learn how
   the server orders stages and manages runtimes.
 
 ## Where to go next
 
-- [Architecture](/docs/v3/module-development/concepts/architecture): how Ferron starts, how the pipeline runs, and how the two runtimes work.
-- [Creating a module](/docs/v3/module-development/guides/creating-a-module): step-by-step guide to write a `ModuleLoader` crate.
-- [Module API](/docs/v3/module-development/concepts/module-api): introduction to the traits you implement.
-- [Naming conventions](/docs/v3/module-development/guides/naming-conventions): how to name directives and crates.
-- [Example modules](/docs/v3/module-development/guides/examples): runnable examples you can copy.
-- [Obtaining API docs](/docs/v3/module-development/guides/obtaining-api-docs): how to generate local Rust docs for `ferron-core` and `types/*`.
+- [Architecture](/docs/module-development/concepts/architecture): how Ferron starts, how the pipeline runs, and how the two runtimes work.
+- [Creating a module](/docs/module-development/guides/creating-a-module): step-by-step guide to write a `ModuleLoader` crate.
+- [Module API](/docs/module-development/concepts/module-api): introduction to the traits you implement.
+- [Naming conventions](/docs/module-development/guides/naming-conventions): how to name directives and crates.
+- [Example modules](/docs/module-development/guides/examples): runnable examples you can copy.
+- [Obtaining API docs](/docs/module-development/guides/obtaining-api-docs): how to generate local Rust docs for `ferron-core` and `types/*`.
 
 > [!tip]
 > Start with a minimal HTTP stage (see the `ferron-http-header-append` example). It is the shortest path to a working module and covers most concepts you need for other kinds.

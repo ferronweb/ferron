@@ -207,7 +207,7 @@ ferron doctor -c ferron.conf
 ```
 
 > [!info]
-> See [Configuration doctor](/docs/v3/configuration/fundamentals/doctor) for the full list of checks.
+> See [Configuration doctor](/docs/configuration/fundamentals/doctor) for the full list of checks.
 
 ### ferron adapt
 
@@ -221,7 +221,7 @@ ferron adapt -c ferron.conf
 > The JSON output format is stable and suitable for programmatic consumption by tools and CI pipelines.
 
 > [!info]
-> See [JSON configuration and adapt command](/docs/v3/configuration/fundamentals/json-config) for details.
+> See [JSON configuration and adapt command](/docs/configuration/fundamentals/json-config) for details.
 
 ### ferron run
 
@@ -232,7 +232,7 @@ The `run` command runs the same validation during startup. If validation fails, 
 
 ## See also
 
-- [JSON configuration and adapt command](/docs/v3/configuration/fundamentals/json-config)
-- [Configuration formatting](/docs/v3/configuration/fundamentals/formatting): `ferron-fmt` for formatting `.conf` files
-- [Syntax and file structure](/docs/v3/configuration/fundamentals/syntax)
-- [Core directives](/docs/v3/configuration/server/core-directives)
+- [JSON configuration and adapt command](/docs/configuration/fundamentals/json-config)
+- [Configuration formatting](/docs/configuration/fundamentals/formatting): `ferron-fmt` for formatting `.conf` files
+- [Syntax and file structure](/docs/configuration/fundamentals/syntax)
+- [Core directives](/docs/configuration/server/core-directives)

@@ -20,7 +20,7 @@ http example.com:8080 {
 > - The engine supports HTTP/1, HTTP/2, and HTTP/3.
 
 > [!info]
-> For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/security/acme). For crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security/tls).
+> For ACME configuration details, see [ACME automatic TLS](/docs/configuration/security/acme). For crypto and mTLS settings, see [Security and TLS](/docs/configuration/security/tls).
 
 ## Directives
 
@@ -71,7 +71,7 @@ example.com {
 When you specify an explicit port (for example, `example.com:8080`), Ferron starts only a single listener on that port. Ferron does not apply automatic ACME TLS (you must configure TLS explicitly).
 
 > [!info]
-> See [ACME automatic TLS](/docs/v3/configuration/security/acme) for full ACME configuration details.
+> See [ACME automatic TLS](/docs/configuration/security/acme) for full ACME configuration details.
 
 ### HTTPS redirect
 
@@ -227,9 +227,9 @@ example.com {
 
 > [!info]
 >
-> - For crypto settings (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`, `client_auth_ca`), see [Security and TLS](/docs/v3/configuration/security/tls).
-> - For OCSP stapling configuration, see [OCSP stapling](/docs/v3/configuration/security/ocsp).
-> - For session ticket keys, see [TLS session ticket keys](/docs/v3/configuration/security/session-tickets).
+> - For crypto settings (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`, `client_auth_ca`), see [Security and TLS](/docs/configuration/security/tls).
+> - For OCSP stapling configuration, see [OCSP stapling](/docs/configuration/security/ocsp).
+> - For session ticket keys, see [TLS session ticket keys](/docs/configuration/security/session-tickets).
 
 ### `admin_email`
 

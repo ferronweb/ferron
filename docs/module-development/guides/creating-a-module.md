@@ -183,6 +183,6 @@ fn main() {
 
 ## Next steps
 
-- Read [Module API](/docs/v3/module-development/concepts/module-api) for trait details and helpers.
-- Check [Examples](/docs/v3/module-development/guides/examples) for runnable crates to copy.
-- See [Naming conventions](/docs/v3/module-development/guides/naming-conventions) for directive and crate names.
+- Read [Module API](/docs/module-development/concepts/module-api) for trait details and helpers.
+- Check [Examples](/docs/module-development/guides/examples) for runnable crates to copy.
+- See [Naming conventions](/docs/module-development/guides/naming-conventions) for directive and crate names.

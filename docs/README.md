@@ -89,10 +89,10 @@ Use GFM alert syntax inline with the relevant content. Do not gather callouts in
 
 ### Links
 
-Use relative paths prefixed with `/docs/v3/`, without `.md` file extension:
+Use relative paths prefixed with `/docs/`, without `.md` file extension:
 
 ```markdown
-See [Reverse proxying](/docs/v3/use-cases/traffic/reverse-proxy).
+See [Reverse proxying](/docs/use-cases/traffic/reverse-proxy).
 ```
 
 ### Writing principles
@@ -122,10 +122,10 @@ Define the sidebar navigation in `links.json`. Add new pages there to make them 
 
 **Fields:**
 
-| Name       | Description                                                                       |
-| ---------- | --------------------------------------------------------------------------------- |
-| `href`     | The URL path of the page (for example, `/docs/v3/installation/linux/rhel-fedora`) |
-| `target`   | The target window or tab (`"_self"` for current, `"_blank"` for new)              |
-| `label`    | The display text in the sidebar                                                   |
-| `sub`      | Whether this is a sub-item (indented under another category)                      |
-| `category` | Whether the item should function as a category header only                        |
+| Name       | Description                                                                    |
+| ---------- | ------------------------------------------------------------------------------ |
+| `href`     | The URL path of the page (for example, `/docs/installation/linux/rhel-fedora`) |
+| `target`   | The target window or tab (`"_self"` for current, `"_blank"` for new)           |
+| `label`    | The display text in the sidebar                                                |
+| `sub`      | Whether this is a sub-item (indented under another category)                   |
+| `category` | Whether the item should function as a category header only                     |

@@ -18,7 +18,7 @@ This page documents directives that belong in top-level global blocks:
 > - The `config-ferronconf` module (for `.conf` files) or the `config-json` module (for `.json` files) handles configuration file parsing.
 
 > [!info]
-> For observability-specific configuration, see [Observability and logging](/docs/v3/configuration/observability/logging). For per-host HTTP settings, see [HTTP host directives](/docs/v3/configuration/server/host). For admin API security hardening, see [Security considerations](#security-considerations).
+> For observability-specific configuration, see [Observability and logging](/docs/configuration/observability/logging). For per-host HTTP settings, see [HTTP host directives](/docs/configuration/server/host). For admin API security hardening, see [Security considerations](#security-considerations).
 
 ## Directives
 

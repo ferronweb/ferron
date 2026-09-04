@@ -353,7 +353,7 @@ example.com {
 }
 ```
 
-Ferron 3 also introduces a `log_style modern` directive in the OTLP observability block, enabled by default (unlike the previous `log_style legacy` behavior). See [OTLP observability](/docs/v3/configuration/observability/otlp#log-style) for the field mapping.
+Ferron 3 also introduces a `log_style modern` directive in the OTLP observability block, enabled by default (unlike the previous `log_style legacy` behavior). See [OTLP observability](/docs/configuration/observability/otlp#log-style) for the field mapping.
 
 ### Reverse proxying
 
