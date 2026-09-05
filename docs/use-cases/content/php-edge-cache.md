@@ -58,6 +58,19 @@ example.com {
 
 The `ignore Set-Cookie` directive strips `Set-Cookie` headers from the cached representation. It keeps them in the live response. This is essential for maintaining cacheability alongside session cookies.
 
+## Fix for LSCache plugin not detecting a supported web server
+
+The LSCache plugin requires a supported web server (officially, they are LiteSpeed Web ADC, LiteSpeed Web Server or OpenLiteSpeed) to function. If you are using Ferron 3 as a caching reverse proxy for Apache with LSCache-compatible cache, the plugin might not detect that your web server is supported, and as a result, not emit `X-LiteSpeed-Cache-Control` headers, which are required for Ferron to respect them.
+
+To fix this, add this to your `.htaccess` file:
+
+```apache
+# This would make Apache masquerade as OpenLiteSpeed,
+# so the LSCache plugin will detect it as supported.
+SetEnv LSWS_EDITION Openlitespeed
+SetEnv X-LSCACHE on
+```
+
 ## Cache exclusion for admin paths
 
 You must never cache admin areas, login pages, and checkout flows. Use conditional blocks to disable caching for specific paths:
