@@ -23,7 +23,7 @@ ferron-observability = { path = "../../types/observability" }
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
 ferron-observability = { path = "../../types/observability" }
-argon2 = "0.5.3"
+argon2 = "0.6.0"
 
 [build-dependencies]
 find_git = "1.2.1"

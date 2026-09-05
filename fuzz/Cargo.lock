@@ -741,7 +741,6 @@ dependencies = [
  "async-channel",
  "ferron-core",
  "rustc-hash",
- "tokio-util",
  "urlencoding",
  "xxhash-rust",
 ]
