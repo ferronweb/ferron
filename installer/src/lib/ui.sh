@@ -240,7 +240,7 @@ ui_success() {
         "$FERRON_UI_C_BOLD" "$FERRON_UI_C_RESET" "$celebrate"
     printf '\n'
     printf 'To access the website, open the web browser and navigate to your server'\''s address.\n'
-    printf 'For more information, the documentation is in https://ferron.sh/docs/v3\n'
+    printf 'For more information, the documentation is in https://ferron.sh/docs\n'
 }
 
 # ui_failure LABEL EXIT_CODE

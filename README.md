@@ -49,7 +49,7 @@ api.example.com {
 }
 ```
 
-More examples are available in the [configuration documentation](https://ferron.sh/docs/v3/configuration/fundamentals/syntax).
+More examples are available in the [configuration documentation](https://ferron.sh/docs/configuration/fundamentals/syntax).
 
 ## Installing Ferron (pre-built)
 
@@ -59,7 +59,7 @@ The most convenient way to get started with Ferron is to use the installer scrip
 sudo bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
 ```
 
-See the full instructions in the [Linux installation documentation](https://ferron.sh/docs/v3/installation/linux/installer).
+See the full instructions in the [Linux installation documentation](https://ferron.sh/docs/installation/linux/installer).
 
 ## Building from source
 
@@ -111,7 +111,7 @@ just cross-build
 
 ## Configuration
 
-The full directive reference is in [docs/configuration/](https://ferron.sh/docs/v3/configuration/fundamentals/syntax).
+The full directive reference is in [docs/configuration/](https://ferron.sh/docs/configuration/fundamentals/syntax).
 
 ## Contributing
 
