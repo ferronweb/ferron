@@ -19,6 +19,11 @@ pub struct VaryRule {
     pub header_names: Vec<HeaderName>,
     pub cookie_names: Vec<String>,
     pub value: Option<String>,
+    /// When true (set from `X-LiteSpeed-Cache-Control: no-vary`), request
+    /// cookies starting with a [`crate::lscache::DEFAULT_VARY_COOKIE_PREFIXES`]
+    /// prefix are not part of the cache key. Defaults to false so that the
+    /// automatic vary cookies apply.
+    pub no_vary: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

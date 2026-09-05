@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Changed
+
+#### HTTP cache
+
+- **Automatic `_lscache_vary` vary cookies**: request cookies with names starting with `_lscache_vary` (or the `_litespeed_vary` alias) are now part of the cache key without explicit configuration, matching LiteSpeed behavior. `X-LiteSpeed-Cache-Control: no-vary` disables all cookie-based vary dimensions for the response.
+
 ### Fixed
 
 #### HTTP cache

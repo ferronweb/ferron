@@ -258,6 +258,7 @@ fn restore_entry_rebuilds_variants() {
                 header_names: vec![HeaderName::from_static("accept-language")],
                 cookie_names: Vec::new(),
                 value: None,
+                no_vary: false,
             };
             let headers_en =
                 request_headers(&[(&HeaderName::from_static("accept-language"), "en-US")]);

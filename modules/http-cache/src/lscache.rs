@@ -12,6 +12,25 @@ pub const LS_VARY: HeaderName = HeaderName::from_static("x-litespeed-vary");
 pub const LS_CACHE: HeaderName = HeaderName::from_static("x-litespeed-cache");
 pub const LS_COOKIE: HeaderName = HeaderName::from_static("lsc-cookie");
 
+/// Request cookie name prefixes that are always part of the cache key.
+///
+/// LiteSpeed servers recognize any cookie starting with `_lscache_vary` as a
+/// vary cookie without explicit configuration. The `_litespeed_vary` prefix is
+/// accepted as an alias for the same behavior.
+pub const DEFAULT_VARY_COOKIE_PREFIXES: &[&str] = &["_lscache_vary", "_litespeed_vary"];
+
+/// Whether a request cookie name is an automatic vary cookie.
+///
+/// Matching is case-sensitive: cookie names are case-sensitive per RFC 6265
+/// section 4.1.2, and LiteSpeed matches the documented `_lscache_vary` prefix
+/// literally.
+#[inline]
+pub fn is_default_vary_cookie_name(name: &str) -> bool {
+    DEFAULT_VARY_COOKIE_PREFIXES
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct LiteSpeedCacheControl {
     pub public: bool,
@@ -343,6 +362,19 @@ mod tests {
         let vary = parse_litespeed_vary(&headers);
         // value= is stripped and remaining content is trimmed then stored
         assert_eq!(vary.value.as_deref(), Some("desktop"));
+    }
+
+    #[test]
+    fn default_vary_cookie_names_match_documented_prefix() {
+        assert!(is_default_vary_cookie_name("_lscache_vary"));
+        assert!(is_default_vary_cookie_name("_lscache_vary_login"));
+        assert!(is_default_vary_cookie_name("_litespeed_vary"));
+        assert!(is_default_vary_cookie_name("_litespeed_vary_foo"));
+        assert!(!is_default_vary_cookie_name("session"));
+        assert!(!is_default_vary_cookie_name("_lscache"));
+        assert!(!is_default_vary_cookie_name("x_lscache_vary"));
+        // Cookie names are case-sensitive, so the uppercase prefix is not a match.
+        assert!(!is_default_vary_cookie_name("_LSCACHE_VARY"));
     }
 
     #[test]

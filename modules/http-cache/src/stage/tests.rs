@@ -457,6 +457,16 @@ fn private_key_requires_identity_without_falling_back_to_ip() {
 }
 
 #[test]
+fn private_key_treats_default_vary_cookie_as_identity() {
+    // An automatic `_lscache_vary` cookie identifies the client for private
+    // responses even without an explicit `vary_cookies` declaration.
+    let mut cookies = ahash::AHashMap::default();
+    cookies.insert("_lscache_vary".to_string(), "logged-in".to_string());
+    let key = build_private_cache_key(&cookies, None, &[]);
+    assert_eq!(key.as_deref(), Some("cookie:_lscache_vary=logged-in"));
+}
+
+#[test]
 fn private_key_caps_cookie_components_and_value_length() {
     let mut cookies = ahash::AHashMap::default();
     for index in 0..20 {
@@ -690,6 +700,7 @@ fn purge_reports_purged_and_remaining_entry_counts() {
             header_names: Vec::new(),
             cookie_names: Vec::new(),
             value: None,
+            no_vary: false,
         },
         status: StatusCode::OK,
         headers: std::sync::Arc::new(http::HeaderMap::new()),

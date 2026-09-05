@@ -96,13 +96,15 @@ pub(super) fn build_private_cache_key(
     }
 
     // Without an authenticated user or a recognized private cookie, an explicit
-    // Vary cookie still identifies the client. Do not fall back to every cookie:
-    // arbitrary cookies would explode the private-key space.
+    // Vary cookie still identifies the client, as does an automatic
+    // `_lscache_vary*` cookie. Do not fall back to every cookie: arbitrary
+    // cookies would explode the private-key space.
     if !matched_private_cookie {
         for (name, value) in cookies {
             if vary_cookie_names
                 .iter()
                 .any(|candidate| candidate.eq_ignore_ascii_case(name))
+                || crate::lscache::is_default_vary_cookie_name(name)
             {
                 let value = crate::store::normalize_key_value(value);
                 components.push(format!("cookie:{name}={}", truncate_cookie_value(&value)));
@@ -131,6 +133,7 @@ pub(super) fn build_vary_rule(
     headers: &HeaderMap,
     config: &CacheConfig,
     ls_vary: &crate::lscache::LiteSpeedVary,
+    no_vary: bool,
 ) -> Result<Option<VaryRule>, PipelineError> {
     let mut header_names: AHashSet<HeaderName> = config.vary_headers.iter().cloned().collect();
     for value in headers.get_all(http::header::VARY) {
@@ -164,6 +167,7 @@ pub(super) fn build_vary_rule(
         header_names,
         cookie_names,
         value: None,
+        no_vary,
     }))
 }
 
@@ -228,5 +232,25 @@ pub(super) fn cache_key_fingerprint(key: &str) -> String {
             out.push_str(&format!(" q={tag}"));
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vary_rule_records_no_vary_opt_out() {
+        let config = CacheConfig::default();
+        let vary = crate::lscache::LiteSpeedVary::default();
+        let rule = build_vary_rule(&HeaderMap::new(), &config, &vary, true)
+            .expect("rule builds")
+            .expect("rule present");
+        assert!(rule.no_vary);
+
+        let rule = build_vary_rule(&HeaderMap::new(), &config, &vary, false)
+            .expect("rule builds")
+            .expect("rule present");
+        assert!(!rule.no_vary);
     }
 }

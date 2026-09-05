@@ -60,6 +60,7 @@ async fn vary_variants_have_distinct_inflight_keys() {
         header_names: vec![ae.clone()],
         cookie_names: Vec::new(),
         value: None,
+        no_vary: false,
     };
 
     let gzip_headers = request_headers(&[(&ae, "gzip")]);

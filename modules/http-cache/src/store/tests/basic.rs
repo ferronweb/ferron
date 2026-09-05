@@ -33,6 +33,7 @@ fn lookup_returns_matching_public_entry() {
         header_names: vec![HeaderName::from_static("accept-language")],
         cookie_names: vec!["currency".to_string()],
         value: Some("mobile".to_string()),
+        no_vary: false,
     };
     let headers = request_headers(&[(&HeaderName::from_static("accept-language"), "en-US")]);
     let cookies = request_cookies(&[("currency", "USD")]);
@@ -161,6 +162,7 @@ fn variant_map_per_base_is_bounded_and_evicts_oldest() {
             header_names: Vec::new(),
             cookie_names: vec![format!("variant_{index}")],
             value: None,
+            no_vary: false,
         };
         store.insert_with_request(
             stored_entry(base_key, CacheScope::Public, "body", vary),
@@ -184,6 +186,7 @@ fn variant_map_per_base_is_bounded_and_evicts_oldest() {
             header_names: Vec::new(),
             cookie_names: vec!["variant_0".to_string()],
             value: None,
+            no_vary: false,
         },
     };
     let evicted = store
@@ -454,6 +457,7 @@ fn had_expired_when_variants_exist_but_no_request_matches() {
         header_names: vec![HeaderName::from_static("accept-language")],
         cookie_names: Vec::new(),
         value: None,
+        no_vary: false,
     };
     let en_headers = request_headers(&[(&HeaderName::from_static("accept-language"), "en-US")]);
     let fr_headers = request_headers(&[(&HeaderName::from_static("accept-language"), "fr-FR")]);

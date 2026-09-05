@@ -45,6 +45,30 @@ pub fn build_entry_key(
         }
     }
 
+    // Automatic vary cookies (`_lscache_vary*`): always part of the key unless
+    // the stored response opted out with `no-vary`. They are appended after
+    // the explicit vary cookies in sorted order so the key stays stable.
+    // Names already listed explicitly are skipped here to avoid duplication.
+    if !vary.no_vary {
+        let mut default_names: Vec<&String> = cookies
+            .keys()
+            .filter(|name| {
+                crate::lscache::is_default_vary_cookie_name(name)
+                    && !vary.cookie_names.iter().any(|listed| listed == *name)
+            })
+            .collect();
+        default_names.sort_unstable();
+        for cookie_name in default_names {
+            key.push('\n');
+            key.push_str("c:");
+            key.push_str(cookie_name);
+            key.push('=');
+            if let Some(value) = cookies.get(cookie_name) {
+                key.push_str(&normalize_key_value(value));
+            }
+        }
+    }
+
     if let Some(value) = &vary.value {
         key.push('\n');
         key.push_str("v:");
@@ -128,6 +152,7 @@ mod tests {
             header_names: headers.to_vec(),
             cookie_names: Vec::new(),
             value: None,
+            no_vary: false,
         }
     }
 
@@ -152,6 +177,118 @@ mod tests {
     #[test]
     fn header_value_trim_and_collapse() {
         assert_eq!(normalize_key_value("  gzip\tbr  "), "gzip br");
+    }
+
+    #[test]
+    fn default_vary_cookies_join_key_without_configuration() {
+        let mut cookies: ahash::AHashMap<String, String> = Default::default();
+        cookies.insert("_lscache_vary".to_string(), "logged-in".to_string());
+        cookies.insert("tracking".to_string(), "uuid".to_string());
+
+        let key = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &vary_on(&[]),
+            &HeaderMap::new(),
+            &cookies,
+        );
+
+        assert!(key.contains("c:_lscache_vary=logged-in"), "{key}");
+        assert!(!key.contains("tracking"), "{key}");
+    }
+
+    #[test]
+    fn default_vary_cookies_distinguish_values_and_absence() {
+        let mut cookies_a: ahash::AHashMap<String, String> = Default::default();
+        cookies_a.insert("_lscache_vary".to_string(), "Alabama".to_string());
+        let mut cookies_b: ahash::AHashMap<String, String> = Default::default();
+        cookies_b.insert("_lscache_vary".to_string(), "California".to_string());
+
+        let key_a = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &vary_on(&[]),
+            &HeaderMap::new(),
+            &cookies_a,
+        );
+        let key_b = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &vary_on(&[]),
+            &HeaderMap::new(),
+            &cookies_b,
+        );
+        let key_none = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &vary_on(&[]),
+            &HeaderMap::new(),
+            &Default::default(),
+        );
+
+        assert_ne!(key_a, key_b);
+        assert_ne!(key_a, key_none);
+        assert_ne!(key_b, key_none);
+        // Same value as request A hits the same key.
+        let key_a_repeat = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &vary_on(&[]),
+            &HeaderMap::new(),
+            &cookies_a,
+        );
+        assert_eq!(key_a, key_a_repeat);
+    }
+
+    #[test]
+    fn default_vary_cookies_sorted_and_not_duplicated() {
+        let mut cookies: ahash::AHashMap<String, String> = Default::default();
+        cookies.insert("_lscache_vary_z".to_string(), "1".to_string());
+        cookies.insert("_lscache_vary_a".to_string(), "2".to_string());
+
+        let mut rule = vary_on(&[]);
+        rule.cookie_names.push("_lscache_vary_a".to_string());
+
+        let key = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &rule,
+            &HeaderMap::new(),
+            &cookies,
+        );
+
+        // The explicitly listed cookie appears once, and the other default
+        // cookie follows in sorted order.
+        assert_eq!(key.matches("_lscache_vary_a=2").count(), 1, "{key}");
+        let pos_a = key.find("_lscache_vary_a=2").unwrap();
+        let pos_z = key.find("c:_lscache_vary_z=1").unwrap();
+        assert!(pos_a < pos_z, "{key}");
+    }
+
+    #[test]
+    fn default_vary_cookies_suppressed_by_no_vary() {
+        let mut cookies: ahash::AHashMap<String, String> = Default::default();
+        cookies.insert("_lscache_vary".to_string(), "logged-in".to_string());
+
+        let mut rule = vary_on(&[]);
+        rule.no_vary = true;
+
+        let key = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &rule,
+            &HeaderMap::new(),
+            &cookies,
+        );
+
+        assert!(!key.contains("_lscache_vary"), "{key}");
     }
 
     #[test]

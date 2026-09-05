@@ -358,6 +358,7 @@ fn variants_by_base_kept_when_other_variant_survives_eviction() {
         header_names: vec![HeaderName::from_static("accept-language")],
         cookie_names: Vec::new(),
         value: None,
+        no_vary: false,
     };
     let en_headers = request_headers(&[(&HeaderName::from_static("accept-language"), "en-US")]);
     let fr_headers = request_headers(&[(&HeaderName::from_static("accept-language"), "fr-FR")]);

@@ -460,6 +460,138 @@ async fn test_lscache_vary_cookie() {
 }
 
 #[tokio::test]
+async fn test_lscache_default_vary_cookie() {
+    // Cookies starting with `_lscache_vary` vary the cache key without any
+    // `X-LiteSpeed-Vary` declaration or `vary_cookies` configuration.
+    let ctx = LSCacheTestContext::new("default-vary-cookie", BASE_CONFIG_OVERRIDE_LS).await;
+
+    let resp = ctx
+        .get_with_headers(
+            "/default-vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "no-cookie"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "no-cookie");
+
+    let resp = ctx
+        .get_with_headers(
+            "/default-vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "session-abc"),
+                ("Cookie", "_lscache_vary=abc"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "session-abc");
+
+    // Same vary cookie value hits the stored variant.
+    let resp = ctx
+        .get_with_headers(
+            "/default-vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "session-abc-repeat"),
+                ("Cookie", "_lscache_vary=abc"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "session-abc");
+
+    // A different vary cookie value is a separate variant.
+    let resp = ctx
+        .get_with_headers(
+            "/default-vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "session-xyz"),
+                ("Cookie", "_lscache_vary=xyz"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "session-xyz");
+
+    // The blank variant (no cookies) still hits the first response.
+    let resp = ctx
+        .get_with_headers(
+            "/default-vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "no-cookie-hit"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "no-cookie");
+
+    // Unrelated cookies do not fragment the key: they hit the blank variant.
+    let resp = ctx
+        .get_with_headers(
+            "/default-vary-cookie",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Body", "tracking-hit"),
+                ("Cookie", "tracking=uuid-123"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "no-cookie");
+}
+
+#[tokio::test]
+async fn test_lscache_default_vary_cookie_no_vary() {
+    // `X-LiteSpeed-Cache-Control: no-vary` suppresses the automatic
+    // `_lscache_vary` cookies: all requests share one entry.
+    let ctx = LSCacheTestContext::new("default-vary-no-vary", BASE_CONFIG_OVERRIDE_LS).await;
+
+    let resp = ctx
+        .get_with_headers(
+            "/default-vary-no-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60,no-vary"),
+                ("X-Test-Body", "v1"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "v1");
+
+    let resp = ctx
+        .get_with_headers(
+            "/default-vary-no-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60,no-vary"),
+                ("X-Test-Body", "v2-ignored"),
+                ("Cookie", "_lscache_vary=abc"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "v1");
+
+    let resp = ctx
+        .get_with_headers(
+            "/default-vary-no-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60,no-vary"),
+                ("X-Test-Body", "v3-ignored"),
+                ("Cookie", "_lscache_vary=xyz"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "v1");
+}
+
+#[tokio::test]
 async fn test_lscache_tag() {
     let ctx = LSCacheTestContext::new("tag", BASE_CONFIG_OVERRIDE_LS).await;
 

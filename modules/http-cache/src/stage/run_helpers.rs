@@ -768,7 +768,14 @@ pub(super) async fn run_inverse_handler(
     };
 
     let ls_control = parse_litespeed_cache_control(response.headers());
-    let ls_vary = if ls_control.as_ref().is_some_and(|control| control.no_vary) {
+    // `no-vary` suppresses both the `X-LiteSpeed-Vary` cookies and the
+    // automatic `_lscache_vary*` cookies (recorded on the vary rule so the
+    // stored entry's key stays free of them).
+    //
+    // Also, don't vary if LSCache compatibility is disabled.
+    let no_vary = !state.config.litespeed_override_cache_control
+        || ls_control.as_ref().is_some_and(|control| control.no_vary);
+    let ls_vary = if no_vary {
         crate::lscache::LiteSpeedVary::default()
     } else {
         parse_litespeed_vary(response.headers())
@@ -841,7 +848,7 @@ pub(super) async fn run_inverse_handler(
         decision
     };
 
-    let vary_rule = build_vary_rule(response.headers(), &state.config, &ls_vary)?;
+    let vary_rule = build_vary_rule(response.headers(), &state.config, &ls_vary, no_vary)?;
     let lsc_cookies = collect_lsc_cookies(response.headers());
     let mut response = response;
 

@@ -112,6 +112,7 @@ pub fn estimate_entry_bytes(entry: &StoredEntry) -> usize {
     if let Some(value) = &entry.vary.value {
         size += value.len();
     }
+    size += 1;
     size
 }
 
@@ -329,6 +330,7 @@ fn encode_vary(out: &mut Vec<u8>, vary: &VaryRule) {
         put_str(out, cookie);
     }
     put_opt_str(out, vary.value.as_deref());
+    out.push(vary.no_vary as u8);
 }
 
 fn decode_vary(dec: &mut Decoder<'_>) -> Result<VaryRule, DecodeError> {
@@ -343,10 +345,16 @@ fn decode_vary(dec: &mut Decoder<'_>) -> Result<VaryRule, DecodeError> {
     for _ in 0..cookie_count {
         cookie_names.push(dec.str()?);
     }
+    let value = take_opt_str(dec)?;
+    // Records written before the `no-vary` flag existed end here. They used
+    // the current default behavior (automatic vary cookies apply), so a
+    // missing flag decodes as `false`.
+    let no_vary = if dec.is_done() { false } else { dec.u8()? != 0 };
     Ok(VaryRule {
         header_names,
         cookie_names,
-        value: take_opt_str(dec)?,
+        value,
+        no_vary,
     })
 }
 
@@ -569,6 +577,7 @@ mod tests {
             header_names: vec![HeaderName::from_static("accept-language")],
             cookie_names: vec!["lang".to_string(), "bucket".to_string()],
             value: Some("rewritten".to_string()),
+            no_vary: false,
         };
 
         StoredEntry {
@@ -680,6 +689,41 @@ mod tests {
         assert_eq!(decoded.last_modified, None);
         assert!(!decoded.must_revalidate);
         assert_eq!(decoded.vary, VaryRule::default());
+    }
+
+    #[test]
+    fn put_roundtrip_preserves_no_vary() {
+        let mut entry = test_entry();
+        entry.vary.no_vary = true;
+        let bytes = encode_put("k", &entry);
+        let (record, _) = decode_next(&bytes, 0).unwrap().unwrap();
+        let DecodedRecord::Put { entry: decoded, .. } = record else {
+            panic!("expected Put record");
+        };
+        assert!(decoded.vary.no_vary);
+        assert_eq!(decoded.vary, entry.vary);
+    }
+
+    #[test]
+    fn put_without_no_vary_flag_decodes_as_false() {
+        // Records written before the `no-vary` flag existed end right after
+        // the vary value. They must decode as `no_vary: false` (automatic
+        // vary cookies apply) rather than failing.
+        let entry = test_entry();
+        let mut bytes = encode_put("k", &entry);
+        bytes.truncate(bytes.len() - 1);
+        // Fix the frame length and CRC for the truncated payload.
+        let total_len = (bytes.len() - 4) as u32;
+        bytes[0..4].copy_from_slice(&total_len.to_be_bytes());
+        let crc = crc32fast::hash(&bytes[8..]);
+        bytes[4..8].copy_from_slice(&crc.to_be_bytes());
+
+        let (record, _) = decode_next(&bytes, 0).unwrap().unwrap();
+        let DecodedRecord::Put { entry: decoded, .. } = record else {
+            panic!("expected Put record");
+        };
+        assert!(!decoded.vary.no_vary);
+        assert_eq!(decoded.vary.cookie_names, entry.vary.cookie_names);
     }
 
     #[test]
