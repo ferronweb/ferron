@@ -340,7 +340,7 @@ pub(super) async fn run_forward(
 
                 if !is_leader {
                     let coalesced =
-                        tokio::time::timeout(config.coalesce_timeout, notify.notified())
+                        zincio::time::timeout(config.coalesce_timeout, notify.notified())
                             .await
                             .is_ok();
                     let wait_ms = coalesce_start.elapsed().as_secs_f64() * 1000.0;

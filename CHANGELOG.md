@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+#### HTTP cache
+
+- **HTTP cache coalesce timeout fix**: coalesce timeout in HTTP cache no longer causes server crashes.
+
 ## Ferron 3.0.0-rc.2
 
 **Released in September 4, 2026**
