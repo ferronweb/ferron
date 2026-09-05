@@ -1,8 +1,8 @@
-# Ferron Cross-Compilation Build System
+# Ferron cross-compilation build system
 
 Cross-compilation build files for Linux targets, runnable on Linux hosts of any distro.
 
-## Quick Start
+## Quick start
 
 ```bash
 # 1. Prepare sysroots (one-time, cacheable in CI/CD)
@@ -95,7 +95,7 @@ cross-build/
 
 ### GNU targets (glibc)
 
-Uses `debootstrap` to create a Debian buster sysroot with glibc and libstdc++:
+Uses `debootstrap` to create a Debian bullseye (or newer, depending on target platform) sysroot with glibc and libstdc++:
 
 ```bash
 # Single target
@@ -118,7 +118,7 @@ The sysroot is created at `cross-build/sysroots/gnu-<arch>/` and contains:
 Downloads Alpine packages directly (no Docker required). The musl toolchain is
 fully clang/lld-based: GCC CRT startup objects (`crtbeginS.o`, `crtendS.o`) and
 `libgcc.a` are taken from Alpine's `libgcc-static` package (built for the target
-architecture), so **no host GCC is required**.
+architecture), so no host GCC is required.
 
 ```bash
 # Single target
