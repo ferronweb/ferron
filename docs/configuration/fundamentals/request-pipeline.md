@@ -24,7 +24,7 @@ After resolution, Ferron strips the matched `location` prefix from the request p
 
 ## Pipeline stage order
 
-Stages run in a fixed partial order. The list below shows the typical sequence for an HTTP request. Some stages skip the request when their directives are absent.
+Stages run in a fixed partial order. The list below shows the typical sequence for an HTTP request. Some stages skip the request when their directives are absent. The list below is not exhaustive and may vary based on configuration and Ferron version.
 
 1. ACME HTTP-01 challenge answer. It handles `/.well-known/acme-challenge/*` before other work.
 2. Client IP resolution (`client_ip_from_header`).
