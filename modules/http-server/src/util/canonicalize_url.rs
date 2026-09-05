@@ -1,8 +1,11 @@
+use std::borrow::Cow;
 use std::fmt;
+
+use smallvec::SmallVec;
 
 /// Authoritative semantic path for routing, ACLs, cache keys, and scope checks.
 #[derive(Debug, PartialEq)]
-pub struct CanonicalizedPath {
+pub struct CanonicalizedPath<'a> {
     /// Authoritative semantic path for routing, ACLs, cache keys, and scope checks.
     ///
     /// For `"*"` input: exactly `"*"`
@@ -12,7 +15,7 @@ pub struct CanonicalizedPath {
     /// - Dot-segments resolved
     /// - Root escape rejected
     /// - Trailing slash preserved
-    pub routing: String,
+    pub routing: Cow<'a, str>,
 
     /// Wire-safe serialization for upstream HTTP request line or `:path`.
     ///
@@ -24,11 +27,11 @@ pub struct CanonicalizedPath {
     /// - Trailing slash preserved
     ///
     /// Do not parse this value for security decisions.
-    pub forwarding: String,
+    pub forwarding: Cow<'a, str>,
 
     /// Untouched client input for audit logging, HMAC verification, and debugging.
     /// Never use for routing, ACLs, or cache keys.
-    pub original: String,
+    pub original: Cow<'a, str>,
 }
 
 /// Errors that can occur during path canonicalization.
@@ -64,153 +67,81 @@ impl fmt::Display for CanonicalizationError {
 
 impl std::error::Error for CanonicalizationError {}
 
-/// Returns true if the byte is an unreserved character per RFC 3986.
-#[inline]
-fn is_unreserved(b: u8) -> bool {
-    matches!(b,
-        b'A'..=b'Z'
-        | b'a'..=b'z'
-        | b'0'..=b'9'
-        | b'-'
-        | b'.'
-        | b'_'
-        | b'~'
-    )
+/// Lookup table: hex digit value for each byte, or -1 if not a hex digit.
+/// A single table load replaces branching `is_ascii_hexdigit` checks and
+/// gives the decoded value at the same time.
+const HEX_VAL: [i8; 256] = build_hex_val();
+
+const fn build_hex_val() -> [i8; 256] {
+    let mut t = [-1i8; 256];
+    let mut c = b'0';
+    while c <= b'9' {
+        t[c as usize] = (c - b'0') as i8;
+        c += 1;
+    }
+    c = b'a';
+    while c <= b'f' {
+        t[c as usize] = (c - b'a' + 10) as i8;
+        c += 1;
+    }
+    c = b'A';
+    while c <= b'F' {
+        t[c as usize] = (c - b'A' + 10) as i8;
+        c += 1;
+    }
+    t
 }
 
+/// Lookup table: true if the byte is an unreserved character per RFC 3986.
+const UNRESERVED: [bool; 256] = build_unreserved();
+
+const fn build_unreserved() -> [bool; 256] {
+    let mut t = [false; 256];
+    let mut c = b'A';
+    while c <= b'Z' {
+        t[c as usize] = true;
+        c += 1;
+    }
+    c = b'a';
+    while c <= b'z' {
+        t[c as usize] = true;
+        c += 1;
+    }
+    c = b'0';
+    while c <= b'9' {
+        t[c as usize] = true;
+        c += 1;
+    }
+    t[b'-' as usize] = true;
+    t[b'.' as usize] = true;
+    t[b'_' as usize] = true;
+    t[b'~' as usize] = true;
+    t
+}
+
+/// Uppercases an ASCII hex digit. Only `a`-`f` need conversion because
+/// `0`-`9` and `A`-`F` sort below `a`.
 #[inline]
-fn hex_value(b: u8) -> u8 {
-    // It's possible to use char::to_digit(self, 16),
-    // but it would be generally slower than this custom implementation...
-    match b {
-        b'0'..=b'9' => b - b'0',
-        b'a'..=b'f' => b - b'a' + 10,
-        b'A'..=b'F' => b - b'A' + 10,
-        _ => unreachable!("the byte {b} is not a valid hex digit at this point"),
+fn up(h: u8) -> u8 {
+    if h >= b'a' {
+        h - 32
+    } else {
+        h
     }
 }
 
-/// Validates that a raw segment has well-formed percent-encoding and
-/// rejects excessive nested encoding (`%25xx` patterns).
+/// Pops the last segment from a `/`-joined buffer built by pushing
+/// `'/' + segment` per kept segment. An empty buffer means `..` escapes
+/// above root.
 #[inline]
-fn validate_segment_encoding(segment: &str) -> Result<(), CanonicalizationError> {
-    let bytes = segment.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' {
-            // Need at least 2 more bytes for a valid triplet
-            if i + 2 >= bytes.len() {
-                return Err(CanonicalizationError::MalformedPercent);
-            }
-            let h1 = bytes[i + 1];
-            let h2 = bytes[i + 2];
-            if !h1.is_ascii_hexdigit() || !h2.is_ascii_hexdigit() {
-                return Err(CanonicalizationError::MalformedPercent);
-            }
-            // Check for excessive encoding: %25 followed by two hex digits
-            // This would decode to %xx on a second pass, which is dangerous.
-            if h1 == b'2' && h2 == b'5' && i + 4 < bytes.len() {
-                let h3 = bytes[i + 3];
-                let h4 = bytes[i + 4];
-                if h3.is_ascii_hexdigit() && h4.is_ascii_hexdigit() {
-                    return Err(CanonicalizationError::ExcessiveEncoding);
-                }
-            }
-            // Also check for null byte encoding (%00)
-            if h1 == b'0' && h2 == b'0' {
-                return Err(CanonicalizationError::NullByte);
-            }
-            i += 3;
-        } else {
-            i += 1;
+fn pop_segment(buf: &mut SmallVec<[u8; 128]>) -> Result<(), CanonicalizationError> {
+    match memchr::memrchr(b'/', buf) {
+        Some(idx) => {
+            buf.truncate(idx);
+            Ok(())
         }
+        None => Err(CanonicalizationError::RootEscape),
     }
-    Ok(())
-}
-
-/// Decodes a single segment, returning (routing_decoded, forwarding_encoded).
-///
-/// - Unreserved characters are decoded in the routing view.
-/// - Reserved characters remain encoded in both views.
-/// - Hex digits are uppercased in the forwarding view.
-#[inline]
-fn decode_segment(segment: &str) -> Result<(String, String), CanonicalizationError> {
-    if !segment.contains('%') {
-        return Ok((segment.to_owned(), segment.to_owned()));
-    }
-
-    let bytes = segment.as_bytes();
-    let mut routing = Vec::with_capacity(segment.len());
-    let mut forwarding = Vec::with_capacity(segment.len());
-
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            let h1 = bytes[i + 1];
-            let h2 = bytes[i + 2];
-            let value = (hex_value(h1) << 4) | hex_value(h2);
-
-            if is_unreserved(value) {
-                // Decode unreserved characters for routing
-                routing.push(value);
-                // Forwarding keeps the encoding but uppercased
-                forwarding.push(b'%');
-                forwarding.push(h1.to_ascii_uppercase());
-                forwarding.push(h2.to_ascii_uppercase());
-            } else {
-                // Reserved characters stay encoded in both views
-                routing.push(b'%');
-                routing.push(h1.to_ascii_uppercase());
-                routing.push(h2.to_ascii_uppercase());
-
-                forwarding.push(b'%');
-                forwarding.push(h1.to_ascii_uppercase());
-                forwarding.push(h2.to_ascii_uppercase());
-            }
-            i += 3;
-        } else {
-            let c = bytes[i];
-            routing.push(c);
-            forwarding.push(c);
-            i += 1;
-        }
-    }
-
-    let routing = String::from_utf8(routing).map_err(|_| CanonicalizationError::InvalidUtf8)?;
-    let forwarding =
-        String::from_utf8(forwarding).map_err(|_| CanonicalizationError::InvalidUtf8)?;
-
-    Ok((routing, forwarding))
-}
-
-/// Resolves dot-segments from a list of decoded segments using a stack.
-///
-/// - `.` and empty segments are skipped.
-/// - `..` pops the previous segment.
-/// - If `..` would pop above root, returns `RootEscape`.
-#[inline]
-fn resolve_dot_segments(segments: &[String]) -> Result<Vec<String>, CanonicalizationError> {
-    let mut stack: Vec<String> = Vec::new();
-
-    for segment in segments {
-        if segment == "." || segment.is_empty() {
-            // Skip current-dir and empty segments
-            continue;
-        } else if segment == ".." {
-            // Pop the previous segment; reject if at root
-            if stack.is_empty() {
-                return Err(CanonicalizationError::RootEscape);
-            }
-            stack.pop();
-        } else if segment.contains("\0") {
-            // The path segment contains a null byte, so reject it
-            return Err(CanonicalizationError::NullByte);
-        } else {
-            stack.push(segment.clone());
-        }
-    }
-
-    Ok(stack)
 }
 
 /// Canonicalizes a raw HTTP request target path.
@@ -218,88 +149,257 @@ fn resolve_dot_segments(segments: &[String]) -> Result<Vec<String>, Canonicaliza
 /// Supports:
 /// - Absolute paths beginning with `/`
 /// - The special asterisk form `*` used for server-wide OPTIONS requests
-pub fn canonicalize_path(raw_path: &str) -> Result<CanonicalizedPath, CanonicalizationError> {
+pub fn canonicalize_path<'a>(
+    raw_path: &'a str,
+) -> Result<CanonicalizedPath<'a>, CanonicalizationError> {
     if raw_path == "*" {
         return Ok(CanonicalizedPath {
-            routing: "*".to_owned(),
-            forwarding: "*".to_owned(),
-            original: raw_path.to_owned(),
+            routing: Cow::Borrowed("*"),
+            forwarding: Cow::Borrowed("*"),
+            original: Cow::Borrowed(raw_path),
         });
     }
 
-    if !raw_path.starts_with('/') {
+    let bytes = raw_path.as_bytes();
+    if bytes.is_empty() || bytes[0] != b'/' {
         return Err(CanonicalizationError::MalformedPath);
     }
 
-    // Reject null bytes and control characters
-    for &b in raw_path.as_bytes() {
-        if b == 0 || b < 0x20 || b == 0x7F {
+    // First scan: reject control bytes and detect whether the resolving
+    // paths are needed at all. Static file traffic is dominated by clean
+    // ASCII paths, so this one pass decides between a memcpy fast path
+    // and the resolving/decoding paths below. Control rejection comes
+    // first so it beats any percent-encoding error later in the path.
+    // `needs_resolve` is a conservative proxy: `//` means empty segments,
+    // `/.` means a possible `.`/`..` segment (also matches dotfiles such as
+    // `/.well-known`, which the resolving path still handles correctly).
+    let mut has_percent = false;
+    let mut needs_resolve = false;
+    let mut prev = 0u8;
+    for &b in bytes {
+        if b < 0x20 || b == 0x7F {
             return Err(CanonicalizationError::MalformedPath);
         }
+        if b == b'%' {
+            has_percent = true;
+        } else if prev == b'/' && (b == b'/' || b == b'.') {
+            needs_resolve = true;
+        }
+        prev = b;
     }
 
-    let segments: Vec<&str> = raw_path.split('/').collect();
+    // Fast path: no encoding, no dot-segments, no duplicate slashes.
+    // Both outputs equal the input, so just copy it.
+    if !has_percent {
+        if !needs_resolve {
+            return Ok(CanonicalizedPath {
+                routing: Cow::Borrowed(raw_path),
+                forwarding: Cow::Borrowed(raw_path),
+                original: Cow::Borrowed(raw_path),
+            });
+        }
 
-    // Track trailing slash: present if path ends with `/` and is not just `"/"`
-    let trailing_slash = raw_path.ends_with('/') && raw_path != "/";
+        // Medium path: no percent-encoding, only dot-segment / duplicate
+        // slash resolution. Routing and forwarding stay identical, so build
+        // once and clone. No per-segment allocations: segments are appended
+        // straight into the output buffer, `..` pops via `rfind`.
+        let mut routing: SmallVec<[u8; 128]> = SmallVec::with_capacity(bytes.len());
+        for seg in raw_path.split('/').skip(1) {
+            if seg.is_empty() || seg == "." {
+                continue;
+            } else if seg == ".." {
+                pop_segment(&mut routing)?;
+            } else {
+                routing.push(b'/');
+                routing.extend_from_slice(seg.as_bytes());
+            }
+        }
+        let trailing_slash = raw_path.ends_with('/') && raw_path != "/";
+        if routing.is_empty() || trailing_slash {
+            routing.push(b'/');
+        }
+        let routing = String::from_utf8(routing.into_vec())
+            .map_err(|_| CanonicalizationError::InvalidUtf8)?;
+        let forwarding = routing.clone();
+        return Ok(CanonicalizedPath {
+            routing: Cow::Owned(routing),
+            forwarding: Cow::Owned(forwarding),
+            original: Cow::Borrowed(raw_path),
+        });
+    }
 
-    let mut routing_segments: Vec<String> = Vec::with_capacity(segments.len());
-    let mut forwarding_segments: Vec<String> = Vec::with_capacity(segments.len());
-
-    for (idx, segment) in segments.iter().enumerate() {
-        // The first segment is always empty (before the leading `/`)
-        if idx == 0 {
-            validate_segment_encoding(segment)?;
-            routing_segments.push(String::new());
-            forwarding_segments.push(String::new());
+    // Slow path: percent-encoding present. Triplet validation runs over the
+    // whole path first (rather than per segment) without changing behavior:
+    // `/` is never a hex digit, so triplets and `%25xx` patterns cannot
+    // span segments. Validating up front preserves the original error
+    // precedence (malformed/double encoding beats `RootEscape`).
+    // Decoding and dot-segment resolution then happen in a single pass over
+    // each segment, decoding directly into the two output buffers
+    // (no per-segment `String` allocations, no separate decode/resolve
+    // passes, no double dot resolution). The checks in the decode loop
+    // re-verify defensively.
+    // The routing and forwarding views resolve independently: an encoded
+    // dot such as `%2E` is a dot-segment for routing but opaque data for
+    // forwarding.
+    {
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] != b'%' {
+                i += 1;
+                continue;
+            }
+            // Need at least 2 more bytes for a valid triplet.
+            if i + 2 >= bytes.len() {
+                return Err(CanonicalizationError::MalformedPercent);
+            }
+            let h1 = bytes[i + 1];
+            let h2 = bytes[i + 2];
+            if HEX_VAL[h1 as usize] < 0 || HEX_VAL[h2 as usize] < 0 {
+                return Err(CanonicalizationError::MalformedPercent);
+            }
+            // Excessive encoding: `%25` followed by two hex digits would
+            // decode to `%xx` on a second pass, which is dangerous.
+            if h1 == b'2'
+                && h2 == b'5'
+                && i + 4 < bytes.len()
+                && HEX_VAL[bytes[i + 3] as usize] >= 0
+                && HEX_VAL[bytes[i + 4] as usize] >= 0
+            {
+                return Err(CanonicalizationError::ExcessiveEncoding);
+            }
+            // Null byte encoding (`%00`).
+            if h1 == b'0' && h2 == b'0' {
+                return Err(CanonicalizationError::NullByte);
+            }
+            i += 3;
+        }
+    }
+    let mut routing: SmallVec<[u8; 128]> = SmallVec::with_capacity(bytes.len());
+    let mut forwarding: SmallVec<[u8; 128]> = SmallVec::with_capacity(bytes.len());
+    for seg in raw_path.split('/').skip(1) {
+        if seg.is_empty() {
+            continue;
+        }
+        let sb = seg.as_bytes();
+        if !sb.contains(&b'%') {
+            if seg == "." {
+                continue;
+            } else if seg == ".." {
+                pop_segment(&mut routing)?;
+                pop_segment(&mut forwarding)?;
+            } else {
+                routing.push(b'/');
+                routing.extend_from_slice(sb);
+                forwarding.push(b'/');
+                forwarding.extend_from_slice(sb);
+            }
             continue;
         }
 
-        validate_segment_encoding(segment)?;
-
-        // Decode the segment
-        let (decoded, encoded) = decode_segment(segment)?;
-        routing_segments.push(decoded);
-        forwarding_segments.push(encoded);
-    }
-
-    let dot_segments = &routing_segments[1..];
-    let resolved = resolve_dot_segments(dot_segments)?;
-
-    let mut routing = String::with_capacity(raw_path.len());
-    routing.push('/');
-    for (i, seg) in resolved.iter().enumerate() {
-        if i > 0 {
-            routing.push('/');
+        // Encoded segment: tentatively append `'/' + decoded` to both
+        // buffers, then apply each view's dot rule by truncating back to
+        // the mark when the decoded segment is `.`/`..`.
+        let r_mark = routing.len();
+        routing.push(b'/');
+        forwarding.push(b'/');
+        // Start of the current raw run (bytes with no `%`), flushed with
+        // `push_str` so multi-byte UTF-8 is never split into chars.
+        let mut run = 0;
+        let mut i = 0;
+        while i < sb.len() {
+            if sb[i] != b'%' {
+                i += 1;
+                continue;
+            }
+            if run < i {
+                // `run..i` holds no `%` (ASCII), so the bounds are UTF-8 safe.
+                routing.extend_from_slice(&sb[run..i]);
+                forwarding.extend_from_slice(&sb[run..i]);
+            }
+            // Need at least 2 more bytes for a valid triplet.
+            if i + 2 >= sb.len() {
+                return Err(CanonicalizationError::MalformedPercent);
+            }
+            let h1 = sb[i + 1];
+            let h2 = sb[i + 2];
+            let v1 = HEX_VAL[h1 as usize];
+            let v2 = HEX_VAL[h2 as usize];
+            if v1 < 0 || v2 < 0 {
+                return Err(CanonicalizationError::MalformedPercent);
+            }
+            // Excessive encoding: `%25` followed by two hex digits would
+            // decode to `%xx` on a second pass, which is dangerous.
+            if h1 == b'2'
+                && h2 == b'5'
+                && i + 4 < sb.len()
+                && HEX_VAL[sb[i + 3] as usize] >= 0
+                && HEX_VAL[sb[i + 4] as usize] >= 0
+            {
+                return Err(CanonicalizationError::ExcessiveEncoding);
+            }
+            // Null byte encoding (`%00`).
+            if h1 == b'0' && h2 == b'0' {
+                return Err(CanonicalizationError::NullByte);
+            }
+            let value = ((v1 as u8) << 4) | (v2 as u8);
+            let u1 = up(h1);
+            let u2 = up(h2);
+            if UNRESERVED[value as usize] {
+                // Decode unreserved characters for routing; forwarding
+                // keeps the encoding but uppercased.
+                routing.push(value);
+                forwarding.push(b'%');
+                forwarding.push(u1);
+                forwarding.push(u2);
+            } else {
+                // Reserved characters stay encoded in both views.
+                routing.push(b'%');
+                routing.push(u1);
+                routing.push(u2);
+                forwarding.push(b'%');
+                forwarding.push(u1);
+                forwarding.push(u2);
+            }
+            i += 3;
+            run = i;
         }
-        routing.push_str(seg);
-    }
-    if trailing_slash && routing != "/" {
-        routing.push('/');
-    }
-
-    // forwarding: same segment structure but with encoded segments
-    // We need to resolve dots on the encoded segments too, but they have the same structure
-    // (same number and position of segments after dot resolution)
-    let encoded_dot_segments = &forwarding_segments[1..];
-    let resolved_encoded = resolve_dot_segments(encoded_dot_segments)?;
-
-    let mut forwarding = String::with_capacity(raw_path.len());
-    forwarding.push('/');
-    for (i, seg) in resolved_encoded.iter().enumerate() {
-        if i > 0 {
-            forwarding.push('/');
+        if run < sb.len() {
+            routing.extend_from_slice(&sb[run..]);
+            forwarding.extend_from_slice(&sb[run..]);
         }
-        forwarding.push_str(seg);
+
+        // Per-view dot rules on the just-decoded segment. The forwarding
+        // view of an encoded segment always contains `%`, so it can never
+        // be `.`/`..`/empty and is kept as appended.
+        // `r_mark + 1` skips the `'/'` just pushed (ASCII boundary).
+        let r_seg = &routing[r_mark + 1..];
+        if r_seg == b"." {
+            routing.truncate(r_mark);
+        } else if r_seg == b".." {
+            routing.truncate(r_mark);
+            pop_segment(&mut routing)?;
+        }
     }
-    if trailing_slash && forwarding != "/" {
-        forwarding.push('/');
+
+    // Track trailing slash: present if path ends with `/` and is not just `"/"`.
+    let trailing_slash = raw_path.ends_with('/') && raw_path != "/";
+    if routing.is_empty() || trailing_slash {
+        routing.push(b'/');
+    }
+    if forwarding.is_empty() || trailing_slash {
+        forwarding.push(b'/');
     }
 
     Ok(CanonicalizedPath {
-        routing,
-        forwarding,
-        original: raw_path.to_owned(),
+        routing: Cow::Owned(
+            String::from_utf8(routing.into_vec())
+                .map_err(|_| CanonicalizationError::InvalidUtf8)?,
+        ),
+        forwarding: Cow::Owned(
+            String::from_utf8(forwarding.into_vec())
+                .map_err(|_| CanonicalizationError::InvalidUtf8)?,
+        ),
+        original: Cow::Borrowed(raw_path),
     })
 }
 
@@ -448,5 +548,22 @@ mod tests {
         let result = canonicalize_path("/a/b/../c/").unwrap();
         assert_eq!(result.routing, "/a/c/");
         assert_eq!(result.forwarding, "/a/c/");
+    }
+
+    #[test]
+    fn test_utf8() {
+        let result = canonicalize_path("/wziąść").unwrap();
+        assert_eq!(result.routing, "/wziąść");
+        assert_eq!(result.forwarding, "/wziąść");
+        assert_eq!(result.original, "/wziąść");
+    }
+
+    #[test]
+    fn test_utf8_encoded() {
+        // wzi%C4%85%C5%9B%C4%87 -> wziąść
+        let result = canonicalize_path("/wzi%C4%85%C5%9B%C4%87").unwrap();
+        assert_eq!(result.routing, "/wzi%C4%85%C5%9B%C4%87");
+        assert_eq!(result.forwarding, "/wzi%C4%85%C5%9B%C4%87");
+        assert_eq!(result.original, "/wzi%C4%85%C5%9B%C4%87");
     }
 }

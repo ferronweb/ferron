@@ -34,6 +34,7 @@ quinn = { version = "0.11.8", default-features = false, features = [
 ] }
 smallvec = "1.15.2"
 hex = "0.4.3"
+memchr = "2.8.3"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }

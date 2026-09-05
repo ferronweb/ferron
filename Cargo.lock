@@ -1659,6 +1659,7 @@ dependencies = [
  "http",
  "http-body-util",
  "libc",
+ "memchr",
  "parking_lot",
  "ppp",
  "quinn",

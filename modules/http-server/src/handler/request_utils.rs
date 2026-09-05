@@ -143,14 +143,13 @@ pub(super) fn check_backslash_in_path(raw_path: &str, reject: bool) -> Result<()
 }
 
 #[inline]
-pub(super) fn sanitize_request_url(
-    request: &mut HttpRequest,
+pub(super) fn sanitize_request_url<'a>(
+    request: &'a mut HttpRequest,
     decoded_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let url_pathname = request.uri().path();
-
-    if decoded_path != url_pathname {
+) -> Result<Cow<'a, str>, Box<dyn std::error::Error>> {
+    if decoded_path != request.uri().path() {
         let orig_uri = request.uri().clone();
+        let old_path = orig_uri.path().to_owned();
         let mut uri_parts = orig_uri.into_parts();
 
         let new_path_and_query = format!(
@@ -166,9 +165,10 @@ pub(super) fn sanitize_request_url(
         uri_parts.path_and_query = Some(new_path_and_query.parse()?);
         let new_uri = http::Uri::from_parts(uri_parts)?;
         *request.uri_mut() = new_uri;
+        Ok(Cow::Owned(old_path))
+    } else {
+        Ok(Cow::Borrowed(request.uri().path()))
     }
-
-    Ok(())
 }
 
 #[inline]

@@ -590,7 +590,7 @@ async fn request_handler_inner(
         .and_then(|g| get_http_nested_boolean(g, "url_sanitize"))
         .unwrap_or(true);
     let (routing_str, _original_str) = if is_connect {
-        (String::from("/"), String::new())
+        ("/".into(), "".into())
     } else {
         // Reject backslashes in URL (unless disabled by configuration)
         let reject_backslash = global_config
@@ -648,57 +648,64 @@ async fn request_handler_inner(
         // Canonicalize + "sanitize" request URL
         match canonicalize_path(request.uri().path()) {
             Ok(canonicalized) => {
-                if url_sanitize_enabled {
-                    if let Err(e) = sanitize_request_url(&mut request, &canonicalized.forwarding) {
-                        emit_error_with_trace(
-                            &events,
-                            format!("URL sanitization error: {}", e),
-                            request_log_trace_context.clone(),
-                            get_error_log_attributes(
-                                "url_sanitize_error",
-                                Some(e.to_string()),
-                                local_address,
-                                remote_address,
-                                unix_socket_path,
-                            ),
-                        );
-                        if let Some(response) = execute_error_pipeline(
-                            error_pipeline.as_ref(),
-                            400,
-                            None,
-                            LayeredConfiguration::default(),
-                            None,
-                            &events,
-                            request_span_key.as_deref(),
-                            host_control_plane_metadata.clone(),
-                            Default::default(),
-                        )
-                        .await
-                        {
-                            return (Ok(response), None, None, None, None, false);
-                        }
-                        return (
-                            Ok(builtin_error_response(
+                if url_sanitize_enabled && canonicalized.forwarding != request.uri().path() {
+                    let routing = canonicalized.routing.into_owned();
+                    let forwarding = canonicalized.forwarding.into_owned();
+                    let original = match sanitize_request_url(&mut request, &forwarding) {
+                        Ok(o) => o,
+                        Err(e) => {
+                            emit_error_with_trace(
+                                &events,
+                                format!("URL sanitization error: {}", e),
+                                request_log_trace_context.clone(),
+                                get_error_log_attributes(
+                                    "url_sanitize_error",
+                                    Some(e.to_string()),
+                                    local_address,
+                                    remote_address,
+                                    unix_socket_path,
+                                ),
+                            );
+                            if let Some(response) = execute_error_pipeline(
+                                error_pipeline.as_ref(),
                                 400,
                                 None,
-                                global_config.as_ref().and_then(|g| {
-                                    g.get_value("admin_email").and_then(|v| {
-                                        v.as_string_with_interpolations(&HashMap::new())
-                                    })
-                                }),
-                                request_trace_context
-                                    .as_ref()
-                                    .map(|tc| tc.trace_id.as_str()),
-                            )),
-                            None,
-                            None,
-                            None,
-                            None,
-                            false,
-                        );
-                    }
+                                LayeredConfiguration::default(),
+                                None,
+                                &events,
+                                request_span_key.as_deref(),
+                                host_control_plane_metadata.clone(),
+                                Default::default(),
+                            )
+                            .await
+                            {
+                                return (Ok(response), None, None, None, None, false);
+                            }
+                            return (
+                                Ok(builtin_error_response(
+                                    400,
+                                    None,
+                                    global_config.as_ref().and_then(|g| {
+                                        g.get_value("admin_email").and_then(|v| {
+                                            v.as_string_with_interpolations(&HashMap::new())
+                                        })
+                                    }),
+                                    request_trace_context
+                                        .as_ref()
+                                        .map(|tc| tc.trace_id.as_str()),
+                                )),
+                                None,
+                                None,
+                                None,
+                                None,
+                                false,
+                            );
+                        }
+                    };
+                    (routing, original)
+                } else {
+                    (canonicalized.routing.into_owned(), canonicalized.original)
                 }
-                (canonicalized.routing, canonicalized.original)
             }
             Err(e) => {
                 emit_error_with_trace(
@@ -754,7 +761,6 @@ async fn request_handler_inner(
     // This allows all interpolation variables (request.*, server.*, remote.*) to be
     // resolved dynamically from the context rather than pre-populated in a HashMap.
     let mut ctx = HttpContext::default();
-    ctx.req = Some(request);
     ctx.events = events.clone();
     ctx.configuration = LayeredConfiguration::default();
     ctx.hostname = hostname.clone();
@@ -763,6 +769,7 @@ async fn request_handler_inner(
     ctx.local_address = local_address;
     ctx.remote_address = remote_address;
     ctx.https_port = https_port;
+    ctx.req = Some(request);
 
     // Attach parsed or generated trace context to the HttpContext extensions so stages/modules can access it.
     if let Some(ref tc) = request_trace_context {
