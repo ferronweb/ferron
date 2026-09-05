@@ -135,6 +135,9 @@ example.com {
 > [!warning]
 > Symlink-based attacks can bypass directory boundaries. If the `root` directory contains untrusted symlinks, enable `disable_symlinks true`. If you run a shared hosting environment, enable it there as well.
 
+> [!important]
+> `disable_symlinks true` is the default. When a request path crosses a symlink, Ferron returns `403 Forbidden`. The error page does not name the symlink. If static files return 403 after you add symlinks, check for links in every path component with `ls -la`, then set `disable_symlinks false` for trusted content or `disable_symlinks if_not_owner` when link and target share an owner.
+
 > [!note]
 >
 > - Symlink detection uses `symlink_metadata()`, which does not follow the symlink. It does no file I/O on the symlink target.

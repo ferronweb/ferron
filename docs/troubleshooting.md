@@ -139,7 +139,11 @@ Ferron must be able to read files and traverse directories.
 
 ### Path rewriting confusion
 
-For SPAs, you commonly need route fallback rewrites. If you use rewrites, enable `rewrite_log` while diagnosing.
+For SPAs, you commonly need route fallback rewrites. If you use rewrites, enable `rewrite_log` while diagnosing. Guard fallback rules with `file false` and `directory false`, or static assets match the fallback too.
+
+### Symlink 403 errors
+
+Symlinks return `403 Forbidden` by default (`disable_symlinks true`). The error page does not name the link. Check each path component for links, then allow them with `disable_symlinks false` or `disable_symlinks if_not_owner`.
 
 > [!info]
 > See [Static file serving](/docs/use-cases/content/static-files), [URL rewriting](/docs/use-cases/traffic/url-rewriting), and [Configuration: routing and URL processing](/docs/configuration/routing/url-processing).

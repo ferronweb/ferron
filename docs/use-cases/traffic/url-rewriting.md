@@ -5,7 +5,7 @@ description: "Apply practical rewrite rules in Ferron for SPAs, PHP front contro
 
 URL rewriting is useful when your application expects "pretty URLs" that map to a single entry script (common in PHP CMS/framework stacks). It is also useful when you need to preserve old URL structures after migrations.
 
-Ferron applies rewrites early in the request pipeline, before proxying or static file serving, so routing uses the rewritten URL. The client sees no redirect, meaning the rewrite is transparent.
+Ferron applies rewrites in the request pipeline, before proxying or static file serving, so later stages use the rewritten URL. Rewrites do not trigger a new round of `location` matching. Ferron selects the `location` block once, on the original URL. The client sees no redirect, meaning the rewrite is transparent.
 
 For many applications behind reverse proxy, rewriting is not required. Those apps usually handle routing themselves, and Ferron only forwards requests with `proxy` (often using `location` blocks).
 

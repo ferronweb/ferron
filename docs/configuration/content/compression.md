@@ -29,9 +29,18 @@ If the client does not send an `Accept-Encoding` header, the server serves the r
 
 ## Configuration
 
-### On-the-fly compression
+Ferron uses two separate directives for the two response paths. Do not mix them up.
 
-The `compressed` directive (`http-static`) enables on-the-fly compression for static file responses. The `dynamic_compressed` directive (`http-compression`) enables on-the-fly compression for dynamic response bodies such as reverse proxy responses. The server compresses files larger than 256 bytes with compressible extensions. Default: `compressed true`, `dynamic_compressed false`
+### Static file compression
+
+The `compressed` directive (`http-static`) enables on-the-fly compression for static file responses only. It applies when Ferron serves files from `root`. Ferron compresses files larger than 256 bytes with compressible extensions. Default: `compressed true`
+
+### Dynamic response compression
+
+The `dynamic_compressed` directive (`http-compression`) enables on-the-fly compression for dynamic response bodies, such as reverse proxy, FastCGI, and CGI responses. It does not affect static files. Use it when backends return compressible text without their own compression. Default: `dynamic_compressed false`
+
+> [!note]
+> Ferron never compresses `101 Switching Protocols` responses. Protocol upgrades such as WebSockets pass through unchanged when `dynamic_compressed` is on.
 
 ### Pre-compressed sidecar files
 

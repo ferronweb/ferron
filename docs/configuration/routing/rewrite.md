@@ -3,7 +3,10 @@ title: "Configuration: URL rewriting"
 description: "The `rewrite` directive for transforming request URLs using regular expression patterns."
 ---
 
-This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Ferron applies rewrites early in the request pipeline, before proxying or static file serving, so routing uses the rewritten URL.
+This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Ferron applies rewrites in the request pipeline, before proxying or static file serving, so later stages use the rewritten URL.
+
+> [!important]
+> Rewrites do not trigger a new round of `location` matching. Ferron selects the `location` block once, on the original URL, and strips the matched prefix before rewrite rules run. Rules therefore see the location-stripped path. Use `match` blocks with `if` or `if_not` for regex routing. See [Request pipeline order](/docs/configuration/fundamentals/request-pipeline).
 
 > [!info]
 > For `url_sanitize` interaction, see [Routing and URL processing](/docs/configuration/routing/url-processing#url-sanitation-and-redirects). For static file serving, see [Static file serving](/docs/configuration/content/static-files).
@@ -71,6 +74,8 @@ Ferron first rewrites a `/legacy/foo` request to `/modern/foo`. Then the second 
 
 #### File/directory-specific rules
 
+`file false` and `directory false` skip the rule when the URL maps to a real file or directory under `root`. Use both guards for fallback patterns such as single-page apps and front controllers. Without the guards, a broad pattern rewrites static asset requests too, and scripts, styles, and images break.
+
 ```ferron
 example.com {
     root /var/www
@@ -81,6 +86,9 @@ example.com {
     }
 }
 ```
+
+> [!tip]
+> Start every catch-all fallback rule with `file false` and `directory false`. Add `last` to stop rule processing after the fallback matches. Enable `rewrite_log true` while you test the guards.
 
 ### `rewrite_log`
 
