@@ -5,6 +5,9 @@ description: "Request matching, conditional configuration, error handling, web r
 
 This page documents directives that affect HTTP request matching and configuration layering inside host blocks. The `http-server` module's radix tree resolver processes these directives.
 
+> [!info]
+> For the full request order, see [Request pipeline order](/docs/configuration/fundamentals/request-pipeline). Ferron resolves host, `location`, and `if` blocks once per request, before any pipeline stage runs.
+
 ## Directives
 
 ### Path matching
@@ -26,6 +29,12 @@ example.com {
 >
 > - Matching is prefix-based (`/api` matches `/api` and `/api/users`). More specific locations win over less specific ones.
 > - If this block matches, Ferron automatically rewrites the URL to remove the base URL.
+> - Ferron supports prefixes only. There is no regex form such as `location ~`. Use a `match` block with `if` or `if_not` for pattern routing. See [Conditionals and variables](/docs/configuration/fundamentals/conditionals).
+> - Ferron selects the `location` block once, on the original URL, before pipeline stages run. A later `rewrite` does not move the request to a different `location` block. See [Request pipeline order](/docs/configuration/fundamentals/request-pipeline).
+
+### Inheritance
+
+A `location` block inherits directives from the enclosing host block and from global defaults. When the same directive appears at both levels, the value in the `location` block wins for requests in that block. The same rule applies to `if` and `if_not` blocks nested in a host or `location` block.
 
 ### Conditional matching
 

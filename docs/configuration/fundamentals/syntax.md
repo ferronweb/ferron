@@ -182,27 +182,27 @@ If you specify a hostname (for example, a domain name) and give no explicit port
 
 ## Configuration model
 
-Ferron resolves configuration in layers:
+Ferron resolves configuration in layers, once per request, before pipeline stages run:
 
 1. Global configuration from `{ ... }` provides startup and runtime settings.
-2. A Ferron selects a matching host block by local IP and hostname.
-3. Ferron merges a set of matching `location` blocks.
-4. Ferron merges a set of matching `if` and `if_not` blocks.
+2. Ferron selects matching host blocks by local IP and hostname.
+3. Ferron merges matching `location` blocks. Matching is prefix only. The longest match wins.
+4. Ferron merges matching `if` and `if_not` blocks.
 
 > [!note]
 >
 > - `location` uses prefix matching. `/api` matches `/api` and `/api/users`.
-> - A longer, more specific location wins over a less specific one(s).
+> - A longer, more specific location wins over a less specific one.
 > - All expressions in a `match` block use AND semantics.
-> - In a configuration, a directive name matches more than one block, and multiple layers can collect at a single layer.
+> - A rewrite in a later pipeline stage does not trigger a new round of `location` matching. See [Request pipeline order](/docs/configuration/fundamentals/request-pipeline).
 
 ## Inheritance and behavior
 
-Ferron applies inheritance in a block context.
+Directives inherit from outer blocks to inner blocks. A `location` block starts with the host block values. An `if` block starts with the enclosing host or `location` values.
 
-- Location DEFAULT inherits parent first, unless another directive shares the same name.
-- When a directive appears in a child block and a parent block, the child directive Wins in that block.
-- In conditional branches it is often clearer to explicitly strip `use` GShared snippets.
+- When a directive appears in both a parent block and a child block, the child value wins for that block.
+- When a directive appears only in the parent block, the child block inherits it.
+- Some directives accumulate across layers instead of overriding, for example `rewrite` rules and `map` entries. Their reference pages state the behavior.
 
 > [!note]
 > When validation and runtime behavior differ, the directive pages explain that.

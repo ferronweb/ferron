@@ -239,6 +239,12 @@
     "label": "Syntax and file structure"
   },
   {
+    "href": "/docs/configuration/fundamentals/request-pipeline",
+    "target": "_self",
+    "sub": true,
+    "label": "Request pipeline order"
+  },
+  {
     "href": "/docs/configuration/fundamentals/json-config",
     "target": "_self",
     "sub": true,
