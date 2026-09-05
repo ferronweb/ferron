@@ -84,6 +84,11 @@
     "label": "From Apache .htaccess (PHP)"
   },
   {
+    "href": "/docs/migration/from-nginx",
+    "target": "_self",
+    "label": "From NGINX"
+  },
+  {
     "label": "Common use cases",
     "category": true
   },
