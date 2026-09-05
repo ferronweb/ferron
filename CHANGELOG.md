@@ -9,6 +9,7 @@
 #### HTTP cache
 
 - **HTTP cache coalesce timeout fix**: coalesce timeout in HTTP cache no longer causes server crashes.
+- **Default HTTP cache TTL fix**: default HTTP cache TTL is now 10% of the time since the resource was last modified (RFC 9111) or disabled (LSCache compatibility). This improves cache consistency.
 
 #### HTTP compression
 

@@ -10,7 +10,6 @@ use ferron_core::config::ServerConfigurationBlock;
 
 pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 1024;
 pub const DEFAULT_MAX_CACHE_RESPONSE_SIZE: usize = 2 * 1024 * 1024;
-pub const DEFAULT_MAX_CACHE_AGE_SECS: u64 = 300;
 pub const DEFAULT_COALESCE_TIMEOUT_SECS: u64 = 5;
 pub const DEFAULT_PERSIST_INTERVAL: Duration = Duration::from_secs(30);
 pub const MIN_PERSIST_INTERVAL: Duration = Duration::from_secs(1);

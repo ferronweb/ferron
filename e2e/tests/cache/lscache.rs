@@ -95,6 +95,7 @@ impl LSCacheTestContext {
         }
     }
 
+    #[allow(dead_code)]
     async fn get(&self, path: &str) -> reqwest::Response {
         self.client
             .get(format!(
@@ -132,15 +133,6 @@ impl LSCacheTestContext {
     }
 }
 
-const BASE_CONFIG_EMIT_LS: &str = r#"
-*:80 {
-  proxy "http://backend:3000"
-  cache {
-    emit_litespeed_headers true
-  }
-}
-"#;
-
 const BASE_CONFIG_OVERRIDE_LS: &str = r#"
 *:80 {
   proxy "http://backend:3000"
@@ -153,7 +145,7 @@ const BASE_CONFIG_OVERRIDE_LS: &str = r#"
 
 #[tokio::test]
 async fn test_lscache_miss_then_hit() {
-    let ctx = LSCacheTestContext::new("miss-hit", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("miss-hit", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -196,7 +188,7 @@ async fn test_lscache_miss_then_hit() {
 
 #[tokio::test]
 async fn test_lscache_hop_by_hop_headers_stripped_on_serve() {
-    let ctx = LSCacheTestContext::new("hop-by-hop", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("hop-by-hop", BASE_CONFIG_OVERRIDE_LS).await;
 
     // Origin sends hop-by-hop headers, with Connection naming an extra field.
     let headers = [
@@ -319,7 +311,7 @@ async fn test_lscache_private_hit_rehydrates_lsc_cookie_but_not_origin_set_cooki
 
 #[tokio::test]
 async fn test_lscache_no_store() {
-    let ctx = LSCacheTestContext::new("no-store", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("no-store", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -349,7 +341,7 @@ async fn test_lscache_no_store() {
 
 #[tokio::test]
 async fn test_lscache_no_cache() {
-    let ctx = LSCacheTestContext::new("no-cache", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("no-cache", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -410,7 +402,7 @@ async fn test_lscache_override_standard_no_store() {
 
 #[tokio::test]
 async fn test_lscache_vary_cookie() {
-    let ctx = LSCacheTestContext::new("vary-cookie", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("vary-cookie", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -469,7 +461,7 @@ async fn test_lscache_vary_cookie() {
 
 #[tokio::test]
 async fn test_lscache_tag() {
-    let ctx = LSCacheTestContext::new("tag", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("tag", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -514,7 +506,7 @@ async fn test_lscache_tag() {
 
 #[tokio::test]
 async fn test_lscache_purge_by_tag() {
-    let ctx = LSCacheTestContext::new("purge-tag", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("purge-tag", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -583,9 +575,14 @@ async fn test_lscache_purge_by_tag() {
 
 #[tokio::test]
 async fn test_lscache_purge_by_url() {
-    let ctx = LSCacheTestContext::new("purge-url", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("purge-url", BASE_CONFIG_OVERRIDE_LS).await;
 
-    let resp = ctx.get("/url-purge-test").await;
+    let resp = ctx
+        .get_with_headers(
+            "/url-purge-test",
+            &[("X-Test-Cache-Control", "max-age=300")],
+        )
+        .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
         .headers()
@@ -596,7 +593,12 @@ async fn test_lscache_purge_by_url() {
     assert_eq!(ls_cache, "miss");
     assert_eq!(resp.text().await.unwrap(), "OK");
 
-    let resp = ctx.get("/url-purge-test").await;
+    let resp = ctx
+        .get_with_headers(
+            "/url-purge-test",
+            &[("X-Test-Cache-Control", "max-age=300")],
+        )
+        .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
         .headers()
@@ -610,6 +612,7 @@ async fn test_lscache_purge_by_url() {
         .get_with_headers(
             "/purge-url-trigger",
             &[
+                ("X-Test-Cache-Control", "max-age=300"),
                 ("X-Test-Purge", "url=/url-purge-test"),
                 ("X-Test-Body", "purge-url-response"),
             ],
@@ -617,7 +620,12 @@ async fn test_lscache_purge_by_url() {
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
-    let resp = ctx.get("/url-purge-test").await;
+    let resp = ctx
+        .get_with_headers(
+            "/url-purge-test",
+            &[("X-Test-Cache-Control", "max-age=300")],
+        )
+        .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let ls_cache = resp
         .headers()
@@ -630,7 +638,7 @@ async fn test_lscache_purge_by_url() {
 
 #[tokio::test]
 async fn test_lscache_purge_all() {
-    let ctx = LSCacheTestContext::new("purge-all", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("purge-all", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -690,7 +698,7 @@ async fn test_lscache_purge_all() {
 
 #[tokio::test]
 async fn test_lsc_cookie_to_set_cookie() {
-    let ctx = LSCacheTestContext::new("lsc-cookie", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("lsc-cookie", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -833,7 +841,7 @@ async fn test_lscache_public_tag_with_private_cache() {
 
 #[tokio::test]
 async fn test_lscache_bypass_uncacheable_status() {
-    let ctx = LSCacheTestContext::new("bypass-status", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("bypass-status", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -853,7 +861,7 @@ async fn test_lscache_bypass_uncacheable_status() {
 
 #[tokio::test]
 async fn test_lscache_shared_cache_control() {
-    let ctx = LSCacheTestContext::new("shared", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("shared", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -947,7 +955,7 @@ async fn test_lscache_purge_private_scope() {
 
 #[tokio::test]
 async fn test_lscache_purge_stale_flag() {
-    let ctx = LSCacheTestContext::new("purge-stale", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("purge-stale", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -990,7 +998,7 @@ async fn test_lscache_purge_stale_flag() {
 #[tokio::test]
 async fn test_lscache_vary_value() {
     // Note: vary values aren't supported by Ferron cache implementation.
-    let ctx = LSCacheTestContext::new("vary-value", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("vary-value", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -1034,7 +1042,7 @@ async fn test_lscache_vary_value() {
 
 #[tokio::test]
 async fn test_lscache_multiple_vary_cookies() {
-    let ctx = LSCacheTestContext::new("vary-multi-cookie", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("vary-multi-cookie", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -1094,7 +1102,7 @@ async fn test_lscache_multiple_vary_cookies() {
 
 #[tokio::test]
 async fn test_lscache_combined_vary_cookie_and_value() {
-    let ctx = LSCacheTestContext::new("vary-combined", BASE_CONFIG_EMIT_LS).await;
+    let ctx = LSCacheTestContext::new("vary-combined", BASE_CONFIG_OVERRIDE_LS).await;
 
     let resp = ctx
         .get_with_headers(
@@ -1144,6 +1152,7 @@ const BASE_CONFIG_PURGE_METHOD: &str = r#"
   proxy "http://backend:3000"
   cache {
     emit_litespeed_headers true
+    litespeed_override_cache_control true
     purge_method true
     purge_allowed_ips "0.0.0.0/0"
   }
@@ -1155,6 +1164,7 @@ const BASE_CONFIG_PURGE_METHOD_NO_ALLOW: &str = r#"
   proxy "http://backend:3000"
   cache {
     emit_litespeed_headers true
+    litespeed_override_cache_control true
     purge_method true
   }
 }
@@ -1236,6 +1246,7 @@ const BASE_CONFIG_PURGE_PROPAGATION_LOOP_PREVENTION: &str = r#"
   proxy "http://backend:3000"
   cache {
     emit_litespeed_headers true
+    litespeed_override_cache_control true
     purge_method true
     purge_allowed_ips "0.0.0.0/0"
     purge_propagation {
@@ -1390,6 +1401,7 @@ async fn test_lscache_purge_propagation_outbound_webhook() {
   proxy "http://backend:3000"
   cache {
     emit_litespeed_headers true
+    litespeed_override_cache_control true
     purge_method true
     purge_allowed_ips "0.0.0.0/0"
     purge_propagation {

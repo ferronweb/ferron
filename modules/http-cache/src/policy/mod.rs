@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use http::{header, HeaderMap, StatusCode};
 
-use crate::config::DEFAULT_MAX_CACHE_AGE_SECS;
 use crate::lscache::LiteSpeedCacheControl;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -421,8 +420,6 @@ pub(crate) fn choose_ttl(
         if let Some(ttl) = ls_control.and_then(|control| control.max_age) {
             return Some(ttl);
         }
-
-        return Some(Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS));
     }
 
     // Standard Cache-Control is the authority. LiteSpeed headers act only as
@@ -450,18 +447,13 @@ pub(crate) fn choose_ttl(
     }
 
     if litespeed_overrides_response_policy {
-        if scope == CacheScope::Public {
-            if let Some(ttl) = ls_control.and_then(|control| control.s_maxage) {
-                return Some(ttl);
-            }
-        }
-
-        if let Some(ttl) = ls_control.and_then(|control| control.max_age) {
-            return Some(ttl);
-        }
+        // LSCache (as originally implemented by LiteSpeed) does NOT cache the
+        // response unless cache headers are set. So do the same for the LSCache
+        // compatiblility layer.
+        None
+    } else {
+        last_modified_delta(headers)
     }
-
-    Some(Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
 }
 
 /// Recalculate freshness parameters from updated headers during 304 revalidation.
@@ -517,6 +509,26 @@ fn expires_delta(headers: &HeaderMap) -> Option<Duration> {
         .unwrap_or_else(std::time::SystemTime::now);
 
     Some(expires_at.duration_since(date).unwrap_or(Duration::ZERO))
+}
+
+fn last_modified_delta(headers: &HeaderMap) -> Option<Duration> {
+    // RFC 9111 permits caches to use heuristic freshness to estimate how long the content
+    // is valid. This is typically calculated as 10% of the time since the resource was
+    // last modified (if a `Last-Modified` date is present).
+    //
+    // So let's do that here as well.
+    let last_modified = headers.get(header::LAST_MODIFIED)?.to_str().ok()?;
+    let date = headers
+        .get(header::DATE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| httpdate::parse_http_date(value).ok())
+        .unwrap_or_else(std::time::SystemTime::now);
+
+    Some(
+        date.duration_since(httpdate::parse_http_date(last_modified).unwrap_or(date))
+            .map(|delta| delta / 10)
+            .unwrap_or(Duration::ZERO),
+    )
 }
 
 #[inline]

@@ -93,7 +93,7 @@ You do not need a `location` block or a separate Ferron directive to fix this: t
 
 `litespeed_override_cache_control` only takes effect when the response also carries `X-LiteSpeed-Cache-Control`, and plain static files served directly by Apache (as opposed to pages rendered by the LSCache plugin) never send that header. So standard `Cache-Control` governs static assets, and LSCache semantics keep governing PHP pages, from the same host block.
 
-The only thing missing is telling Apache to send `Cache-Control` on static files. Without it, Ferron still caches a bare `200 OK` for a short time under its default heuristic (5 minutes), but you get no control over the TTL and no `immutable` hint.
+The only thing missing is telling Apache to send `Cache-Control` on static files. Without it, Ferron would not cache a bare `200 OK` response at all.
 
 Add explicit headers with `mod_headers` and `mod_expires`:
 

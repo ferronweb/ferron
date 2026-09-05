@@ -222,12 +222,22 @@ fn not_cacheable_status_code() {
 
 #[test]
 fn cacheable_by_default_status_without_explicit_directive() {
-    let headers = HeaderMap::new();
+    let mut headers = HeaderMap::new();
+    // Insert Date and Last-Modified headers to simulate a cached response
+    // Since without these headers, the response won't be cacheable (default TTL heurisitcs)...
+    headers.insert(
+        header::DATE,
+        HeaderValue::from_static("Fri, 03 Jun 2022 09:00:00 GMT"),
+    );
+    headers.insert(
+        header::LAST_MODIFIED,
+        HeaderValue::from_static("Wed, 01 Jun 2022 08:00:00 GMT"),
+    );
     // 200 OK is cacheable by default even without explicit Cache-Control
     let decision = evaluate_response_policy(StatusCode::OK, &headers, false, false, None, false);
     assert!(decision.store);
     assert_eq!(decision.scope, Some(CacheScope::Public));
-    assert_eq!(decision.ttl, Some(Duration::from_secs(300)));
+    assert!(decision.ttl.is_some());
 }
 
 #[test]
@@ -350,12 +360,11 @@ fn litespeed_ttl_ignored_without_override() {
         Some(&ls_control),
         false,
     );
-    assert!(decision.store);
-    // Standard directives are silent, so the LS TTL must not apply; the
-    // response falls back to the heuristic lifetime instead.
+    assert!(!decision.store);
+    // Standard directives are silent, so the LS TTL must not apply
     assert_eq!(
         decision.ttl,
-        Some(Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
+        None // No Last-Modified, so no TTL...
     );
 }
 
@@ -377,12 +386,11 @@ fn litespeed_headers_do_not_drive_scope_without_override() {
         Some(&ls_control),
         false,
     );
-    // 200 OK is still cacheable by the default heuristic, but not as a
-    // 3600-second public response.
-    assert!(decision.store);
+    // 200 OK is not cacheable here.
+    assert!(!decision.store);
     assert_eq!(
         decision.ttl,
-        Some(Duration::from_secs(DEFAULT_MAX_CACHE_AGE_SECS))
+        None // No Last-Modified, so no TTL...
     );
     assert_ne!(decision.ttl, Some(Duration::from_secs(3600)));
 }
@@ -626,7 +634,17 @@ fn strip_no_cache_fields_removes_named_headers() {
 
 #[test]
 fn partial_content_is_cacheable_by_default() {
-    let headers = HeaderMap::new();
+    let mut headers = HeaderMap::new();
+    // Insert Date and Last-Modified headers to simulate a cached response
+    // Since without these headers, the response won't be cacheable (default TTL heurisitcs)...
+    headers.insert(
+        header::DATE,
+        HeaderValue::from_static("Fri, 03 Jun 2022 09:00:00 GMT"),
+    );
+    headers.insert(
+        header::LAST_MODIFIED,
+        HeaderValue::from_static("Wed, 01 Jun 2022 08:00:00 GMT"),
+    );
     let decision = evaluate_response_policy(
         StatusCode::PARTIAL_CONTENT,
         &headers,

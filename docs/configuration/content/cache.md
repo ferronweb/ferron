@@ -408,7 +408,7 @@ This gives resilience against transient backend failures by falling back to prev
 
 ### LSCache-compatible response headers
 
-When the cache module runs, Ferron understands the following response headers from upstream applications and origin handlers:
+When the cache module runs, Ferron understands the following response headers from upstream applications and origin handlers (if `litespeed_override_cache_control`):
 
 | Header                      | Description                                                                                                                                 | Notes                                                                                                                                   |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
