@@ -10,6 +10,10 @@
 
 - **HTTP cache coalesce timeout fix**: coalesce timeout in HTTP cache no longer causes server crashes.
 
+#### HTTP compression
+
+- **HTTP upgrade fix**: HTTP dynamic content compression is no longer applicable for 101 (Switching Protocols) responses for HTTP upgrades to work correctly.
+
 ## Ferron 3.0.0-rc.2
 
 **Released in September 4, 2026**

@@ -255,6 +255,13 @@ impl Stage<HttpContext> for DynamicCompressionStage {
             return Ok(());
         }
 
+        // 101 Switching Protocols mean HTTP upgrade
+        // (for example, WebSocket) and should not be compressed
+        if response.status() == http::StatusCode::SWITCHING_PROTOCOLS {
+            ctx.res = Some(HttpResponse::Custom(response));
+            return Ok(());
+        }
+
         let content_type = response
             .headers()
             .get(header::CONTENT_TYPE)
