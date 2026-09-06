@@ -827,12 +827,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
             .status(StatusCode::OK)
             .header(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
 
-        // Last-Modified
         if let Some(ref mdate) = mdate {
             builder = builder.header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
         }
 
-        // ETag
         if let Some(ref etag) = etag_value {
             let etag_suffix = used_compression.etag_suffix().unwrap_or("");
             let precompressed_suffix = if is_precompressed_file {
