@@ -157,6 +157,8 @@ Selectors:
 - `http example.org`: explicit protocol
 - `http example.org:8080`: explicit protocol and port
 - `tcp *:5432`: TCP listener
+- `*:8080`: explicit port (entire server at port 8080)
+- `*`: wildcard (entire server at default ports)
 
 Defaults:
 
