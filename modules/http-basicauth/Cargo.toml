@@ -1,6 +1,6 @@
 [package]
 name = "ferron-http-basicauth"
-version = "3.0.0-rc.2"
+version = "3.0.0-rc.3"
 edition = "2021"
 
 [dependencies]
@@ -28,7 +28,7 @@ argon2 = "0.6.0"
 [build-dependencies]
 find_git = "1.2.1"
 cc = "1.4.2"
-bindgen = "0.72.1"
+bindgen = "0.73.1"
 
 [features]
 fips = ["aws-lc-rs/fips"]

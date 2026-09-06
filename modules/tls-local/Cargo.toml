@@ -1,6 +1,6 @@
 [package]
 name = "ferron-tls-local"
-version = "3.0.0-rc.2"
+version = "3.0.0-rc.3"
 edition = "2021"
 
 [dependencies]
@@ -8,7 +8,7 @@ async-trait = "0.1"
 rustls = { version = "0.23.37", default-features = false, features = ["tls12", "std", "aws_lc_rs"] }
 rustls-pki-types = "1.14.0"
 rcgen = { version = "0.14.1", default-features = false, features = ["crypto", "aws_lc_rs", "pem"] }
-dirs = "6.0"
+dirs = "7.0"
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
 ferron-ocsp = { path = "../../types/ocsp" }
