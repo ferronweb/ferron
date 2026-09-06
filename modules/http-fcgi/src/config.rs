@@ -35,11 +35,15 @@ impl FcgiConfiguration {
         }
         let Some(cgi_children) = cgi_config.children.as_ref() else {
             return Some(FcgiConfiguration {
-                extensions: HashSet::new(),
+                extensions: if is_fcgi_php {
+                    HashSet::from([".php".into()])
+                } else {
+                    HashSet::new()
+                },
                 backend_server: backend_server?,
                 environment: HashMap::new(),
                 local_limit: None,
-                pass: true,
+                pass: !is_fcgi_php,
                 keepalive: false,
             });
         };
@@ -78,7 +82,7 @@ impl FcgiConfiguration {
 
         let mut extensions = HashSet::new();
         if is_fcgi_php {
-            extensions.insert(".php".to_string());
+            extensions.insert(".php".into());
         } else if let Some(entries) = cgi_children.directives.get("extension") {
             for entry in entries {
                 for arg in &entry.args {
