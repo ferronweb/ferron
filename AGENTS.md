@@ -22,63 +22,40 @@ Run from repository root unless noted.
 
 ### Build and test
 
-| Command                                                 | Purpose                                                                 |
-| ------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `cargo build --workspace`                               | Build all crates                                                        |
-| `cargo test --workspace`                                | Unit + inline tests                                                     |
-| `cargo test -p <crate>`                                 | Single crate                                                            |
-| `cargo fmt --all --check`                               | Formatting (no `.rustfmt.toml` — uses defaults)                         |
-| `cargo clippy --workspace --all-targets -- -D warnings` | Lint                                                                    |
-| `cargo shear`                                           | Check unused dependencies (CI)                                          |
-| `cargo run --manifest-path doctest/Cargo.toml`          | Test doc examples                                                       |
-| `cd e2e && cargo test`                                  | E2E tests (needs Docker + protoc)                                       |
-| `rumdl fmt docs && rumdl check --fix docs`              | Lint docs Markdown                                                      |
-| `npx aislop scan`                                       | Scan for possible AI-generated issues (false positives possible though) |
+| Command                                                 | Purpose                                                                               |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `cargo build --workspace`                               | Build all crates                                                                      |
+| `cargo test --workspace`                                | Unit + inline tests                                                                   |
+| `cargo test -p <crate>`                                 | Single crate                                                                          |
+| `cargo fmt --all --check`                               | Formatting (no `.rustfmt.toml` — uses defaults)                                       |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Lint                                                                                  |
+| `cargo shear`                                           | Check unused dependencies (CI)                                                        |
+| `cargo run --manifest-path doctest/Cargo.toml`          | Test Ferron configurations in doc examples                                            |
+| `cd e2e && cargo test`                                  | E2E tests (needs Docker + protoc)                                                     |
+| `rumdl fmt docs && rumdl check --fix docs`              | Lint docs Markdown (rumdl needs to be installed)                                      |
+| `npx aislop scan`                                       | Scan for possible AI-generated issues (false positives possible though; requires npm) |
 
 ### Run server
 
 ```
 cargo run -p ferron -- run -c ferron.conf                         # start
 cargo run -p ferron -- validate -c ferron.conf                    # validate config
-cargo run -p ferron -- validate -c ferron.conf --json             # validate, JSON output
 cargo run -p ferron -- doctor -c ferron.conf                      # best-practice check
-cargo run -p ferron -- adapt -c ferron.conf                       # dump config as JSON
-cargo run -p ferron -- daemon -c ferron.conf --pid-file /path     # Unix daemon
-cargo run -p ferron -- winservice install -c ferron.conf          # Windows service install
-cargo run -p ferron -- directives -c ferron.conf                  # print registered config directives as JSON
 cargo run -p ferron -- version                                    # version + build info
 ```
 
-`--config-params key=value;key2=value2` and `--config-adapter <name>` flags are accepted by `run`, `validate`, `doctor`, `adapt`, and `winservice install` (see `entrypoint/src/cli.rs:5`).
+See the user-facing documentation in `docs` for details and more commands.
 
 ### Justfile shortcuts
 
-```
-just build                       # cargo build -r
-just run                         # cargo run --bin ferron
-just prepare-config              # cp configs/ferron.conf.example ferron.conf
-just package [target]            # release archive (delegates to packaging/archive)
-just package-deb [target]        # Debian package (uses Docker)
-just package-rpm [target]        # RPM package (uses Docker)
-just package-windows [target]    # Windows installer (Windows host only)
-just installer                   # Linux installer (runs `make` in installer/)
-just cross-build target [pgo]    # cross-compile via cross-build/build.sh (pgo=true/false, Linux only)
-```
+This project uses `just` for automating some build tasks (preparing config, packaging, building an installer). See `just --list` for available commands.
 
 ### Fuzzing (requires nightly)
 
-All HTTP fuzz targets live under `fuzz/fuzz_targets/` (excluded from the main workspace). Run from inside the `fuzz/` directory:
+All HTTP fuzz targets live under `fuzz/fuzz_targets/` (excluded from the main workspace). Run from inside the `fuzz/` directory (list the files in `fuzz/fuzz_targets/` for available targets):
 
 ```
-cargo +nightly fuzz run fuzz_http_pipeline        # full HTTP pipeline integration (nginx-style)
-cargo +nightly fuzz run fuzz_canonicalize_path    # URL path canonicalization with security invariants
-cargo +nightly fuzz run fuzz_load_balancers       # LB algorithms (consistent hash, WRR, P2C, selector)
-cargo +nightly fuzz run fuzz_cache                # LSCache parsers, policy evaluation, cache key roundtrip
-cargo +nightly fuzz run fuzz_ratelimit            # rate limiter under concurrent access
-cargo +nightly fuzz run fuzz_traceparent          # W3C traceparent header parsing
-cargo +nightly fuzz run fuzz_qvalue               # Accept/q-value header parsing
-cargo +nightly fuzz run fuzz_otlp_http_request    # OTLP/HTTP encode+JSON roundtrips (no panic, deterministic)
-cargo +nightly fuzz run fuzz_otlp_histogram       # Base2 exponential histogram bucketing invariants
+cargo +nightly fuzz run $FUZZ_TARGET
 ```
 
 Dictionaries and seed corpora are in `fuzz/dictionaries/` and `fuzz/corpus/`.
@@ -98,12 +75,11 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 - **Branch**: all work targets `develop-3.x` (CI workflows filter on it; the 3.x docs site syncs from it).
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Update `CHANGELOG.md` under the unreleased section (except docs-only changes and implementation details, bug fixes and new features are accepted; this is a user-facing changelog). Commit messages should have `Assisted-by: AgentName:ModelVersion` in the footer (for example if you're Claude Opus 4.8 on Claude Code, use `Assisted-by: Claude:Opus-4.8`).
 - **Changelog structure**: New entries use a "Breaking changes" section (when applicable) followed by categorized sections (see `CHANGELOG.md`). Use bold inline headers for each bullet.
-- **Config changes**: Update matching pages under `docs/configuration/`. Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, and relative links. Config files can use either `.conf` or `.ferron` extensions.
+- **Config changes**: Update matching pages under `docs/configuration/` (validate with `cargo run --manifest-path doctest/Cargo.toml`). Validate with `cargo run -p ferron -- validate -c ferron.conf`. Docs use sentence-case headings, YAML frontmatter, `ferron` code blocks, and relative links. Config files can use either `.conf` or `.ferron` extensions.
 - **Stub implementation/known issue comments**: When leaving stubs in the codebase and comments explaining the stubs, include `TODO` markers. For known-issue comments, leave `FIXME` markers.
 - **Mandatory updates for features and fixes**: Every `feat:` or `fix:` commit MUST include updates to documentation (under `docs/` or `docs/configuration/`), the changelog (`CHANGELOG.md`, if user-facing as subtle implementation details don't count), and E2E tests (`e2e/tests/`, if applicable) so the change is verified and documentation does not drift. The `docs:` commit type is the exception (it may update documentation alone without adding tests or code).
-- **Module system**: Implement `ModuleLoader` trait. Register stages with `StageConstraint::Before/After` for DAG ordering via `RegistryBuilder`. All trait methods have default no-op impls — override only what's needed.
-- **Runtime**: dual model, primary threads run zincio (one per CPU, pinned, optional io_uring), secondary is tokio.
-- **Cross-compilation**: Uses `cross` for Linux targets. `Cross.toml` sets GCC 10 for some targets. Release binaries are produced by `cross-build/build.sh` (PGO by default; `.cargo/config.toml` pins an i686-musl linker). `bindgen-cli` required for non-`cross` builds.
+- **Runtime**: dual model, primary threads run zincio (one per CPU, pinned, optional io_uring), secondary is tokio. When writing HTTP server modules, consider using zincio functions instead of tokio as the code mostly runs on the primary runtime.
+- **Cross-compilation**: Uses `cross-build/build.sh` (PGO by default) for Linux targets on Linux hosts and `cross` otherwise. `bindgen-cli` required for non-`cross` builds.
 - **Docker**: PGO build images (`Dockerfile` distroless+musl, `Dockerfile.alpine`, `Dockerfile.debian` glibc-slim). No-PGO variants could be built with `--build-arg NOPGO=1`
 - **Invalid configurations**: if intentionally describing invalid configurations, prepend `# INVALID` to exactly the first line of the configuration.
 - **Idiomatic Ferron 3 configuration style**: When writing `.conf` examples in documentation, follow the new ferronconf spec conventions:
@@ -117,7 +93,7 @@ Benchmarks in `modules/http-server/benches/` (Criterion, gated on `features = ["
 ## Documentation principles
 
 - **Describe behavior, not labels**: When documenting features, limitations, or configurations, explain what the system actually does. Prefer explicit, functional descriptions over terminology.
-- **Inline callouts over separate notes sections**: Use GFM alert syntax (`> [!note]`, `> [!warning]`, `> [!important]`, `> [!tip]`) for brief callouts inline with the relevant content. Do not use a separate `## Notes and troubleshooting` section at the end of a page.
+- **Callouts**: Use GFM alert syntax (`> [!note]`, `> [!warning]`, `> [!important]`, `> [!tip]`) for brief callouts inline with the relevant content.
 - **Linters as guidance**: Treat terminology linters (e.g., `woke`) as soft suggestions. Do not let them override clarity, break consistency, or trigger unnecessary diffs.
 - **Documentation scope**: Treat the documentation like a user-facing manual. Do not include internal implementation details or directly re-quote specifications.
 - **Short paragraphs over long ones**: Write short, concise paragraphs that are easy to scan, read, and understand. Avoid overly verbose explanations.
