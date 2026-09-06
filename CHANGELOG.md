@@ -10,6 +10,10 @@
 
 - **Automatic `_lscache_vary` vary cookies**: request cookies with names starting with `_lscache_vary` (or the `_litespeed_vary` alias) are now part of the cache key without explicit configuration, matching LiteSpeed behavior. `X-LiteSpeed-Cache-Control: no-vary` disables all cookie-based vary dimensions for the response.
 
+#### FastCGI
+
+- **`fcgi_php` subdirectives**: the `fcgi_php` directive now supports same subdirectives as `fcgi` (except `extension` and `pass`). This allows for more fine-grained control over PHP FastCGI requests.
+
 ### Fixed
 
 #### HTTP cache

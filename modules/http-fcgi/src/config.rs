@@ -22,22 +22,12 @@ pub struct FcgiConfiguration {
 
 impl FcgiConfiguration {
     pub fn from_http_ctx(ctx: &HttpContext) -> Option<Self> {
-        if let Some(php_config) = ctx.configuration.get_entry("fcgi_php", true) {
-            let backend_server = php_config
-                .get_value()
-                .and_then(|v| v.as_string_with_interpolations(ctx))?;
-            let mut extensions = HashSet::new();
-            extensions.insert(".php".to_string());
-            return Some(FcgiConfiguration {
-                extensions,
-                backend_server,
-                environment: HashMap::new(),
-                local_limit: None,
-                pass: false,
-                keepalive: false,
-            });
-        }
-        let cgi_config = ctx.configuration.get_entry("fcgi", true)?;
+        let (cgi_config, is_fcgi_php) =
+            if let Some(php_config) = ctx.configuration.get_entry("fcgi_php", true) {
+                (php_config, true)
+            } else {
+                (ctx.configuration.get_entry("fcgi", true)?, false)
+            };
         let mut backend_server = cgi_config
             .get_value()
             .and_then(|v| v.as_string_with_interpolations(ctx));
@@ -88,7 +78,9 @@ impl FcgiConfiguration {
         }
 
         let mut extensions = HashSet::new();
-        if let Some(entries) = cgi_children.directives.get("extension") {
+        if is_fcgi_php {
+            extensions.insert(".php".to_string());
+        } else if let Some(entries) = cgi_children.directives.get("extension") {
             for entry in entries {
                 for arg in &entry.args {
                     if let Some(extension) = arg.as_str() {
@@ -98,11 +90,15 @@ impl FcgiConfiguration {
             }
         }
 
-        let pass = cgi_children
-            .directives
-            .get("pass")
-            .and_then(|e| e.first())
-            .is_none_or(|e| e.get_flag());
+        let pass = if is_fcgi_php {
+            false
+        } else {
+            cgi_children
+                .directives
+                .get("pass")
+                .and_then(|e| e.first())
+                .is_none_or(|e| e.get_flag())
+        };
         let keepalive = cgi_children.get_flag("keepalive");
 
         Some(FcgiConfiguration {

@@ -166,10 +166,26 @@ example.com {
 
 The `fcgi_php` directive is an alias for PHP FastCGI backends. It enables FastCGI and automatically registers the `.php` file extension. This is the recommended way to host PHP applications with PHP-FPM.
 
-| Form                     | Description                                         |
-| ------------------------ | --------------------------------------------------- |
-| `fcgi_php <url: string>` | Enables PHP FastCGI with the specified backend URL. |
-| `fcgi_php false`         | Disables PHP FastCGI for the current scope.         |
+| Form                     | Description                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `fcgi_php <url: string>` | Enables PHP FastCGI with the specified backend URL.                                                                                    |
+| `fcgi_php false`         | Disables PHP FastCGI for the current scope.                                                                                            |
+| `fcgi_php { ... }`       | Configures PHP FastCGI with a custom backend URL and other options (same as `fcgi`, but without `extension` and `pass` subdirectives). |
+
+This directive would be (roughly) equivalent to the following configuration:
+
+```ferron
+example.com {
+    root /var/www/html
+    fcgi {
+        backend tcp://php:9000/ # <-- Backend URL
+        pass false
+        extension ".php"
+        # Other subdirectives...
+    }
+    index index.php index.html index.htm
+}
+```
 
 **Configuration example with TCP:**
 
