@@ -322,7 +322,7 @@ pub(crate) async fn handle_http1_connection<S>(
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
 #[allow(clippy::too_many_arguments)]
 #[inline]
 pub(crate) async fn handle_http1_connection_zerocopy<S>(
@@ -367,7 +367,7 @@ pub(crate) async fn handle_http1_connection_zerocopy<S>(
     .await
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 #[allow(clippy::too_many_arguments)]
 #[inline]
 pub(crate) async fn handle_http1_connection_zerocopy<S>(
