@@ -142,7 +142,7 @@ example.com {
 
 ## Comments
 
-Comments start with `#`.
+Comments in `ferron.conf` files start with `#`. Multiline comments are not supported (you have to start every line with `#`).
 
 ## Host blocks
 
