@@ -8,7 +8,7 @@
 
 #### FastCGI
 
-- **Support for multiple FastCGI backends**: multiple FastCGI backends can now be configured using `fcgi` or `fcgi_php` directive.
+- **Support for multiple FastCGI backends**: multiple FastCGI backends can now be configured using multiple `fcgi` or `fcgi_php` directives.
 
 ### Changed
 
