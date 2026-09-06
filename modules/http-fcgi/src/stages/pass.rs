@@ -29,35 +29,13 @@ impl FcgiPassStage {
     pub fn new(client: Arc<FcgiClient>) -> Self {
         Self { client }
     }
-}
 
-#[async_trait::async_trait(?Send)]
-impl Stage<HttpContext> for FcgiPassStage {
-    fn name(&self) -> &str {
-        "fcgi_pass"
-    }
-
-    fn constraints(&self) -> Vec<ferron_core::registry::StageConstraint> {
-        vec![
-            ferron_core::registry::StageConstraint::Before("reverse_proxy".to_string()),
-            ferron_core::registry::StageConstraint::After("forward_proxy".to_string()),
-        ]
-    }
-
-    fn is_applicable(
+    #[inline]
+    async fn run_once(
         &self,
-        config: Option<&ferron_core::config::ServerConfigurationBlock>,
-    ) -> bool {
-        config.is_some_and(|b| b.has_directive("fcgi") || b.has_directive("fcgi_php"))
-    }
-
-    async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        // -- check if FastCGI is applicable
-        let Some(config) = FcgiConfiguration::from_http_ctx(ctx) else {
-            // FastCGI not configured
-            return Ok(true);
-        };
-
+        ctx: &mut HttpContext,
+        config: FcgiConfiguration,
+    ) -> Result<bool, PipelineError> {
         if !config.pass {
             // Not pass
 
@@ -336,5 +314,39 @@ impl Stage<HttpContext> for FcgiPassStage {
         );
 
         Ok(false)
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl Stage<HttpContext> for FcgiPassStage {
+    fn name(&self) -> &str {
+        "fcgi_pass"
+    }
+
+    fn constraints(&self) -> Vec<ferron_core::registry::StageConstraint> {
+        vec![
+            ferron_core::registry::StageConstraint::Before("reverse_proxy".to_string()),
+            ferron_core::registry::StageConstraint::After("forward_proxy".to_string()),
+        ]
+    }
+
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|b| b.has_directive("fcgi") || b.has_directive("fcgi_php"))
+    }
+
+    async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
+        let configs = FcgiConfiguration::from_http_ctx(ctx);
+        if configs.is_empty() {
+            return Ok(true);
+        };
+        for config in configs {
+            if !self.run_once(ctx, config).await? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 }

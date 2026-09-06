@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Added
+
+#### FastCGI
+
+- **Support for multiple FastCGI backends**: multiple FastCGI backends can now be configured using `fcgi` or `fcgi_php` directive.
+
 ### Changed
 
 #### HTTP cache

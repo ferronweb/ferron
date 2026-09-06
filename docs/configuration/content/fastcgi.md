@@ -16,7 +16,7 @@ example.com {
 }
 ```
 
-The `fcgi` directive enables FastCGI protocol support. You can write it as a boolean flag to enable with defaults. You can write a backend URL to set the target. You can also write it as a block with nested directives to customize behavior.
+The `fcgi` directive enables FastCGI protocol support. You can write it as a boolean flag to enable with defaults. You can write a backend URL to set the target. You can also write it as a block with nested directives to customize behavior. Ferron supports configuring multiple FastCGI backends.
 
 | Form                         | Description                                                                                 |
 | ---------------------------- | ------------------------------------------------------------------------------------------- |

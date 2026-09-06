@@ -25,34 +25,13 @@ impl FcgiFileStage {
     pub fn new(client: Arc<FcgiClient>) -> Self {
         Self { client }
     }
-}
 
-#[async_trait::async_trait(?Send)]
-impl Stage<HttpFileContext> for FcgiFileStage {
-    fn name(&self) -> &str {
-        "fcgi"
-    }
-
-    fn constraints(&self) -> Vec<ferron_core::registry::StageConstraint> {
-        vec![ferron_core::registry::StageConstraint::Before(
-            "static_file".to_string(),
-        )]
-    }
-
-    fn is_applicable(
+    #[inline]
+    async fn run_once(
         &self,
-        config: Option<&ferron_core::config::ServerConfigurationBlock>,
-    ) -> bool {
-        config.is_some_and(|b| b.has_directive("fcgi") || b.has_directive("fcgi_php"))
-    }
-
-    async fn run(&self, ctx: &mut HttpFileContext) -> Result<bool, PipelineError> {
-        // -- check if FastCGI is applicable
-        let Some(config) = FcgiConfiguration::from_http_ctx(&ctx.http) else {
-            // FastCGI not configured
-            return Ok(true);
-        };
-
+        ctx: &mut HttpFileContext,
+        config: FcgiConfiguration,
+    ) -> Result<bool, PipelineError> {
         if config.pass {
             // Pass
             return Ok(true);
@@ -355,5 +334,38 @@ impl Stage<HttpFileContext> for FcgiFileStage {
         );
 
         Ok(false)
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl Stage<HttpFileContext> for FcgiFileStage {
+    fn name(&self) -> &str {
+        "fcgi"
+    }
+
+    fn constraints(&self) -> Vec<ferron_core::registry::StageConstraint> {
+        vec![ferron_core::registry::StageConstraint::Before(
+            "static_file".to_string(),
+        )]
+    }
+
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|b| b.has_directive("fcgi") || b.has_directive("fcgi_php"))
+    }
+
+    async fn run(&self, ctx: &mut HttpFileContext) -> Result<bool, PipelineError> {
+        let configs = FcgiConfiguration::from_http_ctx(&ctx.http);
+        if configs.is_empty() {
+            return Ok(true);
+        };
+        for config in configs {
+            if !self.run_once(ctx, config).await? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 }

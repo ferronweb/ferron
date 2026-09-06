@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use ferron_core::config::ServerConfigurationDirectiveEntry;
 use ferron_http::HttpContext;
 
 /*
@@ -21,13 +22,11 @@ pub struct FcgiConfiguration {
 }
 
 impl FcgiConfiguration {
-    pub fn from_http_ctx(ctx: &HttpContext) -> Option<Self> {
-        let (cgi_config, is_fcgi_php) =
-            if let Some(php_config) = ctx.configuration.get_entry("fcgi_php", true) {
-                (php_config, true)
-            } else {
-                (ctx.configuration.get_entry("fcgi", true)?, false)
-            };
+    fn from_config_entry(
+        cgi_config: &ServerConfigurationDirectiveEntry,
+        is_fcgi_php: bool,
+        ctx: &HttpContext,
+    ) -> Option<Self> {
         let mut backend_server = cgi_config
             .get_value()
             .and_then(|v| v.as_string_with_interpolations(ctx));
@@ -109,5 +108,20 @@ impl FcgiConfiguration {
             pass,
             keepalive,
         })
+    }
+
+    pub fn from_http_ctx(ctx: &HttpContext) -> Vec<Self> {
+        let mut result = Vec::new();
+        for entry in ctx.configuration.get_entries("fcgi_php", true) {
+            if let Some(config) = Self::from_config_entry(entry, true, ctx) {
+                result.push(config);
+            }
+        }
+        for entry in ctx.configuration.get_entries("fcgi", true) {
+            if let Some(config) = Self::from_config_entry(entry, false, ctx) {
+                result.push(config);
+            }
+        }
+        result
     }
 }
