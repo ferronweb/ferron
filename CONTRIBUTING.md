@@ -21,37 +21,87 @@ Contributions are welcome across:
 ## Development setup
 
 1. Fork the repository and clone your fork.
-2. Create a branch from `develop-3.x` (this is the default development branch for Ferron 3 work).
+2. Create a branch from `develop-3.x` (this is the default development branch for Ferron 3 work; CI workflows filter on it and the 3.x docs site syncs from it).
 3. Make your changes in focused commits.
+
+## Repository layout
+
+Ferron 3 is a Rust workspace (resolver "2"). Key directories:
+
+- `core/`: runtime foundation (`Module`/`ModuleLoader` traits, config, `Registry`, `Pipeline`, dual `Runtime`)
+- `bin/`: thin CLI crate, depends on `ferron-entrypoint` with `profile-default` features
+- `entrypoint/`: wires all modules; every module crate is an optional feature (see `entrypoint/Cargo.toml`)
+- `modules/*`: feature crates grouped as `http-*`, `config-*`, `tls-*`, `dns-*`, `observability-*`, and more
+- `types/*`: shared domain types (`dns`, `http`, `observability`, `ocsp`, `tls`)
+- `e2e/`: end-to-end tests via testcontainers (requires Docker and `protoc` in `PATH`)
+- `docs/`: user-facing docs; sidebar in `docs/links.json`; synced to a separate website repo on push to `3.x`
+- `doctest/`: standalone harness that runs doc examples against the built binary
+- `utils/`: CLI utilities (`fmt`, `kdl2ferron`, `passwd`, `precompress`, `serve`); not part of the main server
+
+`doctest/`, `e2e/`, and `fuzz/` are not members of the main workspace (see root `Cargo.toml`), so `cargo build --workspace` and `cargo test --workspace` skip them. Run them with their own commands listed below.
 
 ## Build and check locally
 
-Run from the repository root.
+Run from the repository root unless noted:
 
-### Rust tests and checks
+| Command                                                 | Purpose                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `cargo build --workspace`                               | Build all workspace crates                                                           |
+| `cargo test --workspace`                                | Run unit and inline tests                                                            |
+| `cargo test -p <crate>`                                 | Run tests for a single crate                                                         |
+| `cargo fmt --all --check`                               | Check formatting (the repo uses default `rustfmt` settings, no `.rustfmt.toml`)      |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Lint; warnings fail the check                                                        |
+| `cargo shear`                                           | Check for unused dependencies (also runs in CI)                                      |
+| `cargo run --manifest-path doctest/Cargo.toml`          | Test Ferron configurations in doc examples                                           |
+| `cd e2e && cargo test`                                  | Run E2E tests (needs Docker and `protoc`; build the test image first, see below)     |
+| `rumdl fmt docs && rumdl check --fix docs`              | Format and lint docs Markdown (requires `rumdl`)                                     |
+| `npx aislop scan`                                       | Scan for possible AI-generated issues (false positives are possible; requires `npm`) |
+
+`just` automates packaging and related tasks. Run `just --list` to see available recipes.
+
+### Run the server from source
 
 ```bash
-cargo test --workspace --verbose
-cargo fmt --all -- --check
-cargo clippy --workspace -- -D warnings
+cargo run -p ferron -- run -c ferron.conf                         # start
+cargo run -p ferron -- validate -c ferron.conf                    # validate config
+cargo run -p ferron -- doctor -c ferron.conf                      # best-practice check
+cargo run -p ferron -- version                                    # version and build info
 ```
 
-### Build Ferron
+See `docs/` for details and more commands.
 
-```bash
-cargo build
-```
+## Testing structure
 
-### Docker E2E test suite
+There are three tiers:
 
-If your change affects runtime behavior, networking, modules, container packaging, or configuration parsing, also run:
+1. **Inline unit tests**: `#[cfg(test)] mod tests` inside source files. Run them with `cargo test --workspace` or `cargo test -p <crate>`.
+2. **E2E tests**: `e2e/tests/`, each file declared as `[[test]]` in `e2e/Cargo.toml`. They use `testcontainers` and `reqwest` and need a Docker daemon and `protoc` in `PATH`. Build the test image first:
 
-```bash
-docker rm -f $(docker ps -a --filter ancestor=e2e-test-ferron -q)
-docker image rm e2e-test-ferron
-cd e2e
-cargo test
-```
+   ```bash
+   docker build -f e2e/Dockerfile.test -t e2e-test-ferron:latest .
+   cd e2e && cargo test
+   ```
+
+   If your change affects runtime behavior, networking, modules, container packaging, or config parsing, run the E2E suite.
+
+3. **Fuzz**: `fuzz/` uses nightly `cargo-fuzz` and is excluded from the main workspace. Run from inside `fuzz/` (list files in `fuzz/fuzz_targets/` for available targets):
+
+   ```bash
+   cargo +nightly fuzz run $FUZZ_TARGET
+   ```
+
+   Dictionaries and seed corpora live in `fuzz/dictionaries/` and `fuzz/corpus/`.
+
+Benchmarks live in `modules/http-server/benches/` (Criterion, gated on `features = ["bench"]` on the `ferron-http-server` crate).
+
+## Runtime note
+
+Ferron uses a dual runtime: primary threads run `zincio` (one per CPU, pinned, optional `io_uring`) and a secondary runtime is `tokio`. Most request handling runs on the primary runtime, so when you write HTTP server modules, prefer `zincio` functions over `tokio` equivalents.
+
+## Code conventions
+
+- When you leave a stub implementation, add a `TODO` marker in the comment that explains the stub.
+- When you leave a comment about a known issue, add a `FIXME` marker.
 
 ## Documentation expectations
 
@@ -59,7 +109,17 @@ If behavior, configuration, CLI output, installation steps, or defaults change, 
 
 - Main docs live in `docs/`.
 - If you add or rename doc pages, update `docs/links.json`.
+- If you change configuration directives, update the matching pages under `docs/configuration/` and validate with:
+
+  ```bash
+  cargo run -p ferron -- validate -c ferron.conf
+  cargo run --manifest-path doctest/Cargo.toml
+  ```
+
 - Keep examples and command snippets aligned with the code and scripts in this repository.
+- Config examples use `.conf` or `.ferron` file extensions. If you show an invalid configuration on purpose, prepend `# INVALID` to exactly the first line. For the full docs style guide, see [docs/README.md](./docs/README.md).
+
+Every `feat:` or `fix:` commit must include updates to documentation (under `docs/`), the changelog (`CHANGELOG.md`, unless the change is a subtle implementation detail with no user-visible effect), and E2E tests (`e2e/tests/`, when applicable). This keeps docs from drifting and keeps changes verified. The `docs:` commit type is the exception: it may update documentation alone without code or tests.
 
 Optional local docs linting/formatting (same tool used in CI):
 
@@ -69,6 +129,11 @@ rumdl check --fix docs
 ```
 
 For other guidelines for writing documentation, see [docs/README.md](./docs/README.md).
+
+## Cross-compilation and Docker builds
+
+- Linux cross-builds use `cross-build/build.sh` (PGO by default) on Linux hosts and `cross` otherwise. See [cross-build/README.md](./cross-build/README.md). Non-`cross` builds require `bindgen-cli`.
+- Docker images use PGO builds (`Dockerfile` distroless and musl, `Dockerfile.alpine`, `Dockerfile.debian` glibc-slim). Build a no-PGO variant with `--build-arg NOPGO=1`.
 
 ## Pull request guidelines
 
@@ -83,9 +148,10 @@ For other guidelines for writing documentation, see [docs/README.md](./docs/READ
 
 ## Commit guidance
 
-- Commit messages follow Conventional Commits.
+- Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`).
 - Keep commit messages descriptive and scoped.
 - Avoid mixing refactors, behavior changes, and docs-only updates in one commit when possible.
+- Update `CHANGELOG.md` under the unreleased section for user-facing `feat:` and `fix:` changes. Docs-only changes and subtle implementation details are exempt. New entries start with a "Breaking changes" section when applicable, followed by categorized sections (see `CHANGELOG.md` for the current layout). Use a bold inline header for each bullet.
 
 ## AI policy
 

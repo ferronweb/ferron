@@ -4,36 +4,6 @@ User-facing documentation for Ferron 3. Synced to the documentation website on p
 
 ## Structure
 
-```text
-docs/
-├── index.md                       # Landing page
-├── getting-started.md             # First-time user guide
-├── troubleshooting.md             # Diagnostic checklist
-├── installation/                  # Platform-specific install guides
-│   ├── linux/
-│   ├── docker.md
-│   ├── windows.md
-│   ├── manual-installation.md
-│   └── source/
-├── migration/
-│   └── from-v2.md                 # Ferron 2 → 3 migration
-├── use-cases/                     # Task-oriented feature guides
-│   ├── content/                   # static files, caching, CGI, PHP
-│   ├── traffic/                   # reverse proxy, URL rewriting, error pages
-│   ├── security/                  # TLS, rate limiting, abuse, headers, mTLS, access control
-│   └── operations/                # admin API, logging, ferron-serve
-├── configuration/                 # Directive-level reference
-│   ├── fundamentals/              # syntax, JSON, validation, doctor, conditionals
-│   ├── server/                    # core directives, host directives
-│   ├── routing/                   # URL processing, response control, rewrite, map
-│   ├── proxy/                     # reverse proxy, forward proxy
-│   ├── security/                  # auth, TLS, ACME, DNS, OCSP, session tickets
-│   ├── content/                   # static files, compression, cache, CGI, FastCGI, SCGI, buffering, headers, rate limit, abuse
-│   └── observability/             # logging, metrics, tracing, OTLP, Prometheus
-├── links.json                     # Sidebar link definitions (internal use by the website)
-└── README.md                      # This file
-```
-
 Two tiers of documentation:
 
 - **Use-case guides** (`use-cases/`): task-oriented walkthroughs that show how to accomplish a goal (for example, "set up automatic TLS").
@@ -60,7 +30,20 @@ Sentence case. Use `##` for top-level section headings, `###` for subsections. N
 
 ### Code blocks
 
-Use ` ```ferron ` for configuration examples. Use ` ``` ` (no language tag) for shell commands or other output.
+Use ` ```ferron ` for configuration examples. Use ` ```bash ` or ` ```sh ` for shell commands. Use ` ```text ` for plain output.
+
+Config files use `.conf` or `.ferron` extensions.
+
+### Configuration style
+
+Write `.conf` examples in idiomatic Ferron 3 style:
+
+- **No semicolons**: end directives with newlines, not semicolons.
+- **4-space indentation**: use 4 spaces at each nesting level.
+- **Bare strings preferred**: omit quotes unless the value contains spaces, special characters, or ambiguity.
+- **Boolean flags**: write the bare directive to enable it. Write `directive false` only to disable it.
+- **Raw string literals**: use `r"..."` for regex patterns to avoid double-backslash escaping.
+- **Quoted strings**: single and double quotes are interchangeable. Use the clearer option.
 
 ### Invalid configuration examples
 
@@ -98,6 +81,9 @@ See [Reverse proxying](/docs/use-cases/traffic/reverse-proxy).
 ### Writing principles
 
 - **Describe behavior, not labels**: explain what the system actually does, not just what the feature is called.
+- **Documentation scope**: treat the documentation as a user-facing manual. Do not include internal implementation details. Do not quote specifications directly.
+- **Short paragraphs**: write short paragraphs. Keep each paragraph easy to scan. Cover one topic per paragraph with a maximum of six sentences.
+- **Simple English**: write in clear, straightforward language. Use [ASD-STE100](https://asd-ste100.org/) as a reference for simplified English.
 - **Functional precision first**: prefer clear, explicit descriptions over clever phrasing.
 - **Consistency over novelty**: if a term comes from an upstream API, a legacy config, or a widely adopted standard, keep it.
 - **Inline callouts**: no separate notes section at the end of a page.
@@ -115,6 +101,17 @@ See [Reverse proxying](/docs/use-cases/traffic/reverse-proxy).
   - **One topic per paragraph**, max six sentences per paragraph.
   - **No em dashes as separators**: Use a period, comma, or restructure instead. Keep numeric ranges (1-2).
   - **American spelling**.
+
+## Validation
+
+Run these commands from the repository root after you change configuration docs:
+
+```bash
+cargo run -p ferron -- validate -c ferron.conf
+cargo run --manifest-path doctest/Cargo.toml
+```
+
+Ferron validates the sample config. The doctest harness runs doc examples against the built binary.
 
 ## Sidebar
 

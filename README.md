@@ -115,7 +115,7 @@ The full directive reference is in [docs/configuration/](https://ferron.sh/docs/
 
 ## Contributing
 
-Feedback, bug reports, and testing are welcome. When reporting issues, include your configuration file, `--verbose` output, and steps to reproduce.
+Feedback, bug reports, and testing are welcome. When reporting issues, include your configuration file, `--verbose` output, and steps to reproduce. See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, checks, and guidelines.
 
 ## License
 
