@@ -149,13 +149,15 @@ For other guidelines for writing documentation, see [docs/README.md](./docs/READ
 - Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`).
 - Keep commit messages descriptive and scoped.
 - Avoid mixing refactors, behavior changes, and docs-only updates in one commit when possible.
+- Do small, incremental commits that are easy to review, instead of large, monolithic commits.
 - Update `CHANGELOG.md` under the unreleased section for user-facing `feat:` and `fix:` changes. Docs-only changes and subtle implementation details are exempt. New entries start with a "Breaking changes" section when applicable, followed by categorized sections (see `CHANGELOG.md` for the current layout). Use a bold inline header for each bullet.
 
 ## AI policy
 
 - AI coding agents are allowed to assist with code generation and documentation (for example when dealing with repetitive tasks or boilerplate code). For improved code quality and guidance, tell the AI agent to read this file (`CONTRIBUTING.md`) before making any changes.
 - Commit messages with AI assistance should have `Assisted-by: AgentName:ModelVersion` in the footer (for example when using Claude Opus 4.8 on Claude Code, use `Assisted-by: Claude:Opus-4.8`). AI-powered autocomplete is exempt from this requirement.
-- Autonomous AI agents opening pull requests (and issues) **aren't allowed**. Any such activity will be detected.
+- Autonomous AI agents opening pull requests (and issues) **aren't allowed**. Any such activity will be detected. This is to make sure an actual human is responsible for code changes, not some automated system.
+- Bulk (high volume in short time) AI-generated code and commits **are discouraged**. This is to make sure the code quality remains high and maintainable.
 - The repository has an `aislop` CI/CD workflow that detects low-quality AI-generated code (aka "AI slop") using [`npx aislop ci`](https://github.com/scanaislop/aislop).
 
 ## Questions and discussion
