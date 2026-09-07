@@ -26,19 +26,17 @@ Contributions are welcome across:
 
 ## Repository layout
 
-Ferron 3 is a Rust workspace (resolver "2"). Key directories:
+Ferron 3 is a Rust workspace (resolver "2"). Key directories include:
 
-- `core/`: runtime foundation (`Module`/`ModuleLoader` traits, config, `Registry`, `Pipeline`, dual `Runtime`)
-- `bin/`: thin CLI crate, depends on `ferron-entrypoint` with `profile-default` features
-- `entrypoint/`: wires all modules; every module crate is an optional feature (see `entrypoint/Cargo.toml`)
-- `modules/*`: feature crates grouped as `http-*`, `config-*`, `tls-*`, `dns-*`, `observability-*`, and more
-- `types/*`: shared domain types (`dns`, `http`, `observability`, `ocsp`, `tls`)
-- `e2e/`: end-to-end tests via testcontainers (requires Docker and `protoc` in `PATH`)
-- `docs/`: user-facing docs; sidebar in `docs/links.json`; synced to a separate website repo on push to `3.x`
-- `doctest/`: standalone harness that runs doc examples against the built binary
-- `utils/`: CLI utilities (`fmt`, `kdl2ferron`, `passwd`, `precompress`, `serve`); not part of the main server
-
-`doctest/`, `e2e/`, and `fuzz/` are not members of the main workspace (see root `Cargo.toml`), so `cargo build --workspace` and `cargo test --workspace` skip them. Run them with their own commands listed below.
+- `core/`: the Ferron core
+- `bin/`: thin wrapper around `ferron-entrypoint`
+- `entrypoint/`: the entrypoint binary that wires all modules
+- `modules/*`: where individual module crates are located
+- `types/*`: shared types that can be used by modules
+- `e2e/`: E2E tests via testcontainers (requires Docker and `protoc`)
+- `docs/`: user-facing docs; sidebar in `docs/links.json`
+- `doctest/`: setup for testing Ferron configurations in doc examples
+- `utils/`: CLI utilities (`fmt`, `kdl2ferron`, `passwd`, `precompress`, `serve`)
 
 ## Build and check locally
 
