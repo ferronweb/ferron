@@ -153,7 +153,7 @@ For other guidelines for writing documentation, see [docs/README.md](./docs/READ
 
 ## AI policy
 
-- AI coding agents are allowed to assist with code generation and documentation (for example when dealing with repetitive tasks or boilerplate code). This repository contains [AGENTS.md](./AGENTS.md) (and CLAUDE.md symlink) file for guiding AI coding agents.
+- AI coding agents are allowed to assist with code generation and documentation (for example when dealing with repetitive tasks or boilerplate code). For improved code quality and guidance, tell the AI agent to read this file (`CONTRIBUTING.md`) before making any changes.
 - Commit messages with AI assistance should have `Assisted-by: AgentName:ModelVersion` in the footer (for example when using Claude Opus 4.8 on Claude Code, use `Assisted-by: Claude:Opus-4.8`). AI-powered autocomplete is exempt from this requirement.
 - Autonomous AI agents opening pull requests (and issues) **aren't allowed**. Any such activity will be detected.
 - The repository has an `aislop` CI/CD workflow that detects low-quality AI-generated code (aka "AI slop") using [`npx aislop ci`](https://github.com/scanaislop/aislop).
