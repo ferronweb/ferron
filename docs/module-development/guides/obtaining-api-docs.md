@@ -58,20 +58,4 @@ User docs live in `docs/` in the Ferron repository. The sidebar is
 
 ## Keeping docs in sync
 
-The example modules repository (`https://github.com/ferronweb/ferron3-example-modules`)
-contains its own `AGENTS.md` that tells agents to fetch docs from the upstream
-`3.x` branch (user docs and `cargo doc`). When Ferron API changes, regenerate
-docs and update your `Cargo.toml` branch reference (`branch = "3.x"` always
-tracks the latest development API).
-
-## Short guide in `AGENTS.md`
-
-The example repo `AGENTS.md` summarizes:
-
-```markdown
-git clone https://github.com/ferronweb/ferron -b 3.x /tmp/ferron
-cd /tmp/ferron
-cargo doc --no-deps
-```
-
-and lists the GitHub URLs for direct reading without cloning.
+When Ferron API changes, regenerate docs and update your `Cargo.toml` branch reference (`branch = "3.x"` always tracks the latest development API).
