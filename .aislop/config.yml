@@ -1,11 +1,11 @@
 version: 1
 engines:
-  format: true
-  lint: true
+  format: false # There's already a `cargo fmt` step in the CI
+  lint: false # There's already a `cargo clippy` step in the CI
   code-quality: true
   ai-slop: true
   architecture: false
-  security: true
+  security: false # There's already a `cargo audit` step in the CI
 quality:
   maxFunctionLoc: 80
   maxFileLoc: 400
