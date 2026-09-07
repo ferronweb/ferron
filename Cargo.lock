@@ -6058,9 +6058,9 @@ dependencies = [
 
 [[package]]
 name = "zincio-http"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85f444a2878fb12da5d9b4705a5125ae983f20cd271bbdb3d0958df6e623efd2"
+checksum = "0d13bae6a9a35d5a6cb27ca1cc1394bd3e75bb769d2436238177c70f7cf3eb8d"
 dependencies = [
  "bytes",
  "futures-executor",

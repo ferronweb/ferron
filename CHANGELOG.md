@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+#### HTTP server core
+
+- **HTTP/1.x multiple request parsing fix**: fixed HTTP/1.x requests being rejected with 400 Bad Request after multiple requests in one connection. (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-046))
+
 ## Ferron 3.0.0-rc.3
 
 **Released in September 6, 2026**
