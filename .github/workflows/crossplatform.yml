@@ -111,7 +111,7 @@ jobs:
 
       - name: Setup sysroot cache
         if: matrix.cross-build == true
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             cross-build/sysroots/prepared
@@ -119,7 +119,7 @@ jobs:
           restore-keys: SysrootsFerron3-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Setup cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
