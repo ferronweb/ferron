@@ -340,6 +340,7 @@ Ferron supports reverse proxying to backends listening on Unix sockets:
 ```ferron
 example.com {
     proxy {
+        # "backend" can be replaced with arbitrary hostname
         upstream http://backend {
             unix /run/backend/web.sock
         }
