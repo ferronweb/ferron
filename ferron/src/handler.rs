@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(not(feature = "runtime-zincio"))]
 use std::time::SystemTime;
 
 use crate::acme::ACME_TLS_ALPN_NAME;
@@ -17,20 +17,26 @@ use crate::util::SendAsyncIo;
 use crate::util::{read_proxy_header, MultiCancel};
 use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(feature = "runtime-zincio")]
+use bytes::Bytes;
+#[cfg(not(feature = "runtime-zincio"))]
 use bytes::{Buf, Bytes};
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 use core_affinity::CoreId;
 use ferron_common::logging::LogMessage;
+#[cfg(feature = "runtime-zincio")]
+use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(not(feature = "runtime-zincio"))]
 use http_body_util::StreamBody;
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(feature = "runtime-zincio")]
+use hyper::body::{Body, Frame, SizeHint};
+#[cfg(not(feature = "runtime-zincio"))]
 use hyper::body::{Frame, Incoming};
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(not(feature = "runtime-zincio"))]
 use hyper::service::service_fn;
 use hyper::Request;
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(not(feature = "runtime-zincio"))]
 use hyper::Response;
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioIo, TokioTimer};
@@ -44,17 +50,21 @@ use monoio::net::TcpStream;
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo, MonoioTimer};
 use rustls::server::Acceptor;
 use rustls::ServerConfig;
+#[cfg(feature = "runtime-zincio")]
+use std::pin::Pin;
+#[cfg(feature = "runtime-zincio")]
+use std::task::{Context, Poll};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::LazyConfigAcceptor;
 use tokio_util::sync::CancellationToken;
-#[cfg(feature = "runtime-vibeio")]
-use vibeio::net::PollTcpStream;
-#[cfg(feature = "runtime-vibeio")]
-use vibeio::net::TcpStream;
+#[cfg(feature = "runtime-zincio")]
+use zincio::net::PollTcpStream;
+#[cfg(feature = "runtime-zincio")]
+use zincio::net::TcpStream;
 
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(not(feature = "runtime-zincio"))]
 static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
   hyper::header::HeaderName::from_static("keep-alive"),
   hyper::header::HeaderName::from_static("proxy-connection"),
@@ -62,6 +72,37 @@ static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
   hyper::header::TE,
   hyper::header::UPGRADE,
 ];
+
+#[cfg(feature = "runtime-zincio")]
+struct SyncBody(http_body_util::combinators::UnsyncBoxBody<Bytes, std::io::Error>);
+#[cfg(feature = "runtime-zincio")]
+unsafe impl Send for SyncBody {}
+#[cfg(feature = "runtime-zincio")]
+unsafe impl Sync for SyncBody {}
+#[cfg(feature = "runtime-zincio")]
+impl Body for SyncBody {
+  type Data = Bytes;
+  type Error = std::io::Error;
+  fn poll_frame(
+    mut self: Pin<&mut Self>,
+    cx: &mut Context<'_>,
+  ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+    Pin::new(&mut self.0).poll_frame(cx)
+  }
+  fn is_end_stream(&self) -> bool {
+    self.0.is_end_stream()
+  }
+  fn size_hint(&self) -> SizeHint {
+    self.0.size_hint()
+  }
+}
+#[cfg(feature = "runtime-zincio")]
+fn boxed_incoming<B>(body: B) -> BoxBody<Bytes, std::io::Error>
+where
+  B: Body<Data = Bytes, Error = std::io::Error> + Send + 'static,
+{
+  BoxBody::new(SyncBody(body.boxed_unsync()))
+}
 
 /// A struct holding reloadable data for handler threads
 #[allow(clippy::type_complexity)]
@@ -108,7 +149,7 @@ pub fn create_http_handler(
   enable_uring: Option<bool>,
   io_uring_disabled: Sender<Option<std::io::Error>>,
   multi_cancel: Arc<MultiCancel>,
-  #[cfg(feature = "runtime-vibeio")] core_affinity: Option<CoreId>,
+  #[cfg(feature = "runtime-zincio")] core_affinity: Option<CoreId>,
 ) -> Result<(CancellationToken, Sender<()>), Box<dyn Error + Send + Sync>> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
@@ -117,7 +158,7 @@ pub fn create_http_handler(
   std::thread::Builder::new()
     .name("Request handler".to_string())
     .spawn(move || {
-      #[cfg(feature = "runtime-vibeio")]
+      #[cfg(feature = "runtime-zincio")]
       if let Some(affinity) = core_affinity {
         core_affinity::set_for_current(affinity);
       }
@@ -260,10 +301,10 @@ async fn http_handler_fn(
           // Unset it when io_uring is enabled, and set it otherwise.
           #[cfg(feature = "runtime-monoio")]
           let _ = tcp_stream.set_nonblocking(monoio::utils::is_legacy());
-          #[cfg(feature = "runtime-vibeio")]
-          let _ = tcp_stream.set_nonblocking(vibeio::util::supports_completion());
+          #[cfg(feature = "runtime-zincio")]
+          let _ = tcp_stream.set_nonblocking(zincio::util::supports_completion());
 
-          #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+          #[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
           let tcp_stream = match TcpStream::from_std(tcp_stream) {
             Ok(stream) => stream,
             Err(err) => {
@@ -319,7 +360,7 @@ async fn http_handler_fn(
 #[cfg(feature = "runtime-monoio")]
 type HttpTcpStream = SendAsyncIo<TcpStreamPoll>;
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 type HttpTcpStream = PollTcpStream;
 
 #[cfg(feature = "runtime-tokio")]
@@ -431,7 +472,7 @@ async fn convert_tcp_stream_for_runtime(
   }
 }
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 #[inline]
 async fn convert_tcp_stream_for_runtime(
   tcp_stream: TcpStream,
@@ -517,7 +558,7 @@ async fn maybe_accept_tls_stream(
   }
 }
 
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(not(feature = "runtime-zincio"))]
 #[inline]
 fn sanitize_http3_response_headers(response_headers: &mut hyper::HeaderMap) {
   if let Ok(http_date) = httpdate::fmt_http_date(SystemTime::now()).try_into() {
@@ -576,40 +617,41 @@ async fn http_tcp_handler_fn(
     #[cfg(feature = "runtime-tokio")]
     let io = TokioIo::new(tls_stream);
 
-    // Ferron with Vibeio would use `vibeio-http` for HTTP
-    #[cfg(feature = "runtime-vibeio")]
+    // Ferron with Zincio would use `zincio-http` for HTTP
+    #[cfg(feature = "runtime-zincio")]
     if is_http2 {
-      use vibeio_http::{Http2Options, HttpProtocol};
+      use zincio_http::{Http2Options, HttpProtocol};
 
-      let mut h2_options = Http2Options::default();
-      let http2_builder = h2_options.h2_builder();
       let http2_settings = get_http2_settings(&configurations);
+      let mut h2_options = Http2Options::default();
       if let Some(initial_window_size) = http2_settings.initial_window_size {
-        http2_builder.initial_window_size(initial_window_size);
+        h2_options = h2_options
+          .initial_stream_window_size(initial_window_size)
+          .initial_connection_window_size(initial_window_size);
       }
       if let Some(max_frame_size) = http2_settings.max_frame_size {
-        http2_builder.max_frame_size(max_frame_size);
+        h2_options = h2_options.max_frame_size(max_frame_size);
       }
       if let Some(max_concurrent_streams) = http2_settings.max_concurrent_streams {
-        http2_builder.max_concurrent_streams(max_concurrent_streams);
+        h2_options = h2_options.max_concurrent_streams(max_concurrent_streams);
       }
       if let Some(max_header_list_size) = http2_settings.max_header_list_size {
-        http2_builder.max_header_list_size(max_header_list_size);
+        h2_options = h2_options.max_header_list_size(max_header_list_size);
       }
       if http2_settings.enable_connect_protocol {
-        http2_builder.enable_connect_protocol();
+        h2_options = h2_options.enable_connect_protocol(true);
       }
 
       let configurations_clone = configurations.clone();
       let graceful_shutdown_token2 = CancellationToken::new();
       let connection_reference = _connection_reference.clone();
-      let http_future = vibeio_http::Http2::new(tls_stream, h2_options)
+      let http_future = zincio_http::Http2::new(tls_stream, h2_options)
         .graceful_shutdown_token(graceful_shutdown_token2.clone())
-        .handle(move |request: Request<vibeio_http::Incoming>| {
+        .handle(move |request: Request<zincio_http::Incoming>| {
           let (request_parts, request_body) = request.into_parts();
           let request = Request::from_parts(
             request_parts,
-            request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+            boxed_incoming(request_body.map_err(|e| std::io::Error::other(e.to_string()))),
           );
           let fut = request_handler(
             request,
@@ -647,19 +689,19 @@ async fn http_tcp_handler_fn(
         log_http_connection_error(&configurations, "HTTPS", err).await;
       }
     } else {
-      use vibeio_http::{Http1Options, HttpProtocol};
+      use zincio_http::{Http1Options, HttpProtocol};
 
       let configurations_clone = configurations.clone();
       let graceful_shutdown_token2 = CancellationToken::new();
       let connection_reference = _connection_reference.clone();
       let mut http_future = Box::pin(
-        vibeio_http::Http1::new(tls_stream, Http1Options::default())
+        zincio_http::Http1::new(tls_stream, Http1Options::default())
           .graceful_shutdown_token(graceful_shutdown_token2.clone())
-          .handle(move |request: Request<vibeio_http::Incoming>| {
+          .handle(move |request: Request<zincio_http::Incoming>| {
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(
               request_parts,
-              request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+              boxed_incoming(request_body.map_err(|e| std::io::Error::other(e.to_string()))),
             );
             let fut = request_handler(
               request,
@@ -698,7 +740,7 @@ async fn http_tcp_handler_fn(
       }
     }
 
-    #[cfg(not(feature = "runtime-vibeio"))]
+    #[cfg(not(feature = "runtime-zincio"))]
     if is_http2 {
       // Hyper's HTTP/2 connection doesn't require underlying I/O to be `Send`.
       #[cfg(feature = "runtime-monoio")]
@@ -847,22 +889,22 @@ async fn http_tcp_handler_fn(
       }
     }
   } else if let MaybeTlsStream::Plain(stream) = maybe_tls_stream {
-    #[cfg(feature = "runtime-vibeio")]
+    #[cfg(feature = "runtime-zincio")]
     {
-      use vibeio_http::{Http1Options, HttpProtocol};
+      use zincio_http::{Http1Options, HttpProtocol};
 
       let configurations_clone = configurations.clone();
       let connection_reference = _connection_reference.clone();
       let graceful_shutdown_token2 = CancellationToken::new();
-      let http1 = vibeio_http::Http1::new(stream, Http1Options::default())
+      let http1 = zincio_http::Http1::new(stream, Http1Options::default())
         .graceful_shutdown_token(graceful_shutdown_token2.clone());
 
       #[cfg(target_os = "linux")]
-      let mut http_future = Box::pin(http1.zerocopy().handle(move |request: Request<vibeio_http::Incoming>| {
+      let mut http_future = Box::pin(http1.zerocopy().handle(move |request: Request<zincio_http::Incoming>| {
         let (request_parts, request_body) = request.into_parts();
         let request = Request::from_parts(
           request_parts,
-          request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+          boxed_incoming(request_body.map_err(|e| std::io::Error::other(e.to_string()))),
         );
         let fut = request_handler(
           request,
@@ -883,11 +925,11 @@ async fn http_tcp_handler_fn(
         }
       }));
       #[cfg(not(target_os = "linux"))]
-      let mut http_future = Box::pin(http1.handle(move |request: Request<vibeio_http::Incoming>| {
+      let mut http_future = Box::pin(http1.handle(move |request: Request<zincio_http::Incoming>| {
         let (request_parts, request_body) = request.into_parts();
         let request = Request::from_parts(
           request_parts,
-          request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+          boxed_incoming(request_body.map_err(|e| std::io::Error::other(e.to_string()))),
         );
         let fut = request_handler(
           request,
@@ -924,7 +966,7 @@ async fn http_tcp_handler_fn(
         log_http_connection_error(&configurations, "HTTP", err).await;
       }
     }
-    #[cfg(not(feature = "runtime-vibeio"))]
+    #[cfg(not(feature = "runtime-zincio"))]
     {
       #[cfg(feature = "runtime-monoio")]
       let io = MonoioIo::new(stream);
@@ -1001,7 +1043,7 @@ async fn http_tcp_handler_fn(
 
 /// HTTP/3 handler function
 #[inline]
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::type_complexity)]
 async fn http_quic_handler_fn(
@@ -1014,7 +1056,7 @@ async fn http_quic_handler_fn(
   shutdown_rx: CancellationToken,
   graceful_shutdown_token: Arc<CancellationToken>,
 ) {
-  use vibeio_http::{Http3Options, HttpProtocol};
+  use zincio_http::{Http3Options, HttpProtocol};
 
   let connection = if let Some(tls_config) = quic_tls_configs
     .get(&(Some(server_address.ip().to_canonical()), server_address.port()))
@@ -1048,13 +1090,13 @@ async fn http_quic_handler_fn(
   let configurations_clone = configurations.clone();
   let graceful_shutdown_token2 = CancellationToken::new();
   let mut http_future = Box::pin(
-    vibeio_http::Http3::new(h3_quinn::Connection::new(connection), Http3Options::default())
+    zincio_http::Http3::new(zincio_http::quinn::Connection::new(connection), Http3Options::default())
       .graceful_shutdown_token(graceful_shutdown_token2.clone())
-      .handle(move |request: Request<vibeio_http::Incoming>| {
+      .handle(move |request: Request<zincio_http::Incoming>| {
         let (request_parts, request_body) = request.into_parts();
         let request = Request::from_parts(
           request_parts,
-          request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+          boxed_incoming(request_body.map_err(|e| std::io::Error::other(e.to_string()))),
         );
         let fut = request_handler(
           request,
@@ -1094,7 +1136,7 @@ async fn http_quic_handler_fn(
 }
 
 /// HTTP/3 handler function
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(not(feature = "runtime-zincio"))]
 #[inline]
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::type_complexity)]

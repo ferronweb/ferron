@@ -7,8 +7,8 @@ use std::task::{Context, Poll};
 use std::thread::ThreadId;
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use vibeio::net::PollUnixStream;
-use vibeio::net::UnixStream;
+use zincio::net::PollUnixStream;
+use zincio::net::UnixStream;
 
 /// SendUnixStream is a wrapper around Monoio's UnixStream.
 pub struct SendUnixStreamPoll {
@@ -80,7 +80,7 @@ impl SendUnixStreamPoll {
       }
       // Safety: The inner UnixStreamPoll is manually dropped, so it's safe to use the raw fd/socket
       let std_unix_stream = unsafe { std::os::unix::net::UnixStream::from_raw_fd(self.inner_fd) };
-      let _ = std_unix_stream.set_nonblocking(vibeio::util::supports_completion());
+      let _ = std_unix_stream.set_nonblocking(zincio::util::supports_completion());
       let unix_stream_poll = UnixStream::from_std(std_unix_stream)
         .expect("failed to create UnixStream")
         .into_poll()

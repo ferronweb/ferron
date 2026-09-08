@@ -221,9 +221,9 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
                 use tokio::fs;
                 fs::metadata(&joined_pathbuf).await
               };
-              #[cfg(feature = "runtime-vibeio")]
+              #[cfg(feature = "runtime-zincio")]
               let metadata = {
-                use vibeio::fs;
+                use zincio::fs;
                 fs::metadata(&joined_pathbuf).await
               };
               #[cfg(all(feature = "runtime-monoio", unix))]

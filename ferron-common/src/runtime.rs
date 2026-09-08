@@ -13,35 +13,35 @@ pub fn spawn(future: impl Future + 'static) {
 }
 
 /// Spawn a future in an asynchronous runtime
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 pub fn spawn(future: impl Future + 'static) {
-  vibeio::spawn(future);
+  zincio::spawn(future);
 }
 
 #[cfg(feature = "runtime-monoio")]
 pub use monoio::spawn_blocking;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::task::spawn_blocking;
-#[cfg(feature = "runtime-vibeio")]
-pub use vibeio::spawn_blocking;
+#[cfg(feature = "runtime-zincio")]
+pub use zincio::spawn_blocking;
 
 #[cfg(feature = "runtime-monoio")]
 pub use monoio::time::sleep;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::time::sleep;
-#[cfg(feature = "runtime-vibeio")]
-pub use vibeio::time::sleep;
+#[cfg(feature = "runtime-zincio")]
+pub use zincio::time::sleep;
 
 #[cfg(feature = "runtime-monoio")]
 pub use monoio::time::timeout;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::time::timeout;
-#[cfg(feature = "runtime-vibeio")]
-pub use vibeio::time::timeout;
+#[cfg(feature = "runtime-zincio")]
+pub use zincio::time::timeout;
 
 #[cfg(feature = "runtime-monoio")]
 pub use monoio::select;
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 pub use tokio::select;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::select;

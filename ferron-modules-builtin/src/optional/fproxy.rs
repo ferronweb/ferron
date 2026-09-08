@@ -19,16 +19,16 @@ use monoio_compat::hyper::MonoioIo;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
-#[cfg(feature = "runtime-vibeio")]
-use vibeio::net::TcpStream;
+#[cfg(feature = "runtime-zincio")]
+use zincio::net::TcpStream;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::get_entries_for_validation;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
 use ferron_common::util::ModuleCache;
-#[cfg(feature = "runtime-vibeio")]
-use vibeio_hyper::VibeioIo;
+#[cfg(feature = "runtime-zincio")]
+use zincio_hyper::ZincioIo;
 
 /// A forward proxy fallback module loader
 pub struct ForwardProxyModuleLoader {
@@ -124,20 +124,20 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
     if is_connect_proxy_request {
       if let Some(connect_address) = request.uri().authority().map(|auth| auth.to_string()) {
         let error_logger = error_logger.clone();
-        #[cfg(feature = "runtime-vibeio")]
+        #[cfg(feature = "runtime-zincio")]
         let upgrade_on = {
           let mut request = request;
-          vibeio_http::prepare_upgrade(&mut request)
+          zincio_http::prepare_upgrade(&mut request)
         };
         ferron_common::runtime::spawn(async move {
-          #[cfg(feature = "runtime-vibeio")]
+          #[cfg(feature = "runtime-zincio")]
           let upgrade_on = (if let Some(upgraded_request) = upgrade_on {
             upgraded_request.await
           } else {
             None
           })
-          .ok_or(std::io::Error::other("vibeio HTTP upgrade failure"));
-          #[cfg(not(feature = "runtime-vibeio"))]
+          .ok_or(std::io::Error::other("zincio HTTP upgrade failure"));
+          #[cfg(not(feature = "runtime-zincio"))]
           let upgrade_on = hyper::upgrade::on(request).await;
           match upgrade_on {
             Ok(upgraded_request) => {
@@ -170,7 +170,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
               };
               #[cfg(feature = "runtime-tokio")]
               let mut stream = stream;
-              #[cfg(feature = "runtime-vibeio")]
+              #[cfg(feature = "runtime-zincio")]
               let mut stream = match stream.into_poll() {
                 Ok(stream) => stream,
                 Err(err) => {
@@ -185,7 +185,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
               let mut upgraded = MonoioIo::new(upgraded_request);
               #[cfg(feature = "runtime-tokio")]
               let mut upgraded = TokioIo::new(upgraded_request);
-              #[cfg(feature = "runtime-vibeio")]
+              #[cfg(feature = "runtime-zincio")]
               let mut upgraded = upgraded_request;
 
               tokio::io::copy_bidirectional(&mut upgraded, &mut stream)
@@ -318,7 +318,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
           });
         }
       };
-      #[cfg(feature = "runtime-vibeio")]
+      #[cfg(feature = "runtime-zincio")]
       let stream = match stream.into_poll() {
         Ok(stream) => stream,
         Err(err) => {
@@ -371,8 +371,8 @@ async fn http_proxy(
   let io = MonoioIo::new(stream);
   #[cfg(feature = "runtime-tokio")]
   let io = TokioIo::new(stream);
-  #[cfg(feature = "runtime-vibeio")]
-  let io = VibeioIo::new(stream);
+  #[cfg(feature = "runtime-zincio")]
+  let io = ZincioIo::new(stream);
 
   let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
     Ok(data) => data,

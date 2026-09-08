@@ -1,5 +1,5 @@
 use std::future::Future;
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 use std::sync::LazyLock;
 
 /// A representation of an asynchronous runtime
@@ -13,8 +13,8 @@ enum RuntimeInner {
   MonoioIouring(monoio::Runtime<monoio::time::TimeDriver<monoio::IoUringDriver>>),
   #[cfg(feature = "runtime-monoio")]
   MonoioLegacy(monoio::Runtime<monoio::time::TimeDriver<monoio::LegacyDriver>>),
-  #[cfg(feature = "runtime-vibeio")]
-  Custom(vibeio::Runtime),
+  #[cfg(feature = "runtime-zincio")]
+  Custom(zincio::Runtime),
   #[cfg(feature = "runtime-tokio")]
   Tokio(tokio::runtime::Runtime),
   TokioOnly(tokio::runtime::Runtime),
@@ -48,10 +48,10 @@ impl Runtime {
         }
       }
     }
-    #[cfg(all(feature = "runtime-vibeio", target_os = "linux"))]
-    if enable_uring.is_none_or(|x| x) && vibeio::util::supports_io_uring() {
-      match vibeio::RuntimeBuilder::new()
-        .driver(vibeio::DriverKind::IoUring)
+    #[cfg(all(feature = "runtime-zincio", target_os = "linux"))]
+    if enable_uring.is_none_or(|x| x) && zincio::util::supports_io_uring() {
+      match zincio::RuntimeBuilder::new()
+        .driver(zincio::DriverKind::IoUring)
         .enable_timer(true)
         .blocking_pool(Box::new(BlockingThreadPool))
         .build()
@@ -71,7 +71,7 @@ impl Runtime {
         }
       }
     }
-    #[cfg(not(all(any(feature = "runtime-monoio", feature = "runtime-vibeio"), target_os = "linux")))]
+    #[cfg(not(all(any(feature = "runtime-monoio", feature = "runtime-zincio"), target_os = "linux")))]
     let _ = enable_uring;
 
     // `io_uring` is either disabled or not supported
@@ -84,14 +84,14 @@ impl Runtime {
     );
     #[cfg(feature = "runtime-tokio")]
     let rt_inner = RuntimeInner::Tokio(tokio::runtime::Builder::new_current_thread().enable_all().build()?);
-    #[cfg(feature = "runtime-vibeio")]
+    #[cfg(feature = "runtime-zincio")]
     let rt_inner = {
       #[cfg(unix)]
-      let driver_kind = vibeio::DriverKind::Mio;
+      let driver_kind = zincio::DriverKind::Mio;
       #[cfg(windows)]
-      let driver_kind = vibeio::DriverKind::Iocp;
+      let driver_kind = zincio::DriverKind::Iocp;
       RuntimeInner::Custom(
-        vibeio::RuntimeBuilder::new()
+        zincio::RuntimeBuilder::new()
           .driver(driver_kind)
           .enable_timer(true)
           .blocking_pool(Box::new(BlockingThreadPool))
@@ -128,9 +128,9 @@ impl Runtime {
       #[cfg(feature = "runtime-tokio")]
       RuntimeInner::Tokio(ref mut rt) => rt.block_on(async move {
         let local_set = tokio::task::LocalSet::new();
-        local_set.run_until(fut).await;
+        local_set.run_until(fut).await
       }),
-      #[cfg(feature = "runtime-vibeio")]
+      #[cfg(feature = "runtime-zincio")]
       RuntimeInner::Custom(ref mut rt) => rt.block_on(fut),
       RuntimeInner::TokioOnly(ref mut rt) => rt.block_on(fut),
     };
@@ -139,8 +139,8 @@ impl Runtime {
 
 pub use ferron_common::runtime::*;
 
-#[cfg(feature = "runtime-vibeio")]
-use vibeio::blocking::DefaultBlockingThreadPool;
+#[cfg(feature = "runtime-zincio")]
+use zincio::blocking::DefaultBlockingThreadPool;
 
 /// A blocking thread pool for Monoio, implemented using `blocking` crate
 #[cfg(feature = "runtime-monoio")]
@@ -154,16 +154,16 @@ impl monoio::blocking::ThreadPool for BlockingThreadPool {
   }
 }
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 static GLOBAL_BLOCKING_POOL: LazyLock<DefaultBlockingThreadPool> =
   LazyLock::new(|| DefaultBlockingThreadPool::with_max_threads(1536));
 
-/// A global blocking thread pool for `vibeio`
-#[cfg(feature = "runtime-vibeio")]
+/// A global blocking thread pool for `zincio`
+#[cfg(feature = "runtime-zincio")]
 struct BlockingThreadPool;
 
-#[cfg(feature = "runtime-vibeio")]
-impl vibeio::blocking::BlockingThreadPool for BlockingThreadPool {
+#[cfg(feature = "runtime-zincio")]
+impl zincio::blocking::BlockingThreadPool for BlockingThreadPool {
   #[inline]
   fn spawn(&self, task: Box<dyn FnOnce() + Send + 'static>) {
     GLOBAL_BLOCKING_POOL.spawn(task);

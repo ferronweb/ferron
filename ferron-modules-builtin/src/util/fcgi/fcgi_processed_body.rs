@@ -12,7 +12,7 @@ pub struct FcgiProcessedBody<B> {
   finished: bool,
   #[cfg(feature = "runtime-tokio")]
   inner: Pin<Box<B>>,
-  #[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
+  #[cfg(any(feature = "runtime-monoio", feature = "runtime-zincio"))]
   inner: send_wrapper::SendWrapper<Pin<Box<B>>>,
 }
 
@@ -29,7 +29,7 @@ where
     }
   }
 
-  #[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
+  #[cfg(any(feature = "runtime-monoio", feature = "runtime-zincio"))]
   pub fn new(inner: B, stderr_cancel: CancellationToken) -> Self {
     Self {
       stderr_cancel,
@@ -56,7 +56,7 @@ where
     }
     #[cfg(feature = "runtime-tokio")]
     let chunk = ready!(Pin::new(&mut self.inner).poll_frame(cx));
-    #[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
+    #[cfg(any(feature = "runtime-monoio", feature = "runtime-zincio"))]
     let chunk = ready!(Pin::new(&mut *self.inner).poll_frame(cx));
     if chunk.is_none() {
       // No more chunks

@@ -23,9 +23,9 @@ use clap::Parser;
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 use malloc_best_effort::BEMalloc;
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(not(feature = "runtime-zincio"))]
 use mimalloc::MiMalloc;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::{RootCertStore, ServerConfig};
@@ -56,10 +56,10 @@ use crate::setup::tls::{
 use crate::setup::tls_single::{init_crypto_provider, set_tls_version};
 use crate::util::{load_certs, MultiCancel};
 
-#[cfg(not(feature = "runtime-vibeio"))]
+#[cfg(not(feature = "runtime-zincio"))]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 #[global_allocator]
 static GLOBAL: BEMalloc = BEMalloc::new();
 
@@ -855,7 +855,7 @@ fn before_starting_server(
         // there would be a "deadlock" when shutting down handler threads, and they won't be able to shut down
         let multi_cancel = Arc::new(MultiCancel::new(available_parallelism.saturating_sub(1)));
 
-        #[cfg(feature = "runtime-vibeio")]
+        #[cfg(feature = "runtime-zincio")]
         if let Some(core_ids) = core_affinity::get_core_ids() {
           for core_id in core_ids {
             handler_shutdown_channels.push(create_http_handler(
@@ -879,7 +879,7 @@ fn before_starting_server(
             )?);
           }
         }
-        #[cfg(not(feature = "runtime-vibeio"))]
+        #[cfg(not(feature = "runtime-zincio"))]
         for _ in 0..available_parallelism {
           handler_shutdown_channels.push(create_http_handler(
             reloadable_handler_data.clone(),
@@ -1056,7 +1056,7 @@ fn print_version() {
 
 /// The main entry point of the application
 fn main() {
-  #[cfg(feature = "runtime-vibeio")]
+  #[cfg(feature = "runtime-zincio")]
   BEMalloc::init();
 
   // Set the panic handler

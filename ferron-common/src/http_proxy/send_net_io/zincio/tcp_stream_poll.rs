@@ -10,9 +10,9 @@ use std::task::{Context, Poll};
 use std::thread::ThreadId;
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use vibeio::net::PollTcpStream;
-use vibeio::net::TcpStream;
-use vibeio::util::supports_completion;
+use zincio::net::PollTcpStream;
+use zincio::net::TcpStream;
+use zincio::util::supports_completion;
 
 /// SendTcpStream is a wrapper around Monoio's TcpStream.
 pub struct SendTcpStreamPoll {

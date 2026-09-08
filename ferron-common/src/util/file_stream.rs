@@ -6,11 +6,11 @@ use std::task::{Context, Poll};
 use bytes::Bytes;
 use futures_util::Stream;
 use send_wrapper::SendWrapper;
-use vibeio::fs::File;
+use zincio::fs::File;
 
 const MAX_BUFFER_SIZE: usize = 16384;
 
-/// A wrapper over Vibeio's `File` that implements a `Stream` trait and doesn't spawn a background task.
+/// A wrapper over Zincio's `File` that implements a `Stream` trait and doesn't spawn a background task.
 pub struct FileStream {
   file: Arc<SendWrapper<File>>,
   current_pos: u64,
@@ -21,7 +21,7 @@ pub struct FileStream {
 }
 
 impl FileStream {
-  /// Creates a new stream from Vibeio's `File`, with specified start and end positions
+  /// Creates a new stream from Zincio's `File`, with specified start and end positions
   pub fn new(file: File, start: Option<u64>, end: Option<u64>) -> Self {
     Self {
       file: Arc::new(SendWrapper::new(file)),

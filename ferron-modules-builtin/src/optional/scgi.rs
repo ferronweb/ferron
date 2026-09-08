@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use cegla_scgi::client::CgiBuilder;
-#[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
+#[cfg(any(feature = "runtime-monoio", feature = "runtime-zincio"))]
 use ferron_common::util::SendAsyncIo;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
@@ -18,8 +18,8 @@ use monoio::net::TcpStream;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
-#[cfg(feature = "runtime-vibeio")]
-use vibeio::net::TcpStream;
+#[cfg(feature = "runtime-zincio")]
+use zincio::net::TcpStream;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
@@ -41,13 +41,13 @@ impl cegla_scgi::client::Runtime for CustomScgiRuntime {
 }
 
 /// Custom runtime for `cegla-scgi`
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 pub struct CustomScgiRuntime;
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 impl cegla_scgi::client::Runtime for CustomScgiRuntime {
   fn spawn(&self, future: impl std::future::Future + 'static) {
-    vibeio::spawn(async move {
+    zincio::spawn(async move {
       future.await;
     });
   }
@@ -183,8 +183,8 @@ impl ModuleHandlers for ScgiModuleHandlers {
           };
           #[cfg(feature = "runtime-tokio")]
           let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
-          #[cfg(feature = "runtime-vibeio")]
-          let canonicalize_result = vibeio::fs::canonicalize(&wwwroot_unknown).await;
+          #[cfg(feature = "runtime-zincio")]
+          let canonicalize_result = zincio::fs::canonicalize(&wwwroot_unknown).await;
 
           match canonicalize_result {
             Ok(pathbuf) => pathbuf,
@@ -231,8 +231,8 @@ impl ModuleHandlers for ScgiModuleHandlers {
         };
         #[cfg(feature = "runtime-tokio")]
         let canonicalize_result = tokio::fs::canonicalize(&joined_pathbuf).await;
-        #[cfg(feature = "runtime-vibeio")]
-        let canonicalize_result = vibeio::fs::canonicalize(&joined_pathbuf).await;
+        #[cfg(feature = "runtime-zincio")]
+        let canonicalize_result = zincio::fs::canonicalize(&joined_pathbuf).await;
 
         let canonical_joined_pathbuf = match canonicalize_result {
           Ok(pathbuf) => pathbuf,
@@ -442,13 +442,13 @@ async fn execute_scgi(
   };
 
   let io = tokio::io::join(socket_reader, socket_writer);
-  #[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
+  #[cfg(any(feature = "runtime-monoio", feature = "runtime-zincio"))]
   let io = SendAsyncIo::new(io);
 
   #[cfg(feature = "runtime-tokio")]
   let response =
     cegla_scgi::client::client_handle_scgi_send(request, tokio_cegla::TokioScgiRuntime, io, env_builder).await?;
-  #[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
+  #[cfg(any(feature = "runtime-monoio", feature = "runtime-zincio"))]
   let response = cegla_scgi::client::client_handle_scgi(request, CustomScgiRuntime, io, env_builder).await?;
 
   let (parts, body) = response.into_parts();
@@ -472,7 +472,7 @@ async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn 
   Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
 }
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
   let socket = TcpStream::connect(addr).await?;
   socket.set_nodelay(true)?;
@@ -510,9 +510,9 @@ async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn
 }
 
 #[allow(dead_code)]
-#[cfg(all(feature = "runtime-vibeio", unix))]
+#[cfg(all(feature = "runtime-zincio", unix))]
 async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
-  use vibeio::net::UnixStream;
+  use zincio::net::UnixStream;
 
   let socket = UnixStream::connect(path).await?;
 
@@ -540,7 +540,7 @@ async fn connect_unix(
 }
 
 #[allow(dead_code)]
-#[cfg(all(any(feature = "runtime-monoio", feature = "runtime-vibeio"), not(unix)))]
+#[cfg(all(any(feature = "runtime-monoio", feature = "runtime-zincio"), not(unix)))]
 async fn connect_unix(
   _path: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {

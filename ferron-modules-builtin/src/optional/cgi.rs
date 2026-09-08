@@ -21,16 +21,16 @@ use tokio::process::Command;
 use tokio::sync::RwLock;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
-#[cfg(feature = "runtime-vibeio")]
-use vibeio::fs;
+#[cfg(feature = "runtime-zincio")]
+use zincio::fs;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use ferron_common::util::{ModuleCache, TtlCache, SERVER_SOFTWARE};
 use ferron_common::{get_entries, get_entries_for_validation, get_entry, get_value};
-#[cfg(feature = "runtime-vibeio")]
-use vibeio::util::AsyncWrap;
+#[cfg(feature = "runtime-zincio")]
+use zincio::util::AsyncWrap;
 
 /// Custom runtime for `cegla-cgi`
 #[cfg(feature = "runtime-monoio")]
@@ -99,21 +99,21 @@ impl cegla_cgi::client::SendChild for CustomCgiChild {
 }
 
 /// Custom runtime for `cegla-cgi`
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 pub struct CustomCgiRuntime;
 
 /// Custom child process for `cegla-cgi`
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 pub struct CustomCgiChild {
-  inner: vibeio::process::Child,
+  inner: zincio::process::Child,
 }
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 impl cegla_cgi::client::Runtime for CustomCgiRuntime {
   type Child = CustomCgiChild;
 
   fn spawn(&self, future: impl std::future::Future + 'static) {
-    vibeio::spawn(async move {
+    zincio::spawn(async move {
       future.await;
     });
   }
@@ -125,7 +125,7 @@ impl cegla_cgi::client::Runtime for CustomCgiRuntime {
     env: CgiEnvironment,
     cwd: Option<PathBuf>,
   ) -> Result<Self::Child, std::io::Error> {
-    let mut command = vibeio::process::Command::new(cmd);
+    let mut command = zincio::process::Command::new(cmd);
     command
       .stdin(Stdio::piped())
       .stdout(Stdio::piped())
@@ -141,11 +141,11 @@ impl cegla_cgi::client::Runtime for CustomCgiRuntime {
   }
 }
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 impl cegla_cgi::client::Child for CustomCgiChild {
-  type Stdin = AsyncWrap<vibeio::process::ChildStdin>;
-  type Stdout = AsyncWrap<vibeio::process::ChildStdout>;
-  type Stderr = AsyncWrap<vibeio::process::ChildStderr>;
+  type Stdin = AsyncWrap<zincio::process::ChildStdin>;
+  type Stdout = AsyncWrap<zincio::process::ChildStdout>;
+  type Stderr = AsyncWrap<zincio::process::ChildStderr>;
 
   fn stdin(&mut self) -> Option<Self::Stdin> {
     self.inner.stdin.take().map(AsyncWrap::new)
@@ -164,12 +164,12 @@ impl cegla_cgi::client::Child for CustomCgiChild {
   }
 }
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 struct SendWrapBody<B> {
   inner: send_wrapper::SendWrapper<std::pin::Pin<Box<B>>>,
 }
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 impl<B> SendWrapBody<B> {
   fn new(inner: B) -> Self {
     Self {
@@ -178,7 +178,7 @@ impl<B> SendWrapBody<B> {
   }
 }
 
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 impl<B> hyper::body::Body for SendWrapBody<B>
 where
   B: hyper::body::Body + 'static,
@@ -387,7 +387,7 @@ impl ModuleHandlers for CgiModuleHandlers {
                 "Can't spawn a blocking task to obtain the canonical webroot path",
               )))
           };
-          #[cfg(any(feature = "runtime-tokio", feature = "runtime-vibeio"))]
+          #[cfg(any(feature = "runtime-tokio", feature = "runtime-zincio"))]
           let canonicalize_result = fs::canonicalize(&wwwroot_unknown).await;
 
           match canonicalize_result {
@@ -441,7 +441,7 @@ impl ModuleHandlers for CgiModuleHandlers {
                   "Can't spawn a blocking task to obtain the canonical file path",
                 )))
             };
-            #[cfg(any(feature = "runtime-tokio", feature = "runtime-vibeio"))]
+            #[cfg(any(feature = "runtime-tokio", feature = "runtime-zincio"))]
             let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
 
             let canonical_joined_pathbuf = match canonicalize_result {
@@ -481,9 +481,9 @@ impl ModuleHandlers for CgiModuleHandlers {
             use tokio::fs;
             fs::metadata(&joined_pathbuf).await
           };
-          #[cfg(feature = "runtime-vibeio")]
+          #[cfg(feature = "runtime-zincio")]
           let metadata = {
-            use vibeio::fs;
+            use zincio::fs;
             fs::metadata(&joined_pathbuf).await
           };
           #[cfg(all(feature = "runtime-monoio", unix))]
@@ -535,9 +535,9 @@ impl ModuleHandlers for CgiModuleHandlers {
                     use monoio::fs;
                     fs::metadata(&temp_joined_pathbuf).await
                   };
-                  #[cfg(feature = "runtime-vibeio")]
+                  #[cfg(feature = "runtime-zincio")]
                   let temp_metadata = {
-                    use vibeio::fs;
+                    use zincio::fs;
                     fs::metadata(&temp_joined_pathbuf).await
                   };
                   #[cfg(all(feature = "runtime-monoio", windows))]
@@ -596,9 +596,9 @@ impl ModuleHandlers for CgiModuleHandlers {
                     use monoio::fs;
                     fs::metadata(&temp_pathbuf).await
                   };
-                  #[cfg(feature = "runtime-vibeio")]
+                  #[cfg(feature = "runtime-zincio")]
                   let temp_metadata = {
-                    use vibeio::fs;
+                    use zincio::fs;
                     fs::metadata(&temp_pathbuf).await
                   };
                   #[cfg(all(feature = "runtime-monoio", windows))]
@@ -849,20 +849,20 @@ async fn execute_cgi(
   let runtime = tokio_cegla::TokioCgiRuntime;
   #[cfg(feature = "runtime-monoio")]
   let runtime = CustomCgiRuntime;
-  #[cfg(feature = "runtime-vibeio")]
+  #[cfg(feature = "runtime-zincio")]
   let runtime = CustomCgiRuntime;
 
-  #[cfg(not(feature = "runtime-vibeio"))]
+  #[cfg(not(feature = "runtime-zincio"))]
   let (response, stderr, exit_code_option) =
     cegla_cgi::client::execute_cgi_send(request, runtime, cmd, &args, env_builder, Some(execute_dir_pathbuf)).await?;
-  #[cfg(feature = "runtime-vibeio")]
+  #[cfg(feature = "runtime-zincio")]
   let (response, stderr, exit_code_option) =
     cegla_cgi::client::execute_cgi(request, runtime, cmd, &args, env_builder, Some(execute_dir_pathbuf)).await?;
 
   let (parts, body) = response.into_parts();
-  #[cfg(not(feature = "runtime-vibeio"))]
+  #[cfg(not(feature = "runtime-zincio"))]
   let response = Response::from_parts(parts, body.boxed());
-  #[cfg(feature = "runtime-vibeio")]
+  #[cfg(feature = "runtime-zincio")]
   let response = Response::from_parts(parts, SendWrapBody::new(body).boxed());
 
   if let Some(exit_code) = exit_code_option {
@@ -984,7 +984,7 @@ async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dy
 }
 
 #[allow(dead_code)]
-#[cfg(all(feature = "runtime-vibeio", not(unix)))]
+#[cfg(all(feature = "runtime-zincio", not(unix)))]
 async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
   let magic_signature_buffer = vec![0u8; 2].into_boxed_slice();
   let open_file = fs::File::open(&execute_pathbuf).await?;

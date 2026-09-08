@@ -36,10 +36,10 @@ use tokio::net::TcpStream;
 use tokio::net::UnixStream;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
-#[cfg(feature = "runtime-vibeio")]
-use vibeio::net::TcpStream;
-#[cfg(all(feature = "runtime-vibeio", unix))]
-use vibeio::net::UnixStream;
+#[cfg(feature = "runtime-zincio")]
+use zincio::net::TcpStream;
+#[cfg(all(feature = "runtime-zincio", unix))]
+use zincio::net::UnixStream;
 
 use crate::config::ServerConfiguration;
 use crate::http_proxy::send_request::SendRequestWrapper;
@@ -49,9 +49,9 @@ use crate::observability::{Metric, MetricAttributeValue, MetricType, MetricValue
 use crate::util::{NoServerVerifier, TtlCache};
 
 pub use self::builder::ReverseProxyBuilder;
-#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+#[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
 use self::send_net_io::{SendTcpStreamPoll, SendTcpStreamPollDropGuard};
-#[cfg(all(any(feature = "runtime-vibeio", feature = "runtime-monoio"), unix))]
+#[cfg(all(any(feature = "runtime-zincio", feature = "runtime-monoio"), unix))]
 use self::send_net_io::{SendUnixStreamPoll, SendUnixStreamPollDropGuard};
 use self::{
   load_balancer::{determine_proxy_to, resolve_upstreams},
@@ -221,7 +221,7 @@ type ProxyToKeyInner = (UpstreamInner, Option<usize>, Option<Duration>);
 type ConnectionPool = Arc<Pool<(UpstreamInner, Option<IpAddr>), SendRequestWrapper>>;
 type ConnectionPoolItem = Item<(UpstreamInner, Option<IpAddr>), SendRequestWrapper>;
 
-#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+#[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
 #[allow(unused)]
 enum DropGuard {
   Tcp(SendTcpStreamPollDropGuard),
@@ -230,17 +230,17 @@ enum DropGuard {
 }
 
 enum Connection {
-  #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+  #[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
   Tcp(SendTcpStreamPoll),
-  #[cfg(not(any(feature = "runtime-vibeio", feature = "runtime-monoio")))]
+  #[cfg(not(any(feature = "runtime-zincio", feature = "runtime-monoio")))]
   Tcp(TcpStream),
-  #[cfg(all(any(feature = "runtime-vibeio", feature = "runtime-monoio"), unix))]
+  #[cfg(all(any(feature = "runtime-zincio", feature = "runtime-monoio"), unix))]
   Unix(SendUnixStreamPoll),
-  #[cfg(all(not(any(feature = "runtime-vibeio", feature = "runtime-monoio")), unix))]
+  #[cfg(all(not(any(feature = "runtime-zincio", feature = "runtime-monoio")), unix))]
   Unix(UnixStream),
 }
 
-#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+#[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
 impl Connection {
   unsafe fn get_drop_guard(&mut self) -> DropGuard {
     match self {
@@ -793,7 +793,7 @@ impl ModuleHandlers for ReverseProxyHandler {
               }
             };
 
-            #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+            #[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
             let stream = match SendUnixStreamPoll::new_comp_io(stream) {
               Ok(stream) => stream,
               Err(err) => {
@@ -858,7 +858,7 @@ impl ModuleHandlers for ReverseProxyHandler {
             continue;
           };
 
-          #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+          #[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
           let stream = match SendTcpStreamPoll::new_comp_io(stream) {
             Ok(stream) => stream,
             Err(err) => {
@@ -1018,14 +1018,14 @@ impl ModuleHandlers for ReverseProxyHandler {
         // Safety: the drop guard is dropped when the connection future is completed,
         // and after the underlying connection is moved across threads,
         // see the "http_proxy_handshake" function.
-        #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+        #[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
         let drop_guard = unsafe { stream.get_drop_guard() };
 
         let sender = if !encrypted {
           let sender = match http_proxy_handshake(
             stream,
             enable_http2_only_config,
-            #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+            #[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
             drop_guard,
           )
           .await
@@ -1106,7 +1106,7 @@ impl ModuleHandlers for ReverseProxyHandler {
           let sender = match http_proxy_handshake(
             tls_stream,
             enable_http2,
-            #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
+            #[cfg(any(feature = "runtime-zincio", feature = "runtime-monoio"))]
             drop_guard,
           )
           .await

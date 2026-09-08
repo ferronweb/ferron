@@ -1,4 +1,4 @@
-name: Cross-platform compilation test (Ferron 2.x with `vibeio`)
+name: Cross-platform compilation test (Ferron 2.x with `zincio`)
 
 on:
   push:
@@ -19,7 +19,7 @@ on:
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
       - "smoketest/**"
-      - ".github/workflows/crossplatform-vibeio-v2.yml"
+      - ".github/workflows/crossplatform-zincio-v2.yml"
   pull_request:
     branches: ["develop-2.x"]
     paths:
@@ -38,7 +38,7 @@ on:
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
       - "smoketest/**"
-      - ".github/workflows/crossplatform-vibeio-v2.yml"
+      - ".github/workflows/crossplatform-zincio-v2.yml"
 
 env:
   CARGO_TERM_COLOR: always
@@ -132,8 +132,8 @@ jobs:
             ~/.cargo/git/db/
             build/prepare/target/
             target/
-          key: CompileTestFerron2Vibeio-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: CompileTestFerron2Vibeio-${{ runner.os }}-${{ matrix.target }}-
+          key: CompileTestFerron2Zincio-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: CompileTestFerron2Zincio-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Setup NASM
         if: matrix.runner == 'windows-latest'
@@ -157,7 +157,7 @@ jobs:
         if: matrix.runner != 'windows-latest'
         shell: bash
         run: |
-          make build-dev TARGET="${{ matrix.target }}" CARGO_FINAL="${{ matrix.command }}" CARGO_FINAL_EXTRA_ARGS="--verbose" EXPERIMENTAL_VIBEIO=1
+          make build-dev TARGET="${{ matrix.target }}" CARGO_FINAL="${{ matrix.command }}" CARGO_FINAL_EXTRA_ARGS="--verbose" EXPERIMENTAL_ZINCIO=1
 
       - name: Build binaries (Windows)
         if: matrix.runner == 'windows-latest'
@@ -166,7 +166,7 @@ jobs:
           $env:TARGET = "${{ matrix.target }}"
           $env:CARGO_FINAL = "${{ matrix.command }}"
           $env:CARGO_FINAL_EXTRA_ARGS = "--verbose"
-          $env:EXPERIMENTAL_VIBEIO = "1"
+          $env:EXPERIMENTAL_ZINCIO = "1"
           powershell -ExecutionPolicy Bypass .\build.ps1 BuildDev
 
       - name: Smoke test the binary (Unix-like)

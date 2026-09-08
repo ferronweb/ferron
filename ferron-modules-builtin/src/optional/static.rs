@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::error::Error;
 use std::ffi::OsStr;
-#[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
+#[cfg(any(feature = "runtime-monoio", feature = "runtime-zincio"))]
 use std::fs::ReadDir;
 #[cfg(feature = "runtime-tokio")]
 use std::io::SeekFrom;
@@ -31,13 +31,13 @@ use tokio::fs::{self, ReadDir};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, BufReader};
 use tokio::sync::RwLock;
 use tokio_util::io::{ReaderStream, StreamReader};
-#[cfg(feature = "runtime-vibeio")]
-use vibeio::fs;
+#[cfg(feature = "runtime-zincio")]
+use zincio::fs;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
-#[cfg(feature = "runtime-vibeio")]
+#[cfg(feature = "runtime-zincio")]
 use ferron_common::util::FileStream;
 #[cfg(feature = "runtime-monoio")]
 use ferron_common::util::MonoioFileStreamNoSpawn;
@@ -252,8 +252,8 @@ async fn generate_directory_listing(
   .unwrap_or(Err(std::io::Error::other(
     "Can't spawn a blocking task to obtain the files in a directory",
   )))?;
-  #[cfg(feature = "runtime-vibeio")]
-  let mut entries = vibeio::spawn_blocking(move || {
+  #[cfg(feature = "runtime-zincio")]
+  let mut entries = zincio::spawn_blocking(move || {
     let mut entries = Vec::new();
     for entry in directory {
       entries.push(entry?);
@@ -289,7 +289,7 @@ async fn generate_directory_listing(
     #[cfg(any(
       feature = "runtime-tokio",
       all(feature = "runtime-monoio", unix),
-      feature = "runtime-vibeio"
+      feature = "runtime-zincio"
     ))]
     let metadata_obt = fs::metadata(&entry_path).await;
     #[cfg(all(feature = "runtime-monoio", windows))]
@@ -812,7 +812,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   "Can't spawn a blocking task to obtain the canonical file path",
                 )))
             };
-            #[cfg(any(feature = "runtime-vibeio", feature = "runtime-tokio"))]
+            #[cfg(any(feature = "runtime-zincio", feature = "runtime-tokio"))]
             let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
 
             let canonical_joined_pathbuf = match canonicalize_result {
@@ -839,7 +839,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   "Can't spawn a blocking task to obtain the canonical file path",
                 )))
             };
-            #[cfg(any(feature = "runtime-vibeio", feature = "runtime-tokio"))]
+            #[cfg(any(feature = "runtime-zincio", feature = "runtime-tokio"))]
             let canonicalize_result = fs::canonicalize(wwwroot).await;
 
             let canonical_wwwroot = match canonicalize_result {
@@ -874,7 +874,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
       #[cfg(any(
         feature = "runtime-tokio",
         all(feature = "runtime-monoio", unix),
-        feature = "runtime-vibeio"
+        feature = "runtime-zincio"
       ))]
       let metadata_obt = fs::metadata(&joined_pathbuf).await;
       #[cfg(all(feature = "runtime-monoio", windows))]
@@ -900,7 +900,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 #[cfg(any(
                   feature = "runtime-tokio",
                   all(feature = "runtime-monoio", unix),
-                  feature = "runtime-vibeio"
+                  feature = "runtime-zincio"
                 ))]
                 let metadata_obt = fs::metadata(&temp_joined_pathbuf).await;
                 #[cfg(all(feature = "runtime-monoio", windows))]
@@ -1302,7 +1302,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     // Construct a boxed body
                     #[cfg(feature = "runtime-monoio")]
                     let file_stream = MonoioFileStreamNoSpawn::new(file, Some(range_begin), Some(range_end + 1));
-                    #[cfg(feature = "runtime-vibeio")]
+                    #[cfg(feature = "runtime-zincio")]
                     let file_stream = FileStream::new(file, Some(range_begin), Some(range_end + 1));
                     #[cfg(feature = "runtime-tokio")]
                     let file_stream = {
@@ -1456,7 +1456,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   #[cfg(any(
                     feature = "runtime-tokio",
                     all(feature = "runtime-monoio", unix),
-                    feature = "runtime-vibeio"
+                    feature = "runtime-zincio"
                   ))]
                   let metadata_obt = fs::metadata(&joined_pathbuf_with_extension).await;
                   #[cfg(all(feature = "runtime-monoio", windows))]
@@ -1576,20 +1576,20 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     },
                   };
 
-                  #[cfg(all(feature = "runtime-vibeio", unix))]
+                  #[cfg(all(feature = "runtime-zincio", unix))]
                   let zerocopy_fd = std::os::fd::AsRawFd::as_raw_fd(&file);
-                  #[cfg(all(feature = "runtime-vibeio", windows))]
+                  #[cfg(all(feature = "runtime-zincio", windows))]
                   let zerocopy_fd = std::os::windows::io::AsRawHandle::as_raw_handle(&file);
 
                   // Create a file stream.
                   #[cfg(feature = "runtime-monoio")]
                   let file_stream = MonoioFileStreamNoSpawn::new(file, None, Some(content_length));
-                  #[cfg(feature = "runtime-vibeio")]
+                  #[cfg(feature = "runtime-zincio")]
                   let file_stream = FileStream::new(file, None, Some(content_length));
                   #[cfg(feature = "runtime-tokio")]
                   let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
-                  #[cfg(feature = "runtime-vibeio")]
+                  #[cfg(feature = "runtime-zincio")]
                   let mut enable_zerocopy = false;
                   // Create the appropriate response body based on compression method, if precompression is disabled
                   let boxed_body = match (enable_precompression, used_compression) {
@@ -1652,7 +1652,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       stream_body.boxed()
                     }
                     _ => {
-                      #[cfg(feature = "runtime-vibeio")]
+                      #[cfg(feature = "runtime-zincio")]
                       {
                         enable_zerocopy = true;
                       }
@@ -1661,15 +1661,15 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     }
                   };
 
-                  #[cfg(feature = "runtime-vibeio")]
+                  #[cfg(feature = "runtime-zincio")]
                   {
                     let mut response = response_builder.body(boxed_body)?;
                     if enable_zerocopy {
-                      unsafe { vibeio_http::install_zerocopy(&mut response, zerocopy_fd) };
+                      unsafe { zincio_http::install_zerocopy(&mut response, zerocopy_fd) };
                     }
                     response
                   }
-                  #[cfg(not(feature = "runtime-vibeio"))]
+                  #[cfg(not(feature = "runtime-zincio"))]
                   response_builder.body(boxed_body)?
                 }
               };
@@ -1699,8 +1699,8 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 .unwrap_or(Err(std::io::Error::other(
                   "Can't spawn a blocking task to read the directory",
                 )));
-              #[cfg(feature = "runtime-vibeio")]
-              let directory_result = vibeio::spawn_blocking(move || std::fs::read_dir(joined_pathbuf))
+              #[cfg(feature = "runtime-zincio")]
+              let directory_result = zincio::spawn_blocking(move || std::fs::read_dir(joined_pathbuf))
                 .await
                 .unwrap_or(Err(std::io::Error::other(
                   "Can't spawn a blocking task to read the directory",

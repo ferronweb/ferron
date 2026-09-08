@@ -1,9 +1,9 @@
 #[cfg(feature = "runtime-monoio")]
 mod monoio;
-#[cfg(feature = "vibeio")]
-mod vibeio;
+#[cfg(feature = "zincio")]
+mod zincio;
 
 #[cfg(feature = "runtime-monoio")]
 pub use monoio::*;
-#[cfg(feature = "vibeio")]
-pub use vibeio::*;
+#[cfg(feature = "zincio")]
+pub use zincio::*;
