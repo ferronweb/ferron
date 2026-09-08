@@ -1575,7 +1575,7 @@ dependencies = [
  "mimalloc",
  "monoio",
  "monoio-compat",
- "num-bigint 0.4.8",
+ "num-bigint 0.5.1",
  "ppp",
  "procfs",
  "quinn",
