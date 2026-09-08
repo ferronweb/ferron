@@ -1,6 +1,6 @@
 [package]
 name = "ferron-passwd"
-version = "3.0.0-rc.3"
+version = "3.0.0-rc.4"
 edition = "2021"
 
 [package.metadata.winresource]
