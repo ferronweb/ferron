@@ -131,9 +131,16 @@ impl FcgiFileStage {
                 .unwrap_or(ctx.file_root.clone())
         };
 
+        // `cegla` automatically adds leading `/` to `PATH_INFO` env variable name,
+        // so strip it here to avoid double slashes in the env var value.
+        let path_info = ctx
+            .path_info
+            .clone()
+            .filter(|p| !p.starts_with("/"))
+            .map(|p| p.trim_start_matches('/').to_owned());
         env_builder = env_builder
             .server("Ferron".to_string())
-            .script_path(file_path, file_root, ctx.path_info.clone())
+            .script_path(file_path, file_root, path_info)
             .request_uri(original_request_uri);
         if let Some(addr) = ctx.http.local_address {
             env_builder = env_builder.server_address(addr);

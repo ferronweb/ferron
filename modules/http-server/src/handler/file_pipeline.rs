@@ -386,10 +386,15 @@ async fn apply_resolved_file_to_context(
     control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
 ) -> Result<(), FilePipelineExecutionError> {
     if let Some(path_info) = resolved_file.path_info.as_ref() {
-        ctx.variables
-            .insert("request.path_info".to_string(), path_info.clone());
+        ctx.variables.insert(
+            ferron_http::variables::var::REQUEST_PATH_INFO.into(),
+            path_info.clone(),
+        );
     } else {
-        ctx.variables.remove("request.path_info");
+        ctx.variables.insert(
+            ferron_http::variables::var::REQUEST_PATH_INFO.into(),
+            "".into(),
+        );
     }
 
     // Avoid cloning configuration/hostname for placeholder (saves 1 Arc inc + String clone per request)
