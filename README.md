@@ -10,7 +10,7 @@
   <b>Ferron</b> - a fast, modern, and easily configurable web server with automatic TLS
 </p>
 
-* * *
+---
 
 <p align="center">
   <a href="https://ferron.sh/docs" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange?style=for-the-badge"></a>
@@ -37,9 +37,9 @@ The easiest way to install Ferron is installing it from pre-built binaries.
 Below are the different ways to install Ferron:
 
 - [Installer (GNU/Linux)
-](https://ferron.sh/docs/installation/installer-linux)
+  ](https://ferron.sh/docs/installation/installer-linux)
 - [Installer (Windows Server)
-](https://ferron.sh/docs/installation/installer-windows)
+  ](https://ferron.sh/docs/installation/installer-windows)
 - [Package managers (Debian/Ubuntu)](https://ferron.sh/docs/installation/debian)
 - [Package managers (RHEL/Fedora)](https://ferron.sh/docs/installation/rpm)
 - [Docker](https://ferron.sh/docs/installation/docker)
@@ -107,6 +107,7 @@ make installer # Build installers for Ferron 2
 ```
 
 Or a `build.ps1` build script, if you're on Windows:
+
 ```batch
 REM Build the web server
 powershell -ExecutionPolicy Bypass .\build.ps1 Build
@@ -155,6 +156,7 @@ make build TARGET="i686-unknown-linux-gnu" CARGO_FINAL="cross"
 ```
 
 It's also possible to use only Cargo to build the web server, although you wouldn't be able to use external modules:
+
 ```sh
 cargo build -r
 ./target/release/ferron
@@ -173,10 +175,6 @@ You can check the [Ferron documentation](https://ferron.sh/docs/configuration/fu
 ## Contributing
 
 See [Ferron contribution page](https://ferron.sh/contribute) for details.
-
-Below is a list of contributors to Ferron. **Thank you to all of them!**
-
-[![Contributor list](./CONTRIBUTORS.svg)](https://github.com/ferronweb/ferron/graphs/contributors)
 
 ## License
 
