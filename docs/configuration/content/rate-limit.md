@@ -53,8 +53,7 @@ The `key` directive determines which value each bucket uses:
 
 ## Behavior
 
-> [!important]
-> Ferron applies rate limiting per server instance. For distributed rate limiting, use an external service (for example, Redis). The rate limiting module does not support this.
+Ferron applies rate limiting with the in-memory backend per server instance by default. For distributed rate limiting across instances, configure a `rate_limit_backend` block with `type redis` (Redis or Valkey, same RESP protocol).
 
 ### Token bucket algorithm
 
@@ -68,7 +67,74 @@ When the bucket is empty, the server rejects the request with the configured `de
 
 ### Bucket eviction
 
-To prevent unbounded memory growth from one-shot clients, the module evicts buckets after `bucket_ttl` seconds of inactivity. The `max_buckets` setting enforces a hard upper limit. When the registry reaches this limit, the module rejects new requests until it removes stale buckets.
+To prevent unbounded memory growth from one-shot clients, the module evicts buckets after `bucket_ttl` seconds of inactivity. The `max_buckets` setting enforces a hard upper limit. When the registry reaches this limit, the module rejects new requests until it removes stale buckets. `max_buckets` applies to the in-memory backend only; Redis keys expire via `bucket_ttl`.
+
+### Distributed backend with Redis or Valkey
+
+Rate limit state is selected by a `rate_limit_backend` block, a sibling of `rate_limit` (not nested inside it). A host or location without its own `rate_limit_backend` block inherits the global one; absent entirely means in-memory.
+
+```ferron
+{
+    rate_limit_backend {
+        type redis
+        url "redis://127.0.0.1:6379/0"
+        key_prefix "ferron:rl:"
+        timeout 200
+        fail_open true
+    }
+}
+
+example.com {
+    rate_limit {
+        rate 100
+        burst 50
+        key remote_address
+    }
+}
+```
+
+| Nested directive | Arguments    | Description                                                                                                           | Default      |
+| ---------------- | ------------ | --------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `type`           | `<string>`   | Backend type: `memory` or `redis` (`valkey` is accepted as an alias for `redis`).                                     | `memory`     |
+| `url`            | `<string>`   | Redis/Valkey URL, for example `redis://127.0.0.1:6379/0`. Required when `type redis`.                                 | none         |
+| `key_prefix`     | `<string>`   | Prefix prepended to every Redis key. Zone, rule fingerprint and user key are appended automatically.                  | `ferron:rl:` |
+| `timeout`        | `<duration>` | Per-request Redis timeout in milliseconds as a number (for example `200`), or a duration string (for example `"2s"`). | `200`        |
+| `fail_open`      | `<bool>`     | On Redis errors, allow (`true`, default) or deny (`false`) the request.                                               | `true`       |
+
+Redis uses the same token-bucket semantics as memory via an atomic Lua script (capacity `rate + burst`, refill `rate`/sec, key TTL `bucket_ttl`). All Redis I/O runs on the secondary Tokio runtime, never on primary `zincio` threads.
+
+> [!note]
+> `fail_open true` (default) favors availability: traffic is allowed during a Redis outage. For high-security endpoints (for example login), set `fail_open false` to deny instead. The module emits `ferron.ratelimit.backend_errors` and a `WARN` log on backend failures either way.
+
+> [!note]
+> With `throttle true` over Redis, Ferron sleeps once for `Retry-After` (capped at 30s) and retries once, instead of looping. Memory throttling may wait longer via the bucket.
+
+Override per location by defining another `rate_limit_backend` block:
+
+```ferron
+example.com {
+    rate_limit_backend {
+        type redis
+        url "redis://127.0.0.1:6379/0"
+    }
+
+    rate_limit {
+        rate 100
+        burst 50
+    }
+
+    location /internal {
+        rate_limit_backend {
+            type memory
+        }
+
+        rate_limit {
+            rate 1000
+            burst 100
+        }
+    }
+}
+```
 
 ### Per-location limits
 
@@ -172,7 +238,7 @@ internal.example.com {
 
 ### Configuration reload
 
-Ferron stores rate limit buckets in memory. They do not survive a configuration reload. A reload creates fresh buckets with the new configuration.
+Ferron stores in-memory rate limit buckets in memory. They do not survive a configuration reload. A reload creates fresh buckets with the new configuration. Redis-backed buckets survive reloads (they live in Redis and expire via `bucket_ttl`).
 
 ## Examples
 
@@ -229,18 +295,20 @@ Limits login to 3 requests burst, then 2/second. Returns 429 when exceeded.
 
 The rate limiting module emits the following metrics:
 
-| Metric                       | Type    | Attributes                                                                            | Description                                                        |
-| ---------------------------- | ------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `ferron.ratelimit.allowed`   | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests that passed rate limiting                                 |
-| `ferron.ratelimit.rejected`  | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests rejected due to exhausted buckets or registry at capacity |
-| `ferron.ratelimit.throttled` | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`) | Requests delayed due to throttling                                 |
+| Metric                            | Type    | Attributes                                                                                                        | Description                                                        |
+| --------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `ferron.ratelimit.allowed`        | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`), `ferron.ratelimit.backend` | Requests that passed rate limiting                                 |
+| `ferron.ratelimit.rejected`       | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`), `ferron.ratelimit.backend` | Requests rejected due to exhausted buckets or registry at capacity |
+| `ferron.ratelimit.throttled`      | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`), `ferron.ratelimit.backend` | Requests delayed due to throttling                                 |
+| `ferron.ratelimit.backend_errors` | Counter | `ferron.ratelimit.zone`, `ferron.ratelimit.key_type`, `ferron.ratelimit.backend`                                  | Backend errors (for example Redis unavailable or timeout)          |
 
-The `ferron.ratelimit.zone` attribute identifies which rate limit zone the request belongs to. It has the value `"global"` for the shared global zone. It uses the zone name for named zones and the hostname for per-host zones.
+The `ferron.ratelimit.zone` attribute identifies which rate limit zone the request belongs to. It has the value `"global"` for the shared global zone. It uses the zone name for named zones and the hostname for per-host zones. The `ferron.ratelimit.backend` attribute is `"memory"` or `"redis"`.
 
 ### Logs
 
 - **`DEBUG`**: logged when a rate limit bucket has no tokens left for a key.
 - **`WARN`**: logged when the registry reaches `max_buckets` capacity and applies backpressure.
+- **`WARN`**: logged when the Redis backend errors (`Rate limit backend error`; fail-open allows, fail-closed denies).
 
 ### Structured logs
 
@@ -267,5 +335,6 @@ The rate limit stage sets the following attributes on its `ferron.stage.rate_lim
 | `ferron.ratelimit.result`           | string | Rate limit decision: `allowed`, `throttled` or `rejected`.       |
 | `ferron.ratelimit.zone`             | string | The rate limit zone name.                                        |
 | `ferron.ratelimit.key_type`         | string | Key extractor type: `ip`, `uri`, or `header`.                    |
+| `ferron.ratelimit.backend`          | string | Backend type: `memory` or `redis`.                               |
 | `ferron.ratelimit.limit`            | int    | The configured rate limit (requests per second).                 |
 | `ferron.ratelimit.retry_after_secs` | int    | Seconds until the bucket is available again (on rejection only). |

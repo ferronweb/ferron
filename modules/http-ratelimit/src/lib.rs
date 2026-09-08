@@ -3,18 +3,14 @@
 //! Provides the `rate_limit` directive for request rate control using token bucket
 //! algorithms with configurable keys (IP, URI, custom headers).
 
+#[cfg(any(test, feature = "fuzz"))]
+pub mod backends;
+#[cfg(not(any(test, feature = "fuzz")))]
+mod backends;
 mod config;
 mod key_extractor;
 mod loader;
-#[cfg(any(test, feature = "fuzz"))]
-pub mod registry;
-#[cfg(not(any(test, feature = "fuzz")))]
-mod registry;
 mod stage;
-#[cfg(any(test, feature = "fuzz"))]
-pub mod token_bucket;
-#[cfg(not(any(test, feature = "fuzz")))]
-mod token_bucket;
 mod validator;
 
-pub use loader::HttpRateLimitModuleLoader;
+pub use loader::{HttpRateLimitModule, HttpRateLimitModuleLoader};

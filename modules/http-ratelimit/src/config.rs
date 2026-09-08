@@ -21,6 +21,165 @@ pub enum RateLimitZoneId {
     Host(String),
 }
 
+/// Backend type for rate limiting state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BackendType {
+    /// Single-node in-memory buckets (default).
+    #[default]
+    Memory,
+    /// Distributed Redis/Valkey buckets.
+    Redis,
+}
+
+impl BackendType {
+    /// Parse from a `type` directive value.
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "memory" => Some(Self::Memory),
+            "redis" | "valkey" => Some(Self::Redis),
+            _ => None,
+        }
+    }
+
+    /// Stable label for metrics and fingerprints.
+    pub fn label(&self) -> &'static str {
+        match self {
+            BackendType::Memory => "memory",
+            BackendType::Redis => "redis",
+        }
+    }
+}
+
+/// Backend configuration resolved from the layered `rate_limit_backend { ... }` block.
+///
+/// The block is a sibling of `rate_limit` (not nested inside it) and is
+/// inherited like other directives: a host/location without its own
+/// `rate_limit_backend` block inherits the global one. Absent entirely means memory.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BackendConfig {
+    /// Selected backend type.
+    pub backend_type: BackendType,
+    /// Redis/Valkey URL (`redis://`, `rediss://`, `valkey://`).
+    pub url: String,
+    /// Prefix prepended to every Redis key.
+    pub key_prefix: String,
+    /// Per-request Redis timeout.
+    pub timeout: std::time::Duration,
+    /// On Redis errors, allow (`true`) or deny (`false`) the request.
+    pub fail_open: bool,
+}
+
+impl Default for BackendConfig {
+    fn default() -> Self {
+        Self {
+            backend_type: BackendType::Memory,
+            url: String::new(),
+            key_prefix: "ferron:rl:".to_string(),
+            timeout: std::time::Duration::from_millis(200),
+            fail_open: true,
+        }
+    }
+}
+
+impl BackendConfig {
+    /// Default Redis key prefix.
+    pub const DEFAULT_KEY_PREFIX: &'static str = "ferron:rl:";
+    /// Default Redis timeout in milliseconds.
+    pub const DEFAULT_TIMEOUT_MS: u64 = 200;
+
+    /// Stable fingerprint for engine cache keys.
+    pub fn fingerprint(&self) -> String {
+        match self.backend_type {
+            BackendType::Memory => "backend:memory".to_string(),
+            BackendType::Redis => format!(
+                "backend:redis|url:{}|prefix:{}|timeout:{}|fail_open:{}",
+                self.url,
+                self.key_prefix,
+                self.timeout.as_millis(),
+                self.fail_open
+            ),
+        }
+    }
+}
+
+/// Parse the effective `rate_limit_backend { ... }` block from layered configuration.
+///
+/// Uses the highest-priority `rate_limit_backend` entry (host/location overrides
+/// global). Returns the default memory config when no block exists.
+pub fn parse_backend_config(
+    config: &ferron_core::config::layer::LayeredConfiguration,
+) -> BackendConfig {
+    let Some(entry) = config.get_entry("rate_limit_backend", true) else {
+        return BackendConfig::default();
+    };
+    let Some(children) = entry.children.as_ref() else {
+        return BackendConfig::default();
+    };
+    parse_backend_block(children)
+}
+
+/// Parse a single `rate_limit_backend { ... }` block.
+fn parse_backend_block(block: &ServerConfigurationBlock) -> BackendConfig {
+    let backend_type = block
+        .get_value("type")
+        .and_then(|v| v.as_str())
+        .and_then(BackendType::from_str)
+        .unwrap_or_default();
+
+    let url = block
+        .get_value("url")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let key_prefix = block
+        .get_value("key_prefix")
+        .and_then(|v| v.as_str())
+        .unwrap_or(BackendConfig::DEFAULT_KEY_PREFIX)
+        .to_string();
+
+    let timeout = block
+        .get_value("timeout")
+        .and_then(parse_timeout_value)
+        .unwrap_or_else(|| std::time::Duration::from_millis(BackendConfig::DEFAULT_TIMEOUT_MS));
+
+    // `fail_open` defaults to true. Absent means true; present flag without
+    // args means true; explicit boolean is honored.
+    let fail_open = if block.directives.contains_key("fail_open") {
+        block.get_flag("fail_open")
+    } else {
+        true
+    };
+
+    BackendConfig {
+        backend_type,
+        url,
+        key_prefix,
+        timeout,
+        fail_open,
+    }
+}
+
+/// Parse a `timeout` value.
+///
+/// Accepts an integer as milliseconds (e.g. `timeout 200`), a float as
+/// seconds, or a duration string (e.g. `timeout "2s"`, `timeout "1m"`).
+/// Note: millisecond strings like `"200ms"` are not supported by the shared
+/// duration parser; use a plain number for milliseconds.
+fn parse_timeout_value(
+    value: &ferron_core::config::ServerConfigurationValue,
+) -> Option<std::time::Duration> {
+    if let Some(millis) = value.as_number() {
+        if millis < 0 {
+            return None;
+        }
+        return Some(std::time::Duration::from_millis(millis as u64));
+    }
+    // Floats and duration strings fall through to the shared parser
+    // (float = seconds, string = e.g. "2s").
+    value.as_duration()
+}
+
 /// A single rate limit rule parsed from configuration.
 #[derive(Debug, Clone)]
 pub struct RateLimitConfig {

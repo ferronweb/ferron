@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{atomic::Ordering, Arc};
 use std::thread;
 
-use ferron_http_ratelimit::registry::TokenBucketRegistry;
+use ferron_http_ratelimit::backends::memory::registry::TokenBucketRegistry;
 
 fuzz_target!(|data: &[u8]| {
     let mut u = Unstructured::new(data);

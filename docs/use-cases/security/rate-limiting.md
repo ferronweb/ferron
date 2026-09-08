@@ -42,7 +42,11 @@ example.com {
 > [!note]
 >
 > - Rate limiting uses a token bucket algorithm: capacity = `rate + burst` tokens, refilled at `rate` tokens per second.
-> - Ferron stores rate limit buckets in memory. They do not survive configuration reloads.
+> - Ferron stores in-memory rate limit buckets in memory. They do not survive configuration reloads. Redis-backed buckets survive reloads.
+
+> [!info]
+>
+> For distributed rate limiting across Ferron instances, configure a `rate_limit_backend` block with `type redis`. See [rate limiting configuration](/docs/configuration/content/rate-limit) for details. Redis failures allow by default (`fail_open true`), use `fail_open false` for high-security endpoints like login.
 
 > [!important]
 > If Ferron is behind another proxy/load balancer, make sure the client IP is correctly resolved. See [HTTP host directives](/docs/configuration/server/host) for `client_ip_from_header` configuration.

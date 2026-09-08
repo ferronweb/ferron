@@ -16,6 +16,7 @@ mod fproxy;
 mod http;
 mod ip_access;
 mod limit;
+mod limit_redis;
 mod limit_zones;
 
 pub(crate) async fn create_ferron_container(

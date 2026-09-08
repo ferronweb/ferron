@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Added
+
+#### Rate limiting
+
+- **Distributed rate limiting with Redis/Valkey**: the `rate_limit` module now supports a `rate_limit_backend` block with `type redis` for shared token-bucket limits across Ferron instances. The block is inherited from global scope when not set per host/location.
+
 ### Fixed
 
 #### HTTP server core

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::token_bucket::ConcurrentTokenBucket;
+use super::token_bucket::ConcurrentTokenBucket;
 
 /// Entry wrapping a token bucket with metadata for eviction.
 struct BucketEntry {

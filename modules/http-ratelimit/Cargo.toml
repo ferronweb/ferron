@@ -19,9 +19,12 @@ zincio = { version = "0.2.22", default-features = false, features = ["time"] }
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http", features = ["abuse"] }
 ferron-observability = { path = "../../types/observability" }
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "rt", "time"] }
+# `redis` crate depends on SHA-1. SHA-1 is used in Redis for identifying loaded Lua scripts.
+# It's not used for cryptography.
+redis = { version = "1", default-features = false, features = ["tokio-comp", "script", "connection-manager"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt", "macros", "time"] }
 ferron-observability = { path = "../../types/observability" }
 futures-executor = "0.3.32"

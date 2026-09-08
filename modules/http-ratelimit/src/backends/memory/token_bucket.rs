@@ -126,8 +126,11 @@ impl ConcurrentTokenBucket {
             }
             throttled = true;
             let wait_time = self.time_until_available(n).await;
-            if wait_time > 0.0 {
-                zincio::time::sleep(std::time::Duration::from_secs_f64(wait_time)).await;
+            if wait_time > 0.0 && wait_time.is_finite() {
+                sleep_for_throttle(std::time::Duration::from_secs_f64(wait_time)).await;
+            } else if !wait_time.is_finite() {
+                // Zero refill rate would wait forever; break to avoid hanging.
+                return throttled;
             }
         }
     }
@@ -136,6 +139,15 @@ impl ConcurrentTokenBucket {
     #[inline]
     pub async fn time_until_available(&self, n: u64) -> f64 {
         self.inner.read().await.time_until_available(n)
+    }
+}
+
+/// Sleep that works on both primary (`zincio`) and secondary/tests (`tokio`).
+async fn sleep_for_throttle(duration: std::time::Duration) {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        tokio::time::sleep(duration).await;
+    } else {
+        zincio::time::sleep(duration).await;
     }
 }
 

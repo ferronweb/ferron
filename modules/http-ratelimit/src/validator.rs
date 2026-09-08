@@ -3,7 +3,11 @@ use ferron_core::config::validator::{
 };
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
 
+use crate::config::BackendType;
 use crate::key_extractor::KeyExtractor;
+
+/// Directives allowed inside a `rate_limit_backend { ... }` block.
+const BACKEND_DIRECTIVES: &[&str] = &["type", "url", "key_prefix", "timeout", "fail_open"];
 
 /// Directives allowed inside a global `rate_limit { ... }` block (no zone definitions).
 const GLOBAL_RATE_LIMIT_DIRECTIVES: &[&str] = &[
@@ -53,6 +57,172 @@ impl ConfigurationValidator for RateLimitValidator {
             }
         }
 
+        if let Some(entries) = config.directives.get("rate_limit_backend") {
+            ctx.used_directives.insert("rate_limit_backend".to_string());
+            for entry in entries {
+                let Some(ref children) = entry.children else {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `rate_limit_backend` — expected a block with `type`, `url`, `key_prefix`, `timeout` and `fail_open` directives",
+                    )
+                    .with_span(entry_span(entry)));
+                };
+                // `rate_limit_backend` as a flag without args or with no children is invalid;
+                // an empty block means explicit memory defaults.
+                if !entry.args.is_empty() {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `rate_limit_backend` — expected no arguments, only a block",
+                    )
+                    .with_span(entry_span(entry)));
+                }
+                self.validate_backend_block(children, ctx)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Backend block validation.
+impl RateLimitValidator {
+    /// Validate a `rate_limit_backend { ... }` block.
+    fn validate_backend_block(
+        &self,
+        block: &ServerConfigurationBlock,
+        ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
+    ) -> Result<(), ferron_core::config::validator::ConfigurationValidationError> {
+        let mut sub = std::collections::HashSet::new();
+
+        for directive_name in block.directives.keys() {
+            if !BACKEND_DIRECTIVES.contains(&directive_name.as_str()) {
+                return Err(ConfigurationValidationError::from(format!(
+                    "Invalid `{directive_name}` — unknown directive in rate_limit_backend block"
+                ))
+                .with_span(first_entry_span(block, directive_name)));
+            }
+        }
+
+        let mut backend_type: Option<BackendType> = None;
+        if let Some(entries) = block.directives.get("type") {
+            sub.insert("type".to_string());
+            for entry in entries {
+                let value = entry.args.first().ok_or_else(|| {
+                    ConfigurationValidationError::from(
+                        "Invalid `type` — must be one of: memory, redis",
+                    )
+                    .with_span(entry_span(entry))
+                })?;
+                let s = value.as_str().ok_or_else(|| {
+                    ConfigurationValidationError::from("Invalid `type` — must be a string value")
+                        .with_span(entry_span(entry))
+                })?;
+                backend_type = Some(BackendType::from_str(s).ok_or_else(|| {
+                    ConfigurationValidationError::from(format!(
+                        "Invalid `type` — must be one of: memory, redis (got '{s}')"
+                    ))
+                    .with_span(entry_span(entry))
+                })?);
+                if entry.children.is_some() {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `type` — expected a string argument, not a block",
+                    )
+                    .with_span(entry_span(entry)));
+                }
+            }
+        }
+
+        if let Some(entries) = block.directives.get("url") {
+            sub.insert("url".to_string());
+            for entry in entries {
+                if entry.args.len() != 1 || entry.args.first().and_then(|v| v.as_str()).is_none() {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `url` — expected exactly one string argument (the Redis/Valkey URL)",
+                    )
+                    .with_span(entry_span(entry)));
+                }
+                if entry.children.is_some() {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `url` — expected a string argument, not a block",
+                    )
+                    .with_span(entry_span(entry)));
+                }
+                if let Some(url) = entry.args.first().and_then(|v| v.as_str()) {
+                    let lower = url.to_ascii_lowercase();
+                    if !(lower.starts_with("redis://")
+                        || lower.starts_with("rediss://")
+                        || lower.starts_with("valkey://"))
+                    {
+                        return Err(ConfigurationValidationError::from(
+                            "Invalid `url` — must start with redis://, rediss:// or valkey://",
+                        )
+                        .with_span(entry_span(entry)));
+                    }
+                }
+            }
+        }
+
+        if backend_type == Some(BackendType::Redis) && !block.directives.contains_key("url") {
+            return Err(ConfigurationValidationError::from(
+                "Invalid `rate_limit_backend` — `url` is required when `type redis` is set",
+            )
+            .with_span(block.span.clone()));
+        }
+
+        if let Some(entries) = block.directives.get("key_prefix") {
+            sub.insert("key_prefix".to_string());
+            for entry in entries {
+                if entry.args.len() != 1 || entry.args.first().and_then(|v| v.as_str()).is_none() {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `key_prefix` — expected exactly one string argument",
+                    )
+                    .with_span(entry_span(entry)));
+                }
+            }
+        }
+
+        if let Some(entries) = block.directives.get("timeout") {
+            sub.insert("timeout".to_string());
+            for entry in entries {
+                let value = entry.args.first().ok_or_else(|| {
+                    ConfigurationValidationError::from(
+                        "Invalid `timeout` — must be milliseconds (like 200) or a duration (like \"2s\")",
+                    )
+                    .with_span(entry_span(entry))
+                })?;
+                // Plain numbers are milliseconds; otherwise use shared duration parser.
+                let valid = if let Some(n) = value.as_number() {
+                    n >= 0
+                } else {
+                    value.as_duration().is_some()
+                };
+                if !valid {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `timeout` — must be milliseconds (like 200) or a duration (like \"2s\")",
+                    )
+                    .with_span(entry_span(entry)));
+                }
+            }
+        }
+
+        if let Some(entries) = block.directives.get("fail_open") {
+            sub.insert("fail_open".to_string());
+            for entry in entries {
+                if !entry.args.is_empty()
+                    && entry.args.first().and_then(|a| a.as_boolean()).is_none()
+                {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `fail_open` — expected a boolean value",
+                    )
+                    .with_span(entry_span(entry)));
+                }
+            }
+        }
+
+        ferron_core::check_unused_subdirectives!(
+            block,
+            sub,
+            &mut ctx.diagnostics,
+            ctx.scope.clone()
+        );
         Ok(())
     }
 }
