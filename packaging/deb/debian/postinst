@@ -3,7 +3,7 @@ set -e
 
 if [ "$1" = "configure" ]; then
     # Create the user for running Ferron
-    useradd -r -d /var/lib/ferron -m -s /usr/sbin/nologin ferron || true
+    useradd -r -d /var/lib/ferron -m -s /usr/sbin/nologin ferron 2>/dev/null || true
     chown -hR ferron:ferron /var/lib/ferron
 
     if [ -z "$2" ]; then
