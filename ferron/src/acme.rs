@@ -199,7 +199,7 @@ fn get_account_cache_key(config: &AcmeConfig) -> String {
   format!(
     "account_{}",
     base64::engine::general_purpose::URL_SAFE_NO_PAD
-      .encode(xxh3_128(format!("{};{}", &config.contact.join(","), &config.directory).as_bytes()).to_be_bytes())
+      .encode(xxh3_128(format!("{};{}", config.contact.join(","), config.directory).as_bytes()).to_be_bytes())
   )
 }
 
@@ -232,7 +232,7 @@ fn get_hostname_cache_key(config: &AcmeOnDemandConfig) -> String {
       xxh3_128(
         format!(
           "{}{}",
-          &config.port,
+          config.port,
           config.sni_hostname.as_ref().map_or("".to_string(), |h| format!(";{h}"))
         )
         .as_bytes()
