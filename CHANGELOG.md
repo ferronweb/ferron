@@ -9,6 +9,7 @@
 #### HTTP server core
 
 - **HTTP/1.x multiple request parsing fix**: fixed HTTP/1.x requests being rejected with 400 Bad Request after multiple requests in one connection. (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-046))
+- **HTTPS redirect fix**: `https_redirect` directive is now effective for block levels above host block (like location or conditional blocks) if specified in the host block.
 
 ## Ferron 3.0.0-rc.3
 
