@@ -214,9 +214,9 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.44"
+version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "515a1f282e33d55983c499d7e9e87082e81cbc32974825bf9032f928392d5844"
+checksum = "24a8ec73eb862508b7041723c89386365894b4e7d9f6998bf1b8529e5b0ee254"
 dependencies = [
  "compression-codecs",
  "compression-core",
@@ -397,9 +397,9 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.73.1"
+version = "0.73.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54be9a169b85a1bef39252af30bb6246a31b23c7e0f6a162520dd869f8dad33c"
+checksum = "787ef8ef523575546b106a58213d6e6b06198a05c2f757258c68a74273670cfa"
 dependencies = [
  "bitflags 2.13.1",
  "cexpr",
@@ -743,9 +743,9 @@ dependencies = [
 
 [[package]]
 name = "compression-codecs"
-version = "0.4.39"
+version = "0.4.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fe67f2944eef52fc7b106b8c9450d243a88701a0c065f7f57235e76abaed7df"
+checksum = "100590da849306918656ffbb22576bbdfc1382b50ad10d1d50ec177d3b205fb2"
 dependencies = [
  "brotli",
  "compression-core",
@@ -1385,7 +1385,7 @@ dependencies = [
  "aws-lc-rs",
  "aws-lc-sys",
  "base64 0.23.1",
- "bindgen 0.73.1",
+ "bindgen 0.73.2",
  "bytes",
  "cc",
  "dashmap",
@@ -2953,9 +2953,9 @@ dependencies = [
 
 [[package]]
 name = "io-uring"
-version = "0.7.14"
+version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d64d8ca234d152948ceaede1f419b6a83983a5ecccaac05fb337a809c96d3aa6"
+checksum = "ed3bd0ecfbb87805f538bb7b32e5239ca0763890c623e349860ecba69469f2bb"
 dependencies = [
  "bitflags 2.13.1",
  "cfg-if",
@@ -5111,9 +5111,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tld"
-version = "2.37.0"
+version = "2.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e229cec96f7a816855e1371801ba8f5c58c4d301e146537fde62a37a7a79cde"
+checksum = "bbc236d4beadd25b00935f063939bec1632476bda50c9e4f8aa6a62941482fb7"
 dependencies = [
  "phf 0.11.3",
  "phf_codegen 0.11.3",
@@ -6096,7 +6096,7 @@ dependencies = [
  "crossbeam-queue",
  "futures-util",
  "io-uring 0.6.4",
- "io-uring 0.7.14",
+ "io-uring 0.7.15",
  "libc",
  "mio",
  "once_cell",
@@ -6184,18 +6184,18 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zstd"
-version = "0.13.3"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
+checksum = "bf06bd8162af0734b344780deb55b42a2429ae430870d13fcc12f238e880fe6e"
 dependencies = [
  "zstd-safe",
 ]
 
 [[package]]
 name = "zstd-safe"
-version = "7.3.0"
+version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64d80649ab6db9d9f6f9c80a40becd948eda4714a0a5ac8c4d157a32231c7882"
+checksum = "ae42c0555055784c70058d19ba8e275528e8a99a706684868ace5da4e716a4ab"
 dependencies = [
  "zstd-sys",
 ]
