@@ -43,7 +43,7 @@ anyhow = "1.0.98"
 shiba = { workspace = true }
 
 [build-dependencies]
-yaml-rust2 = "0.11.0"
+yaml-rust2 = "0.12.0"
 toml = "1.0.0"
 
 [features]

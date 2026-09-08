@@ -144,7 +144,7 @@ fn match_condition(
       for (key, value) in headers_hashmap_initial.into_iter() {
         headers_btreemap.insert(key.into(), value.into());
       }
-      let headers_rego = regorus::Value::Object(Arc::new(headers_btreemap));
+      let headers_rego = regorus::Value::Object(Arc::new(headers_btreemap.into()));
       rego_input_object.insert("headers".into(), headers_rego);
       let mut socket_data_btreemap = BTreeMap::new();
       socket_data_btreemap.insert("client_ip".into(), socket_data.remote_addr.ip().to_string().into());
@@ -152,15 +152,15 @@ fn match_condition(
       socket_data_btreemap.insert("server_ip".into(), socket_data.local_addr.ip().to_string().into());
       socket_data_btreemap.insert("server_port".into(), (socket_data.local_addr.port() as u32).into());
       socket_data_btreemap.insert("encrypted".into(), socket_data.encrypted.into());
-      let socket_data_rego = regorus::Value::Object(Arc::new(socket_data_btreemap));
+      let socket_data_rego = regorus::Value::Object(Arc::new(socket_data_btreemap.into()));
       rego_input_object.insert("socket_data".into(), socket_data_rego);
       let mut constants_btreemap = BTreeMap::new();
       for (key, value) in constants.iter_mut() {
         constants_btreemap.insert(key.to_owned().into(), value.to_owned().into());
       }
-      let constants_rego = regorus::Value::Object(Arc::new(constants_btreemap));
+      let constants_rego = regorus::Value::Object(Arc::new(constants_btreemap.into()));
       rego_input_object.insert("constants".into(), constants_rego);
-      let rego_input = regorus::Value::Object(Arc::new(rego_input_object));
+      let rego_input = regorus::Value::Object(Arc::new(rego_input_object.into()));
       cloned_engine.set_input(rego_input);
       Ok(*cloned_engine.eval_rule("data.ferron.pass".to_string())?.as_bool()?)
     }

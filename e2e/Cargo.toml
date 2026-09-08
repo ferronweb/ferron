@@ -12,7 +12,7 @@ tokio = { version = "1.50.0", features = ["full"] }
 flate2 = "1.1.9"
 password-auth = "1.0.0"
 brotli = "8.0.2"
-zstd = "0.13.3"
+zstd = "0.14.0"
 rcgen = "0.14.7"
 h3 = "0.0.8"
 quinn = "0.11.9"

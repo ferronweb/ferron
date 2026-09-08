@@ -71,7 +71,7 @@ rcgen = { version = "0.14.1", default-features = false, features = [
     "aws_lc_rs",
     "pem",
 ] }
-base64 = "0.22.1"
+base64 = "0.23.1"
 xxhash-rust = { version = "0.8.15", features = ["std", "xxh3"] }
 rasn = "0.28.8"
 rasn-ocsp = "0.28.8"
@@ -113,7 +113,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 kdl = { workspace = true }
 ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core", optional = true }
-regorus = { version = "0.10.0", default-features = false, features = [
+regorus = { version = "0.12.0", default-features = false, features = [
   "arc",
   "regex",
   "glob",
@@ -127,7 +127,7 @@ regorus = { version = "0.10.0", default-features = false, features = [
 
 # CLI & Configuration
 clap = { version = "4.5.38", features = ["cargo", "derive"] }
-dirs = "6.0.0"
+dirs = "7.0.0"
 
 # Performance & Utilities
 smallvec = { version = "1.15.0", features = [
@@ -147,10 +147,10 @@ shlex = "2.0.1"
 procfs = { version = "0.18.0", default-features = false }
 
 [target.'cfg(target_arch = "x86")'.dependencies]
-mimalloc = { workspace = true, optional = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
+mimalloc = { workspace = true, optional = true, features = ["v2"] } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
 
 [target.'cfg(not(target_arch = "x86"))'.dependencies]
-mimalloc = { workspace = true, optional = true, features = ["v3"] }
+mimalloc = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dev-dependencies]
 shiba = { workspace = true }

@@ -11,10 +11,10 @@ clap = { version = "4.5.38", features = ["cargo"] }
 ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core" }
 
 [target.'cfg(target_arch = "x86")'.dependencies]
-mimalloc = { workspace = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
+mimalloc = { workspace = true, features = ["v2"] } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
 
 [target.'cfg(not(target_arch = "x86"))'.dependencies]
-mimalloc = { workspace = true, features = ["v3"] }
+mimalloc = { workspace = true }
 
 [target.'cfg(unix)'.dev-dependencies]
 shiba = { workspace = true }
