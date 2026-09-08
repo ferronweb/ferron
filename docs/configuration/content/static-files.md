@@ -108,8 +108,8 @@ example.com {
 ```ferron
 example.com {
     root /srv/www/example
-    error_page 404 /custom/404.html
-    error_page 500 502 503 504 /custom/50x.html
+    error_page 404 /srv/www/custom/404.html
+    error_page 500 502 503 504 /srv/www/custom/50x.html
     error_page_placeholders true
 }
 ```
@@ -117,7 +117,7 @@ example.com {
 > [!note]
 >
 > - Ferron applies this only when it generates an error response and no custom response exists.
-> - The file path is absolute or relative to the current working directory.
+> - The file path is absolute (not relative to the webroot) or relative to the current working directory.
 > - If the specified error page file does not exist, Ferron skips the directive and uses the built-in error page.
 > - You can map multiple status codes to the same error page in a single directive.
 > - Placeholder substitution reads the file into memory and replaces the placeholders with the trace context of the request.
