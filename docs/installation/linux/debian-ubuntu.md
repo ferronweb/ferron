@@ -50,7 +50,7 @@ The `ferron3-fips` package conflicts with the standard `ferron3` package, so you
 
 By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server works and serves the default `index.html` file.
 
-If you see a "Ferron is installed successfully!" message on the page, the web server works correctly.
+If you see a "Ferron is ready to serve." message on the page, the web server works correctly.
 
 > [!tip]
 > If you cannot access the server from another machine, make sure your firewall allows incoming connections on port 80. If port 80 is in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.

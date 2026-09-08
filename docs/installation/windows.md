@@ -55,7 +55,7 @@ After installing Ferron, start a Windows service by following these steps:
 
 By default, Ferron serves content from its `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server works.
 
-If you see a "Ferron is installed successfully!" message on the page, the web server works.
+If you see a "Ferron is ready to serve." message on the page, the web server works.
 
 > [!tip]
 > If you cannot access the server from another machine, make sure Windows Defender Firewall allows incoming connections on port 80. If port 80 is already in use, change the listen port in `C:\ProgramData\Ferron\ferron.conf` and restart the service.

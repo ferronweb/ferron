@@ -47,7 +47,7 @@ docker ps
 
 This should display a running container with the name `myferron`.
 
-To test the web server, open a browser and navigate to `http://localhost`. If you see the `Ferron is installed successfully!` message on the page, the web server works correctly.
+To test the web server, open a browser and navigate to `http://localhost`. If you see the "Ferron is ready to serve." message on the page, the web server works correctly.
 
 You can also use `curl` instead:
 

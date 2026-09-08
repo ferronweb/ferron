@@ -24,7 +24,7 @@ The installer prompts you to choose the installation type. If packages are avail
 
 By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server runs and serves the default `index.html` file.
 
-If you see the `Ferron is installed successfully!` message on the page, the web server works correctly.
+If you see the "Ferron is ready to serve." message on the page, the web server works correctly.
 
 > [!tip]
 > If you cannot access the server from another machine, make sure your firewall allows incoming connections on port 80. If you use a different port, allow connections on that port. If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
@@ -87,14 +87,14 @@ sudo /etc/init.d/ferron reload # For non-systemd systems
 
 The installer supports several environment variables for automation and advanced use cases. Set them before running the installer script.
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `FERRON_ARCHIVE_PATH` | Path to a locally downloaded Ferron archive for offline installation. The installer will validate the archive and skip the download step. | `/tmp/ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz` |
-| `FERRON_VERSION` | Specify a particular Ferron version to install. If not set, the installer fetches the latest stable version from `dl.ferron.sh`. | `3.0.0` |
-| `FERRON_INSTALL_METHOD` | Override the detected install method. Valid values: `archive`, `debian`, `rhel`. Useful when the auto-detection fails. | `archive` |
-| `FERRON_INSTALL_MODE` | Set to `update` or `uninstall` to skip the interactive mode selection. It only applies when the installer detects an existing installation. | `update` |
-| `FERRON_REMOVE_USER` | During uninstall, set to `yes` to automatically remove the `ferron` system user and group without prompting. | `yes` |
-| `NO_COLOR` | Set to any value to disable colored terminal output. Follows the [NO_COLOR standard](https://no-color.org/). | `1` |
+| Variable                | Description                                                                                                                                 | Example                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `FERRON_ARCHIVE_PATH`   | Path to a locally downloaded Ferron archive for offline installation. The installer will validate the archive and skip the download step.   | `/tmp/ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz` |
+| `FERRON_VERSION`        | Specify a particular Ferron version to install. If not set, the installer fetches the latest stable version from `dl.ferron.sh`.            | `3.0.0`                                             |
+| `FERRON_INSTALL_METHOD` | Override the detected install method. Valid values: `archive`, `debian`, `rhel`. Useful when the auto-detection fails.                      | `archive`                                           |
+| `FERRON_INSTALL_MODE`   | Set to `update` or `uninstall` to skip the interactive mode selection. It only applies when the installer detects an existing installation. | `update`                                            |
+| `FERRON_REMOVE_USER`    | During uninstall, set to `yes` to automatically remove the `ferron` system user and group without prompting.                                | `yes`                                               |
+| `NO_COLOR`              | Set to any value to disable colored terminal output. Follows the [NO_COLOR standard](https://no-color.org/).                                | `1`                                                 |
 
 ### Examples
 
