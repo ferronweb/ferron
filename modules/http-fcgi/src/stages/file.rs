@@ -137,11 +137,12 @@ impl FcgiFileStage {
             .path_info
             .clone()
             .filter(|p| !p.starts_with("/"))
-            .map(|p| p.trim_start_matches('/').to_owned());
+            .and_then(|p| p.strip_prefix('/').map(|p| p.to_owned()));
         env_builder = env_builder
             .server("Ferron".to_string())
             .script_path(file_path, file_root, path_info)
             .request_uri(original_request_uri);
+
         if let Some(addr) = ctx.http.local_address {
             env_builder = env_builder.server_address(addr);
         }

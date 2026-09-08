@@ -19,7 +19,7 @@
 
 #### Gateway interfaces
 
-- **CGI `PATH_INFO` fix**: previously, `PATH_INFO` was not set correctly in CGI requests (stray leading slash, if `PATH_INFO` is about to be set).
+- **CGI and FastCGI `PATH_INFO` fix**: previously, `PATH_INFO` was not set correctly in CGI requests (stray leading slash, if `PATH_INFO` is about to be set). Now, `PATH_INFO` is set correctly in both CGI and FastCGI (often PHP-FPM) requests.
 
 ## Ferron 3.0.0-rc.3
 
