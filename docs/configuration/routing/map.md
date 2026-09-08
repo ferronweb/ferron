@@ -6,7 +6,7 @@ description: "The `map` directive for creating variables whose values depend on 
 This page documents the `map` directive. It creates variables whose values come from matching a source variable against a set of patterns. Mapped variables are available via `{{variable}}` interpolation in other directives.
 
 > [!important]
-> `map` belongs in HTTP scope. Put it in an `http *` block, a host block, or a `location` block. It has no effect in the bare global `{ ... }` block. The global block holds server-wide settings, not per-request HTTP directives. When you migrate from NGINX, `http *` is the counterpart of the NGINX `http` context.
+> `map` belongs in HTTP scope. Put it in an `http *` block, a host block, or a `location` block. It has no effect in the bare top-level configuration (not inside any block). When you migrate from NGINX, `http *` is the counterpart of the NGINX `http` context.
 
 ## Directives
 
