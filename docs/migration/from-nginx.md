@@ -11,19 +11,19 @@ The examples assume a host that serves static files and proxies API traffic to a
 
 NGINX evaluates `server` and `location` blocks per request and can repeat `location` search after a rewrite. Ferron resolves configuration once per request, before pipeline stages run. There is no repeat search.
 
-| Concept | NGINX | Ferron 3 |
-| ------- | ----- | -------- |
-| Virtual host | `server` + `server_name` | Host block (`example.com { ... }`) |
-| Path matching | `location` with prefix, `=`, `^~`, and regex (`~`, `~*`) | `location` with prefix only, plus `match` and `if` for patterns |
-| Rewrite loop | `rewrite ... last` repeats `location` search, up to 10 times | `rewrite` runs once in the pipeline and never re-triggers `location` matching |
-| File fallback | `try_files` | `rewrite` with `file false` and `directory false` |
-| Path remap | `alias` | `location` prefix stripping with `root`, or a separate `location` per path |
-| Variables from patterns | `map` in `http` context | `map` in `http *`, host, or `location` blocks, never in the bare global block |
-| Variables from regex | `set` | `set_var` |
-| Static compression | `gzip on` | `compressed` (static files only) |
-| Proxy compression | `gzip` on proxied responses | `dynamic_compressed` (dynamic responses only) |
-| Symlinks | `disable_symlinks off` by default (links allowed) | `disable_symlinks true` by default (links return 403) |
-| Direct response | `return` | `status` |
+| Concept                 | NGINX                                                        | Ferron 3                                                                      |
+| ----------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Virtual host            | `server` + `server_name`                                     | Host block (`example.com { ... }`)                                            |
+| Path matching           | `location` with prefix, `=`, `^~`, and regex (`~`, `~*`)     | `location` with prefix only, plus `match` and `if` for patterns               |
+| Rewrite loop            | `rewrite ... last` repeats `location` search, up to 10 times | `rewrite` runs once in the pipeline and never re-triggers `location` matching |
+| File fallback           | `try_files`                                                  | `rewrite` with `file false` and `directory false`                             |
+| Path remap              | `alias`                                                      | `location` prefix stripping with `root`, or a separate `location` per path    |
+| Variables from patterns | `map` in `http` context                                      | `map` in `http *`, host, or `location` blocks, never in the bare global block |
+| Variables from regex    | `set`                                                        | `set_var`                                                                     |
+| Static compression      | `gzip on`                                                    | `compressed` (static files only)                                              |
+| Proxy compression       | `gzip` on proxied responses                                  | `dynamic_compressed` (dynamic responses only)                                 |
+| Symlinks                | `disable_symlinks off` by default (links allowed)            | `disable_symlinks true` by default (links return 403)                         |
+| Direct response         | `return`                                                     | `status`                                                                      |
 
 > [!important]
 > Read [Request pipeline order](/docs/configuration/fundamentals/request-pipeline) before you migrate rewrites. Ferron selects the `location` block once, on the original URL. Later rewrites change the URL for proxying and file serving. They do not move the request to a different `location` block.
@@ -34,16 +34,16 @@ NGINX:
 
 ```nginx
 server {
-    listen 80
-    server_name example.com
-    root /srv/www/example
+    listen 80;
+    server_name example.com;
+    root /srv/www/example;
 
     location / {
-        try_files $uri $uri/ /index.html
+        try_files $uri $uri/ /index.html;
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:3000
+        proxy_pass http://127.0.0.1:3000;
     }
 }
 ```
@@ -78,15 +78,15 @@ Ferron uses one pass with prefixes only. The longest matching prefix wins. There
 ```nginx
 # NGINX
 location = /health {
-    return 200 "ok"
+    return 200 "ok";
 }
 
 location ^~ /assets/ {
-    root /srv/www/example
+    root /srv/www/example;
 }
 
 location ~* \.(gif|jpg|jpeg)$ {
-    root /srv/www/images
+    root /srv/www/images;
 }
 ```
 
@@ -129,7 +129,7 @@ This changes broad patterns. A catch-all rule at host level also sees requests f
 ```nginx
 # NGINX: location search repeats, so /libs/app.js can still match a static location
 server {
-    rewrite ^/([^/]+)/(.*)$ /tenant/$1/app/$2 last
+    rewrite ^/([^/]+)/(.*)$ /tenant/$1/app/$2 last;
 }
 ```
 
@@ -155,7 +155,7 @@ Ferron has no `try_files` directive. Use a `rewrite` with `file false` and `dire
 ```nginx
 # NGINX
 location / {
-    try_files $uri $uri/ /index.html
+    try_files $uri $uri/ /index.html;
 }
 ```
 
@@ -193,7 +193,7 @@ Ferron has no `alias` directive. In most cases `location` prefix stripping with 
 ```nginx
 # NGINX
 location /i/ {
-    alias /data/w3/images/
+    alias /data/w3/images/;
 }
 ```
 
@@ -232,9 +232,9 @@ NGINX `map` lives in the `http` context. The Ferron counterpart lives in an `htt
 # NGINX
 http {
     map $http_user_agent $is_mobile {
-        default 0
-        ~*mobile 1
-        ~*android 1
+        default 0;
+        ~*mobile 1;
+        ~*android 1;
     }
 }
 ```
@@ -311,7 +311,7 @@ NGINX `return` stops processing and answers at once. Ferron `status` does the sa
 # NGINX
 server {
     server_name www.example.com
-    return 301 https://example.com$request_uri
+    return 301 https://example.com$request_uri;
 }
 ```
 
@@ -329,7 +329,7 @@ NGINX `rewrite ... permanent` and `rewrite ... redirect` also map to `status`.
 
 ```nginx
 # NGINX
-rewrite ^/old/(.*)$ /new/$1 permanent
+rewrite ^/old/(.*)$ /new/$1 permanent;
 ```
 
 ```ferron
@@ -351,7 +351,7 @@ NGINX uses one `gzip` switch for static and proxied responses. Ferron splits the
 
 ```nginx
 # NGINX
-gzip on
+gzip on;
 ```
 
 ```ferron
