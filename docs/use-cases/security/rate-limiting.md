@@ -119,3 +119,19 @@ api.example.com {
     }
 }
 ```
+
+## JSON rate limit responses
+
+By default, when a client exceeds the rate limit, Ferron responds with an HTTP `429 Too Many Requests` status code and includes an HTML-format message. You can customize this response to return a JSON object instead using `json_errors` directive:
+
+```ferron
+api.example.com {
+    proxy http://localhost:3000
+    rate_limit {
+        rate 50
+        burst 100
+        key remote_address
+    }
+    json_errors
+}
+```
