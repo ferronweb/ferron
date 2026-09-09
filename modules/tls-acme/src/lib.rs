@@ -22,6 +22,7 @@
 
 pub mod cache;
 pub mod challenge;
+pub mod challenge_sync;
 pub mod config;
 pub mod errors;
 pub mod on_demand;
@@ -70,6 +71,13 @@ pub struct AcmeTaskState {
     pub memory_account_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
     /// Shared SNI resolver lock.
     pub sni_resolver_lock: SniResolverLock,
+    /// Shared challenge cache directories (file-backed `cache` paths).
+    ///
+    /// Peers publish HTTP-01 / TLS-ALPN-01 challenge files here so any node
+    /// behind a load balancer can answer CA validation. Populated from each
+    /// config's file `cache` path (deduplicated). Empty when only in-memory
+    /// caching is used.
+    pub challenge_cache_dirs: Arc<RwLock<Vec<std::path::PathBuf>>>,
     /// Event sink for observability.
     pub event_sink: Arc<parking_lot::RwLock<Option<Arc<ferron_observability::CompositeEventSink>>>>,
 }
@@ -92,6 +100,7 @@ impl AcmeTaskState {
             http_01_resolvers: Arc::new(RwLock::new(Vec::new())),
             memory_account_cache: Arc::new(RwLock::new(HashMap::new())),
             sni_resolver_lock: Arc::new(RwLock::new(HashMap::new())),
+            challenge_cache_dirs: Arc::new(RwLock::new(Vec::new())),
             event_sink: Arc::new(parking_lot::RwLock::new(None)),
         }
     }
@@ -107,6 +116,15 @@ impl AcmeTaskState {
         self.tls_alpn_01_resolvers.write().await.clear();
         self.http_01_resolvers.write().await.clear();
         self.sni_resolver_lock.write().await.clear();
+        self.challenge_cache_dirs.write().await.clear();
+    }
+
+    /// Registers a file cache directory for distributed challenge fallback (deduplicated).
+    pub fn register_challenge_cache_dir(&self, dir: std::path::PathBuf) {
+        let mut dirs = self.challenge_cache_dirs.blocking_write();
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
     }
 }
 
@@ -194,6 +212,14 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                 let certified_key_lock = acme_config.certified_key_lock.clone();
                 let challenge_type = acme_config.challenge_type.clone();
                 let error_message = acme_config.error_message.clone();
+                // Register the file cache dir so peers' challenge files are visible.
+                if let Some(dir) = acme_config
+                    .account_cache
+                    .cache_dir()
+                    .or_else(|| acme_config.certificate_cache.cache_dir())
+                {
+                    task_state.register_challenge_cache_dir(dir);
+                }
 
                 // Add to configs list
                 task_state.configs.blocking_write().push(acme_config);
@@ -219,6 +245,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                     ticketer,
                     None,
                     error_message,
+                    task_state.challenge_cache_dirs.clone(),
                 );
 
                 ctx.resolver = Some(Arc::new(acme_resolver));
@@ -227,6 +254,9 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                 let sni_resolver_lock = on_demand_config.sni_resolver_lock.clone();
                 let challenge_type = on_demand_config.challenge_type.clone();
                 let error_message = on_demand_config.error_message.clone();
+                if let Some(ref dir) = on_demand_config.cache_path {
+                    task_state.register_challenge_cache_dir(dir.clone());
+                }
 
                 // Store on-demand config for later use by the background task
                 task_state
@@ -255,6 +285,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                     ticketer,
                     Some((task_state.on_demand_tx.clone(), on_demand_config.port)),
                     error_message,
+                    task_state.challenge_cache_dirs.clone(),
                 );
                 ctx.resolver = Some(Arc::new(acme_resolver));
             }
@@ -340,6 +371,7 @@ impl Module for TlsAcmeModule {
         let sni_resolver_lock = state.sni_resolver_lock.clone();
         let tls_alpn_01_resolvers = state.tls_alpn_01_resolvers.clone();
         let http_01_resolvers = state.http_01_resolvers.clone();
+        let challenge_cache_dirs = state.challenge_cache_dirs.clone();
         let cancel_token = self.cancel_token.clone();
 
         let cancel_token2 = cancel_token.clone();
@@ -355,6 +387,7 @@ impl Module for TlsAcmeModule {
                     sni_resolver_lock,
                     tls_alpn_01_resolvers,
                     http_01_resolvers,
+                    challenge_cache_dirs,
                     event_sink,
                 ))
                 .await;
@@ -383,6 +416,7 @@ async fn run_acme_background_task(
     sni_resolver_lock: Arc<RwLock<HashMap<String, Arc<dyn rustls::server::ResolvesServerCert>>>>,
     tls_alpn_01_resolvers: Arc<RwLock<Vec<crate::challenge::TlsAlpn01DataLock>>>,
     http_01_resolvers: Arc<RwLock<Vec<crate::challenge::Http01DataLock>>>,
+    challenge_cache_dirs: Arc<RwLock<Vec<std::path::PathBuf>>>,
     event_sink: Arc<ferron_observability::CompositeEventSink>,
 ) {
     // Track which (hostname, port) combinations we've already processed
@@ -722,7 +756,23 @@ async fn run_acme_background_task(
             }
         }
 
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        // Drop expired peer challenge files so the shared dir doesn't grow
+        // unboundedly when a node crashes mid-order (TTL is the backstop).
+        for dir in challenge_cache_dirs.read().await.clone() {
+            crate::challenge_sync::prune_expired_challenges(&dir).await;
+        }
+
+        // Stagger cycles with deterministic jitter (pid + time based, no `rand`
+        // dependency) so nodes restarted together desynchronize and don't wake
+        // in lockstep every 10s (thundering-herd damping; the lock is the
+        // primary serialization).
+        let jitter_ms = (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() % 1000)
+            .unwrap_or(0) as u64
+            + std::process::id() as u64)
+            % 2000;
+        tokio::time::sleep(std::time::Duration::from_millis(10_000 + jitter_ms)).await;
     }
 }
 

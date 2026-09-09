@@ -177,13 +177,47 @@ The cache directory structure:
 ```text
 /var/cache/ferron-acme/
 ├── account_<hash>          # ACME account credentials
-└── certificate_<hash>      # Certificate chain + private key (JSON)
+├── certificate_<hash>      # Certificate chain + private key (JSON)
+├── challenge_http_<hash>   # Shared HTTP-01 challenge (distributed mode)
+├── challenge_tls_<hash>    # Shared TLS-ALPN-01 challenge (distributed mode)
+└── lock_certificate_<hash> # Provisioning lockfile (distributed mode)
 ```
 
 ### Cache key derivation
 
 - **Account cache key**: hash of `contact emails + directory URL`
 - **Certificate cache key**: hash of `sorted domains + profile name`
+- **Challenge keys**: hash of the challenge `token` (`challenge_http_*`) or identifier (`challenge_tls_*`)
+- **Lock keys**: `lock_` + the paired `certificate_*` / `account_*` / `hostname_*` key, so `ls lock_*` groups all locks
+
+## Distributed mode (shared filesystem)
+
+Point every Ferron instance at the same shared `cache` directory (NFS, EFS, CephFS) to run ACME behind a load balancer:
+
+```ferron
+example.com {
+    tls {
+        provider acme
+        challenge http-01
+        contact "admin@example.com"
+        cache "/var/cache/ferron-acme"
+    }
+}
+```
+
+How it works:
+
+- **Challenge sync**: the node creating the order publishes `challenge_http_*` / `challenge_tls_*` files (15-minute TTL). Peers serve CA validation from these files when their in-memory locks miss, so validation succeeds regardless of which node the CA reaches.
+- **One order at a time**: before ordering, a node takes the paired `lock_certificate_*` lockfile (atomic create). Peers skip that cycle and pick up the resulting `certificate_*` file later. On-demand `hostname_*` appends take `lock_hostname_*` the same way.
+- **Self-healing locks**: the holder refreshes a heartbeat every 30 seconds; a lock without heartbeat for 5 minutes is treated as stale (crashed holder) and broken by the next contender, which logs a warning. Releases only delete their own lock, never a peer's.
+- **Herd damping**: skipped cycles return to the 10-second loop, and cycle sleeps include jitter so restarted nodes desynchronize.
+
+Requirements and notes:
+
+- All nodes must share one writable `cache` path with atomic create/rename semantics and roughly synchronized clocks. In-memory caching cannot coordinate.
+- Challenge and key material is `0600` on Unix, but any node with cache access can read it — restrict cache access to your Ferron hosts.
+- DNS-01 needs no challenge files (the TXT record is already shared); the provisioning lock still prevents duplicate orders.
+- Debug with `ls lock_*` (stuck entries show the owner `host-pid`) and the `ACME lock stale, broken` / `ACME provisioning skipped, peer holds lock` log messages.
 
 ## Certificate renewal
 

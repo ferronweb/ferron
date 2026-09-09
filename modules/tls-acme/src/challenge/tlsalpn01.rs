@@ -13,6 +13,10 @@ use rustls_pki_types::PrivateKeyDer;
 
 use super::{TlsAlpn01DataLock, ACME_TLS_ALPN_NAME};
 
+/// Challenge certificate with PEM material for distributed sharing:
+/// (certified key, identifier, certificate-chain PEM, private-key PEM).
+pub type ChallengeCertWithPem = (Arc<CertifiedKey>, String, String, String);
+
 /// Resolver for TLS-ALPN-01 challenges.
 ///
 /// Implements `ResolvesServerCert` to check for pending ACME challenges
@@ -34,10 +38,25 @@ impl TlsAlpn01Resolver {
     ///
     /// The certificate contains the ACME identifier extension with the
     /// SHA-256 digest of the key authorization.
+    ///
+    /// Returns the certified key, the identifier, and the PEM-encoded
+    /// certificate chain + private key so the challenge can be shared with
+    /// peer nodes via the shared `cache` directory (see `challenge_sync`).
     pub fn generate_challenge_cert(
         identifier: &str,
         key_authorization: &KeyAuthorization,
     ) -> Result<(Arc<CertifiedKey>, String), Box<dyn std::error::Error + Send + Sync>> {
+        let (certified_key, ident, _cert_pem, _key_pem) =
+            Self::generate_challenge_cert_with_pem(identifier, key_authorization)?;
+        Ok((certified_key, ident))
+    }
+
+    /// Same as [`TlsAlpn01Resolver::generate_challenge_cert`], additionally
+    /// returning PEM material for distributed sharing.
+    pub fn generate_challenge_cert_with_pem(
+        identifier: &str,
+        key_authorization: &KeyAuthorization,
+    ) -> Result<ChallengeCertWithPem, Box<dyn std::error::Error + Send + Sync>> {
         let mut params = CertificateParams::new(vec![identifier.to_string()])?;
         params
             .custom_extensions
@@ -46,6 +65,8 @@ impl TlsAlpn01Resolver {
             ));
         let key_pair = KeyPair::generate()?;
         let certificate = params.self_signed(&key_pair)?;
+        let certificate_chain_pem = certificate.pem();
+        let private_key_pem = key_pair.serialize_pem();
         let private_key = PrivateKeyDer::try_from(key_pair.serialize_der())?;
 
         let signing_key = rustls::crypto::aws_lc_rs::default_provider()
@@ -57,7 +78,12 @@ impl TlsAlpn01Resolver {
             signing_key,
         ));
 
-        Ok((certified_key, identifier.to_string()))
+        Ok((
+            certified_key,
+            identifier.to_string(),
+            certificate_chain_pem,
+            private_key_pem,
+        ))
     }
 }
 

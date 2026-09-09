@@ -6,6 +6,7 @@
 mod account;
 pub(crate) mod cert_install;
 mod challenge;
+pub mod dist_lock;
 mod validity;
 
 use std::net::IpAddr;
@@ -29,7 +30,137 @@ use self::validity::check_certificate_validity_or_install_cached;
 
 /// Provisions a TLS certificate using ACME for the given config.
 /// Returns `true` if a certificate was provisioned, `false` otherwise.
+///
+/// Distributed coordination: when the cache is file-backed (shared
+/// filesystem), only one node orders for a given domain set at a time (via
+/// `lock_certificate_*`). Peers skip the cycle and pick up the resulting
+/// `certificate_*` file on a later cycle, which damps thundering herds after
+/// restarts/expiries. Dead holders self-heal via lock heartbeat + lease.
 pub async fn provision_certificate(
+    config: &mut AcmeConfig,
+    event_sink: &Arc<ferron_observability::CompositeEventSink>,
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    if check_certificate_validity_or_install_cached(config, event_sink).await? {
+        return Ok(false);
+    }
+
+    // Fast path found nothing valid; serialize orders across nodes sharing the cache.
+    let lock_dir = config
+        .account_cache
+        .cache_dir()
+        .or_else(|| config.certificate_cache.cache_dir());
+    let domains_label = config.domains.join(", ");
+    let guard = if let Some(ref dir) = lock_dir {
+        let lock_key = crate::cache::get_cert_lock_key(&config.domains, config.profile.as_deref());
+        match dist_lock::acquire_with_timeout(
+            dir,
+            &lock_key,
+            &domains_label,
+            &config.directory,
+            Duration::from_secs(5),
+        )
+        .await
+        {
+            Ok((guard_opt, stale_broken)) => {
+                if stale_broken {
+                    emit_log(
+                        event_sink,
+                        ferron_observability::LogLevel::Warn,
+                        "ACME lock stale, broken",
+                        &format!(
+                            "Broke a stale ACME provisioning lock for {domains_label}; \
+                             a previous holder likely crashed"
+                        ),
+                        "ferron-tls-acme",
+                        vec![
+                            (
+                                "ferron.acme.domains",
+                                ferron_observability::LogAttributeValue::String(
+                                    domains_label.clone(),
+                                ),
+                            ),
+                            (
+                                "ferron.acme.lock_key",
+                                ferron_observability::LogAttributeValue::String(lock_key),
+                            ),
+                        ],
+                    );
+                }
+                match guard_opt {
+                    Some(g) => Some(g),
+                    None => {
+                        // A live peer is ordering; skip this cycle (thundering-herd
+                        // damping). The next 10s cycle re-checks the file cache.
+                        emit_log(
+                            event_sink,
+                            ferron_observability::LogLevel::Debug,
+                            "ACME provisioning skipped, peer holds lock",
+                            &format!(
+                                "Skipping ACME provisioning for {domains_label}: \
+                                 a peer holds the provisioning lock"
+                            ),
+                            "ferron-tls-acme",
+                            vec![(
+                                "ferron.acme.domains",
+                                ferron_observability::LogAttributeValue::String(
+                                    domains_label.clone(),
+                                ),
+                            )],
+                        );
+                        return Ok(false);
+                    }
+                }
+            }
+            Err(e) => {
+                // Fail open: a broken cache dir must not wedge issuance.
+                emit_log(
+                    event_sink,
+                    ferron_observability::LogLevel::Warn,
+                    "ACME lock acquisition failed",
+                    &format!(
+                        "Failed to acquire ACME provisioning lock for {domains_label}, \
+                         proceeding without it: {e}"
+                    ),
+                    "ferron-tls-acme",
+                    vec![
+                        (
+                            "ferron.acme.domains",
+                            ferron_observability::LogAttributeValue::String(domains_label.clone()),
+                        ),
+                        (
+                            "error.message",
+                            ferron_observability::LogAttributeValue::String(e.to_string()),
+                        ),
+                    ],
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Re-check after acquiring: a peer may have installed the cert while we waited.
+    if check_certificate_validity_or_install_cached(config, event_sink).await? {
+        if let Some(g) = guard {
+            g.release().await;
+        }
+        return Ok(false);
+    }
+
+    let outcome = provision_with_providers(config, event_sink).await;
+    if let Some(g) = guard {
+        g.release().await;
+    }
+    outcome
+}
+
+/// Runs the provider (primary + fallbacks) ordering loop.
+///
+/// Must be called with the distributed lock held (or with no lock for
+/// in-memory caches). Returns `true` if provisioning ran, `false` is never
+/// returned here (validity short-circuits happen in the caller).
+async fn provision_with_providers(
     config: &mut AcmeConfig,
     event_sink: &Arc<ferron_observability::CompositeEventSink>,
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
@@ -39,10 +170,6 @@ pub async fn provision_certificate(
     let mut providers = vec![provider_list.primary.clone()];
     providers.extend(provider_list.fallbacks.iter().cloned());
     drop(provider_list);
-
-    if check_certificate_validity_or_install_cached(config, event_sink).await? {
-        return Ok(false);
-    }
 
     for (idx, provider) in providers.iter().enumerate() {
         let provider_name = if idx == 0 { "primary" } else { "fallback" };
@@ -435,16 +562,37 @@ async fn provision_certificate_inner(
 
         match config.challenge_type {
             instant_acme::ChallengeType::TlsAlpn01 => {
-                let (certified_key, _ident) =
-                    TlsAlpn01Resolver::generate_challenge_cert(&identifier, &key_authorization)?;
+                let (certified_key, _ident, cert_pem, key_pem) =
+                    TlsAlpn01Resolver::generate_challenge_cert_with_pem(
+                        &identifier,
+                        &key_authorization,
+                    )?;
                 *config.tls_alpn_01_data_lock.write().await =
                     Some((certified_key, identifier.clone()));
+                // Share with peers so any node can answer the CA validation.
+                if let Some(dir) = crate::challenge_sync::shared_cache_dir(config) {
+                    crate::challenge_sync::publish_tlsalpn01_challenge(
+                        &dir,
+                        &identifier,
+                        &cert_pem,
+                        &key_pem,
+                    )
+                    .await;
+                }
             }
             instant_acme::ChallengeType::Http01 => {
-                *config.http_01_data_lock.write().await = Some((
-                    challenge.token.clone(),
-                    key_authorization.as_str().to_string(),
-                ));
+                let key_auth_string = key_authorization.as_str().to_string();
+                *config.http_01_data_lock.write().await =
+                    Some((challenge.token.clone(), key_auth_string.clone()));
+                // Share with peers so any node can answer the CA validation.
+                if let Some(dir) = crate::challenge_sync::shared_cache_dir(config) {
+                    crate::challenge_sync::publish_http01_challenge(
+                        &dir,
+                        &challenge.token,
+                        &key_auth_string,
+                    )
+                    .await;
+                }
             }
             instant_acme::ChallengeType::Dns01 => {
                 if let Some(ref dns_client) = config.dns_client {

@@ -47,18 +47,40 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
             return Ok(true);
         };
 
-        let path = req.uri().path();
+        let path = req.uri().path().to_string();
 
         // Only handle ACME challenge paths
         if !path.starts_with("/.well-known/acme-challenge/") {
             return Ok(true);
         }
 
-        // Look up the key authorization from the shared ACME state
+        // Look up the key authorization from the shared ACME state:
+        // first in-memory locks, then challenge files published by peers.
         let task_state = get_or_init_task_state();
-        let resolvers = task_state.http_01_resolvers.blocking_read();
+        let key_authorization = {
+            let resolvers = task_state.http_01_resolvers.blocking_read();
+            try_handle_challenge(&path, &resolvers)
+        };
+        let key_authorization = match key_authorization {
+            Some(ka) => Some(ka),
+            None => {
+                let token = path
+                    .strip_prefix(crate::challenge::http01::ACME_CHALLENGE_PATH_PREFIX)
+                    .unwrap_or("");
+                let dirs = task_state.challenge_cache_dirs.blocking_read().clone();
+                let mut found = None;
+                for dir in &dirs {
+                    if let Some(ka) = crate::challenge_sync::load_http01_challenge(dir, token).await
+                    {
+                        found = Some(ka);
+                        break;
+                    }
+                }
+                found
+            }
+        };
 
-        if let Some(key_authorization) = try_handle_challenge(path, &resolvers) {
+        if let Some(key_authorization) = key_authorization {
             ctx.res = Some(HttpResponse::Custom(
                 Response::builder()
                     .status(200)

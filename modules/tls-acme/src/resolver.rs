@@ -96,6 +96,8 @@ pub struct TlsAcmeResolver {
     ticketer: Option<Arc<dyn rustls::server::ProducesTickets>>,
     /// Error message lock
     error_message: Arc<parking_lot::RwLock<Option<String>>>,
+    /// Shared file cache dirs for distributed TLS-ALPN-01 fallback.
+    challenge_cache_dirs: Option<Arc<RwLock<Vec<std::path::PathBuf>>>>,
 }
 
 /// OCSP service handle type alias.
@@ -122,6 +124,7 @@ impl TlsAcmeResolver {
         ticketer: Option<Arc<dyn rustls::server::ProducesTickets>>,
         on_demand_tx: Option<(async_channel::Sender<OnDemandRequest>, u16)>,
         error_message: Arc<parking_lot::RwLock<Option<String>>>,
+        challenge_cache_dirs: Arc<RwLock<Vec<std::path::PathBuf>>>,
     ) -> Self {
         let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock, on_demand_tx));
 
@@ -133,6 +136,7 @@ impl TlsAcmeResolver {
             ocsp_handle,
             ticketer,
             error_message,
+            challenge_cache_dirs: Some(challenge_cache_dirs),
         }
     }
 
@@ -144,6 +148,19 @@ impl TlsAcmeResolver {
                 if data.1 == server_name {
                     return Some(data.0);
                 }
+            }
+        }
+        None
+    }
+
+    /// Falls back to challenge files published by peers on the shared cache.
+    async fn find_challenge_cert_shared(&self, server_name: &str) -> Option<Arc<CertifiedKey>> {
+        let dirs = self.challenge_cache_dirs.as_ref()?.read().await.clone();
+        for dir in &dirs {
+            if let Some(cert) =
+                crate::challenge_sync::load_tlsalpn01_challenge_cert(dir, server_name).await
+            {
+                return Some(cert);
             }
         }
         None
@@ -210,9 +227,15 @@ impl TlsResolver for TlsAcmeResolver {
                 .eq([ACME_TLS_ALPN_NAME]);
 
         if is_acme_challenge {
-            // Look up the matching challenge certificate
+            // Look up the matching challenge certificate: first in-memory,
+            // then in shared challenge files published by peers.
             let server_name = client_hello.server_name();
-            let challenge_cert = server_name.and_then(|name| self.find_challenge_cert(name));
+            let mut challenge_cert = server_name.and_then(|name| self.find_challenge_cert(name));
+            if challenge_cert.is_none() {
+                if let Some(name) = server_name {
+                    challenge_cert = self.find_challenge_cert_shared(name).await;
+                }
+            }
 
             match challenge_cert {
                 Some(cert) => {

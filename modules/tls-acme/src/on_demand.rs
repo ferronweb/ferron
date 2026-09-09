@@ -32,19 +32,50 @@ pub async fn get_cached_domains(
 }
 
 /// Adds a domain to the on-demand cache.
+///
+/// Uses the paired `lock_hostname_*` lockfile when file caching is used so
+/// concurrent nodes appending different domains to the same `hostname_*` file
+/// don't lose each other's updates. Re-reads under the lock and dedupes, so
+/// retries and duplicate requests can't grow the file unboundedly.
 pub async fn add_domain_to_cache(
     port: u16,
     sni_hostname: Option<&str>,
     cache_path: &Option<PathBuf>,
     domain: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    if let Some(ref pathbuf) = cache_path {
-        let hostname_cache_key = get_hostname_cache_key(port, sni_hostname);
-        let hostname_cache = AcmeCache::File(pathbuf.clone());
-        let mut cached_domains = get_cached_domains(port, sni_hostname, cache_path).await;
+    let Some(ref pathbuf) = cache_path else {
+        return Ok(());
+    };
+    let hostname_cache_key = get_hostname_cache_key(port, sni_hostname);
+    let lock_key = crate::cache::get_hostname_lock_key(port, sni_hostname);
+
+    // Serialize read-modify-write across nodes sharing the cache.
+    let guard = match crate::provision::dist_lock::acquire_with_timeout(
+        pathbuf,
+        &lock_key,
+        domain,
+        "",
+        std::time::Duration::from_secs(3),
+    )
+    .await
+    {
+        Ok((guard_opt, _)) => guard_opt,
+        Err(_) => None, // Fail open to best-effort append below.
+    };
+
+    let hostname_cache = AcmeCache::File(pathbuf.clone());
+    let mut cached_domains: Vec<String> = match hostname_cache.get(&hostname_cache_key).await {
+        Some(data) => serde_json::from_slice(&data).unwrap_or_default(),
+        None => Vec::new(),
+    };
+    if !cached_domains.iter().any(|d| d == domain) {
         cached_domains.push(domain.to_string());
         let data = serde_json::to_vec(&cached_domains)?;
         hostname_cache.set(&hostname_cache_key, data).await?;
+    }
+
+    if let Some(g) = guard {
+        g.release().await;
     }
     Ok(())
 }

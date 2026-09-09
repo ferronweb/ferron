@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Added
+
+#### TLS
+
+- **Distributed ACME via shared cache**: when `cache` points at a shared filesystem, Ferron now syncs HTTP-01 / TLS-ALPN-01 challenge data (`challenge_http_*`, `challenge_tls_*`) so any node can answer CA validation, and serializes orders with `lock_certificate_*` lockfiles (heartbeat + 5-minute stale-break, thundering-herd damping).
+
 ### Changed
 
 #### TLS
