@@ -159,19 +159,41 @@
     "sub": true
   },
   {
-    "label": "Security"
+    "label": "TLS/HTTPS"
   },
+
   {
-    "href": "/docs/use-cases/security/automatic-tls",
+    "href": "/docs/use-cases/https/automatic-tls",
     "target": "_self",
     "label": "Automatic TLS",
     "sub": true
   },
   {
-    "href": "/docs/use-cases/security/distributed-tls",
+    "href": "/docs/use-cases/https/distributed-tls",
     "target": "_self",
     "label": "Distributed TLS",
     "sub": true
+  },
+  {
+    "href": "/docs/use-cases/https/manual-tls",
+    "target": "_self",
+    "label": "Manual TLS",
+    "sub": true
+  },
+  {
+    "href": "/docs/use-cases/https/mtls",
+    "target": "_self",
+    "label": "mTLS (mutual TLS)",
+    "sub": true
+  },
+  {
+    "href": "/docs/use-cases/https/fips",
+    "target": "_self",
+    "label": "FIPS-certified cryptography",
+    "sub": true
+  },
+  {
+    "label": "Security"
   },
   {
     "href": "/docs/use-cases/security/rate-limiting",
@@ -189,24 +211,6 @@
     "href": "/docs/use-cases/security/security-headers",
     "target": "_self",
     "label": "Security headers",
-    "sub": true
-  },
-  {
-    "href": "/docs/use-cases/security/manual-tls",
-    "target": "_self",
-    "label": "Manual TLS",
-    "sub": true
-  },
-  {
-    "href": "/docs/use-cases/security/mtls",
-    "target": "_self",
-    "label": "mTLS (mutual TLS)",
-    "sub": true
-  },
-  {
-    "href": "/docs/use-cases/security/fips",
-    "target": "_self",
-    "label": "FIPS-certified cryptography",
     "sub": true
   },
   {
