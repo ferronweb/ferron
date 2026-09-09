@@ -25,7 +25,7 @@ async fn raw_http_get(addr: &str, port: u16, raw_path: &str) -> u16 {
     buf.truncate(n);
 
     let response = String::from_utf8_lossy(&buf);
-    // Parse status code from "HTTP/1.1 XXX ..."
+    // Parse status code from "HTTP/1.1 <code> <description>"
     response
         .split_whitespace()
         .nth(1)
