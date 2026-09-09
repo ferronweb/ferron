@@ -786,7 +786,7 @@ impl TicketKeyRotator {
             let mut hasher = std::hash::DefaultHasher::default();
             existing_keys.hash(&mut hasher);
             let stek_hash = hasher.finish();
-            if let (Ok(state), Some(first_key)) = (self.state.read(), ticket_keys.get(0)) {
+            if let (Ok(state), Some(first_key)) = (self.state.read(), ticket_keys.first()) {
                 if state.stek_hash != stek_hash {
                     // Seems already rotated, reload it...
                     let new_encryptor = CustomTicketEncryptor::new(first_key).ok()?;
