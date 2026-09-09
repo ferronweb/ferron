@@ -58,7 +58,7 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
         // first in-memory locks, then challenge files published by peers.
         let task_state = get_or_init_task_state();
         let key_authorization = {
-            let resolvers = task_state.http_01_resolvers.blocking_read();
+            let resolvers = task_state.http_01_resolvers.read().await;
             try_handle_challenge(&path, &resolvers)
         };
         let key_authorization = match key_authorization {
@@ -67,7 +67,7 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
                 let token = path
                     .strip_prefix(crate::challenge::http01::ACME_CHALLENGE_PATH_PREFIX)
                     .unwrap_or("");
-                let dirs = task_state.challenge_cache_dirs.blocking_read().clone();
+                let dirs = task_state.challenge_cache_dirs.read().await.clone();
                 let mut found = None;
                 for dir in &dirs {
                     if let Some(ka) =
