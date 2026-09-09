@@ -101,15 +101,12 @@ impl GRpcRProxyTestContext {
 
         let network = format!("e2e-test-grpc-rproxy-{}", test_name);
 
-        // Start backend
         let backend = create_backend_grpc_container(&network, cert_dir.path())
             .await
             .unwrap();
 
-        // Write Ferron config
         config_file.as_file_mut().write_all(config_content).unwrap();
 
-        // Start Ferron
         let ferron = create_ferron_container(&network, config_file.path(), cert_dir.path())
             .await
             .unwrap();
@@ -136,7 +133,6 @@ async fn call_say_hello(
 ) -> Result<String, Box<dyn std::error::Error>> {
     use prost::Message;
 
-    // Create the request message
     let request_msg = hello::HelloRequest { name };
     let mut request_bytes = Vec::new();
     request_msg.encode(&mut request_bytes)?;
@@ -147,7 +143,6 @@ async fn call_say_hello(
     grpc_message.extend_from_slice(&(request_bytes.len() as u32).to_be_bytes());
     grpc_message.extend_from_slice(&request_bytes);
 
-    // Create HTTP/2 request
     let response = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .danger_accept_invalid_hostnames(true)

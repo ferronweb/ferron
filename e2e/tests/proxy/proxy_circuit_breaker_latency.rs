@@ -295,7 +295,6 @@ async fn test_circuit_breaker_latency_half_open_recovery() {
         .build()
         .unwrap();
 
-    // Step 1: Request to slow backend — trips the circuit (500ms > 100ms threshold)
     let response = client
         .get(format!("http://localhost:{}/unstable?sleep=500", port))
         .send()
@@ -306,8 +305,6 @@ async fn test_circuit_breaker_latency_half_open_recovery() {
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    // Step 2: Request to fast backend (round_robin selects backend-fast)
-    // Circuit is open for backend-slow, but backend-fast is fine
     let response = client
         .get(format!("http://localhost:{}/whoami", port))
         .send()
@@ -316,12 +313,8 @@ async fn test_circuit_breaker_latency_half_open_recovery() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.text().await.unwrap(), "backend-fast");
 
-    // Step 3: Wait for circuit to transition to half-open (open_duration = 2s)
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-    // Step 4: Request to slow backend again (half-open) — but we use /whoami
-    // to get the backend name. Since the circuit is half-open, it will try backend-slow.
-    // We expect a fast response because in half-open state, a single success closes the circuit.
     let response = client
         .get(format!("http://localhost:{}/whoami", port))
         .send()

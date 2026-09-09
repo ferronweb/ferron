@@ -105,7 +105,6 @@ async fn test_forward_proxy_connect_port_80() {
 
     let ctx = ForwardProxyTestContext::new("connect-80", config).await;
 
-    // Step 1: Connect to Ferron and send CONNECT request
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", ctx.ferron_port))
         .await
         .unwrap();
@@ -114,7 +113,6 @@ async fn test_forward_proxy_connect_port_80() {
     stream.write_all(connect_request.as_bytes()).await.unwrap();
     stream.flush().await.unwrap();
 
-    // Step 2: Read the 200 response (tunnel established)
     let mut buf = vec![0u8; 4096];
     let n = stream.read(&mut buf).await.unwrap();
     buf.truncate(n);
@@ -135,12 +133,10 @@ async fn test_forward_proxy_connect_port_80() {
         response
     );
 
-    // Step 3: Send HTTP GET through the established tunnel
     let http_request = "GET / HTTP/1.1\r\nHost: backend:3000\r\nConnection: close\r\n\r\n";
     stream.write_all(http_request.as_bytes()).await.unwrap();
     stream.flush().await.unwrap();
 
-    // Step 4: Read the HTTP response from the backend through the tunnel
     let mut tunnel_buf = vec![0u8; 4096];
     let n = stream.read(&mut tunnel_buf).await.unwrap();
     tunnel_buf.truncate(n);

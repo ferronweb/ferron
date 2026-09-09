@@ -163,7 +163,6 @@ async fn test_proxy_header_end_to_end() {
         .await
         .unwrap();
 
-    // Step 1: Send request to A with PROXY v1 header claiming client is 1.2.3.4
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port_a))
         .await

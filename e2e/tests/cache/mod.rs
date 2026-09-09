@@ -402,7 +402,6 @@ async fn test_cache_request_max_age_revalidates() {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
-    // The origin answers 200, so the refreshed entry replaces the stored one.
     assert_eq!(&*response.bytes().await.unwrap(), b"v2");
 
     // A plain request within the TTL now serves the refreshed entry from cache.

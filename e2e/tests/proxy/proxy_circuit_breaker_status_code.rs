@@ -497,7 +497,6 @@ async fn test_circuit_breaker_5xx_half_open_recovery() {
         .build()
         .unwrap();
 
-    // Step 1: First request to backend-a returns 503 — trips the circuit
     let response = client
         .get(format!("http://localhost:{}/status?code=503", port))
         .send()
@@ -507,7 +506,6 @@ async fn test_circuit_breaker_5xx_half_open_recovery() {
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    // Step 2: Request goes to backend-b (backend-a circuit is open)
     let response = client
         .get(format!("http://localhost:{}/whoami", port))
         .send()
@@ -516,12 +514,8 @@ async fn test_circuit_breaker_5xx_half_open_recovery() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.text().await.unwrap(), "backend-b");
 
-    // Step 3: Wait for circuit to transition to half-open (open_duration = 1s)
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-    // Step 4: Request to whoami — both backends should be reachable again.
-    // backend-a's circuit is half-open, and backend-a returns 200 OK on /whoami,
-    // which should close the circuit again (consecutive_passes = 1).
     let response = client
         .get(format!("http://localhost:{}/whoami", port))
         .send()

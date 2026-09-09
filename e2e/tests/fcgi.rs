@@ -91,7 +91,6 @@ async fn test_fcgi_php_hello_world() {
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
-    // Write PHP file
     self::common::write_file(
         wwwroot_dir.path().join("index.php"),
         br#"<?php
@@ -100,7 +99,6 @@ echo "Hello, World!";
     )
     .unwrap();
 
-    // Write Ferron config
     config_file
         .as_file_mut()
         .write_all(
@@ -116,12 +114,10 @@ echo "Hello, World!";
 
     let network = "e2e-test-fcgi";
 
-    // Start PHP-FPM container
     let _php_fpm = create_php_fpm_container(network, wwwroot_dir.path())
         .await
         .unwrap();
 
-    // Start Ferron container
     let ferron = create_ferron_container(network, wwwroot_dir.path(), config_file.path())
         .await
         .unwrap();
@@ -162,7 +158,6 @@ async fn test_fcgiwrap_cgi_hello_world() {
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
-    // Write CGI script
     let _ = self::common::create_dir(wwwroot_dir.path().join("cgi-bin"));
     self::common::write_file(
         wwwroot_dir.path().join("cgi-bin/index.cgi"),
@@ -179,7 +174,6 @@ echo "Hello, World!"
         nix::sys::stat::Mode::from_bits(0o777).unwrap(),
     ); // CGI must be executable
 
-    // Write Ferron config
     config_file
         .as_file_mut()
         .write_all(
@@ -205,12 +199,10 @@ echo "Hello, World!"
 
     let network = "e2e-test-fcgiwrap";
 
-    // Start fcgiwrap container
     let _fcgiwrap = create_fcgiwrap_container(network, wwwroot_dir.path())
         .await
         .unwrap();
 
-    // Start Ferron container
     let ferron = create_ferron_container(network, wwwroot_dir.path(), config_file.path())
         .await
         .unwrap();
@@ -272,7 +264,6 @@ echo "Hello after sleep";
 
     let network = "e2e-test-fcgi-reset";
 
-    // Start PHP-FPM container
     let php_fpm = GenericImage::new("php", "8.4-fpm")
         .with_exposed_port(ContainerPort::Tcp(9000))
         .with_wait_for(WaitFor::seconds(3))
@@ -286,7 +277,6 @@ echo "Hello after sleep";
         .await
         .unwrap();
 
-    // Start Ferron container
     let ferron = create_ferron_container(network, wwwroot_dir.path(), config_file.path())
         .await
         .unwrap();
@@ -301,7 +291,6 @@ echo "Hello after sleep";
         .build()
         .unwrap();
 
-    // Start the request in a background task
     let client_clone = client.clone();
     let req_future = tokio::spawn(async move {
         client_clone

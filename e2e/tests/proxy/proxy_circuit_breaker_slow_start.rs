@@ -128,7 +128,6 @@ async fn test_circuit_breaker_slow_start_config_accepted() {
         .build()
         .unwrap();
 
-    // Step 1: First request goes to backend-fail (round_robin), which fails.
     let response1 = client
         .get(format!("http://localhost:{}/unstable", port))
         .send()
@@ -143,7 +142,6 @@ async fn test_circuit_breaker_slow_start_config_accepted() {
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-    // Step 2: Second request goes to backend-ok (backend-fail circuit is open).
     let response2 = client
         .get(format!("http://localhost:{}/whoami", port))
         .send()
@@ -158,13 +156,8 @@ async fn test_circuit_breaker_slow_start_config_accepted() {
         ferron_logs(&ferron).await
     );
 
-    // Step 3: Wait for circuit to transition to half-open, then close.
-    // open_duration = 1s, so after 2s the circuit is half-open.
-    // The next successful request closes the circuit (consecutive_passes = 1).
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-    // Step 4: Request to backend-fail (half-open probe). It should succeed
-    // because UNSTABLE_FAILS=1 means it only fails the first request.
     let response3 = client
         .get(format!("http://localhost:{}/whoami", port))
         .send()
@@ -179,8 +172,6 @@ async fn test_circuit_breaker_slow_start_config_accepted() {
         ferron_logs(&ferron).await
     );
 
-    // Step 5: Subsequent requests should succeed from either backend.
-    // The circuit is now closed (slow-start active for backend-fail).
     let response4 = client
         .get(format!("http://localhost:{}/whoami", port))
         .send()

@@ -369,10 +369,6 @@ async fn test_tls_http_3() {
     container.stop().await.unwrap();
 }
 
-// ============================================================================
-// Infrastructure helpers for TLS session ticket testing
-// ============================================================================
-
 /// Generate a ticket key file with the specified number of keys.
 ///
 /// Returns the path to the generated key file.
@@ -439,10 +435,6 @@ fn build_session_resumption_client() -> reqwest::Client {
         .build()
         .unwrap()
 }
-
-// ============================================================================
-// E2E Tests for TLS Session Tickets
-// ============================================================================
 
 #[tokio::test]
 async fn test_tls_session_tickets_static() {

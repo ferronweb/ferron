@@ -74,7 +74,6 @@ async fn test_cgi_hello_world() {
     #[cfg(not(unix))]
     let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
-    // Write Ferron config
     config_file
         .as_file_mut()
         .write_all(
@@ -90,12 +89,10 @@ async fn test_cgi_hello_world() {
 
     let network = "e2e-test-cgi";
 
-    // Start CGI container to copy the CGI binary
     let _cgi = create_cgi_container(network, cgi_bin_dir.path())
         .await
         .unwrap();
 
-    // Start Ferron container
     let ferron = create_ferron_container(network, cgi_bin_dir.path(), config_file.path())
         .await
         .unwrap();
