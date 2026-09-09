@@ -168,6 +168,12 @@
     "sub": true
   },
   {
+    "href": "/docs/use-cases/security/distributed-tls",
+    "target": "_self",
+    "label": "Distributed TLS",
+    "sub": true
+  },
+  {
     "href": "/docs/use-cases/security/rate-limiting",
     "target": "_self",
     "label": "Rate limiting",
