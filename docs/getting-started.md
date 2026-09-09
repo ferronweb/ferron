@@ -89,7 +89,7 @@ Ferron 3 strips the matched `location` prefix before the next stage runs, so the
 3. Pick a deeper guide once the basic setup works:
    - [Static file serving](/docs/use-cases/content/static-files)
    - [Reverse proxying](/docs/use-cases/traffic/reverse-proxy)
-   - [Automatic TLS](/docs/use-cases/security/automatic-tls)
+   - [Automatic TLS](/docs/use-cases/https/automatic-tls)
 4. Validate your config before restarting or reloading Ferron with `ferron validate -c ferron.conf`.
 
 ## Common beginner mistakes

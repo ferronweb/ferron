@@ -102,4 +102,4 @@ This command must return no files. A leftover `lock_certificate_*` entry shows i
 
 - [Configuration: ACME automatic TLS](/docs/configuration/security/acme): challenge sync, lockfiles, and lock metrics
 - [Configuration: TLS session ticket keys](/docs/configuration/security/session-tickets): rotation settings and key file format
-- [Automatic TLS](/docs/use-cases/security/automatic-tls): single-node ACME setup
+- [Automatic TLS](/docs/use-cases/https/automatic-tls): single-node ACME setup

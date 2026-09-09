@@ -160,7 +160,7 @@ Replace `127.0.0.1` with Ferron's actual IP if running on a different host.
 
 Because Ferron terminates client connections before they reach Apache, you can add edge-level features that apply to all traffic. These features apply to cached responses that never touch the backend:
 
-- **TLS termination.** Offload HTTPS at Ferron with automatic (ACME) or manual certificates. See [Automatic TLS](/docs/use-cases/security/automatic-tls) and [Manual TLS](/docs/use-cases/security/manual-tls).
+- **TLS termination.** Offload HTTPS at Ferron with automatic (ACME) or manual certificates. See [Automatic TLS](/docs/use-cases/https/automatic-tls) and [Manual TLS](/docs/use-cases/https/manual-tls).
 - **Rate limiting.** Protect Apache and PHP from traffic spikes and brute-force attacks. See [Rate limiting](/docs/use-cases/security/rate-limiting).
 - **Abuse protection.** Drop malicious requests before they reach the backend. See [Abuse protection](/docs/use-cases/security/abuse-protection).
 - **Security headers.** Add headers like `Strict-Transport-Security`, `Content-Security-Policy`, and `X-Frame-Options` at the edge. See [Security headers](/docs/use-cases/security/security-headers).

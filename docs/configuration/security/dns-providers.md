@@ -431,7 +431,7 @@ Choose the `endpoint` that matches where your domain resides:
 ## See also
 
 - [ACME automatic TLS](/docs/configuration/security/acme): full ACME configuration reference
-- [Automatic TLS use case](/docs/use-cases/security/automatic-tls): guided walkthrough
+- [Automatic TLS use case](/docs/use-cases/https/automatic-tls): guided walkthrough
 
 ## Best practices
 

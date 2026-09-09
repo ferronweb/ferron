@@ -182,6 +182,6 @@ This configuration creates a CDN edge node that:
 ## See also
 
 - [HTTP caching](/docs/use-cases/content/caching): cache directives, stale-while-revalidate, stale-if-error
-- [Automatic TLS](/docs/use-cases/security/automatic-tls): ACME challenge types and DNS provider configuration
+- [Automatic TLS](/docs/use-cases/https/automatic-tls): ACME challenge types and DNS provider configuration
 - [Reverse proxying](/docs/use-cases/traffic/reverse-proxy): load balancing, health checks, circuit breaking
 - [ACME configuration reference](/docs/configuration/security/acme): on-demand mode, fallback providers, and ACME directory URLs

@@ -28,7 +28,7 @@ If you are new to Ferron, follow this path:
 - [Routing and URL processing](/docs/configuration/routing/url-processing)
 - [Static file serving](/docs/use-cases/content/static-files)
 - [Reverse proxying](/docs/use-cases/traffic/reverse-proxy)
-- [Automatic TLS](/docs/use-cases/security/automatic-tls)
+- [Automatic TLS](/docs/use-cases/https/automatic-tls)
 
 > [!tip]
 > If a guide references a directive you have not seen yet, open the related reference page from the links above.
