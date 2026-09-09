@@ -2158,6 +2158,7 @@ dependencies = [
  "urlencoding",
  "webpki-roots",
  "xxhash-rust",
+ "zincio",
 ]
 
 [[package]]

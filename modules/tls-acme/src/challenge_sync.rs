@@ -97,16 +97,16 @@ pub async fn load_http01_challenge(dir: &Path, token: &str) -> Option<String> {
 
 /// Sync variant of [`load_http01_challenge`] for request paths running on the
 /// primary (non-Tokio) runtime, where `tokio::fs` would panic.
-pub fn load_http01_challenge_sync(dir: &Path, token: &str) -> Option<String> {
+pub async fn load_http01_challenge_zincio(dir: &Path, token: &str) -> Option<String> {
     let key = get_challenge_http_key(token);
-    let bytes = std::fs::read(dir.join(&key)).ok()?;
-    parse_http01_bytes_sync(&bytes, dir, &key)
+    let bytes = zincio::fs::read(dir.join(&key)).await.ok()?;
+    parse_http01_bytes_zincio(&bytes, dir, &key).await
 }
 
-fn parse_http01_bytes_sync(bytes: &[u8], dir: &Path, key: &str) -> Option<String> {
+async fn parse_http01_bytes_zincio(bytes: &[u8], dir: &Path, key: &str) -> Option<String> {
     let payload: Http01ChallengeFile = serde_json::from_slice(bytes).ok()?;
     if payload.expires_at_unix <= now_unix() || payload.key_authorization.is_empty() {
-        let _ = std::fs::remove_file(dir.join(key));
+        let _ = zincio::fs::remove_file(dir.join(key)).await;
         return None;
     }
     Some(payload.key_authorization)
@@ -141,23 +141,27 @@ pub async fn load_tlsalpn01_challenge_data(
 ) -> Option<(String, String)> {
     let key = get_challenge_tls_key(identifier);
     let bytes = tokio::fs::read(dir.join(&key)).await.ok()?;
-    parse_tlsalpn01_bytes(&bytes).or_else(|| {
-        let _ = std::fs::remove_file(dir.join(&key));
+    if let Some(result) = parse_tlsalpn01_bytes(&bytes) {
+        Some(result)
+    } else {
+        let _ = tokio::fs::remove_file(dir.join(&key)).await;
         None
-    })
+    }
 }
 
 /// Sync variant for request paths running on the primary (non-Tokio) runtime.
-pub fn load_tlsalpn01_challenge_data_sync(
+pub async fn load_tlsalpn01_challenge_data_zincio(
     dir: &Path,
     identifier: &str,
 ) -> Option<(String, String)> {
     let key = get_challenge_tls_key(identifier);
-    let bytes = std::fs::read(dir.join(&key)).ok()?;
-    parse_tlsalpn01_bytes(&bytes).or_else(|| {
-        let _ = std::fs::remove_file(dir.join(&key));
+    let bytes = zincio::fs::read(dir.join(&key)).await.ok()?;
+    if let Some(result) = parse_tlsalpn01_bytes(&bytes) {
+        Some(result)
+    } else {
+        let _ = zincio::fs::remove_file(dir.join(&key)).await;
         None
-    })
+    }
 }
 
 fn parse_tlsalpn01_bytes(bytes: &[u8]) -> Option<(String, String)> {
@@ -205,11 +209,11 @@ pub async fn load_tlsalpn01_challenge_cert(
 
 /// Sync variant of [`load_tlsalpn01_challenge_cert`] for request paths running
 /// on the primary (non-Tokio) runtime, where `tokio::fs` would panic.
-pub fn load_tlsalpn01_challenge_cert_sync(
+pub async fn load_tlsalpn01_challenge_cert_zincio(
     dir: &Path,
     identifier: &str,
 ) -> Option<Arc<rustls::sign::CertifiedKey>> {
-    let (chain_pem, key_pem) = load_tlsalpn01_challenge_data_sync(dir, identifier)?;
+    let (chain_pem, key_pem) = load_tlsalpn01_challenge_data_zincio(dir, identifier).await?;
     certified_key_from_pems(&chain_pem, &key_pem)
 }
 

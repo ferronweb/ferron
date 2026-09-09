@@ -158,11 +158,11 @@ impl TlsAcmeResolver {
     /// Fully synchronous (`blocking_read` + `std::fs`) because the handshake
     /// runs on the primary runtime without a Tokio reactor, where `tokio::fs`
     /// would panic.
-    fn find_challenge_cert_shared(&self, server_name: &str) -> Option<Arc<CertifiedKey>> {
+    async fn find_challenge_cert_shared(&self, server_name: &str) -> Option<Arc<CertifiedKey>> {
         let dirs = self.challenge_cache_dirs.as_ref()?.try_read().ok()?.clone();
         for dir in &dirs {
             if let Some(cert) =
-                crate::challenge_sync::load_tlsalpn01_challenge_cert_sync(dir, server_name)
+                crate::challenge_sync::load_tlsalpn01_challenge_cert_zincio(dir, server_name).await
             {
                 return Some(cert);
             }
@@ -237,7 +237,7 @@ impl TlsResolver for TlsAcmeResolver {
             let mut challenge_cert = server_name.and_then(|name| self.find_challenge_cert(name));
             if challenge_cert.is_none() {
                 if let Some(name) = server_name {
-                    challenge_cert = self.find_challenge_cert_shared(name);
+                    challenge_cert = self.find_challenge_cert_shared(name).await;
                 }
             }
 

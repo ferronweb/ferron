@@ -70,7 +70,8 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
                 let dirs = task_state.challenge_cache_dirs.blocking_read().clone();
                 let mut found = None;
                 for dir in &dirs {
-                    if let Some(ka) = crate::challenge_sync::load_http01_challenge_sync(dir, token)
+                    if let Some(ka) =
+                        crate::challenge_sync::load_http01_challenge_zincio(dir, token).await
                     {
                         found = Some(ka);
                         break;
