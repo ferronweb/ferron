@@ -49,6 +49,9 @@ This configuration:
 - Keeps up to 3 keys for decryption of old tickets without interruption
 - Persists new keys to disk atomically on each rotation
 
+> [!tip]
+> Automatic session ticket key rotation feature also supports keys being shared across a shared network volume.
+
 ### Configuration parameters
 
 | Parameter           | Type         | Default | Required | Description                   |

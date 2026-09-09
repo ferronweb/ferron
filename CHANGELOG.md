@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Changed
+
+#### TLS
+
+- **Automatic STEK rotation improvements**: automatic STEK rotation feature now checks if the key file has been changed on the disk, allowing for distributed STEK rotation without race conditions.
+
 ## Ferron 3.0.0-rc.4
 
 **Released in September 8, 2026**

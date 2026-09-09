@@ -44,6 +44,7 @@ use aws_lc_rs::iv::FixedLength;
 use rustls::server::ProducesTickets;
 use rustls_pki_types::UnixTime;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::Path;
 use std::sync::RwLock;
@@ -550,7 +551,7 @@ fn parse_ticket_key_record(
 }
 
 /// A ticket key with all its components.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct TicketKey {
     /// 16-byte key name/identifier
     pub key_name: [u8; 16],
@@ -576,6 +577,16 @@ impl fmt::Debug for TicketKey {
         f.debug_struct("TicketKey")
             .field("key_name", &self.key_name)
             .finish_non_exhaustive()
+    }
+}
+
+impl From<TicketKeyComponents> for TicketKey {
+    fn from(value: TicketKeyComponents) -> Self {
+        Self {
+            key_name: value.0,
+            aes_key: value.1,
+            hmac_key: value.2,
+        }
     }
 }
 
@@ -676,6 +687,8 @@ struct TicketRotatorState {
     previous: Option<CustomTicketEncryptor>,
     /// When to perform the next rotation
     next_switch_time: Option<u64>,
+    /// Hash of session ticket keys
+    stek_hash: u64,
 }
 
 /// Automatic ticket key rotator.
@@ -719,6 +732,9 @@ impl TicketKeyRotator {
         if keys.is_empty() {
             return Err("At least one ticket key is required".into());
         }
+        let mut hasher = std::hash::DefaultHasher::default();
+        keys.hash(&mut hasher);
+        let keys_hash = hasher.finish();
 
         let lifetime = rotation_interval.map(|d| d.as_secs() as u32);
 
@@ -735,6 +751,7 @@ impl TicketKeyRotator {
             current,
             previous,
             next_switch_time: lifetime.map(|l| UnixTime::now().as_secs().saturating_add(l as u64)),
+            stek_hash: keys_hash,
         };
 
         Ok(Self {
@@ -762,6 +779,43 @@ impl TicketKeyRotator {
             }
         }
 
+        let existing_keys = load_ticket_keys(&self.key_file);
+        if let Ok(existing_keys) = &existing_keys {
+            let ticket_keys: Vec<TicketKey> =
+                existing_keys.iter().map(|v| v.to_owned().into()).collect();
+            let mut hasher = std::hash::DefaultHasher::default();
+            existing_keys.hash(&mut hasher);
+            let stek_hash = hasher.finish();
+            if let (Ok(state), Some(first_key)) = (self.state.read(), ticket_keys.get(0)) {
+                if state.stek_hash != stek_hash {
+                    // Seems already rotated, reload it...
+                    let new_encryptor = CustomTicketEncryptor::new(first_key).ok()?;
+                    drop(state);
+                    let mut write = self.state.write().ok()?;
+
+                    // Double-check time (another thread might have rotated)
+                    if write.next_switch_time.is_none_or(|t| now <= t) {
+                        drop(write);
+                        return self.state.read().ok();
+                    }
+
+                    // Rotate: current → previous, new → current
+                    write.previous = Some(std::mem::replace(&mut write.current, new_encryptor));
+                    write.next_switch_time = self
+                        .rotation_interval
+                        .map(|interval| now.saturating_add(interval as u64));
+
+                    ferron_core::log_info!(
+                        "TLS session ticket keys already rotated, \
+                        keys reloaded successfully"
+                    );
+
+                    drop(write);
+                    return self.state.read().ok();
+                }
+            }
+        }
+
         // Slow path: generate new key outside the lock
         let new_key = generate_ticket_key();
         let new_ticket_key = TicketKey {
@@ -774,7 +828,7 @@ impl TicketKeyRotator {
 
         // Persist the new key to file
         // Read existing keys, prepend new one, trim to reasonable count
-        if let Ok(mut existing_keys) = load_ticket_keys(&self.key_file) {
+        if let Ok(mut existing_keys) = existing_keys {
             // Prepend new key
             existing_keys.insert(
                 0,
