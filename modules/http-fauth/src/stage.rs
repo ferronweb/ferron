@@ -409,7 +409,9 @@ impl Stage<HttpContext> for ForwardedAuthenticationStage {
         };
 
         for config in &configs {
-            self.send_auth_request(ctx, config).await?;
+            if !self.send_auth_request(ctx, config).await? {
+                return Ok(false);
+            }
         }
         Ok(true)
     }
