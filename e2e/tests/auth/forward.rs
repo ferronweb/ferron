@@ -170,6 +170,27 @@ async fn test_fauth_failure_403() {
 }
 
 #[tokio::test]
+async fn test_fauth_failure_403_with_proxy() {
+    let ctx = FAuthTestContext::new(
+        "failure-403-proxy",
+        r#"
+*:80 {
+    auth_to http://auth-backend:9090/auth/forbidden
+
+    proxy http://auth-backend:9090
+}
+"#,
+    )
+    .await;
+
+    let response = ctx.client.get(&ctx.base_url).send().await.unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+    let body = response.text().await.unwrap();
+    assert!(!body.contains("Hello from auth backend!"));
+}
+
+#[tokio::test]
 async fn test_fauth_failure_500() {
     let ctx = FAuthTestContext::new(
         "failure-500",
