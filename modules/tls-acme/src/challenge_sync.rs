@@ -95,6 +95,23 @@ pub async fn load_http01_challenge(dir: &Path, token: &str) -> Option<String> {
     Some(payload.key_authorization)
 }
 
+/// Sync variant of [`load_http01_challenge`] for request paths running on the
+/// primary (non-Tokio) runtime, where `tokio::fs` would panic.
+pub fn load_http01_challenge_sync(dir: &Path, token: &str) -> Option<String> {
+    let key = get_challenge_http_key(token);
+    let bytes = std::fs::read(dir.join(&key)).ok()?;
+    parse_http01_bytes_sync(&bytes, dir, &key)
+}
+
+fn parse_http01_bytes_sync(bytes: &[u8], dir: &Path, key: &str) -> Option<String> {
+    let payload: Http01ChallengeFile = serde_json::from_slice(bytes).ok()?;
+    if payload.expires_at_unix <= now_unix() || payload.key_authorization.is_empty() {
+        let _ = std::fs::remove_file(dir.join(key));
+        return None;
+    }
+    Some(payload.key_authorization)
+}
+
 /// Removes a published HTTP-01 challenge (best-effort).
 pub async fn remove_http01_challenge(dir: &Path, token: &str) {
     let _ = tokio::fs::remove_file(dir.join(get_challenge_http_key(token))).await;
@@ -124,25 +141,40 @@ pub async fn load_tlsalpn01_challenge_data(
 ) -> Option<(String, String)> {
     let key = get_challenge_tls_key(identifier);
     let bytes = tokio::fs::read(dir.join(&key)).await.ok()?;
-    let payload: TlsAlpn01ChallengeFile = serde_json::from_slice(&bytes).ok()?;
+    parse_tlsalpn01_bytes(&bytes).or_else(|| {
+        let _ = std::fs::remove_file(dir.join(&key));
+        None
+    })
+}
+
+/// Sync variant for request paths running on the primary (non-Tokio) runtime.
+pub fn load_tlsalpn01_challenge_data_sync(
+    dir: &Path,
+    identifier: &str,
+) -> Option<(String, String)> {
+    let key = get_challenge_tls_key(identifier);
+    let bytes = std::fs::read(dir.join(&key)).ok()?;
+    parse_tlsalpn01_bytes(&bytes).or_else(|| {
+        let _ = std::fs::remove_file(dir.join(&key));
+        None
+    })
+}
+
+fn parse_tlsalpn01_bytes(bytes: &[u8]) -> Option<(String, String)> {
+    let payload: TlsAlpn01ChallengeFile = serde_json::from_slice(bytes).ok()?;
     if payload.expires_at_unix <= now_unix()
         || payload.certificate_chain_pem.is_empty()
         || payload.private_key_pem.is_empty()
     {
-        let _ = tokio::fs::remove_file(dir.join(&key)).await;
         return None;
     }
     Some((payload.certificate_chain_pem, payload.private_key_pem))
 }
 
-/// Loads a TLS-ALPN-01 challenge as a ready `CertifiedKey`.
-///
-/// Corrupt PEMs are treated as a miss (returns `None`).
-pub async fn load_tlsalpn01_challenge_cert(
-    dir: &Path,
-    identifier: &str,
+fn certified_key_from_pems(
+    chain_pem: &str,
+    key_pem: &str,
 ) -> Option<Arc<rustls::sign::CertifiedKey>> {
-    let (chain_pem, key_pem) = load_tlsalpn01_challenge_data(dir, identifier).await?;
     let certs = rustls_pki_types::CertificateDer::pem_slice_iter(chain_pem.as_bytes())
         .collect::<Result<Vec<_>, _>>()
         .ok()?;
@@ -158,6 +190,27 @@ pub async fn load_tlsalpn01_challenge_cert(
         certs,
         signing_key,
     )))
+}
+
+/// Loads a TLS-ALPN-01 challenge as a ready `CertifiedKey`.
+///
+/// Corrupt PEMs are treated as a miss (returns `None`).
+pub async fn load_tlsalpn01_challenge_cert(
+    dir: &Path,
+    identifier: &str,
+) -> Option<Arc<rustls::sign::CertifiedKey>> {
+    let (chain_pem, key_pem) = load_tlsalpn01_challenge_data(dir, identifier).await?;
+    certified_key_from_pems(&chain_pem, &key_pem)
+}
+
+/// Sync variant of [`load_tlsalpn01_challenge_cert`] for request paths running
+/// on the primary (non-Tokio) runtime, where `tokio::fs` would panic.
+pub fn load_tlsalpn01_challenge_cert_sync(
+    dir: &Path,
+    identifier: &str,
+) -> Option<Arc<rustls::sign::CertifiedKey>> {
+    let (chain_pem, key_pem) = load_tlsalpn01_challenge_data_sync(dir, identifier)?;
+    certified_key_from_pems(&chain_pem, &key_pem)
 }
 
 /// Removes a published TLS-ALPN-01 challenge (best-effort).
