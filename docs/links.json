@@ -198,6 +198,12 @@
     "sub": true
   },
   {
+    "href": "/docs/use-cases/security/fips",
+    "target": "_self",
+    "label": "FIPS-certified cryptography",
+    "sub": true
+  },
+  {
     "href": "/docs/use-cases/security/access-control",
     "target": "_self",
     "label": "Access control",
