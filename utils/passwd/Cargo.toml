@@ -16,10 +16,10 @@ rpassword = "7.4.0"
 # so we have to use AWS-LC FIPS instead, and use only PBKDF2...
 aws-lc-rs = { optional = true, version = "1", features = ["fips"] }
 base64 = { optional = true, version = "0.23.1"}
-rand = { version = "0.10.2", optional = true }
+getrandom = { version = "0.4.3", optional = true }
 
 [build-dependencies]
 winresource = "0.1.19"
 
 [features]
-fips = ["aws-lc-rs", "base64", "rand"]
+fips = ["aws-lc-rs", "base64", "getrandom"]

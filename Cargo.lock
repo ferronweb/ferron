@@ -2068,8 +2068,8 @@ dependencies = [
  "aws-lc-rs",
  "base64 0.23.1",
  "clap",
+ "getrandom 0.4.3",
  "password-auth",
- "rand 0.10.2",
  "rpassword",
  "winresource",
 ]

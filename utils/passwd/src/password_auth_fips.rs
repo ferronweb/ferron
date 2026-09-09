@@ -3,7 +3,8 @@ use std::num::NonZeroU32;
 use base64::{engine::general_purpose::STANDARD_NO_PAD as B64, Engine};
 
 pub fn generate_hash(password: impl AsRef<[u8]>) -> String {
-    let salt: [u8; 16] = rand::random();
+    let mut salt: [u8; 16] = Default::default();
+    getrandom::fill(&mut salt).expect("failed to fill salt with random bytes");
     let mut derived = [0u8; 32];
     let iterations = 600000; // OWASP Password Storage Cheat Sheet recommendation
 
