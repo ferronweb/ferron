@@ -967,3 +967,236 @@ ferron-fallback {
         "Failed to connect to Ferron via HTTPS with fallback ACME provider"
     );
 }
+
+/// Tests distributed ACME with two Ferron nodes sharing one cache directory.
+///
+/// Both nodes register the same hostname alias on one Docker network, so
+/// Pebble's HTTP-01 validation may reach either node. Exactly one node must
+/// win the `lock_certificate_*` lock and place the order; the peer serves the
+/// challenge from the shared `challenge_http_*` file and later picks up the
+/// shared `certificate_*` file. At the end both nodes serve HTTPS, exactly
+/// one certificate file exists (no duplicate orders), and no lockfiles remain.
+#[tokio::test]
+async fn test_acme_http01_shared_cache_two_nodes() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let hostname = "ferron-shared";
+    let webroot_dir = self::common::create_temp_dir();
+    let cert_dir = self::common::create_temp_dir();
+    // Single shared cache dir bind-mounted into both Ferron containers.
+    let cache_dir = self::common::create_temp_dir();
+    let mut ferron_config = self::common::create_temp_file();
+    let mut pebble_config = self::common::create_temp_file();
+
+    // 1. Generate CA for Pebble
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+    std::fs::write(cert_dir.path().join("ca.crt"), cert.cert.pem()).unwrap();
+    std::fs::write(
+        cert_dir.path().join("ca.key"),
+        cert.signing_key.serialize_pem(),
+    )
+    .unwrap();
+
+    // 2. Write Pebble config
+    pebble_config
+        .as_file_mut()
+        .write_all(
+            br#"{
+  "pebble": {
+    "listenAddress": "0.0.0.0:14000",
+    "managementListenAddress": "0.0.0.0:15000",
+    "certificate": "/etc/certs/ca.crt",
+    "privateKey": "/etc/certs/ca.key",
+    "httpPort": 80,
+    "tlsPort": 443,
+    "externalAccountBindingRequired": false,
+    "domainBlocklist": [],
+    "retryAfter": {
+      "authz": 3,
+      "order": 5
+    }
+  }
+}"#,
+        )
+        .unwrap();
+
+    // 3. Write Ferron config (both nodes use the identical config + cache path)
+    ferron_config
+        .as_file_mut()
+        .write_all(
+            format!(
+                r#"
+{} {{
+  tls {{
+    provider acme
+    cache "/var/cache/ferron-acme"
+    directory "https://pebble:14000/dir"
+    no_verification true
+    challenge "http-01"
+  }}
+  root "/var/www/ferron"
+}}
+"#,
+                hostname
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+
+    self::common::write_file(
+        webroot_dir.path().join("index.html"),
+        b"Ferron is installed successfully!",
+    )
+    .unwrap();
+
+    let network = "e2e-test-ferronacme-shared";
+
+    // 4. Start Pebble
+    let _pebble = create_pebble_container(network, pebble_config.path(), cert_dir.path(), None)
+        .await
+        .unwrap();
+
+    // 5. Start both Ferron nodes with the same alias and the shared cache dir
+    let ferron1 = create_ferron_container(
+        network,
+        webroot_dir.path(),
+        ferron_config.path(),
+        cache_dir.path(),
+        hostname,
+        None,
+    )
+    .await
+    .unwrap();
+    let ferron2 = create_ferron_container(
+        network,
+        webroot_dir.path(),
+        ferron_config.path(),
+        cache_dir.path(),
+        hostname,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // 6. Wait until both nodes serve HTTPS with the issued certificate
+    let port1 = ferron1
+        .get_host_port_ipv4(ContainerPort::Tcp(443))
+        .await
+        .unwrap();
+    let port2 = ferron2
+        .get_host_port_ipv4(ContainerPort::Tcp(443))
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .resolve(
+            hostname,
+            std::net::SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+                port1,
+            ),
+        )
+        .resolve(
+            hostname,
+            std::net::SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+                port2,
+            ),
+        )
+        .build()
+        .unwrap();
+
+    // NOTE: `resolve` keeps a single override per hostname, so poll each node
+    // with its own client to avoid both checks hitting the same port.
+    let client1 = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .resolve(
+            hostname,
+            std::net::SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+                port1,
+            ),
+        )
+        .build()
+        .unwrap();
+    let client2 = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .resolve(
+            hostname,
+            std::net::SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+                port2,
+            ),
+        )
+        .build()
+        .unwrap();
+    drop(client);
+
+    let mut success1 = false;
+    let mut success2 = false;
+    for _ in 0..150 {
+        if !success1 {
+            if let Ok(response) = client1
+                .get(format!("https://{}:{}/", hostname, port1))
+                .send()
+                .await
+                && response.status().is_success()
+            {
+                success1 = true;
+            }
+        }
+        if !success2 {
+            if let Ok(response) = client2
+                .get(format!("https://{}:{}/", hostname, port2))
+                .send()
+                .await
+                && response.status().is_success()
+            {
+                success2 = true;
+            }
+        }
+        if success1 && success2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+
+    assert!(
+        success1 && success2,
+        "Both Ferron nodes must serve HTTPS with the shared-cached certificate \
+         (node1: {success1}, node2: {success2})"
+    );
+
+    // 7. Exactly one certificate file: no duplicate orders across nodes.
+    // Lock release is async after issuance, so allow a grace period.
+    let mut cert_files = Vec::new();
+    let mut lock_files = Vec::new();
+    for _ in 0..30 {
+        cert_files.clear();
+        lock_files.clear();
+        let mut entries = tokio::fs::read_dir(cache_dir.path()).await.unwrap();
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with("certificate_") {
+                cert_files.push(name);
+            } else if name.starts_with("lock_") {
+                lock_files.push(name);
+            }
+        }
+        if cert_files.len() == 1 && lock_files.is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+
+    assert_eq!(
+        cert_files.len(),
+        1,
+        "Expected exactly one shared certificate file (single order), found: {cert_files:?}"
+    );
+    assert!(
+        lock_files.is_empty(),
+        "Expected no leftover lockfiles after issuance, found: {lock_files:?}"
+    );
+}

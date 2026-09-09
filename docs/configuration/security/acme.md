@@ -353,6 +353,9 @@ The ACME background task emits log events and metrics through the configured obs
 | `WARN`  | `Post-obtain command has malformed quoting for ...`                     | Post-obtain hook malformed command      |
 | `WARN`  | `Failed to save ACME account cache: <error>`                            | Account cache write failure             |
 | `WARN`  | `Failed to save ACME certificate cache: <error>`                        | Certificate cache write failure         |
+| `WARN`  | `Broke a stale ACME provisioning lock for ...`                          | Stale lockfile cleared (holder crashed) |
+| `WARN`  | `Failed to acquire ACME provisioning lock for ..., proceeding without it` | Lock I/O failure, fail-open             |
+| `DEBUG` | `Skipping ACME provisioning for ...: a peer holds the provisioning lock` | Contended cycle skipped (herd damping) |
 | `DEBUG` | `ACME provisioning cycle started — checking N configurations`           | Each background loop iteration          |
 | `DEBUG` | `ACME account loaded from cache for ...`                                | Account reused from cache               |
 | `DEBUG` | `ACME order created for domains: ...`                                   | New order placed with CA                |
@@ -389,6 +392,9 @@ In OTLP `log_style modern`, the `summary` field acts as the log body and Ferron 
 | ACME challenge solved               | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string)                                                               |
 | ACME DNS-01 record created          | DEBUG | `ferron.acme.dns_challenge_domain` (string), `ferron.acme.dns_ttl` (int)                                                            |
 | ACME DNS-01 record cleanup          | DEBUG | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
+| ACME lock stale, broken              | WARN  | `ferron.acme.domains` (string), `ferron.acme.lock_key` (string): stale lockfile cleared after heartbeat lease expiry                |
+| ACME provisioning skipped         | DEBUG | `ferron.acme.domains` (string): peer holds the provisioning lock; this cycle is skipped                                             |
+| ACME lock acquisition failed        | WARN  | `ferron.acme.domains` (string), `error.message` (string): lock I/O failed, provisioning proceeds without coordination               |
 | ACME account creation failed        | WARN  | `ferron.acme.domains` (string), `ferron.acme.provider` (string), `error.message` (string)                                           |
 | ACME account load/create failed     | ERROR | `ferron.acme.domains` (string), `error.message` (string)                                                                            |
 | ACME order creation failed          | ERROR | `ferron.acme.domains` (string), `error.message` (string), `ferron.acme.provider` (string)                                           |
@@ -410,6 +416,9 @@ In OTLP `log_style modern`, the `summary` field acts as the log body and Ferron 
 | --------------------------------------- | ------- | --------------------------------------------------------------------------------- | -------------------------------------------- |
 | `ferron.acme.certificates_issued_total` | Counter | `ferron.acme.status` (`success`, `error`), `ferron.acme.challenge_type`           | Certificate issuance outcomes                |
 | `ferron.acme.on_demand_requests_total`  | Counter | None                                                                              | On-demand certificate requests               |
+| `ferron.acme.lock_acquired_total`       | Counter | `ferron.acme.domains`, `ferron.acme.lock_key`                                     | Provisioning locks acquired                  |
+| `ferron.acme.lock_contention_total`     | Counter | `ferron.acme.domains`, `ferron.acme.lock_key`                                     | Cycles skipped, peer holds the lock          |
+| `ferron.acme.lock_breaks_total`         | Counter | `ferron.acme.domains`, `ferron.acme.lock_key`                                     | Stale locks broken (crashed holder)          |
 | `ferron.tls.certificate_not_after`      | Gauge   | `ferron.host`, `ferron.tls.provider` (`acme`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
 ### Trace spans

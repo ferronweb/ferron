@@ -20,13 +20,41 @@ use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use crate::cache::{get_account_cache_key, get_certificate_cache_key, CertificateCacheData};
 use crate::challenge::tlsalpn01::TlsAlpn01Resolver;
 use crate::config::{build_rustls_client_config, AcmeConfig};
-use crate::emit_log;
 use crate::errors::acme_error_to_string;
+use crate::{emit_log, emit_metric};
 
 use self::account::{create_new_account, HttpsClientForAcme};
 use self::cert_install::install_certified_key;
 use self::challenge::cleanup_challenge_data;
 use self::validity::check_certificate_validity_or_install_cached;
+
+/// Emits a lock lifecycle counter (`ferron.acme.lock_*_total`).
+fn emit_lock_metric(
+    event_sink: &Arc<ferron_observability::CompositeEventSink>,
+    name: &'static str,
+    description: &'static str,
+    domains: &str,
+    lock_key: &str,
+) {
+    emit_metric(
+        event_sink,
+        name,
+        ferron_observability::MetricValue::U64(1),
+        ferron_observability::MetricType::Counter,
+        Some("{lock}"),
+        Some(description),
+        vec![
+            (
+                "ferron.acme.domains",
+                ferron_observability::MetricAttributeValue::String(domains.to_string()),
+            ),
+            (
+                "ferron.acme.lock_key",
+                ferron_observability::MetricAttributeValue::String(lock_key.to_string()),
+            ),
+        ],
+    );
+}
 
 /// Provisions a TLS certificate using ACME for the given config.
 /// Returns `true` if a certificate was provisioned, `false` otherwise.
@@ -81,13 +109,29 @@ pub async fn provision_certificate(
                             ),
                             (
                                 "ferron.acme.lock_key",
-                                ferron_observability::LogAttributeValue::String(lock_key),
+                                ferron_observability::LogAttributeValue::String(lock_key.clone()),
                             ),
                         ],
                     );
+                    emit_lock_metric(
+                        event_sink,
+                        "ferron.acme.lock_breaks_total",
+                        "Stale ACME provisioning locks broken",
+                        &domains_label,
+                        &lock_key,
+                    );
                 }
                 match guard_opt {
-                    Some(g) => Some(g),
+                    Some(g) => {
+                        emit_lock_metric(
+                            event_sink,
+                            "ferron.acme.lock_acquired_total",
+                            "ACME provisioning locks acquired",
+                            &domains_label,
+                            &lock_key,
+                        );
+                        Some(g)
+                    }
                     None => {
                         // A live peer is ordering; skip this cycle (thundering-herd
                         // damping). The next 10s cycle re-checks the file cache.
@@ -106,6 +150,13 @@ pub async fn provision_certificate(
                                     domains_label.clone(),
                                 ),
                             )],
+                        );
+                        emit_lock_metric(
+                            event_sink,
+                            "ferron.acme.lock_contention_total",
+                            "ACME provisioning cycles skipped due to peer-held locks",
+                            &domains_label,
+                            &lock_key,
                         );
                         return Ok(false);
                     }
@@ -878,4 +929,21 @@ async fn provision_certificate_inner(
     cleanup_challenge_data(config, &dns_01_domains, event_sink).await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_emit_lock_metric_does_not_panic_without_sinks() {
+        let sink = Arc::new(ferron_observability::CompositeEventSink::new(vec![]));
+        emit_lock_metric(
+            &sink,
+            "ferron.acme.lock_breaks_total",
+            "Stale ACME provisioning locks broken",
+            "example.com",
+            "lock_certificate_test",
+        );
+    }
 }

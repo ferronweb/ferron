@@ -796,7 +796,7 @@ pub fn emit_log(
 }
 
 /// Helper to emit metric events through the event sink.
-fn emit_metric(
+pub(crate) fn emit_metric(
     event_sink: &Arc<ferron_observability::CompositeEventSink>,
     name: &'static str,
     value: MetricValue,
