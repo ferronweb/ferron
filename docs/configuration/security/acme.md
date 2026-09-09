@@ -205,18 +205,18 @@ example.com {
 }
 ```
 
-How it works:
+**How it works:**
 
-- **Challenge sync**: the node creating the order publishes `challenge_http_*` / `challenge_tls_*` files (15-minute TTL). Peers serve CA validation from these files when their in-memory locks miss, so validation succeeds regardless of which node the CA reaches.
+- **Challenge sync**: the node creating the order publishes `challenge_http_*` / `challenge_tls_*` files (15-minute TTL). Peers serve CA validation from these files when their in-memory locks miss, so validation succeeds no matter which node the CA reaches.
 - **One order at a time**: before ordering, a node takes the paired `lock_certificate_*` lockfile (atomic create). Peers skip that cycle and pick up the resulting `certificate_*` file later. On-demand `hostname_*` appends take `lock_hostname_*` the same way.
-- **Self-healing locks**: the holder refreshes a heartbeat every 30 seconds; a lock without heartbeat for 5 minutes is treated as stale (crashed holder) and broken by the next contender, which logs a warning. Releases only delete their own lock, never a peer's.
+- **Self-healing locks**: the holder refreshes a heartbeat every 30 seconds. A lock without heartbeat for 5 minutes is treated as stale (crashed holder) and broken by the next contender, which logs a warning. Releases only delete their own lock, never a peer's.
 - **Herd damping**: skipped cycles return to the 10-second loop, and cycle sleeps include jitter so restarted nodes desynchronize.
 
-Requirements and notes:
+**Requirements and notes:**
 
 - All nodes must share one writable `cache` path with atomic create/rename semantics and roughly synchronized clocks. In-memory caching cannot coordinate.
-- Challenge and key material is `0600` on Unix, but any node with cache access can read it — restrict cache access to your Ferron hosts.
-- DNS-01 needs no challenge files (the TXT record is already shared); the provisioning lock still prevents duplicate orders.
+- Challenge and key material is `0600` on Unix, but any node with cache access can read it. Restrict cache access to your Ferron hosts.
+- DNS-01 needs no challenge files (the TXT record is already shared), meaning the provisioning lock still prevents duplicate orders.
 - Debug with `ls lock_*` (stuck entries show the owner `host-pid`) and the `ACME lock stale, broken` / `ACME provisioning skipped, peer holds lock` log messages.
 
 ## Certificate renewal
@@ -339,31 +339,31 @@ The ACME background task emits log events and metrics through the configured obs
 
 ### Logs
 
-| Level   | Message                                                                 | When                                    |
-| ------- | ----------------------------------------------------------------------- | --------------------------------------- |
-| `INFO`  | `ACME background task started with N configuration(s) for domains: ...` | Service initialization                  |
-| `INFO`  | `On-demand certificate requested for SNI <host>:<port>`                 | On-demand certificate request received  |
-| `INFO`  | `On-demand certificate pre-loaded for SNI <host>:<port>`                | On-demand certificate loaded from cache |
-| `INFO`  | `ACME certificate issued for domains: ...`                              | Successful certificate issuance         |
-| `INFO`  | `ACME account created for directory ..., contact: ...`                  | New ACME account registration           |
-| `INFO`  | `Post-obtain command started for ...: <cmd>`                            | Post-obtain hook execution              |
-| `WARN`  | `ACME certificate provisioning error for ...: <error>`                  | Certificate issuance failure            |
-| `WARN`  | `ACME account not found on server for ..., recreating`                  | Account expired/removed on CA side      |
-| `WARN`  | `Post-obtain command failed for ...: <error>`                           | Post-obtain hook error                  |
-| `WARN`  | `Post-obtain command has malformed quoting for ...`                     | Post-obtain hook malformed command      |
-| `WARN`  | `Failed to save ACME account cache: <error>`                            | Account cache write failure             |
-| `WARN`  | `Failed to save ACME certificate cache: <error>`                        | Certificate cache write failure         |
-| `WARN`  | `Broke a stale ACME provisioning lock for ...`                          | Stale lockfile cleared (holder crashed) |
+| Level   | Message                                                                   | When                                    |
+| ------- | ------------------------------------------------------------------------- | --------------------------------------- |
+| `INFO`  | `ACME background task started with N configuration(s) for domains: ...`   | Service initialization                  |
+| `INFO`  | `On-demand certificate requested for SNI <host>:<port>`                   | On-demand certificate request received  |
+| `INFO`  | `On-demand certificate pre-loaded for SNI <host>:<port>`                  | On-demand certificate loaded from cache |
+| `INFO`  | `ACME certificate issued for domains: ...`                                | Successful certificate issuance         |
+| `INFO`  | `ACME account created for directory ..., contact: ...`                    | New ACME account registration           |
+| `INFO`  | `Post-obtain command started for ...: <cmd>`                              | Post-obtain hook execution              |
+| `WARN`  | `ACME certificate provisioning error for ...: <error>`                    | Certificate issuance failure            |
+| `WARN`  | `ACME account not found on server for ..., recreating`                    | Account expired/removed on CA side      |
+| `WARN`  | `Post-obtain command failed for ...: <error>`                             | Post-obtain hook error                  |
+| `WARN`  | `Post-obtain command has malformed quoting for ...`                       | Post-obtain hook malformed command      |
+| `WARN`  | `Failed to save ACME account cache: <error>`                              | Account cache write failure             |
+| `WARN`  | `Failed to save ACME certificate cache: <error>`                          | Certificate cache write failure         |
+| `WARN`  | `Broke a stale ACME provisioning lock for ...`                            | Stale lockfile cleared (holder crashed) |
 | `WARN`  | `Failed to acquire ACME provisioning lock for ..., proceeding without it` | Lock I/O failure, fail-open             |
-| `DEBUG` | `Skipping ACME provisioning for ...: a peer holds the provisioning lock` | Contended cycle skipped (herd damping) |
-| `DEBUG` | `ACME provisioning cycle started — checking N configurations`           | Each background loop iteration          |
-| `DEBUG` | `ACME account loaded from cache for ...`                                | Account reused from cache               |
-| `DEBUG` | `ACME order created for domains: ...`                                   | New order placed with CA                |
-| `DEBUG` | `ACME <type> challenge initiated for ...`                               | Challenge setup started                 |
-| `DEBUG` | `ACME <type> challenge solved for ...`                                  | Challenge ready for validation          |
-| `DEBUG` | `DNS-01 record created for _acme-challenge.<domain>, TTL <ttl>`         | DNS record published                    |
-| `DEBUG` | `DNS-01 record cleanup completed for _acme-challenge.<domain>`          | DNS record removed                      |
-| `DEBUG` | `Certificate installed for ..., chain length: N`                        | Certificate loaded into TLS config      |
+| `DEBUG` | `Skipping ACME provisioning for ...: a peer holds the provisioning lock`  | Contended cycle skipped (herd damping)  |
+| `DEBUG` | `ACME provisioning cycle started — checking N configurations`             | Each background loop iteration          |
+| `DEBUG` | `ACME account loaded from cache for ...`                                  | Account reused from cache               |
+| `DEBUG` | `ACME order created for domains: ...`                                     | New order placed with CA                |
+| `DEBUG` | `ACME <type> challenge initiated for ...`                                 | Challenge setup started                 |
+| `DEBUG` | `ACME <type> challenge solved for ...`                                    | Challenge ready for validation          |
+| `DEBUG` | `DNS-01 record created for _acme-challenge.<domain>, TTL <ttl>`           | DNS record published                    |
+| `DEBUG` | `DNS-01 record cleanup completed for _acme-challenge.<domain>`            | DNS record removed                      |
+| `DEBUG` | `Certificate installed for ..., chain length: N`                          | Certificate loaded into TLS config      |
 
 ### Structured logs
 
@@ -392,8 +392,8 @@ In OTLP `log_style modern`, the `summary` field acts as the log body and Ferron 
 | ACME challenge solved               | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string)                                                               |
 | ACME DNS-01 record created          | DEBUG | `ferron.acme.dns_challenge_domain` (string), `ferron.acme.dns_ttl` (int)                                                            |
 | ACME DNS-01 record cleanup          | DEBUG | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
-| ACME lock stale, broken              | WARN  | `ferron.acme.domains` (string), `ferron.acme.lock_key` (string): stale lockfile cleared after heartbeat lease expiry                |
-| ACME provisioning skipped         | DEBUG | `ferron.acme.domains` (string): peer holds the provisioning lock; this cycle is skipped                                             |
+| ACME lock stale, broken             | WARN  | `ferron.acme.domains` (string), `ferron.acme.lock_key` (string): stale lockfile cleared after heartbeat lease expiry                |
+| ACME provisioning skipped           | DEBUG | `ferron.acme.domains` (string): peer holds the provisioning lock; this cycle is skipped                                             |
 | ACME lock acquisition failed        | WARN  | `ferron.acme.domains` (string), `error.message` (string): lock I/O failed, provisioning proceeds without coordination               |
 | ACME account creation failed        | WARN  | `ferron.acme.domains` (string), `ferron.acme.provider` (string), `error.message` (string)                                           |
 | ACME account load/create failed     | ERROR | `ferron.acme.domains` (string), `error.message` (string)                                                                            |
