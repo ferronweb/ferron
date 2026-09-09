@@ -80,7 +80,7 @@ FIPS builds allow only NIST curves:
 
 ### TLS session tickets
 
-Session ticket encryption uses AES-256-CBC with HMAC-SHA256 authentication. Both are approved. Ticket keys come from the operating system random source. See [TLS session ticket keys](/docs/configuration/security/session-tickets).
+Session ticket encryption uses AES-256-CBC with HMAC-SHA256 authentication in Encrypt-then-MAC mode. Both are approved. Ticket keys come from the operating system random source. See [TLS session ticket keys](/docs/configuration/security/session-tickets).
 
 ### OCSP stapling
 
