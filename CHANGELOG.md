@@ -16,6 +16,12 @@
 
 - **Automatic STEK rotation improvements**: automatic STEK rotation feature now checks if the key file has been changed on the disk, allowing for distributed STEK rotation without race conditions.
 
+### Fixed
+
+#### Forwarded auth
+
+- **Forwarded auth bugfix**: improved handling and checking the authentication status when using forwarded authentication, to improve security (thank you, [@impietic](https://github.com/impietic)).
+
 ## Ferron 3.0.0-rc.4
 
 **Released in September 8, 2026**
