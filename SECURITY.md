@@ -1,16 +1,23 @@
-# Ferron Security Policy
+# Ferron security policy
 
-## Overview
-
-Ferron is a fast, memory-safe web server written in Rust, designed for performance and security. This document outlines the security policies and procedures to ensure Ferron remains a secure and reliable software project.
+Ferron is a fast, modern web server built for production debugging. This document describes the security policies and procedures to make sure Ferron stays secure and reliable.
 
 ## Supported versions
 
-Ferron actively supports the latest stable release and provides security updates for the most recent minor versions. Users are encouraged to upgrade promptly to receive security patches.
+Ferron supports the latest stable release and provides security updates for the most recent minor versions. Users are encouraged to upgrade promptly to receive security patches.
+
+Ferron supports following versions:
+
+| Major version | Status                                                              |
+| ------------- | ------------------------------------------------------------------- |
+| Ferron 3      | Supported (release candidate)                                       |
+| Ferron 2 LTS  | Supported (long term support)                                       |
+| Ferron 2      | Supported (stable)                                                  |
+| Ferron 1.x    | [End of Life (July 1, 2026)](https://ferron.sh/blog/ferron-1-x-eol) |
 
 ## Reporting security issues
 
-Security is a top priority for Ferron. If you discover a vulnerability, please report it responsibly by sending an email message to [security@ferron.sh](mailto:security@ferron.sh).
+Security is very important for Ferron. If you discover a vulnerability, please report it responsibly by sending an email message to [security@ferron.sh](mailto:security@ferron.sh), or [reporting it privately via GitHub](https://github.com/ferronweb/ferron/security/advisories/new).
 
 We strongly discourage public disclosure of vulnerabilities before a fix is released.
 
@@ -18,30 +25,21 @@ We strongly discourage public disclosure of vulnerabilities before a fix is rele
 
 To maintain security, we follow these principles:
 
-- **Memory safety** - Ferron leverages Rust’s ownership model and borrow checker to eliminate memory-related vulnerabilities.
-- **Minimal attack surface** - features are enabled only as needed, reducing exposure to potential threats.
-- **Regular audits** - code is reviewed regularly, and dependencies are monitored for security vulnerabilities.
-- **Safe defaults** - Ferron has some insecure configuration disabled by default, like exposing the server version or directory listings.
+- **Memory safety**: Ferron is written in Rust, so whole classes of vulnerabilities are eliminated by the language's memory safety features.
+- **Regular audits**: code is reviewed regularly, and dependencies are monitored (using `cargo audit`) for security vulnerabilities.
+- **Safe defaults**: Ferron has sensible defaults, so insecure configuration is disabled by default, like exposing the server version or directory listings.
+- **Minimal attack surface**: features are enabled only as needed (via web server configuration), reducing exposure to potential threats.
 
 ## Secure development process
 
 Ferron follows industry best practices to maintain a secure development lifecycle:
 
-1. **Code review** - all changes undergo peer review with security checks.
-2. **Dependency management** - regularly check and update dependencies to patch known vulnerabilities.
-3. **Responsible disclosure** - work with the security community to resolve issues before public disclosure.
-
-## Handling security incidents
-
-In the event of a security breach or vulnerability:
-
-1. **Triage** - assess and prioritize the issue based on severity.
-2. **Mitigation** - develop and test a fix.
-3. **Advisory** - issue a security advisory with mitigation steps and fixed versions.
-4. **Update users** - notify users via release notes and security mailing lists.
+1. **Code review**: all changes (including AI-generated ones!) are reviewed with security and correctness checks.
+2. **Dependency management**: regularly check and update dependencies to patch known vulnerabilities.
+3. **Responsible disclosure**: work with the security community to resolve issues before public disclosure.
 
 ## Contact information
 
 For any security concerns, contact us at [security@ferron.sh](mailto:security@ferron.sh). Stay updated on security patches via [our website](https://ferron.sh).
 
-By following this policy, we ensure Ferron remains a secure and trustworthy web server for all users.
+By following this policy, we make sure Ferron remains a secure and trustworthy web server for everyone.
