@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Changed
+
+#### HTTP server core
+
+- **HTTP/2 and overall memory usage optimizations**: optimized both reverse proxying and HTTP/2 for lower memory usage, and fine-tuned default `jemalloc` memory allocator settings.
+
 ### Fixed
 
 #### Reverse proxying
