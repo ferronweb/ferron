@@ -866,7 +866,7 @@ main() {
 	fi
 
     # Should reduce memory usage without large performance impact
-	export JEMALLOC_SYS_WITH_MALLOC_CONF='narenas:2,percpu_arena:phycpu,metadata_thp:auto'
+	export JEMALLOC_SYS_WITH_MALLOC_CONF='narenas:2,percpu_arena:phycpu,metadata_thp:auto,dirty_decay_ms:100,muzzy_decay_ms:100'
 
 	# Build
 	if [[ "${pgo}" == "true" ]]; then
