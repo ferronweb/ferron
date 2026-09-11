@@ -865,6 +865,9 @@ main() {
 		setup_env_musl "${target}" "${sysroot_dir}"
 	fi
 
+    # Should reduce memory usage without large performance impact
+	export JEMALLOC_SYS_WITH_MALLOC_CONF='narenas:2,percpu_arena:phycpu,metadata_thp:auto'
+
 	# Build
 	if [[ "${pgo}" == "true" ]]; then
 		pgo_build "${target}" "${bench_duration}" "${debug}" "${fips}"
