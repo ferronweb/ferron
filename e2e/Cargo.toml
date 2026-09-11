@@ -156,4 +156,4 @@ tokio = { version = "1.50.0", features = ["full"] }
 tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "tls12"] }
 tokio-tungstenite = "0.30.0"
 x509-parser = "0.18.0"
-zstd = "0.13.3"
+zstd = "0.14.0"
