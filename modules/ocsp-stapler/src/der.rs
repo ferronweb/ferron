@@ -17,7 +17,6 @@ use anyhow::{bail, Result};
 /// appears on the wire, so we must slice the original bytes rather than
 /// re-encoding via `rasn`.
 pub(crate) fn extract_tbs_bytes(basic_der: &[u8]) -> Result<Vec<u8>> {
-    // Parse outer SEQUENCE header at offset 0.
     let (tag, _len, header_len, _, _) = parse_tlv(basic_der, 0)?;
     if tag != 0x30 {
         bail!("expected outer SEQUENCE (0x30), got {:#x}", tag);
