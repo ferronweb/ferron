@@ -267,17 +267,20 @@ pub struct PoolReturnInfo {
 impl PoolReturnInfo {
     /// Creates a new `PoolReturnInfo` from a pool item and wrapper.
     ///
-    /// This consumes the item without running its Drop impl (via `ManuallyDrop`),
-    /// allowing the wrapper to be stored separately and returned later.
+    /// This disarms the item's Drop accounting (via `disarm`) and moves its
+    /// key out, allowing the wrapper to be stored separately and returned
+    /// later without leaking the item's `Rc` pool reference and `Arc`
+    /// upstream key.
     #[inline]
-    pub fn from_item(item: PooledConnection, wrapper: SendRequestWrapper, is_unix: bool) -> Self {
-        // Prevent item's Drop from running (we'll handle return manually)
-        let item = std::mem::ManuallyDrop::new(item);
+    pub fn from_item(mut item: PooledConnection, wrapper: SendRequestWrapper, is_unix: bool) -> Self {
+        // Disarm accounting; `item` still drops normally (freeing its `Rc`),
+        // but no longer touches `outstanding` counts (handled on return).
+        let (key, local_limit_key) = item.disarm();
 
         Self {
-            key: item.key().cloned(),
+            key,
             wrapper: Some(wrapper),
-            local_limit_key: item.local_limit_key().cloned(),
+            local_limit_key,
             is_unix,
         }
     }

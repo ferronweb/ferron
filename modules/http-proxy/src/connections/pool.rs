@@ -392,6 +392,7 @@ impl<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> PoolItem<K, L, I> {
     }
 
     /// Returns the local limit key, if one was applied.
+    #[allow(dead_code)]
     #[inline]
     pub fn local_limit_key(&self) -> Option<&L> {
         self.local_limit_key.as_ref()
@@ -402,6 +403,19 @@ impl<K: Eq + Hash + Clone, L: Eq + Hash + Clone, I> PoolItem<K, L, I> {
     #[inline]
     pub fn pool(&self) -> &SingleThreadPool<K, L, I> {
         &self.pool
+    }
+
+    /// Takes the pool key and local-limit key, disarming pool accounting.
+    ///
+    /// After this call the item's key is `None`, so dropping the item is a
+    /// no-op for `outstanding`/`local_outstanding` accounting (the caller
+    /// becomes responsible for returning the connection manually). Unlike
+    /// wrapping the item in `ManuallyDrop`, the item itself is still dropped
+    /// normally, so its `Rc` pool reference and any remaining fields are
+    /// freed instead of leaked.
+    #[inline]
+    pub fn disarm(&mut self) -> (Option<K>, Option<L>) {
+        (self.key.take(), self.local_limit_key.take())
     }
 }
 
@@ -639,5 +653,93 @@ mod tests {
 
         drop(item);
         assert_eq!(pool.total_idle_count(), 1);
+    }
+
+    #[test]
+    fn test_disarm_moves_keys_without_leaking_or_accounting() {
+        use std::net::IpAddr;
+        use std::sync::Arc;
+
+        type Key = (Arc<String>, Option<IpAddr>);
+        let pool = Rc::new(SingleThreadPool::<Key, Arc<String>, u32>::new(10));
+        let inner = Arc::new("key1".to_string());
+        let limit_key = Arc::new("limit1".to_string());
+
+        let pool_rc_before = Rc::strong_count(&pool);
+
+        // Pull an empty slot (inner is None, outstanding becomes 1).
+        let mut item = pool
+            .pull_with_local_limit(
+                (Arc::clone(&inner), None),
+                Some((Arc::clone(&limit_key), 10)),
+                |_| (true, true),
+            )
+            .unwrap();
+        assert!(item.inner().is_none());
+        assert_eq!(pool.outstanding_count(), 1);
+        // Pool key holds one clone of `inner`; local-limit map + item hold
+        // two clones of `limit_key` (map key + item key).
+        assert_eq!(Arc::strong_count(&inner), 2);
+        assert_eq!(Arc::strong_count(&limit_key), 3);
+
+        // Disarm moves (not clones) the keys out; accounting is deferred.
+        let (taken_key, taken_limit) = item.disarm();
+        assert!(taken_key.is_some());
+        assert!(taken_limit.is_some());
+        // Disarm itself must not clone (counts unchanged from after pull).
+        assert_eq!(Arc::strong_count(&inner), 2);
+        assert_eq!(Arc::strong_count(&limit_key), 3);
+
+        // Dropping the disarmed item must NOT touch outstanding counts,
+        // but must still drop its `Rc` pool reference (no leak).
+        drop(item);
+        assert_eq!(pool.outstanding_count(), 1);
+        assert_eq!(Rc::strong_count(&pool), pool_rc_before);
+
+        // Simulate manual return via PoolReturnInfo::drop.
+        let key = taken_key.unwrap();
+        let limit = taken_limit.unwrap();
+        pool.return_connection_with_local_limit(key, 42, Some(limit));
+        assert_eq!(pool.outstanding_count(), 0);
+
+        // Pool `Rc` did not accumulate beyond the single live handle.
+        assert_eq!(Rc::strong_count(&pool), pool_rc_before);
+    }
+
+    #[test]
+    fn test_disarm_repeated_cycles_do_not_accumulate() {
+        use std::net::IpAddr;
+        use std::sync::Arc;
+
+        type Key = (Arc<String>, Option<IpAddr>);
+        // Capacity 1000 so every return is stored; proves per-iteration
+        // allocations are freed rather than leaked via ManuallyDrop.
+        let pool = Rc::new(SingleThreadPool::<Key, Arc<String>, u32>::new(1000));
+        let pool_rc_before = Rc::strong_count(&pool);
+
+        for i in 0..1000 {
+            let inner = Arc::new("key".to_string());
+            let weak = Arc::downgrade(&inner);
+            let mut item = pool
+                .pull((Arc::clone(&inner), None), |_| (true, true))
+                .unwrap();
+            // Per-request key clone is moved out, like PoolReturnInfo::from_item.
+            let (taken_key, _) = item.disarm();
+            drop(item);
+            // Manual return consumes the moved key.
+            pool.return_connection(taken_key.unwrap(), 1);
+            drop(inner);
+            let upgraded = weak.upgrade().is_some();
+            // First iteration retains its Arc in the pool; later iterations
+            // dedup by value and must not retain an extra clone.
+            if i == 0 {
+                assert!(upgraded);
+            } else {
+                assert!(!upgraded);
+            }
+        }
+
+        assert_eq!(pool.outstanding_count(), 0);
+        assert_eq!(Rc::strong_count(&pool), pool_rc_before);
     }
 }

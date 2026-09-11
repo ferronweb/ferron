@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+#### Reverse proxying
+
+- **Connection pool memory leak fix**: fixed connection pool memory leak that occurred when connection is returned to the pool (after proxy received the initial response from an upstream).
+
 ## Ferron 3.0.0-rc.5
 
 **Released in September 10, 2026**
