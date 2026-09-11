@@ -272,7 +272,11 @@ impl PoolReturnInfo {
     /// later without leaking the item's `Rc` pool reference and `Arc`
     /// upstream key.
     #[inline]
-    pub fn from_item(mut item: PooledConnection, wrapper: SendRequestWrapper, is_unix: bool) -> Self {
+    pub fn from_item(
+        mut item: PooledConnection,
+        wrapper: SendRequestWrapper,
+        is_unix: bool,
+    ) -> Self {
         // Disarm accounting; `item` still drops normally (freeing its `Rc`),
         // but no longer touches `outstanding` counts (handled on return).
         let (key, local_limit_key) = item.disarm();
