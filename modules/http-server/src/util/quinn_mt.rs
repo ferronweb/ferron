@@ -399,7 +399,7 @@ impl Default for QuinnMTDatagramQueue {
     #[inline]
     fn default() -> Self {
         Self {
-            inner: parking_lot::Mutex::new(VecDeque::with_capacity(1024)),
+            inner: parking_lot::Mutex::new(VecDeque::with_capacity(64)),
             wakers: parking_lot::Mutex::new(smallvec::SmallVec::new()),
         }
     }
