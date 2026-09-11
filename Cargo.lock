@@ -4857,9 +4857,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "smallvec"
-version = "1.16.0"
+version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
+checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
 
 [[package]]
 name = "snafu"
@@ -6123,9 +6123,9 @@ dependencies = [
 
 [[package]]
 name = "zincio-http"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d13bae6a9a35d5a6cb27ca1cc1394bd3e75bb769d2436238177c70f7cf3eb8d"
+checksum = "d13096387bcc3d752b6132dea809db26d0ac9b6918de79246ef7294785a10807"
 dependencies = [
  "bytes",
  "futures-executor",
