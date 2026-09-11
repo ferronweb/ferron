@@ -58,6 +58,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             })
             .collect::<Vec<_>>();
 
+        // Here, the configuration wouldn't be cached, because of dynamic upstream resolution...
         let config = match crate::config::parse_proxy_config(ctx) {
             Ok(Some(cfg)) => Arc::new(cfg),
             Ok(None) => return Ok(true),
