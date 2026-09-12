@@ -27,7 +27,9 @@ use ferron_core::providers::Provider;
 use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::{config_validator_scoped_key, Module};
 use ferron_observability::baggage::{BaggageKeyPromotion, DistinctValueTracker};
-use ferron_observability::module::{try_send_event, ConfiguredEvent};
+use ferron_observability::module::{
+    config_uses_provider, try_send_event, ConfiguredEvent, SharedEventChannel,
+};
 use ferron_observability::{
     build_composite_sink, CompositeEventSink, Event, EventSink, LogAttributeValue, LogEvent,
     LogLevel, ObservabilityContext, TraceEvent,
@@ -529,7 +531,7 @@ fn config_cache_key(config: &OtlpBackendConfig) -> String {
 }
 
 struct OtlpObservabilityProvider {
-    inner: async_channel::Sender<ConfiguredEvent>,
+    shared: Arc<SharedEventChannel>,
 }
 
 impl Provider<ObservabilityContext> for OtlpObservabilityProvider {
@@ -546,7 +548,7 @@ impl Provider<ObservabilityContext> for OtlpObservabilityProvider {
         let has_traces = ctx.log_config.has_directive("traces");
 
         ctx.sink = Some(Arc::new(OtlpEventSink {
-            inner: self.inner.clone(),
+            inner: self.shared.get_or_init().0.clone(),
             log_config: ctx.log_config.clone(),
             has_logs,
             has_metrics,
@@ -559,10 +561,7 @@ impl Provider<ObservabilityContext> for OtlpObservabilityProvider {
 
 pub struct OtlpObservabilityModuleLoader {
     cache: Option<Arc<OtlpObservabilityModule>>,
-    channel: (
-        async_channel::Sender<ConfiguredEvent>,
-        async_channel::Receiver<ConfiguredEvent>,
-    ),
+    shared: Arc<SharedEventChannel>,
 }
 
 impl Default for OtlpObservabilityModuleLoader {
@@ -570,7 +569,9 @@ impl Default for OtlpObservabilityModuleLoader {
     fn default() -> Self {
         Self {
             cache: None,
-            channel: async_channel::bounded(131072),
+            // Allocated lazily once the backend is selected by the
+            // configuration, avoiding ~4 MB of idle memory when unused.
+            shared: Arc::new(SharedEventChannel::new()),
         }
     }
 }
@@ -578,11 +579,11 @@ impl Default for OtlpObservabilityModuleLoader {
 impl ModuleLoader for OtlpObservabilityModuleLoader {
     #[inline]
     fn register_providers(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
-        let channel = self.channel.0.clone();
+        let shared = self.shared.clone();
 
         registry.with_provider::<ObservabilityContext, _>(move || {
             Arc::new(OtlpObservabilityProvider {
-                inner: channel.clone(),
+                shared: shared.clone(),
             })
         })
     }
@@ -594,11 +595,14 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
         modules: &mut Vec<Arc<dyn Module>>,
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn Error>> {
+        if !config_uses_provider(&config, "otlp") {
+            return Ok(());
+        }
         if self.cache.is_none() {
             let event_sink = build_composite_sink(&registry, &config.global_config, None).ok();
 
             let module = Arc::new(OtlpObservabilityModule {
-                inner: self.channel.1.clone(),
+                inner: self.shared.get_or_init().1.clone(),
                 cancel_token: tokio_util::sync::CancellationToken::new(),
                 registry: registry.clone(),
                 event_sink,

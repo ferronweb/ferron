@@ -14,7 +14,9 @@ use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::shutdown::RELOAD_TOKEN;
 use ferron_core::{config_validator_scoped_key, Module};
 use ferron_observability::baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet};
-use ferron_observability::module::{try_send_event, ConfiguredEvent, InitAccessEvent};
+use ferron_observability::module::{
+    config_uses_provider, try_send_event, ConfiguredEvent, InitAccessEvent, SharedEventChannel,
+};
 use ferron_observability::{
     Event, EventSink, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
     ObservabilityContext,
@@ -391,7 +393,7 @@ async fn resolve_target(host: &str, port: u16) -> Option<SocketAddr> {
 }
 
 struct StatsdObservabilityProvider {
-    inner: async_channel::Sender<ConfiguredEvent>,
+    shared: Arc<SharedEventChannel>,
 }
 
 impl Provider<ObservabilityContext> for StatsdObservabilityProvider {
@@ -400,15 +402,16 @@ impl Provider<ObservabilityContext> for StatsdObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn Error>> {
+        let sender = self.shared.get_or_init().0.clone();
         try_send_event(
-            &self.inner,
+            &sender,
             Arc::new(Event::Access(Arc::new(InitAccessEvent))),
             &ctx.log_config,
             &ctx.control_plane_metadata,
             "statsd",
         );
         ctx.sink = Some(Arc::new(StatsdEventSink {
-            inner: self.inner.clone(),
+            inner: sender,
             log_config: ctx.log_config.clone(),
             control_plane_metadata: ctx.control_plane_metadata.clone(),
         }));
@@ -417,17 +420,16 @@ impl Provider<ObservabilityContext> for StatsdObservabilityProvider {
 }
 
 pub struct StatsdObservabilityModuleLoader {
-    channel: (
-        async_channel::Sender<ConfiguredEvent>,
-        async_channel::Receiver<ConfiguredEvent>,
-    ),
+    shared: Arc<SharedEventChannel>,
     cancel_token: tokio_util::sync::CancellationToken,
 }
 
 impl Default for StatsdObservabilityModuleLoader {
     fn default() -> Self {
         Self {
-            channel: async_channel::bounded(131072),
+            // Allocated lazily once the backend is selected by the
+            // configuration, avoiding ~4 MB of idle memory when unused.
+            shared: Arc::new(SharedEventChannel::new()),
             cancel_token: tokio_util::sync::CancellationToken::new(),
         }
     }
@@ -435,11 +437,11 @@ impl Default for StatsdObservabilityModuleLoader {
 
 impl ModuleLoader for StatsdObservabilityModuleLoader {
     fn register_providers(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
-        let channel = self.channel.0.clone();
+        let shared = self.shared.clone();
 
         registry.with_provider::<ObservabilityContext, _>(move || {
             Arc::new(StatsdObservabilityProvider {
-                inner: channel.clone(),
+                shared: shared.clone(),
             })
         })
     }
@@ -448,13 +450,17 @@ impl ModuleLoader for StatsdObservabilityModuleLoader {
         &mut self,
         _registry: Arc<Registry>,
         modules: &mut Vec<Arc<dyn Module>>,
-        _config: Arc<ferron_core::config::ServerConfiguration>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn Error>> {
         self.cancel_token.cancel();
         self.cancel_token = tokio_util::sync::CancellationToken::new();
 
+        if !config_uses_provider(&config, "statsd") {
+            return Ok(());
+        }
+
         modules.push(Arc::new(StatsdObservabilityModule {
-            inner: self.channel.1.clone(),
+            inner: self.shared.get_or_init().1.clone(),
             cancel_token: self.cancel_token.clone(),
         }));
 

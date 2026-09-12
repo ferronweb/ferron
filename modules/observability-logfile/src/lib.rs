@@ -11,7 +11,10 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::registry::Registry;
 use ferron_core::{log_error, Module};
-use ferron_observability::module::{format_metadata_prefix, try_send_event, ConfiguredEvent};
+use ferron_observability::module::{
+    config_uses_provider, format_metadata_prefix, try_send_event, ConfiguredEvent,
+    SharedEventChannel,
+};
 use ferron_observability::{
     AccessEvent, AccessVisitor, ApplicationLogFormatterContext, Event, EventSink,
     LogAttributeValue, LogEvent, LogFormatterContext, ObservabilityContext,
@@ -472,7 +475,7 @@ fn format_log_event(
 }
 
 struct LogFileObservabilityProvider {
-    inner: async_channel::Sender<ConfiguredEvent>,
+    shared: Arc<SharedEventChannel>,
 }
 
 impl Provider<ObservabilityContext> for LogFileObservabilityProvider {
@@ -482,7 +485,7 @@ impl Provider<ObservabilityContext> for LogFileObservabilityProvider {
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn std::error::Error>> {
         ctx.sink = Some(Arc::new(LogFileEventSink {
-            inner: self.inner.clone(),
+            inner: self.shared.get_or_init().0.clone(),
             log_config: ctx.log_config.clone(),
             control_plane_metadata: ctx.control_plane_metadata.clone(),
         }));
@@ -492,17 +495,16 @@ impl Provider<ObservabilityContext> for LogFileObservabilityProvider {
 
 pub struct LogFileObservabilityModuleLoader {
     cache: Option<Arc<LogFileObservabilityModule>>,
-    channel: (
-        async_channel::Sender<ConfiguredEvent>,
-        async_channel::Receiver<ConfiguredEvent>,
-    ),
+    shared: Arc<SharedEventChannel>,
 }
 
 impl Default for LogFileObservabilityModuleLoader {
     fn default() -> Self {
         Self {
             cache: None,
-            channel: async_channel::bounded(131072),
+            // Allocated lazily once the backend is selected by the
+            // configuration, avoiding ~4 MB of idle memory when unused.
+            shared: Arc::new(SharedEventChannel::new()),
         }
     }
 }
@@ -512,11 +514,11 @@ impl ModuleLoader for LogFileObservabilityModuleLoader {
         &mut self,
         registry: ferron_core::registry::RegistryBuilder,
     ) -> ferron_core::registry::RegistryBuilder {
-        let channel = self.channel.0.clone();
+        let shared = self.shared.clone();
 
         registry.with_provider::<ObservabilityContext, _>(move || {
             Arc::new(LogFileObservabilityProvider {
-                inner: channel.clone(),
+                shared: shared.clone(),
             })
         })
     }
@@ -525,11 +527,14 @@ impl ModuleLoader for LogFileObservabilityModuleLoader {
         &mut self,
         registry: Arc<ferron_core::registry::Registry>,
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
-        _config: Arc<ferron_core::config::ServerConfiguration>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        if !config_uses_provider(&config, "file") {
+            return Ok(());
+        }
         if self.cache.is_none() {
             let module = Arc::new(LogFileObservabilityModule {
-                inner: self.channel.1.clone(),
+                inner: self.shared.get_or_init().1.clone(),
                 cancel_token: tokio_util::sync::CancellationToken::new(),
                 registry: registry.clone(),
             });

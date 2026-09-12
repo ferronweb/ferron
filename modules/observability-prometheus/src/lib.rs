@@ -15,7 +15,9 @@ use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::shutdown::RELOAD_TOKEN;
 use ferron_core::{config_validator_scoped_key, Module};
 use ferron_observability::baggage::{self, BaggageKeyPromotion, DistinctValueTracker, SignalSet};
-use ferron_observability::module::{try_send_event, ConfiguredEvent, InitAccessEvent};
+use ferron_observability::module::{
+    config_uses_provider, try_send_event, ConfiguredEvent, InitAccessEvent, SharedEventChannel,
+};
 use ferron_observability::{
     Event, EventSink, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
     ObservabilityContext,
@@ -851,7 +853,7 @@ fn format_description(event: &MetricEvent) -> String {
 }
 
 struct PrometheusObservabilityProvider {
-    inner: async_channel::Sender<ConfiguredEvent>,
+    shared: Arc<SharedEventChannel>,
 }
 
 impl Provider<ObservabilityContext> for PrometheusObservabilityProvider {
@@ -860,15 +862,16 @@ impl Provider<ObservabilityContext> for PrometheusObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn Error>> {
+        let sender = self.shared.get_or_init().0.clone();
         try_send_event(
-            &self.inner,
+            &sender,
             Arc::new(Event::Access(Arc::new(InitAccessEvent))),
             &ctx.log_config,
             &ctx.control_plane_metadata,
             "prometheus",
         );
         ctx.sink = Some(Arc::new(PrometheusEventSink {
-            inner: self.inner.clone(),
+            inner: sender,
             log_config: ctx.log_config.clone(),
             control_plane_metadata: ctx.control_plane_metadata.clone(),
         }));
@@ -877,17 +880,16 @@ impl Provider<ObservabilityContext> for PrometheusObservabilityProvider {
 }
 
 pub struct PrometheusObservabilityModuleLoader {
-    channel: (
-        async_channel::Sender<ConfiguredEvent>,
-        async_channel::Receiver<ConfiguredEvent>,
-    ),
+    shared: Arc<SharedEventChannel>,
     cancel_token: tokio_util::sync::CancellationToken,
 }
 
 impl Default for PrometheusObservabilityModuleLoader {
     fn default() -> Self {
         Self {
-            channel: async_channel::bounded(131072),
+            // Allocated lazily once the backend is selected by the
+            // configuration, avoiding ~4 MB of idle memory when unused.
+            shared: Arc::new(SharedEventChannel::new()),
             cancel_token: tokio_util::sync::CancellationToken::new(),
         }
     }
@@ -895,11 +897,11 @@ impl Default for PrometheusObservabilityModuleLoader {
 
 impl ModuleLoader for PrometheusObservabilityModuleLoader {
     fn register_providers(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
-        let channel = self.channel.0.clone();
+        let shared = self.shared.clone();
 
         registry.with_provider::<ObservabilityContext, _>(move || {
             Arc::new(PrometheusObservabilityProvider {
-                inner: channel.clone(),
+                shared: shared.clone(),
             })
         })
     }
@@ -908,13 +910,17 @@ impl ModuleLoader for PrometheusObservabilityModuleLoader {
         &mut self,
         _registry: Arc<Registry>,
         modules: &mut Vec<Arc<dyn Module>>,
-        _config: Arc<ferron_core::config::ServerConfiguration>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn Error>> {
         self.cancel_token.cancel();
         self.cancel_token = tokio_util::sync::CancellationToken::new();
 
+        if !config_uses_provider(&config, "prometheus") {
+            return Ok(());
+        }
+
         modules.push(Arc::new(PrometheusObservabilityModule {
-            inner: self.channel.1.clone(),
+            inner: self.shared.get_or_init().1.clone(),
             cancel_token: self.cancel_token.clone(),
         }));
 

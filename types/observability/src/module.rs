@@ -35,6 +35,94 @@ impl AccessEvent for InitAccessEvent {
     fn visit(&self, _visitor: &mut dyn crate::AccessVisitor) {}
 }
 
+/// Capacity of the bounded event channel for observability backends.
+///
+/// Each queue slot holds a `ConfiguredEvent` envelope; the events themselves
+/// are reference-counted so payloads are shared between sender and receiver.
+pub const EVENT_CHANNEL_CAPACITY: usize = 131072;
+
+/// Lazily-initialized bounded event channel shared between an observability
+/// backend's provider factory and its background module.
+///
+/// Module loaders are constructed for every backend in `default_profile()`
+/// before the configuration is known, so allocating the channel eagerly in
+/// `Default` wastes ~4 MB per backend when it is never configured. Holding
+/// this shared cell instead defers the allocation until the backend is
+/// actually selected by the configuration.
+pub struct SharedEventChannel {
+    cell: std::sync::OnceLock<(
+        async_channel::Sender<ConfiguredEvent>,
+        async_channel::Receiver<ConfiguredEvent>,
+    )>,
+}
+
+impl SharedEventChannel {
+    /// Create an empty (unallocated) channel cell.
+    pub fn new() -> Self {
+        Self {
+            cell: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// Get the channel, allocating it on first use.
+    pub fn get_or_init(
+        &self,
+    ) -> &(
+        async_channel::Sender<ConfiguredEvent>,
+        async_channel::Receiver<ConfiguredEvent>,
+    ) {
+        self.cell
+            .get_or_init(|| async_channel::bounded(EVENT_CHANNEL_CAPACITY))
+    }
+}
+
+impl Default for SharedEventChannel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Returns true if any observability block in the global config or any
+/// per-host port block selects `provider_name`.
+///
+/// This covers both explicit `observability { provider <name>; ... }` blocks
+/// and alias directives (`log`/`error_log` map to `file`, `console_log`
+/// maps to `console`).
+pub fn config_uses_provider(
+    config: &ferron_core::config::ServerConfiguration,
+    provider_name: &str,
+) -> bool {
+    use crate::config::ObservabilityConfigExtractor;
+
+    if let Ok(blocks) =
+        ObservabilityConfigExtractor::new(&config.global_config).extract_observability_blocks()
+    {
+        if blocks.iter().any(|block| {
+            block.get_value("provider").and_then(|v| v.as_str()) == Some(provider_name)
+        }) {
+            return true;
+        }
+    }
+
+    for ports in config.ports.values() {
+        for port in ports {
+            for (_, host_block) in &port.hosts {
+                if let Ok(blocks) =
+                    ObservabilityConfigExtractor::new(host_block).extract_observability_blocks()
+                {
+                    if blocks.iter().any(|block| {
+                        block.get_value("provider").and_then(|v| v.as_str()) == Some(provider_name)
+                    }) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    false
+}
+
 /// Once guard shared by all observability backends for warn-once dropped-event
 /// logging. The warning text includes the backend name, so the single guard is
 /// sufficient.

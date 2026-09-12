@@ -12,6 +12,10 @@
 
 ### Fixed
 
+#### Observability
+
+- **Lazy observability event channels**: the console, file, OTLP, Prometheus, and StatsD backends now allocate their event channels only when selected by the configuration, instead of pre-allocating ~4 MB each at startup. Idle servers without observability configured use ~20 MB less memory.
+
 #### Reverse proxying
 
 - **Connection pool memory leak fix**: fixed connection pool memory leak that occurred when connection is returned to the pool (after proxy received the initial response from an upstream).
