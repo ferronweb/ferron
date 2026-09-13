@@ -95,7 +95,7 @@ pub async fn request_fn(
             {
                 return config_handler(state).await;
             }
-            if config.reload_get
+            if config.reload
                 && request.uri().path() == "/reload"
                 && request.method() == hyper::Method::POST
             {
