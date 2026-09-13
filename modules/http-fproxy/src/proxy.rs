@@ -113,13 +113,32 @@ async fn handle_connect(
         return Ok(ForwardProxyResult::Handled);
     }
 
-    // Resolve DNS and validate IP (fail if IP is denied)
-    let Some(resolved_ips) = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await? else {
-        let err = ForwardProxyError::DnsUnresolved(host.clone());
-        emit_error_log(ctx, &err);
-        ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
-        emit_forward_proxy_metric(ctx, "connect", "dns_unresolved", 403, None);
-        return Ok(ForwardProxyResult::Handled);
+    // Resolve DNS and validate IP (fail if IP is denied).
+    // NOTE: resolution errors must be answered with 403 here instead of
+    // propagating with `?`: the stage treats a bare `Err` without a response
+    // as pass-through, which would bypass the IP deny list (DNS rebinding).
+    let resolved_ips = match resolve_and_validate_ip(ctx, &host, &config.deny_ips).await {
+        Ok(Some(ips)) => ips,
+        Ok(None) => {
+            let err = ForwardProxyError::DnsUnresolved(host.clone());
+            emit_error_log(ctx, &err);
+            ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+            emit_forward_proxy_metric(ctx, "connect", "dns_unresolved", 403, None);
+            return Ok(ForwardProxyResult::Handled);
+        }
+        Err(err) => {
+            let status = err.http_status_hint().unwrap_or(403);
+            let result = match &err {
+                ForwardProxyError::DnsDeniedIp { .. } => "acl_denied",
+                ForwardProxyError::DnsUnresolved(_) => "dns_unresolved",
+                ForwardProxyError::DnsUnavailable(_) => "dns_unavailable",
+                _ => "acl_denied",
+            };
+            emit_error_log(ctx, &err);
+            ctx.res = Some(ferron_http::HttpResponse::BuiltinError(status, None));
+            emit_forward_proxy_metric(ctx, "connect", result, status, None);
+            return Ok(ForwardProxyResult::Handled);
+        }
     };
     let socket_addrs = resolved_ips
         .into_iter()
@@ -348,13 +367,31 @@ async fn handle_http_forward(
         return Ok(ForwardProxyResult::Handled);
     }
 
-    // Resolve DNS and validate IP (fail if IP is denied)
-    let Some(resolved_ips) = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await? else {
-        let err = ForwardProxyError::DnsUnresolved(host.clone());
-        emit_error_log(ctx, &err);
-        ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
-        emit_forward_proxy_metric(ctx, "request", "dns_unresolved", 403, None);
-        return Ok(ForwardProxyResult::Handled);
+    // Resolve DNS and validate IP (fail if IP is denied).
+    // NOTE: see `handle_connect` — resolution errors must produce a 403
+    // response instead of propagating, or the deny list is bypassed.
+    let resolved_ips = match resolve_and_validate_ip(ctx, &host, &config.deny_ips).await {
+        Ok(Some(ips)) => ips,
+        Ok(None) => {
+            let err = ForwardProxyError::DnsUnresolved(host.clone());
+            emit_error_log(ctx, &err);
+            ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+            emit_forward_proxy_metric(ctx, "request", "dns_unresolved", 403, None);
+            return Ok(ForwardProxyResult::Handled);
+        }
+        Err(err) => {
+            let status = err.http_status_hint().unwrap_or(403);
+            let result = match &err {
+                ForwardProxyError::DnsDeniedIp { .. } => "acl_denied",
+                ForwardProxyError::DnsUnresolved(_) => "dns_unresolved",
+                ForwardProxyError::DnsUnavailable(_) => "dns_unavailable",
+                _ => "acl_denied",
+            };
+            emit_error_log(ctx, &err);
+            ctx.res = Some(ferron_http::HttpResponse::BuiltinError(status, None));
+            emit_forward_proxy_metric(ctx, "request", result, status, None);
+            return Ok(ForwardProxyResult::Handled);
+        }
     };
     let addr = format!("{host}:{port}");
     let socket_addrs = resolved_ips
@@ -442,10 +479,42 @@ async fn handle_http_forward(
     } else {
         http::Version::HTTP_11
     };
-    parts.uri = Uri::from_str(&format!("{request_path}{query}"))?;
+    let rewritten_uri = match Uri::from_str(&format!("{request_path}{query}")) {
+        Ok(uri) => uri,
+        Err(err) => {
+            let err = ForwardProxyError::from(err);
+            emit_error_log(ctx, &err);
+            ctx.res = Some(ferron_http::HttpResponse::BuiltinError(502, None));
+            emit_forward_proxy_metric(
+                ctx,
+                "request",
+                "backend_connect_error",
+                502,
+                Some("handshake_failed".to_string()),
+            );
+            return Ok(ForwardProxyResult::Handled);
+        }
+    };
+    parts.uri = rewritten_uri;
 
     // Connection: close for HTTP/1.1
-    parts.headers.insert(header::CONNECTION, "close".parse()?);
+    let close_value = match "close".parse() {
+        Ok(value) => value,
+        Err(err) => {
+            let err = ForwardProxyError::from(err);
+            emit_error_log(ctx, &err);
+            ctx.res = Some(ferron_http::HttpResponse::BuiltinError(502, None));
+            emit_forward_proxy_metric(
+                ctx,
+                "request",
+                "backend_connect_error",
+                502,
+                Some("handshake_failed".to_string()),
+            );
+            return Ok(ForwardProxyResult::Handled);
+        }
+    };
+    parts.headers.insert(header::CONNECTION, close_value);
 
     let proxy_request = Request::from_parts(parts, body);
 

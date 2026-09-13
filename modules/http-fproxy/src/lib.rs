@@ -286,11 +286,15 @@ impl Stage<HttpContext> for ForwardProxyStage {
                     ctx.get_span_attributes()
                         .insert("http.response.status_code", TraceAttributeValue::I64(code));
                 }
-                // If we have a response already set, stop; otherwise continue
+                // If we have a response already set, stop; otherwise fail closed
+                // instead of passing the request through (a bare Err without a
+                // response would otherwise bypass ACL/DNS enforcement).
                 if ctx.res.is_some() {
                     Ok(false)
                 } else {
-                    Ok(true)
+                    let status = e.http_status_hint().unwrap_or(502);
+                    ctx.res = Some(ferron_http::HttpResponse::BuiltinError(status, None));
+                    Ok(false)
                 }
             }
         }
