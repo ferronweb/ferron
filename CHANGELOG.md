@@ -36,6 +36,7 @@
 
 - **`http_version` subdirective fix**: the `http_version` subdirective now correctly sets the HTTP version for forwarded requests.
 - **DNS rebinding protection fix**: the forward proxy now rejects with `403` (instead of passing the request through to the normal pipeline) when a destination hostname resolves to a denied IP or DNS resolution fails, on both the `CONNECT` tunnel and absolute-URI forwarding paths. The stage also fails closed with an error status if any other proxy error leaves no response set.
+- **Hop-by-hop header stripping fix**: hop-by-hop headers are now stripped from forwarded requests per RFC 7230 section 6.1, so to not forward them to the upstream server.
 
 ## Ferron 3.0.0-rc.5
 

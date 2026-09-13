@@ -497,6 +497,27 @@ async fn handle_http_forward(
     };
     parts.uri = rewritten_uri;
 
+    // Strip hop-by-hop headers per RFC 7230 section 6.1
+    // These must not be forwarded by a proxy.
+    if let Some(c) = parts.headers.remove(http::header::CONNECTION) {
+        // If the connection header contains "upgrade",
+        // preserve it to avoid breaking the upgrade connection.
+        if str::from_utf8(c.as_bytes()).is_ok_and(|s| s.to_lowercase().contains("upgrade")) {
+            parts.headers.insert(
+                http::header::CONNECTION,
+                http::HeaderValue::from_static("upgrade"),
+            );
+        }
+    }
+    parts
+        .headers
+        .remove(http::HeaderName::from_static("keep-alive"));
+    parts.headers.remove(http::header::TRANSFER_ENCODING);
+    parts.headers.remove(http::header::TE);
+    parts.headers.remove(http::header::TRAILER);
+    parts.headers.remove("proxy-authorization");
+    parts.headers.remove("proxy-authenticate");
+
     // Connection: close for HTTP/1.1
     let close_value = match "close".parse() {
         Ok(value) => value,
