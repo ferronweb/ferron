@@ -20,6 +20,10 @@
 
 - **Connection pool memory leak fix**: fixed connection pool memory leak that occurred when connection is returned to the pool (after proxy received the initial response from an upstream).
 
+#### Gateway interfaces
+
+- **`PATH_INFO` fix**: a bug introduced in 3.0.0-rc.4 caused `PATH_INFO` to not be sent at all by default due to an incorrect check.
+
 ## Ferron 3.0.0-rc.5
 
 **Released in September 10, 2026**

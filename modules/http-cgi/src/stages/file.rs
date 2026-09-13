@@ -177,7 +177,6 @@ impl Stage<HttpFileContext> for CgiStage {
         let path_info = ctx
             .path_info
             .clone()
-            .filter(|p| !p.starts_with("/"))
             .and_then(|p| p.strip_prefix('/').map(|p| p.to_owned()));
         env_builder = env_builder
             .server("Ferron".to_string())
