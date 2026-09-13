@@ -18,6 +18,7 @@ mod ip_access;
 mod limit;
 mod limit_redis;
 mod limit_zones;
+mod routing;
 
 pub(crate) async fn create_ferron_container(
     webroot_dir: &Path,

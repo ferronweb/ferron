@@ -20,6 +20,10 @@
 
 - **Access control bugfix**: fixed access control bug that allowed unauthorized access to the admin API (`/reload` was gated by `reload_get` instead of `reload` before the bugfix).
 
+#### HTTP server core
+
+- **Routing bypass fix**: previously, a specially-crafted request (with URL-routing) could bypass routing and access files on unintended paths.
+
 #### Reverse proxying
 
 - **Connection pool memory leak fix**: fixed connection pool memory leak that occurred when connection is returned to the pool (after proxy received the initial response from an upstream).

@@ -342,24 +342,27 @@ pub fn canonicalize_path<'a>(
                 return Err(CanonicalizationError::NullByte);
             }
             let value = ((v1 as u8) << 4) | (v2 as u8);
+            let slash = value == b'/' || value == b'\\'; // Also, "\" for Windows
             let u1 = up(h1);
             let u2 = up(h2);
-            if UNRESERVED[value as usize] {
+            if UNRESERVED[value as usize] || slash {
                 // Decode unreserved characters for routing; forwarding
                 // keeps the encoding but uppercased.
-                routing.push(value);
-                forwarding.push(b'%');
-                forwarding.push(u1);
-                forwarding.push(u2);
+                //
+                // Also, decode slashes to avoid routing bypasses
+                if !(slash && (routing.last() == Some(&b'/') || routing.last() == Some(&b'\\'))) {
+                    // Avoid duplicate slashes in routing (e.g., `/` or `\\`).
+                    routing.push(value);
+                }
             } else {
                 // Reserved characters stay encoded in both views.
                 routing.push(b'%');
                 routing.push(u1);
                 routing.push(u2);
-                forwarding.push(b'%');
-                forwarding.push(u1);
-                forwarding.push(u2);
             }
+            forwarding.push(b'%');
+            forwarding.push(u1);
+            forwarding.push(u2);
             i += 3;
             run = i;
         }
@@ -462,7 +465,7 @@ mod tests {
     #[test]
     fn test_percent_encoded_reserved() {
         let result = canonicalize_path("/api%2Fv2").unwrap();
-        assert_eq!(result.routing, "/api%2Fv2");
+        assert_eq!(result.routing, "/api/v2");
         assert_eq!(result.forwarding, "/api%2Fv2");
     }
 
@@ -476,7 +479,7 @@ mod tests {
     #[test]
     fn test_hex_uppercased() {
         let result = canonicalize_path("/%2f").unwrap();
-        assert_eq!(result.routing, "/%2F");
+        assert_eq!(result.routing, "/");
         assert_eq!(result.forwarding, "/%2F");
     }
 
