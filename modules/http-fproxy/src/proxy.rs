@@ -437,6 +437,11 @@ async fn handle_http_forward(
         .map(|q| format!("?{q}"))
         .unwrap_or_default();
 
+    parts.version = if config.http_version == 10 {
+        http::Version::HTTP_10
+    } else {
+        http::Version::HTTP_11
+    };
     parts.uri = Uri::from_str(&format!("{request_path}{query}"))?;
 
     // Connection: close for HTTP/1.1

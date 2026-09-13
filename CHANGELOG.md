@@ -24,6 +24,10 @@
 
 - **`PATH_INFO` fix**: a bug introduced in 3.0.0-rc.4 caused `PATH_INFO` to not be sent at all by default due to an incorrect check.
 
+#### Forward proxy
+
+- **`http_version` subdirective fix**: the `http_version` subdirective now correctly sets the HTTP version for forwarded requests.
+
 ## Ferron 3.0.0-rc.5
 
 **Released in September 10, 2026**
