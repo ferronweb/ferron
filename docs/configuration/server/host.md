@@ -52,8 +52,8 @@ To use manual TLS instead:
 example.com {
     tls {
         provider manual
-        cert "/etc/ssl/cert.pem"
-        key "/etc/ssl/key.pem"
+        cert /etc/ssl/cert.pem
+        key /etc/ssl/key.pem
     }
     root /var/www/html
 }

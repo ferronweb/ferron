@@ -230,9 +230,9 @@ example.com {
         purge_method
         purge_allowed_ips "10.0.0.0/8"
         purge_propagation {
-            control_plane_url "http://control-plane:9090/cache/purge"
-            shared_secret "edge-to-plane-secret"
-            node_id "edge-1"
+            control_plane_url http://control-plane:9090/cache/purge
+            shared_secret edge-to-plane-secret
+            node_id edge-1
         }
     }
 }

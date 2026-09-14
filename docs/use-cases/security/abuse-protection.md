@@ -170,7 +170,7 @@ example.com {
     }
 
     if AUTOMATED_SCAN {
-        abuse_event "automated_scan"
+        abuse_event automated_scan
     }
 
     # Other directives go here...

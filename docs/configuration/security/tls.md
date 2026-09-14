@@ -23,8 +23,8 @@ If they do not match, TLS handshakes fail. You can use environment variable inte
 example.com {
     tls {
         provider manual
-        cert "/path/cert.pem"
-        key "/path/key.pem"
+        cert /path/cert.pem
+        key /path/key.pem
     }
 }
 ```
@@ -40,8 +40,8 @@ example.com {
 example.com {
     tls {
         provider manual
-        cert "/path/cert.pem"
-        key "/path/key.pem"
+        cert /path/cert.pem
+        key /path/key.pem
         cipher_suite TLS_AES_128_GCM_SHA256
         cipher_suite TLS_AES_256_GCM_SHA384
     }
@@ -91,13 +91,13 @@ example.com {
 
 ```ferron
 example.com {
-  tls {
-      provider manual
-      cert "/path/cert.pem"
-      key "/path/key.pem"
-      min_version TLSv1.3
-      max_version TLSv1.3
-  }
+    tls {
+        provider manual
+        cert /path/cert.pem
+        key /path/key.pem
+        min_version TLSv1.3
+        max_version TLSv1.3
+    }
 }
 ```
 
@@ -116,8 +116,8 @@ If you omit both, Ferron uses the safe default range (TLS 1.2 to 1.3). Setting o
 api.example.com {
     tls {
         provider manual
-        cert "/etc/ssl/api.example.com/cert.pem"
-        key "/etc/ssl/api.example.com/key.pem"
+        cert /etc/ssl/api.example.com/cert.pem
+        key /etc/ssl/api.example.com/key.pem
 
         min_version TLSv1.3
         max_version TLSv1.3
@@ -129,7 +129,7 @@ api.example.com {
         ecdh_curve secp256r1
 
         client_auth
-        client_auth_ca "/etc/ssl/internal-ca/ca-bundle.pem"
+        client_auth_ca /etc/ssl/internal-ca/ca-bundle.pem
     }
 }
 ```

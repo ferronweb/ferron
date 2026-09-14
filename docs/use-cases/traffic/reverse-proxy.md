@@ -129,7 +129,7 @@ example.com {
 
         algorithm round_robin
         affinity cookie {
-            name "ab_test_variant"
+            name ab_test_variant
             ttl "7d"
             path "/"
             httponly
@@ -152,7 +152,7 @@ example.com {
         upstream http://variant-b.example.com:3001
 
         affinity header {
-            name "X-AB-Variant"
+            name X-AB-Variant
         }
 
         # Fallback to round-robin when header is absent
@@ -182,7 +182,7 @@ example.com {
 
         algorithm round_robin
         affinity cookie {
-            name "_ferron_migration"
+            name _ferron_migration
             ttl "24h"
             path "/"
             httponly
@@ -318,12 +318,12 @@ example.com {
     proxy {
         upstream http://localhost:3000 {
             active_check {
-                uri "/health"
+                uri /health
             }
         }
         upstream http://localhost:3001 {
             active_check {
-                uri "/health"
+                uri /health
             }
         }
     }
@@ -340,7 +340,7 @@ Ferron supports reverse proxying to backends listening on Unix sockets:
 ```ferron
 example.com {
     proxy {
-        # "backend" can be replaced with arbitrary hostname
+        # backend can be replaced with arbitrary hostname
         upstream http://backend {
             unix /run/backend/web.sock
         }

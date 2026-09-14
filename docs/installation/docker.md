@@ -153,7 +153,7 @@ You might also configure Ferron in a `ferron-conf.d/ferron.conf` file like this:
 ```ferron
 # Replace "example.com" with your website's domain name
 example.com {
-    root "/var/www/ferron"
+    root /var/www/ferron
 }
 ```
 

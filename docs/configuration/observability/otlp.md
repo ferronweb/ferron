@@ -18,7 +18,7 @@ example.com {
         metrics https://collector:4318/v1/metrics
         traces https://collector:4317/v1/traces
 
-        service_name "my-service"
+        service_name my-service
     }
 }
 ```

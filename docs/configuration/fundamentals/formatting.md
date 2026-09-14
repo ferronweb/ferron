@@ -111,12 +111,12 @@ ferron-fmt --indent-style tabs ferron.conf
 
 ```ferron
 example.com {
-	root /var/www/html
-	tls {
-		provider manual
-		cert /etc/ssl/cert.pem
-		key /etc/ssl/key.pem
-	}
+    root "/var/www/html"
+    tls {
+        provider "manual"
+        cert "/etc/ssl/cert.pem"
+        key "/etc/ssl/key.pem"
+    }
 }
 ```
 
@@ -161,11 +161,11 @@ ferron-fmt --quote-style always-double ferron.conf
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     tls {
-        provider "manual"
-        cert "/etc/ssl/cert.pem"
-        key "/etc/ssl/key.pem"
+        provider manual
+        cert /etc/ssl/cert.pem
+        key /etc/ssl/key.pem
     }
 }
 ```

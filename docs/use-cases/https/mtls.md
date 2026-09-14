@@ -17,11 +17,11 @@ Configure client certificate validation against your internal CA inside the `tls
 admin.example.com:443 {
     tls {
         provider manual
-        cert "/etc/ssl/certs/admin.example.com.crt"
-        key "/etc/ssl/private/admin.example.com.key"
+        cert /etc/ssl/certs/admin.example.com.crt
+        key /etc/ssl/private/admin.example.com.key
 
         client_auth
-        client_auth_ca "/etc/ssl/internal-client-ca.pem"
+        client_auth_ca /etc/ssl/internal-client-ca.pem
     }
 
     proxy http://127.0.0.1:9000
@@ -34,11 +34,11 @@ You can also use the OS trust store or the Mozilla root bundle:
 admin.example.com:443 {
     tls {
         provider manual
-        cert "/etc/ssl/certs/admin.example.com.crt"
-        key "/etc/ssl/private/admin.example.com.key"
+        cert /etc/ssl/certs/admin.example.com.crt
+        key /etc/ssl/private/admin.example.com.key
 
         client_auth
-        client_auth_ca system  // or "webpki" for Mozilla's root bundle
+        client_auth_ca system  # or "webpki" for Mozilla's root bundle
     }
 
     proxy http://127.0.0.1:9000
@@ -59,14 +59,14 @@ For maximum security, combine mTLS with TLS 1.3-only settings:
 internal-api.example.com:443 {
     tls {
         provider manual
-        cert "/etc/ssl/certs/internal-api.example.com.crt"
-        key "/etc/ssl/private/internal-api.example.com.key"
+        cert /etc/ssl/certs/internal-api.example.com.crt
+        key /etc/ssl/private/internal-api.example.com.key
 
         min_version TLSv1.3
         max_version TLSv1.3
 
         client_auth
-        client_auth_ca "/etc/ssl/internal-ca-bundle.pem"
+        client_auth_ca /etc/ssl/internal-ca-bundle.pem
     }
 
     proxy http://127.0.0.1:9000
@@ -83,7 +83,7 @@ example.com:443 {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
+        contact admin@example.com
     }
 
     root /var/www/html
@@ -93,11 +93,11 @@ example.com:443 {
 admin.example.com:443 {
     tls {
         provider manual
-        cert "/etc/ssl/certs/admin.example.com.crt"
-        key "/etc/ssl/private/admin.example.com.key"
+        cert /etc/ssl/certs/admin.example.com.crt
+        key /etc/ssl/private/admin.example.com.key
 
         client_auth
-        client_auth_ca "/etc/ssl/internal-client-ca.pem"
+        client_auth_ca /etc/ssl/internal-client-ca.pem
     }
 
     proxy http://127.0.0.1:9000
@@ -112,8 +112,8 @@ When the reverse proxy connects to an HTTPS upstream, Ferron can present a clien
 example.com {
     proxy {
         upstream https://backend.internal:443 {
-            cert "/etc/ferron/client-cert.pem"
-            key "/etc/ferron/client-key.pem"
+            cert /etc/ferron/client-cert.pem
+            key /etc/ferron/client-key.pem
         }
     }
 }
@@ -129,12 +129,12 @@ mTLS credentials scope per-upstream. Different backends can require different cl
 example.com {
     proxy {
         upstream https://service-a.internal:443 {
-            cert "/etc/ferron/service-a-client.crt"
-            key "/etc/ferron/service-a-client.key"
+            cert /etc/ferron/service-a-client.crt
+            key /etc/ferron/service-a-client.key
         }
         upstream https://service-b.internal:443 {
-            cert "/etc/ferron/service-b-client.crt"
-            key "/etc/ferron/service-b-client.key"
+            cert /etc/ferron/service-b-client.crt
+            key /etc/ferron/service-b-client.key
         }
     }
 }
@@ -148,8 +148,8 @@ When using SRV-record-based upstreams, the same mTLS credentials apply to all ba
 example.com {
     proxy {
         srv _https._tcp.backend.internal {
-            cert "/etc/ferron/client-cert.pem"
-            key "/etc/ferron/client-key.pem"
+            cert /etc/ferron/client-cert.pem
+            key /etc/ferron/client-key.pem
         }
     }
 }

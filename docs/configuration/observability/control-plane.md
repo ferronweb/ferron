@@ -62,7 +62,7 @@ Metadata values support variable interpolation, allowing you to reference reques
 {
     control_plane {
         metadata {
-            request_url "${scheme}://${host}${request_uri}"
+            request_url "{{request.scheme}}://{{request.host}}{{request.uri}}"
         }
     }
 }
@@ -114,7 +114,7 @@ api.example.com:80 {
         }
     }
 
-    proxy "http://backend:3000"
+    proxy http://backend:3000
 }
 ```
 
@@ -144,7 +144,7 @@ A Kubernetes ingress controller would write the server configuration with metada
     observability {
         provider otlp
         service_name my-app
-        traces "http://otlp-collector:4318/v1/traces" {
+        traces http://otlp-collector:4318/v1/traces {
             protocol http/protobuf
         }
     }

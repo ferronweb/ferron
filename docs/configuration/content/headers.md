@@ -24,7 +24,7 @@ Header values support interpolation with `{{...}}` syntax.
 ```ferron
 example.com {
     header +X-Client-IP "{{remote.ip}}"
-    header X-Powered-By "Ferron"
+    header X-Powered-By Ferron
     header -Server
 }
 ```
@@ -56,12 +56,12 @@ The `cors` directive configures Cross-Origin Resource Sharing behavior.
 ```ferron
 example.com {
     cors {
-        origins "https://example.com" "https://app.example.com"
+        origins https://example.com https://app.example.com
         methods GET POST PUT DELETE
-        headers "Content-Type" "Authorization"
+        headers Content-Type Authorization
         credentials
         max_age 86400
-        expose_headers "X-Custom-Header"
+        expose_headers X-Custom-Header
     }
 }
 ```
@@ -93,7 +93,7 @@ api.example.com {
     cors {
         origins "*"
         methods GET POST
-        headers "Content-Type" "Authorization"
+        headers Content-Type Authorization
         credentials false
         max_age 3600
     }
@@ -105,12 +105,12 @@ api.example.com {
 ```ferron
 api.example.com {
     cors {
-        origins "https://app.example.com" "https://admin.example.com"
+        origins https://app.example.com https://admin.example.com
         methods GET POST PUT DELETE OPTIONS
-        headers "Content-Type" "Authorization" "X-Request-ID"
+        headers Content-Type Authorization X-Request-ID
         credentials
         max_age 86400
-        expose_headers "X-Total-Count" "X-Page"
+        expose_headers X-Total-Count X-Page
     }
 }
 ```

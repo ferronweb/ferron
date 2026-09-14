@@ -26,7 +26,7 @@ example.com {
     replace "old-company-name" "new-company-name"
 
     # Replace only the first occurrence
-    replace "http://old-domain.com" "https://new-domain.com" {
+    replace http://old-domain.com https://new-domain.com {
         once
     }
 }

@@ -16,7 +16,7 @@ This is useful when you have an external certificate management service that exp
 example.com {
     tls {
         provider http
-        url "https://cert-manager.internal.example.com/api/cert/example.com"
+        url https://cert-manager.internal.example.com/api/cert/example.com
     }
 }
 ```
@@ -42,7 +42,7 @@ example.com {
 example.com {
     tls {
         provider http
-        url "https://cert-manager.internal.example.com/api/cert/example.com"
+        url https://cert-manager.internal.example.com/api/cert/example.com
         refresh_interval "30m"
 
         ocsp
@@ -62,7 +62,7 @@ On-demand mode defers certificate fetching until the first TLS handshake for a h
 *.example.com {
     tls {
         provider http
-        url "https://cert-manager.internal.example.com/api/cert"
+        url https://cert-manager.internal.example.com/api/cert
         on_demand
     }
 }
@@ -84,9 +84,9 @@ To prevent abuse, you can configure an approval endpoint. Before fetching a cert
 *.example.com {
     tls {
         provider http
-        url "https://cert-manager.internal.example.com/api/cert"
+        url https://cert-manager.internal.example.com/api/cert
         on_demand
-        on_demand_ask "https://internal-api.example.com/check-cert"
+        on_demand_ask https://internal-api.example.com/check-cert
     }
 }
 ```
@@ -134,7 +134,7 @@ The endpoint must return a JSON object with the following structure:
 example.com {
     tls {
         provider http
-        url "https://cert-manager.internal.example.com/api/cert/example.com"
+        url https://cert-manager.internal.example.com/api/cert/example.com
     }
 }
 ```
@@ -145,7 +145,7 @@ example.com {
 example.com {
     tls {
         provider http
-        url "https://cert-manager.internal.example.com/api/cert/example.com"
+        url https://cert-manager.internal.example.com/api/cert/example.com
         refresh_interval "15m"
     }
 }
@@ -157,7 +157,7 @@ example.com {
 example.com {
     tls {
         provider http
-        url "https://cert-manager.internal.example.com/api/cert/example.com"
+        url https://cert-manager.internal.example.com/api/cert/example.com
         no_verification
     }
 }
@@ -169,9 +169,9 @@ example.com {
 *.example.com {
     tls {
         provider http
-        url "https://cert-manager.internal.example.com/api/cert"
+        url https://cert-manager.internal.example.com/api/cert
         on_demand
-        on_demand_ask "https://internal-api.example.com/check-cert"
+        on_demand_ask https://internal-api.example.com/check-cert
         on_demand_ask_auth "Bearer s3cr3t"
     }
 }
@@ -183,7 +183,7 @@ example.com {
 example.com {
     tls {
         provider http
-        url "https://cert-manager.internal.example.com/api/cert/example.com"
+        url https://cert-manager.internal.example.com/api/cert/example.com
 
         ocsp
     }

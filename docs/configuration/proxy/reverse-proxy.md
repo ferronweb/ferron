@@ -174,8 +174,8 @@ When connecting to an upstream over HTTPS, Ferron can present a client certifica
 example.com {
     proxy {
         upstream https://backend.internal:443 {
-            cert "/etc/ferron/client-cert.pem"
-            key "/etc/ferron/client-key.pem"
+            cert /etc/ferron/client-cert.pem
+            key /etc/ferron/client-key.pem
         }
     }
 }
@@ -202,7 +202,7 @@ You must provide both `cert` and `key` for mTLS to activate. The certificate cha
 ```ferron
 example.com {
     proxy http://localhost:8080 {
-        request_header +X-Custom-Header "value"
+        request_header +X-Custom-Header value
         request_header -X-Sensitive-Header
         request_header Host "new-host.example.com"
     }
@@ -309,7 +309,7 @@ example.com {
         upstream http://localhost:8081
 
         affinity cookie {
-            name "ferron_sticky"
+            name ferron_sticky
             ttl "24h"
             path "/"
             httponly
@@ -355,7 +355,7 @@ example.com {
         upstream http://localhost:8081
 
         affinity header {
-            name "X-Backend-Id"
+            name X-Backend-Id
         }
     }
 }
@@ -369,7 +369,7 @@ example.com {
 > ```ferron
 > example.com {
 >     cache {
->         vary "X-Backend-Id"
+>         vary X-Backend-Id
 >     }
 > }
 > ```
@@ -600,7 +600,7 @@ example.com {
     proxy {
         upstream http://localhost:3000 {
             active_check {
-                uri "/health"
+                uri /health
                 interval "10s"
                 timeout "5s"
                 expect_status "200,204"
@@ -610,7 +610,7 @@ example.com {
         }
         upstream https://localhost:3001 {
             active_check {
-                uri "/api/status"
+                uri /api/status
                 method HEAD
                 response_time_threshold "1s"
                 no_verification

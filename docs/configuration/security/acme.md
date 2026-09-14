@@ -32,7 +32,7 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
+        contact admin@example.com
     }
 }
 ```
@@ -48,7 +48,7 @@ example.com {
     tls {
         provider acme
         challenge tls-alpn-01
-        contact "admin@example.com"
+        contact admin@example.com
     }
 }
 ```
@@ -64,7 +64,7 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
     tls {
         provider acme
         challenge dns-01
-        contact "admin@example.com"
+        contact admin@example.com
         dns {
             provider cloudflare
             api_key "EXAMPLE_API_KEY"
@@ -102,14 +102,14 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
+        contact admin@example.com
 
-        directory "https://acme-v02.api.letsencrypt.org/directory"
-        cache "/var/cache/ferron-acme"
+        directory https://acme-v02.api.letsencrypt.org/directory
+        cache /var/cache/ferron-acme
 
-        save "/etc/ssl/certs/example.com.pem" "/etc/ssl/private/example.com.pem"
+        save /etc/ssl/certs/example.com.pem /etc/ssl/private/example.com.pem
         # `post_obtain_command` arg is a script/binary name + args, separated by spaces.
-        post_obtain_command "/var/lib/post_obtain_command.sh"
+        post_obtain_command /var/lib/post_obtain_command.sh
 
         ocsp
     }
@@ -129,7 +129,7 @@ On-demand mode defers certificate issuance until the first TLS handshake for a h
     tls {
         provider acme
         challenge dns-01
-        contact "admin@example.com"
+        contact admin@example.com
         on_demand
     }
 }
@@ -144,9 +144,9 @@ To prevent abuse, you can configure an approval endpoint. Before issuing a certi
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
+        contact admin@example.com
         on_demand
-        on_demand_ask "https://internal-api.example.com/check-cert"
+        on_demand_ask https://internal-api.example.com/check-cert
     }
 }
 ```
@@ -166,8 +166,8 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
-        cache "/var/cache/ferron-acme"
+        contact admin@example.com
+        cache /var/cache/ferron-acme
     }
 }
 ```
@@ -199,8 +199,8 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
-        cache "/var/cache/ferron-acme"
+        contact admin@example.com
+        cache /var/cache/ferron-acme
     }
 }
 ```
@@ -250,18 +250,18 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
-        directory "https://acme-v02.api.letsencrypt.org/directory"
+        contact admin@example.com
+        directory https://acme-v02.api.letsencrypt.org/directory
 
         fallback {
-            directory "https://acme-staging-v02.api.letsencrypt.org/directory"
-            contact "admin@example.com"
+            directory https://acme-staging-v02.api.letsencrypt.org/directory
+            contact admin@example.com
         }
 
         fallback {
-            directory "https://other-ca.example.com/directory"
-            eab "my-key-id" "SMq9KpHkR7z..."
-            profile "my-profile"
+            directory https://other-ca.example.com/directory
+            eab my-key-id SMq9KpHkR7z...
+            profile my-profile
         }
     }
 }
@@ -278,12 +278,12 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
-        directory "https://acme-v02.api.letsencrypt.org/directory"
+        contact admin@example.com
+        directory https://acme-v02.api.letsencrypt.org/directory
 
         fallback {
-            directory "https://acme-staging-v02.api.letsencrypt.org/directory"
-            contact "admin@example.com"
+            directory https://acme-staging-v02.api.letsencrypt.org/directory
+            contact admin@example.com
         }
     }
 }

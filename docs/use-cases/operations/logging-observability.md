@@ -62,7 +62,7 @@ You can also select specific fields:
 example.com {
     log "access.log" {
         format json
-        fields "method" "path" "status" "duration_secs" "client_ip"
+        fields method path status duration_secs client_ip
     }
 
     root /var/www/html
@@ -132,7 +132,7 @@ example.com {
         metrics http://otel-collector.internal:4318/v1/metrics
         traces http://otel-collector.internal:4317/v1/traces
 
-        service_name "ferron-prod"
+        service_name ferron-prod
     }
 
     root /var/www/html
@@ -147,21 +147,21 @@ example.com {
         provider otlp
 
         logs https://otel.example.net/v1/logs {
-            protocol "grpc"
+            protocol grpc
             authorization "Bearer YOUR_TOKEN"
         }
 
         metrics https://otel.example.net/v1/metrics {
-            protocol "grpc"
+            protocol grpc
             authorization "Bearer YOUR_TOKEN"
         }
 
         traces https://otel.example.net/v1/traces {
-            protocol "grpc"
+            protocol grpc
             authorization "Bearer YOUR_TOKEN"
         }
 
-        service_name "ferron-prod"
+        service_name ferron-prod
     }
 }
 ```
@@ -175,7 +175,7 @@ example.com {
     observability {
         provider otlp
         log_style modern
-        service_name "ferron-prod"
+        service_name ferron-prod
 
         logs https://otel.example.net/v1/logs {
             protocol "http/protobuf"
@@ -195,7 +195,7 @@ example.com {
     observability {
         provider otlp
         log_style legacy
-        service_name "ferron-prod"
+        service_name ferron-prod
 
         logs https://otel.example.net/v1/logs {
             protocol "http/protobuf"
@@ -278,7 +278,7 @@ example.com {
         metrics http://otel-collector.internal:4318/v1/metrics
         traces http://otel-collector.internal:4317/v1/traces
 
-        service_name "ferron-prod"
+        service_name ferron-prod
     }
 
     root /var/www/html
@@ -300,7 +300,7 @@ example.com {
     # Centralized OTLP export
     observability {
         provider otlp
-        service_name "ferron-prod"
+        service_name ferron-prod
 
         logs http://otel-collector.internal:4318/v1/logs
         metrics http://otel-collector.internal:4318/v1/metrics

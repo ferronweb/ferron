@@ -62,8 +62,8 @@ You can also promote specific baggage keys into OpenTelemetry attributes on tele
     observability {
         provider otlp
 
-        traces "https://collector:4317/v1/traces" {
-            protocol "grpc"
+        traces https://collector:4317/v1/traces {
+            protocol grpc
         }
 
         baggage {
@@ -132,7 +132,7 @@ The `trace_id_header` directive configures whether and how Ferron injects the tr
 ```ferron
 example.com {
     trace_id_header {
-        header_name "X-Trace-Id"
+        header_name X-Trace-Id
     }
 }
 ```
@@ -157,7 +157,7 @@ Ferron injects the trace ID into the `X-Ferron-Trace-Id` response header for eve
 ```ferron
 example.com {
     trace_id_header {
-        header_name "X-Request-Trace-Id"
+        header_name X-Request-Trace-Id
     }
 }
 ```
@@ -252,7 +252,7 @@ example.com {
         }
 
         # Sample 10% of root spans, respect parent for child spans
-        trace_sampling "parentbased_traceidratio" {
+        trace_sampling parentbased_traceidratio {
             ratio 0.1
         }
     }
@@ -269,7 +269,7 @@ The `traceidratio` and `parentbased_traceidratio` modes accept a `ratio` sub-dir
 ```ferron
 example.com {
     http {
-        trace_sampling "parentbased_traceidratio" {
+        trace_sampling parentbased_traceidratio {
             ratio 0.05   # 5% of root spans
         }
     }
@@ -285,19 +285,19 @@ The `attribute_based` mode samples spans from the attributes that exist when Fer
 ```ferron
 example.com {
     http {
-        trace_sampling "attribute_based" {
+        trace_sampling attribute_based {
             # What to do with spans that don't match any rule
-            default_action "sample"
+            default_action sample
 
             rules {
-                # Always sample spans with http.request.method == "POST"
-                rule "exact" "http.request.method" "POST"
+                # Always sample spans with http.request.method == POST
+                rule exact http.request.method POST
 
                 # Sample spans where url.path starts with "/api/"
-                rule "prefix" "url.path" "/api/"
+                rule prefix url.path /api/
 
                 # Sample spans that have an "error.type" attribute (any value)
-                rule "exists" "error.type"
+                rule exists error.type
             }
         }
     }

@@ -43,7 +43,7 @@ listen.owner = ferron
 listen.group = ferron
 ```
 
-Then reference it from Ferron with `fcgi_php "unix:///run/php/php8.4-fpm.sock"`.
+Then reference it from Ferron with `fcgi_php unix:///run/php/php8.4-fpm.sock`.
 
 ## A complete WordPress example
 
@@ -52,7 +52,7 @@ Here is a full Ferron 3 configuration that reproduces the typical `WordPress` `.
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 
     # Front-controller fallback: route anything that is not a real file or
     # directory to index.php (WordPress reads REQUEST_URI to route).
@@ -69,10 +69,10 @@ example.com {
     error_page 500 502 503 504 /var/www/html/50x.html
 
     # Baseline security headers.
-    header "X-Content-Type-Options" "nosniff"
-    header "X-Frame-Options" "DENY"
-    header "Referrer-Policy" "strict-origin-when-cross-origin"
-    header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+    header X-Content-Type-Options nosniff
+    header X-Frame-Options DENY
+    header Referrer-Policy strict-origin-when-cross-origin
+    header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 
     match WP_ADMIN {
         request.uri ~ r"/wp-login\.php|/wp-admin(?:/|$)"
@@ -118,7 +118,7 @@ In Ferron, `fcgi_php` already sends `.php` files to PHP-FPM, and `root` serves e
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 
     # Only rewrite when the URL is NOT an existing file or directory.
     rewrite r"^(.*)$" "/index.php" {
@@ -143,7 +143,7 @@ Joomla uses the same front-controller idea with `index.php` as the entry script,
 ```ferron
 example.com {
     root /var/www/joomla
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 
     rewrite r"^(.*)$" "/index.php" {
         file false
@@ -159,7 +159,7 @@ If a subtree should be static-only (no PHP execution), disable FastCGI with `fcg
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 
     location /static {
         fcgi_php false
@@ -190,7 +190,7 @@ www.example.com {
 
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
     # https_redirect is enabled by default because TLS is configured.
 }
 ```
@@ -215,7 +215,7 @@ In Ferron, HTTPS redirection is automatic once a host name has TLS enabled. When
 example.com {
     https_redirect          # default when TLS is present
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 }
 ```
 
@@ -245,7 +245,7 @@ Ferron uses `allow` and `block`. When `allow` is present, Ferron permits only th
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 
     # Allow only the office network, deny one bad host inside it.
     allow "203.0.113.0/24"
@@ -277,7 +277,7 @@ match sensitive_path {
 
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 
     if sensitive_path {
         status 403 {
@@ -301,7 +301,7 @@ Ferron uses `error_page`, mapping one or more status codes to an absolute file p
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 
     error_page 404 /var/www/html/404.html
     error_page 500 502 503 504 /var/www/html/50x.html
@@ -365,12 +365,12 @@ The `header` directive has three forms: add (`+`), remove (`-`), and replace (ba
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 
-    header +X-Content-Type-Options "nosniff"
+    header +X-Content-Type-Options nosniff
     header +Content-Security-Policy "default-src 'self'"
     header -X-Powered-By
-    header Server "Ferron"
+    header Server Ferron
 }
 ```
 
@@ -452,7 +452,7 @@ example.com {
     }
 
     if DOWNLOADS {
-        header +Content-Disposition "attachment"
+        header +Content-Disposition attachment
     }
 }
 ```

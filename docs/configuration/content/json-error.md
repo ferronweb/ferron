@@ -59,7 +59,7 @@ With `format "simple"`, responses use `Content-Type: application/json` with a mi
 ```ferron
 example.com {
     json_errors {
-        format "simple"
+        format simple
     }
 }
 ```

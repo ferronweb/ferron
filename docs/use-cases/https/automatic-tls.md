@@ -18,7 +18,7 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
+        contact admin@example.com
     }
 
     root /var/www/html
@@ -49,7 +49,7 @@ example.com {
     tls {
         provider acme
         challenge tls-alpn-01
-        contact "admin@example.com"
+        contact admin@example.com
     }
 
     root /var/www/html
@@ -65,9 +65,9 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
+        contact admin@example.com
 
-        save "/tmp/server.crt" "/tmp/server.key"
+        save /tmp/server.crt /tmp/server.key
 
         # Optionally, run a command after obtaining the certificate:
         # post_obtain_command "/etc/reload-server.sh"
@@ -90,10 +90,10 @@ When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferr
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
+        contact admin@example.com
 
         on_demand
-        on_demand_ask "https://auth.example.com/check-cert"
+        on_demand_ask https://auth.example.com/check-cert
     }
 
     root /var/www/html
@@ -111,7 +111,7 @@ Below is an example configuration for DNS-01 with Cloudflare:
     tls {
         provider acme
         challenge dns-01
-        contact "admin@example.com"
+        contact admin@example.com
 
         dns {
             provider cloudflare
@@ -138,8 +138,8 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
-        cache "/var/cache/ferron-acme"
+        contact admin@example.com
+        cache /var/cache/ferron-acme
     }
 }
 ```

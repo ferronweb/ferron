@@ -177,7 +177,7 @@ For a PHP front controller, send the fallback to the entry script instead.
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 
     rewrite r"^(.*)$" "/index.php" {
         file false

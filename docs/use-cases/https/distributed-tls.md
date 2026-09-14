@@ -26,8 +26,8 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
-        cache "/var/cache/ferron-acme"
+        contact admin@example.com
+        cache /var/cache/ferron-acme
     }
 
     root /var/www/html
@@ -54,11 +54,11 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
-        cache "/var/cache/ferron-acme"
+        contact admin@example.com
+        cache /var/cache/ferron-acme
 
         ticket_keys {
-            file "/var/cache/ferron-acme-shared/tickets.keys"
+            file /var/cache/ferron-acme-shared/tickets.keys
             auto_rotate
             rotation_interval "12h"
             max_keys 3

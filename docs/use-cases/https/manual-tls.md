@@ -14,8 +14,8 @@ To enable manual TLS for a host, configure the `tls` directive with the `"manual
 manual-tls.example.com {
     tls {
         provider manual
-        cert "/etc/ssl/certs/manual-tls.example.com.crt"
-        key "/etc/ssl/private/manual-tls.example.com.key"
+        cert /etc/ssl/certs/manual-tls.example.com.crt
+        key /etc/ssl/private/manual-tls.example.com.key
     }
 
     root /var/www/html
@@ -81,8 +81,8 @@ You can combine manual TLS with custom cipher suites, ECDH curves, and protocol 
 api.example.com {
     tls {
         provider manual
-        cert "/etc/ssl/certs/api.example.com.crt"
-        key "/etc/ssl/private/api.example.com.key"
+        cert /etc/ssl/certs/api.example.com.crt
+        key /etc/ssl/private/api.example.com.key
 
         min_version TLSv1.3
         max_version TLSv1.3

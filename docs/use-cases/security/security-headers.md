@@ -11,12 +11,12 @@ Ferron can add, remove, and replace response headers. This is useful for baselin
 example.com {
     root /var/www/html
 
-    header "X-Content-Type-Options" "nosniff"
-    header "X-Frame-Options" "DENY"
-    header "Referrer-Policy" "strict-origin-when-cross-origin"
-    header "Permissions-Policy" "geolocation=(), microphone=(), camera=()"
-    header "Content-Security-Policy" "default-src 'self'; object-src 'none'; frame-ancestors 'none'"
-    header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+    header X-Content-Type-Options nosniff
+    header X-Frame-Options DENY
+    header Referrer-Policy "strict-origin-when-cross-origin"
+    header Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    header Content-Security-Policy "default-src 'self'; object-src 'none'; frame-ancestors 'none'"
+    header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 }
 ```
 
@@ -34,7 +34,7 @@ app.example.com {
 
     # Remove or normalize headers from upstream responses.
     header -X-Powered-By
-    header Server "Ferron"
+    header Server Ferron
 }
 ```
 
@@ -51,8 +51,8 @@ example.com {
     root /var/www/html
 
     location /admin {
-        header "Cache-Control" "no-store"
-        header "X-Frame-Options" "DENY"
+        header Cache-Control no-store
+        header X-Frame-Options DENY
     }
 }
 ```
@@ -66,12 +66,12 @@ api.example.com {
     proxy http://localhost:3000
 
     cors {
-        origins "https://app.example.com" "https://admin.example.com"
+        origins https://app.example.com https://admin.example.com
         methods GET POST PUT DELETE OPTIONS
-        headers "Content-Type" "Authorization" "X-Request-ID"
+        headers Content-Type Authorization X-Request-ID
         credentials
         max_age 86400
-        expose_headers "X-Total-Count" "X-Page"
+        expose_headers X-Total-Count X-Page
     }
 }
 ```
@@ -85,7 +85,7 @@ api.example.com {
     cors {
         origins "*"
         methods GET POST
-        headers "Content-Type" "Authorization"
+        headers Content-Type Authorization
         max_age 3600
     }
 }
@@ -103,7 +103,7 @@ example.com {
     root /var/www/html
 
     header +X-Client-IP "{{remote.ip}}"
-    header X-Powered-By "Ferron"
+    header X-Powered-By Ferron
 }
 ```
 

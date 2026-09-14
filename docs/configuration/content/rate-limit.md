@@ -77,7 +77,7 @@ Rate limit state is selected by a `rate_limit_backend` block, a sibling of `rate
 {
     rate_limit_backend {
         type redis
-        url "redis://127.0.0.1:6379/0"
+        url redis://127.0.0.1:6379/0
         key_prefix "ferron:rl:"
         timeout 200
         fail_open
@@ -115,7 +115,7 @@ Override per location by defining another `rate_limit_backend` block:
 example.com {
     rate_limit_backend {
         type redis
-        url "redis://127.0.0.1:6379/0"
+        url redis://127.0.0.1:6379/0
     }
 
     rate_limit {
@@ -186,13 +186,13 @@ Both `example.com` and `api.example.com` share the same global zone. Buckets use
 ```ferron
 {
     rate_limit {
-        zone "api"
+        zone api
     }
 }
 
 api.example.com {
     rate_limit {
-        zone "api"
+        zone api
         rate 50
         burst 10
         key remote_address
@@ -201,7 +201,7 @@ api.example.com {
 
 api-v2.example.com {
     rate_limit {
-        zone "api"
+        zone api
         rate 50
         burst 10
         key remote_address

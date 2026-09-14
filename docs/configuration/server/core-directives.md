@@ -135,7 +135,7 @@ The `unix` directive also supports the subdirectives below:
 
 ```ferron
 {
-    unix "/run/ferron.sock" {
+    unix /run/ferron.sock {
         backlog 128
         mode "0660"
         owner ferron
@@ -149,7 +149,7 @@ The `unix` directive also supports the subdirectives below:
     }
 
     # Multiple sockets (see above)
-    unix "/run/ferron-api.sock" {
+    unix /run/ferron-api.sock {
         mode "0660"
     }
 }

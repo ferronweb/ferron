@@ -155,7 +155,7 @@ example.com {
     }
 
     if WORDPRESS_SCAN {
-        abuse_event "wordpress_scan" # <-- register WordPress scanning
+        abuse_event wordpress_scan # <-- register WordPress scanning
     }
 }
 ```

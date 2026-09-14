@@ -11,7 +11,7 @@ This page documents the `fcgi` directive, which configures FastCGI support in Fe
 example.com {
     fcgi {
         backend tcp://127.0.0.1:4000
-        environment "APP_ENV" "production"
+        environment APP_ENV production
     }
 }
 ```
@@ -96,9 +96,9 @@ example.com {
 example.com {
     fcgi {
         backend tcp://127.0.0.1:9000
-        environment "APP_ENV" "production"
-        environment "APP_SECRET" "{{env.APP_SECRET}}"
-        environment "RUBY_VERSION" "3.3"
+        environment APP_ENV production
+        environment APP_SECRET "{{env.APP_SECRET}}"
+        environment RUBY_VERSION "3.3"
     }
 }
 ```
@@ -160,7 +160,7 @@ example.com {
 
 ```ferron
 example.com {
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 }
 ```
 
@@ -192,7 +192,7 @@ example.com {
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "tcp://127.0.0.1:9000"
+    fcgi_php tcp://127.0.0.1:9000
 }
 ```
 
@@ -201,7 +201,7 @@ example.com {
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 }
 ```
 
@@ -353,7 +353,7 @@ The FastCGI stage sets the following attributes on its `ferron.stage.fcgi_pass` 
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "unix:///run/php/php8.4-fpm.sock"
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 }
 ```
 
@@ -362,7 +362,7 @@ example.com {
 ```ferron
 example.com {
     root /var/www/html
-    fcgi_php "tcp://127.0.0.1:9000"
+    fcgi_php tcp://127.0.0.1:9000
 }
 ```
 
@@ -372,8 +372,8 @@ example.com {
 example.com {
     fcgi {
         backend tcp://127.0.0.1:9000
-        environment "APP_ENV" "production"
-        environment "APP_SECRET" "{{env.APP_SECRET}}"
+        environment APP_ENV production
+        environment APP_SECRET "{{env.APP_SECRET}}"
     }
 }
 ```

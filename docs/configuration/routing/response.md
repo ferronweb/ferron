@@ -36,13 +36,13 @@ example.com {
     }
 
     status 404 {
-        url "/old-endpoint"
+        url /old-endpoint
         body "This endpoint has been removed"
     }
 
     status 301 {
-        url "/legacy"
-        location "/new"
+        url /legacy
+        location /new
     }
 
     status 410 {

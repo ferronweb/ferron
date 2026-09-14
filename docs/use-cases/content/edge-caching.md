@@ -15,15 +15,15 @@ This is especially important for CDN deployments. A single edge node may termina
 *.customer.example.com {
     tls {
         provider acme
-        directory "https://acme-v02.api.letsencrypt.org/directory"
+        directory https://acme-v02.api.letsencrypt.org/directory
         challenge dns-01
-        contact "admin@example.com"
-        cache "/var/cache/ferron-acme"
+        contact admin@example.com
+        cache /var/cache/ferron-acme
 
         fallback {
-            directory "https://dv.acme-v02.api.pki.goog/directory"
-            contact "admin@example.com"
-            eab "my-key-id" "SMq9KpHkR7z..." # Replace with your EAB credentials
+            directory https://dv.acme-v02.api.pki.goog/directory
+            contact admin@example.com
+            eab my-key-id SMq9KpHkR7z... # Replace with your EAB credentials
         }
 
         dns {
@@ -50,17 +50,17 @@ Wildcard certificates normally require the DNS-01 challenge. This means you must
 *.customer.example.com {
     tls {
         provider acme
-        directory "https://acme-v02.api.letsencrypt.org/directory"
+        directory https://acme-v02.api.letsencrypt.org/directory
         challenge http-01
-        contact "admin@example.com"
-        cache "/var/cache/ferron-acme"
+        contact admin@example.com
+        cache /var/cache/ferron-acme
         on_demand
-        on_demand_ask "https://internal-api.example.com/check-cert"
+        on_demand_ask https://internal-api.example.com/check-cert
 
         fallback {
-            directory "https://dv.acme-v02.api.pki.goog/directory"
-            contact "admin@example.com"
-            eab "my-key-id" "SMq9KpHkR7z..." # Replace with your EAB credentials
+            directory https://dv.acme-v02.api.pki.goog/directory
+            contact admin@example.com
+            eab my-key-id SMq9KpHkR7z... # Replace with your EAB credentials
         }
     }
 
@@ -88,9 +88,9 @@ You can purge the cache of a single edge node locally with `PURGE` requests. A C
         purge_method
         purge_allowed_ips "10.0.0.0/8"
         purge_propagation {
-            control_plane_url "http://control-plane:9090/cache/purge"
+            control_plane_url http://control-plane:9090/cache/purge
             shared_secret "edge-to-plane-secret"
-            node_id "edge-fra1"
+            node_id edge-fra1
         }
     }
 }
@@ -130,15 +130,15 @@ You can deploy the same Ferron configuration and cache store on every node. GeoD
 *.customer.example.com {
     tls {
         provider acme
-        directory "https://acme-v02.api.letsencrypt.org/directory"
+        directory https://acme-v02.api.letsencrypt.org/directory
         challenge dns-01
-        contact "admin@example.com"
-        cache "/var/cache/ferron-acme"
+        contact admin@example.com
+        cache /var/cache/ferron-acme
 
         fallback {
-            directory "https://dv.acme-v02.api.pki.goog/directory"
-            contact "admin@example.com"
-            eab "my-key-id" "SMq9KpHkR7z..." # Replace with your EAB credentials
+            directory https://dv.acme-v02.api.pki.goog/directory
+            contact admin@example.com
+            eab my-key-id SMq9KpHkR7z... # Replace with your EAB credentials
         }
 
         dns {
@@ -154,16 +154,16 @@ You can deploy the same Ferron configuration and cache store on every node. GeoD
         purge_method
         purge_allowed_ips "10.0.0.0/8"
         purge_propagation {
-            control_plane_url "http://control-plane:9090/cache/purge"
+            control_plane_url http://control-plane:9090/cache/purge
             shared_secret "edge-to-plane-secret"
-            node_id "edge-fra1"
+            node_id edge-fra1
         }
     }
 
     proxy {
         upstream http://origin.example.com:3000 {
             active_check {
-                uri "/health"
+                uri /health
                 interval "10s"
             }
         }

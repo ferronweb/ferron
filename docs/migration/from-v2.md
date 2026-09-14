@@ -287,7 +287,7 @@ example.com {
     tls {
         provider acme
         challenge http-01
-        contact "admin@example.com"
+        contact admin@example.com
     }
 }
 ```
@@ -324,7 +324,7 @@ example.com {
         access_log /var/log/ferron/access.log
         error_log /var/log/ferron/error.log
         format json
-        fields "timestamp" "status"
+        fields timestamp status
     }
 }
 ```
@@ -398,7 +398,7 @@ example.com {
 ```ferron
 # Ferron 3
 example.com {
-    header +X-Frame-Options "DENY"
+    header +X-Frame-Options DENY
     header -X-Powered-By
 
     proxy {
@@ -480,7 +480,7 @@ example.com {
     tls {
         provider acme
         challenge tls-alpn-01
-        contact "admin@example.com"
+        contact admin@example.com
     }
 }
 ```

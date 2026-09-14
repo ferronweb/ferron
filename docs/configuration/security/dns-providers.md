@@ -10,7 +10,7 @@ The `tls-acme` module uses DNS providers to solve the DNS-01 ACME challenge. Thi
     tls {
         provider acme
         challenge dns-01
-        contact "admin@example.com"
+        contact admin@example.com
         dns {
             provider cloudflare
             api_key "{{env.CF_API_TOKEN}}"
@@ -256,7 +256,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 
         dns {
             provider rfc2136
-            server "udp://ns1.example.com:53"
+            server udp://ns1.example.com:53
             key_name "ferron-acme."
             key_secret "BASE64_ENCODED_TSIG_SECRET"
             key_algorithm "HMAC-SHA256"
@@ -360,7 +360,7 @@ The program runs directly (no shell), so arguments beyond the program path are n
 
         dns {
             provider command
-            command "/usr/local/bin/ferron-dns-hook.sh"
+            command /usr/local/bin/ferron-dns-hook.sh
             min_ttl 30
         }
     }

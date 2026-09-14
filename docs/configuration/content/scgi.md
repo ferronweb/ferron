@@ -11,7 +11,7 @@ This page documents the `scgi` directive for configuring Ferron's SCGI (Simple C
 example.com {
     scgi {
         backend tcp://127.0.0.1:4000
-        environment "APP_ENV" "production"
+        environment APP_ENV production
     }
 }
 ```
@@ -67,9 +67,9 @@ example.com {
 example.com {
     scgi {
         backend tcp://127.0.0.1:4000
-        environment "APP_ENV" "production"
-        environment "APP_SECRET" "{{env.APP_SECRET}}"
-        environment "RUBY_VERSION" "3.3"
+        environment APP_ENV production
+        environment APP_SECRET "{{env.APP_SECRET}}"
+        environment RUBY_VERSION "3.3"
     }
 }
 ```
@@ -185,10 +185,10 @@ example.com {
 ```ferron
 example.com {
     scgi {
-        backend "tcp://127.0.0.1:4000"
-        environment "APP_ENV" "production"
-        environment "APP_SECRET" "{{env.APP_SECRET}}"
-        environment "RUBY_VERSION" "3.3"
+        backend tcp://127.0.0.1:4000
+        environment APP_ENV production
+        environment APP_SECRET "{{env.APP_SECRET}}"
+        environment RUBY_VERSION "3.3"
     }
 }
 ```

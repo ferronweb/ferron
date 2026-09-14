@@ -28,7 +28,7 @@ Make sure Ferron writes access logs to a file. The default text format works out
 
 ```ferron
 example.com {
-    log "/var/log/ferron/access.log"
+    log /var/log/ferron/access.log
 
     root /var/www/html
 }
@@ -239,7 +239,7 @@ example.com {
         }
     }
 
-    log "/var/log/ferron/access.log"
+    log /var/log/ferron/access.log
 
     root /var/www/html
 }
@@ -260,7 +260,7 @@ If you prefer a simpler log format that Fail2ban can parse easily, use the `acce
 
 ```ferron
 example.com {
-    log "/var/log/ferron/access.log" {
+    log /var/log/ferron/access.log {
         format text
         access_pattern "%client_ip - %auth_user [%{%d/%b/%Y:%H:%M:%S %z}t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""
     }
