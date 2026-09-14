@@ -80,7 +80,7 @@ Rate limit state is selected by a `rate_limit_backend` block, a sibling of `rate
         url "redis://127.0.0.1:6379/0"
         key_prefix "ferron:rl:"
         timeout 200
-        fail_open true
+        fail_open
     }
 }
 

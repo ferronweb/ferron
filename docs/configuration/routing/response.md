@@ -137,7 +137,7 @@ By default, HTTP/2 and HTTP/3 connections support 103 Early Hints natively. For 
 ```ferron
 {
     http {
-        h1_enable_early_hints true
+        h1_enable_early_hints
     }
 }
 ```

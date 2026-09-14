@@ -110,7 +110,7 @@ example.com {
     root /srv/www/example
     error_page 404 /srv/www/custom/404.html
     error_page 500 502 503 504 /srv/www/custom/50x.html
-    error_page_placeholders true
+    error_page_placeholders
 }
 ```
 

@@ -37,7 +37,7 @@ admin.example.com:443 {
         cert "/etc/ssl/certs/admin.example.com.crt"
         key "/etc/ssl/private/admin.example.com.key"
 
-        client_auth true
+        client_auth
         client_auth_ca system  // or "webpki" for Mozilla's root bundle
     }
 
@@ -65,7 +65,7 @@ internal-api.example.com:443 {
         min_version TLSv1.3
         max_version TLSv1.3
 
-        client_auth true
+        client_auth
         client_auth_ca "/etc/ssl/internal-ca-bundle.pem"
     }
 

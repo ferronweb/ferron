@@ -99,7 +99,7 @@ example.com {
 
 ```ferron
 example.com {
-    rewrite_log true
+    rewrite_log
 }
 ```
 

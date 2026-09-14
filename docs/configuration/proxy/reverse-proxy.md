@@ -97,7 +97,7 @@ example.com {
         upstream http://localhost:3001
 
         algorithm round_robin
-        retry_connection true
+        retry_connection
         retry_budget {
             max_retry_rate 0.1
             max_tokens 10
@@ -565,7 +565,7 @@ example.com {
             window "30s"
             open_duration "10s"
             consecutive_passes 1
-            record_5xx true
+            record_5xx
             latency_threshold "0.5s"
         }
     }

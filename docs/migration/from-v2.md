@@ -166,7 +166,7 @@ globals {
     }
 
     runtime {
-        io_uring true
+        io_uring
     }
 }
 ```

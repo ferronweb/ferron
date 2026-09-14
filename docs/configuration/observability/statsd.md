@@ -18,7 +18,7 @@ example.com {
         host 127.0.0.1
         port 8125
         prefix myapp
-        datadog true
+        datadog
     }
 }
 ```
@@ -82,7 +82,7 @@ The `baggage` sub-directive promotes specific W3C Baggage keys into DogStatsD ta
 example.com {
     observability {
         provider statsd
-        datadog true
+        datadog
 
         baggage {
             key tenant.id {
