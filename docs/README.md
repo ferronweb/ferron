@@ -45,6 +45,10 @@ Write `.conf` examples in idiomatic Ferron 3 style:
 - **Raw string literals**: use `r"..."` for regex patterns to avoid double-backslash escaping.
 - **Quoted strings**: single and double quotes are interchangeable. Use the clearer option.
 
+Configuration examples would have directives always wrapped in a host or global block of some sort (no directives at top-level), except `include`. Also, `include` directives would depend on another configuration files, which would cause documentation test setup to fail.
+
+Write Ferron configuration examples to be simple, if possible, to show the intended configuration. For detailed explanations, you can optionally use longer configuration files or comments (though not necessarily ones restating the same information).
+
 ### Invalid configuration examples
 
 Prefix the first line with `# INVALID` followed by a brief explanation:
