@@ -96,7 +96,7 @@ example.com {
 example.com {
     fcgi {
         backend tcp://127.0.0.1:9000
-        environment APP_ENV production
+        environment APP_ENV "production"
         environment APP_SECRET "{{env.APP_SECRET}}"
         environment RUBY_VERSION "3.3"
     }

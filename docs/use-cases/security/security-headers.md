@@ -11,8 +11,8 @@ Ferron can add, remove, and replace response headers. This is useful for baselin
 example.com {
     root /var/www/html
 
-    header X-Content-Type-Options nosniff
-    header X-Frame-Options DENY
+    header X-Content-Type-Options "nosniff"
+    header X-Frame-Options "DENY"
     header Referrer-Policy "strict-origin-when-cross-origin"
     header Permissions-Policy "geolocation=(), microphone=(), camera=()"
     header Content-Security-Policy "default-src 'self'; object-src 'none'; frame-ancestors 'none'"
@@ -34,7 +34,7 @@ app.example.com {
 
     # Remove or normalize headers from upstream responses.
     header -X-Powered-By
-    header Server Ferron
+    header Server "Ferron"
 }
 ```
 
@@ -51,8 +51,8 @@ example.com {
     root /var/www/html
 
     location /admin {
-        header Cache-Control no-store
-        header X-Frame-Options DENY
+        header Cache-Control "no-store"
+        header X-Frame-Options "DENY"
     }
 }
 ```
@@ -103,7 +103,7 @@ example.com {
     root /var/www/html
 
     header +X-Client-IP "{{remote.ip}}"
-    header X-Powered-By Ferron
+    header X-Powered-By "Ferron"
 }
 ```
 

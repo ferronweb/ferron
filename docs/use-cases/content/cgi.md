@@ -126,7 +126,7 @@ Set CGI environment variables that Ferron passes to the interpreter process:
 example.com {
     root /var/www/html
     cgi {
-        environment APP_ENV production
+        environment APP_ENV "production"
         environment APP_SECRET "{{env.APP_SECRET}}"
         environment RUBY_VERSION "3.3"
     }
@@ -256,7 +256,7 @@ example.com {
 
     cgi {
         extension ".php"
-        environment APP_ENV production
+        environment APP_ENV "production"
     }
 
     # /srv/www/example/cgi-bin/handler.py is treated as CGI

@@ -24,7 +24,7 @@ Header values support interpolation with `{{...}}` syntax.
 ```ferron
 example.com {
     header +X-Client-IP "{{remote.ip}}"
-    header X-Powered-By Ferron
+    header X-Powered-By "Ferron"
     header -Server
 }
 ```

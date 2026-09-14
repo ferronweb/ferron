@@ -69,9 +69,9 @@ example.com {
     error_page 500 502 503 504 /var/www/html/50x.html
 
     # Baseline security headers.
-    header X-Content-Type-Options nosniff
-    header X-Frame-Options DENY
-    header Referrer-Policy strict-origin-when-cross-origin
+    header X-Content-Type-Options "nosniff"
+    header X-Frame-Options "DENY"
+    header Referrer-Policy "strict-origin-when-cross-origin"
     header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 
     match WP_ADMIN {
@@ -370,7 +370,7 @@ example.com {
     header +X-Content-Type-Options nosniff
     header +Content-Security-Policy "default-src 'self'"
     header -X-Powered-By
-    header Server Ferron
+    header Server "Ferron"
 }
 ```
 
