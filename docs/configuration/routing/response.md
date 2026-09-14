@@ -46,7 +46,7 @@ example.com {
     }
 
     status 410 {
-        regex "^/api/v1/.*"
+        regex r"^/api/v1/.*"
         body "API v1 has been deprecated"
     }
 }

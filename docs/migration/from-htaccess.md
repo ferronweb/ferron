@@ -56,7 +56,7 @@ example.com {
 
     # Front-controller fallback: route anything that is not a real file or
     # directory to index.php (WordPress reads REQUEST_URI to route).
-    rewrite "^(.*)$" "/index.php" {
+    rewrite r"^(.*)$" "/index.php" {
         file false
         directory false
     }
@@ -121,7 +121,7 @@ example.com {
     fcgi_php "unix:///run/php/php8.4-fpm.sock"
 
     # Only rewrite when the URL is NOT an existing file or directory.
-    rewrite "^(.*)$" "/index.php" {
+    rewrite r"^(.*)$" "/index.php" {
         file false
         directory false
     }
@@ -145,7 +145,7 @@ example.com {
     root /var/www/joomla
     fcgi_php "unix:///run/php/php8.4-fpm.sock"
 
-    rewrite "^(.*)$" "/index.php" {
+    rewrite r"^(.*)$" "/index.php" {
         file false
         directory false
     }
@@ -272,7 +272,7 @@ In Ferron, use a named matcher with `if` and a custom `403` status:
 
 ```ferron
 match sensitive_path {
-    request.uri.path ~ "^/(?:\\.|wp-config\\.php|\\.env)"
+    request.uri.path ~ r"^/(?:\.|wp-config\.php|\.env)"
 }
 
 example.com {
@@ -529,7 +529,7 @@ Ferron uses a `match` on `user_agent` and a `403` status:
 
 ```ferron
 match bad_bot {
-    request.header.user_agent ~ "(?i)badbot|evilscraper"
+    request.header.user_agent ~ r"(?i)badbot|evilscraper"
 }
 
 example.com {

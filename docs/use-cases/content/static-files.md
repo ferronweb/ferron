@@ -43,7 +43,7 @@ Ferron also supports single-page applications (SPAs). Add a URL rewrite rule to 
 ```ferron
 example.com {
     root /var/www/html
-    rewrite "^/.*" "/" {
+    rewrite r"^/.*" "/" {
         last
         directory false
         file false

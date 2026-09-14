@@ -10,11 +10,13 @@ This page documents the Prometheus metrics export configuration for Ferron. The 
 You configure Prometheus metrics in `observability` blocks with `provider prometheus`:
 
 ```ferron
-observability {
-    provider prometheus
-    endpoint_listen "127.0.0.1:8889"
-    endpoint_format text
-    endpoint_auth_token "my-scrape-token"
+example.com {
+    observability {
+        provider prometheus
+        endpoint_listen 127.0.0.1:8889
+        endpoint_format text
+        endpoint_auth_token my-scrape-token
+    }
 }
 ```
 
@@ -76,13 +78,15 @@ Ferron enables exemplars by default for all counter metrics. For histograms, exe
 The `baggage` sub-directive promotes specific W3C Baggage keys into Prometheus metric labels. This is useful for adding request-scoped context (such as tenant IDs or user roles) to your metrics without custom instrumentation.
 
 ```ferron
-observability {
-    provider prometheus
+example.com {
+    observability {
+        provider prometheus
 
-    baggage {
-        key "tenant.id" {
-            attribute "tenant.id"
-            max_distinct 100
+        baggage {
+            key tenant.id {
+                attribute tenant.id
+                max_distinct 100
+            }
         }
     }
 }
@@ -152,61 +156,52 @@ Ferron metrics follow OpenTelemetry semantic conventions and use automatic conve
 ### Basic local monitoring
 
 ```ferron
-# Global configuration
 example.com {
     observability {
         provider prometheus
-        endpoint_listen "127.0.0.1:8889"
+        endpoint_listen 127.0.0.1:8889
     }
-    root /var/www/html
 }
 ```
 
 ### Production monitoring with all interfaces
 
 ```ferron
-# Production setup with all interfaces (use with firewall)
 example.com {
     observability {
         provider prometheus
-        endpoint_listen "0.0.0.0:8889"
+        endpoint_listen 0.0.0.0:8889
         endpoint_format text
     }
-    root /var/www/html
 }
 ```
 
 ### IPv6 monitoring
 
 ```ferron
-# IPv6 monitoring
 example.com {
     observability {
         provider prometheus
-        endpoint_listen "[::]:8889"
+        endpoint_listen [::]:8889
     }
-    root /var/www/html
 }
 ```
 
 ### Multiple hosts with different endpoints
 
 ```ferron
-# Different metrics endpoints for different hosts
 example.com {
     observability {
         provider prometheus
-        endpoint_listen "127.0.0.1:9001"
+        endpoint_listen 127.0.0.1:9001
     }
-    root /var/www/example
 }
 
 api.example.com {
     observability {
         provider prometheus
-        endpoint_listen "127.0.0.1:9002"
+        endpoint_listen 127.0.0.1:9002
     }
-    proxy http://backend:3000
 }
 ```
 
@@ -216,18 +211,16 @@ api.example.com {
 example.com {
     observability {
         provider prometheus
-        endpoint_listen "127.0.0.1:8889"
+        endpoint_listen 127.0.0.1:8889
 
         baggage {
-            # Promote tenant ID as a metric label (bounded cardinality)
-            key "tenant.id" {
-                attribute "tenant.id"
+            key tenant.id {
+                attribute tenant.id
                 max_distinct 50
             }
 
-            # Promote user role with strict cardinality cap
-            key "user.role" {
-                attribute "ferron.user_role"
+            key user.role {
+                attribute ferron.user_role
                 max_distinct 10
             }
         }

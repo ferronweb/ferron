@@ -12,12 +12,14 @@ This page documents TLS session ticket key management. TLS session tickets enabl
 To enable session tickets with a pre-existing key file (works with any TLS provider):
 
 ```ferron
-tls {
-    provider manual
-    cert "cert.pem"
-    key "key.pem"
-    ticket_keys {
-        file "session_tickets.keys"
+example.com {
+    tls {
+        provider manual
+        cert cert.pem
+        key key.pem
+        ticket_keys {
+            file session_tickets.keys
+        }
     }
 }
 ```
@@ -29,15 +31,17 @@ This configuration validates the key file and enables session tickets. Ferron lo
 To enable automatic key rotation:
 
 ```ferron
-tls {
-    provider manual
-    cert "cert.pem"
-    key "key.pem"
-    ticket_keys {
-        file "session_tickets.keys"
-        auto_rotate
-        rotation_interval "12h"
-        max_keys 3
+example.com {
+    tls {
+        provider manual
+        cert cert.pem
+        key key.pem
+        ticket_keys {
+            file session_tickets.keys
+            auto_rotate
+            rotation_interval "12h"
+            max_keys 3
+        }
     }
 }
 ```

@@ -228,12 +228,14 @@ Ferron automatically renews certificates before expiration. The renewal check ru
 Some CAs (especially enterprise/internal ACME servers) require External Account Binding. Set the key ID and HMAC secret:
 
 ```ferron
-tls {
-    provider acme
-    challenge http-01
-    contact "admin@example.com"
-    eab "my-key-id" "SMq9KpHkR7z..."
-    directory "https://acme.internal.example.com/directory"
+example.com {
+    tls {
+        provider acme
+        challenge http-01
+        contact admin@example.com
+        eab my-key-id "SMq9KpHkR7z..."
+        directory https://acme.internal.example.com/directory
+    }
 }
 ```
 
@@ -292,11 +294,13 @@ example.com {
 To persist certificates you get for use by other tools or backup:
 
 ```ferron
-tls {
-    provider acme
-    challenge http-01
-    contact "admin@example.com"
-    save "/etc/ssl/certs/example.com.pem" "/etc/ssl/private/example.com.pem"
+example.com {
+    tls {
+        provider acme
+        challenge http-01
+        contact admin@example.com
+        save /etc/ssl/certs/example.com.pem /etc/ssl/private/example.com.pem
+    }
 }
 ```
 

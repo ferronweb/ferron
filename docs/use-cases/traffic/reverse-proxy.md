@@ -52,7 +52,7 @@ example.com {
     # The "/" location is used for serving static files with SPA fallback
     location / {
         root /var/www/html
-        rewrite "^/.*" "/" {
+        rewrite r"^/.*" "/" {
             last
             directory false
             file false

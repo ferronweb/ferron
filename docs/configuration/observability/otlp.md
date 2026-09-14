@@ -170,10 +170,10 @@ example.com {
     observability {
         provider otlp
         log_style modern
-        service_name "my-service"
+        service_name my-service
 
         logs https://collector:4318/v1/logs {
-            protocol "http/protobuf"
+            protocol http/protobuf
         }
     }
 }
@@ -189,11 +189,10 @@ Setting `log_style modern` together with a `format` directive is not allowed (th
 example.com {
     observability {
         provider otlp
-        service_name "my-ferron-instance"
+        service_name my-ferron-instance
 
         traces https://otlp-collector:4317/v1/traces
     }
-    root /var/www/html
 }
 ```
 
@@ -203,42 +202,40 @@ example.com {
 example.com {
     observability {
         provider otlp
-        service_name "ferron-production"
+        service_name ferron-production
 
-        logs "https://logs-collector:4318/v1/logs" {
-            protocol "http/protobuf"
+        logs https://logs-collector:4318/v1/logs {
+            protocol http/protobuf
             authorization "Bearer my-secret-token"
         }
 
         metrics https://metrics-collector:4318/v1/metrics {
-            protocol "http/json"
+            protocol http/json
         }
 
-        traces "https://traces-collector:4317/v1/traces"
+        traces https://traces-collector:4317/v1/traces
     }
-    root /var/www/html
 }
 ```
 
 ### Multiple protocols
 
 ```ferron
-# Different protocols for different signals
 example.com {
     observability {
         provider otlp
-        service_name "ferron-mixed"
+        service_name ferron-mixed
 
         logs http://localhost:4318/v1/logs {
-            protocol "http/json"
+            protocol http/json
         }
 
         metrics http://localhost:4318/v1/metrics {
-            protocol "http/protobuf"
+            protocol http/protobuf
         }
 
         traces http://localhost:4317/v1/traces {
-            protocol "grpc"
+            protocol grpc
         }
     }
 }
@@ -247,11 +244,10 @@ example.com {
 ### Disabling TLS verification (development only)
 
 ```ferron
-# Only for development/testing
 example.com {
     observability {
         provider otlp
-        service_name "ferron-dev"
+        service_name ferron-dev
         no_verification
 
         traces https://localhost:4317/v1/traces
@@ -267,14 +263,14 @@ example.com {
 ```ferron
 example.com {
     http {
-        trace_sampling "parentbased_traceidratio" {
+        trace_sampling parentbased_traceidratio {
             ratio 0.1
         }
     }
 
     observability {
         provider otlp
-        service_name "ferron-production"
+        service_name ferron-production
 
         traces https://collector:4317/v1/traces
     }
@@ -286,18 +282,18 @@ example.com {
 ```ferron
 example.com {
     http {
-        trace_sampling "attribute_based" {
-            default_action "sample"
+        trace_sampling attribute_based {
+            default_action sample
             rules {
-                rule "exact" "http.request.method" "POST"
-                rule "prefix" "url.path" "/api/"
+                rule exact http.request.method POST
+                rule prefix url.path /api/
             }
         }
     }
 
     observability {
         provider otlp
-        service_name "ferron-production"
+        service_name ferron-production
 
         traces https://collector:4317/v1/traces
     }
@@ -310,20 +306,18 @@ example.com {
 example.com {
     observability {
         provider otlp
-        service_name "my-service"
+        service_name my-service
 
         traces https://collector:4317/v1/traces
 
         baggage {
-            # Promote tenant ID to traces and logs
-            key "tenant.id" {
-                attribute "tenant.id"
+            key tenant.id {
+                attribute tenant.id
                 signals traces logs
             }
 
-            # Promote user role to all signals with cardinality cap
-            key "user.role" {
-                attribute "ferron.user_role"
+            key user.role {
+                attribute ferron.user_role
                 max_distinct 100
             }
         }

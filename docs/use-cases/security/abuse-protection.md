@@ -166,7 +166,7 @@ example.com {
     # Detect automated scans targeting dynamic content, admin panels,
     # CMS paths, hidden files, and database files
     match AUTOMATED_SCAN {
-        request.uri.path ~ ".*\\.(?:php|asp|jsp|cgi|sql)(?:\\b|$)|^/wp-(?:admin|login)(?:\\b|$)|^/\\.|^/(?:administrator|admin|login|logon)(?:\\b|$)"
+        request.uri.path ~ r".*\.(?:php|asp|jsp|cgi|sql)(?:\b|$)|^/wp-(?:admin|login)(?:\b|$)|^/\.|^/(?:administrator|admin|login|logon)(?:\b|$)"
     }
 
     if AUTOMATED_SCAN {

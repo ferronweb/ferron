@@ -98,10 +98,12 @@ Ferron ignores the incoming `traceparent` and `baggage`. It generates a fresh tr
 **With `trust_request true`:**
 
 ```ferron
-http {
-    trace {
-        generate
-        trust_request
+example.com {
+    http {
+        trace {
+            generate
+            trust_request
+        }
     }
 }
 ```

@@ -71,11 +71,17 @@ Ferron configuration supports these value types:
 Some directives accept boolean values. For convenience, you can write these as flags with no configured arguments, which is equivalent to `true`:
 
 ```ferron
-# This is a bare flag, equivalent to setting the value to true
-directory_listing
+example.com {
+    # This is a bare flag, equivalent to setting the value to true
+    directory_listing
+}
+```
 
-# To disable, use false explicitly
-directory_listing false
+```ferron
+example.com {
+    # To disable, use false explicitly
+    directory_listing false
+}
 ```
 
 This shorthand can be useful for simple on/off toggles where the intent is clear.

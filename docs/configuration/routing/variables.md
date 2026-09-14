@@ -60,7 +60,7 @@ example.com {
 http * {
     set_var request.uri.path r"\.pdf$" is_pdf
     set_var request.uri.path r"\.(jpg|png|gif)$" is_image
-    set_var request.method "^POST$" is_post
+    set_var request.method r"^POST$" is_post
 }
 ```
 
@@ -83,7 +83,7 @@ http * {
 
 ```ferron
 http * {
-    set_var request.header.user_agent "mobile" is_mobile {
+    set_var request.header.user_agent r"mobile" is_mobile {
         case_insensitive
     }
 }
@@ -95,7 +95,7 @@ This matches user agents containing "mobile" regardless of capitalization (for e
 
 ```ferron
 http * {
-    set_var request.header.x_forwarded_for "." has_xff {
+    set_var request.header.x_forwarded_for r"." has_xff {
         negate
     }
 }

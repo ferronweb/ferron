@@ -22,7 +22,7 @@ A common pattern is rewriting unknown routes to `/` so client-side routing works
 ```ferron
 example.com {
     root /var/www/html
-    rewrite "^/.*" "/" {
+    rewrite r"^/.*" "/" {
         last
         directory false
         file false
@@ -39,7 +39,7 @@ Many PHP applications route requests through `index.php`:
 ```ferron
 example.com {
     root /var/www/app/public
-    rewrite "^/(.*)" "/index.php/$1" {
+    rewrite r"^/(.*)" "/index.php/$1" {
         file false
         directory false
         last
@@ -56,10 +56,10 @@ To keep old URLs working after restructuring paths:
 ```ferron
 example.com {
     root /var/www/html
-    rewrite "^/old-path/(.*)" "/new-path/$1" {
+    rewrite r"^/old-path/(.*)" "/new-path/$1" {
         last
     }
-    rewrite "^/blog/([^/]+)/?(?:$|[?#])" "/blog.php?slug=$1" {
+    rewrite r"^/blog/([^/]+)/?(?:$|[?#])" "/blog.php?slug=$1" {
         last
     }
 }
@@ -74,13 +74,13 @@ example.com {
     root /var/www/html
 
     # Rewrite /test?a=b&c=d -> /test.html?a=b&c=d
-    rewrite "^/([^?#]*[^?#/])($|[?#].*)" "/$1.html$2" {
+    rewrite r"^/([^?#]*[^?#/])($|[?#].*)" "/$1.html$2" {
         file false
     }
 
     # Redirect /test/?a=b&c=d -> /test?a=b&c=d
     status 301 {
-        regex "^/([^?#]*[^?#/])/($|[?#].*)"
+        regex r"^/([^?#]*[^?#/])/($|[?#].*)"
         location /$1$2
     }
 }
@@ -94,8 +94,8 @@ Without `last true`, multiple rewrite rules can chain together:
 
 ```ferron
 example.com {
-    rewrite "^/legacy/(.*)" "/modern/$1"
-    rewrite "^/modern/(.*)" "/current/$1"
+    rewrite r"^/legacy/(.*)" "/modern/$1"
+    rewrite r"^/modern/(.*)" "/current/$1"
 }
 ```
 

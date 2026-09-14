@@ -108,7 +108,7 @@ example.com {
         variant stable 90
         variant next 10
     }
-    set_var canary.variant "^next$" is_next {
+    set_var canary.variant r"^next$" is_next {
         value "true"
     }
     #...

@@ -55,7 +55,7 @@ example.com {
     root /srv/www/example
 
     # Front controller fallback. Real files win. All else serves index.html.
-    rewrite "^(.*)$" "/index.html" {
+    rewrite r"^(.*)$" "/index.html" {
         file false
         directory false
         last
@@ -138,7 +138,7 @@ server {
 example.com {
     root /srv/www/example
 
-    rewrite "^/([^/]+)/(.*)$" "/tenant/$1/app/$2" {
+    rewrite r"^/([^/]+)/(.*)$" "/tenant/$1/app/$2" {
         file false
         last
     }
@@ -164,7 +164,7 @@ location / {
 example.com {
     root /srv/www/example
 
-    rewrite "^(.*)$" "/index.html" {
+    rewrite r"^(.*)$" "/index.html" {
         file false
         directory false
         last
@@ -179,7 +179,7 @@ example.com {
     root /var/www/html
     fcgi_php "unix:///run/php/php8.4-fpm.sock"
 
-    rewrite "^(.*)$" "/index.php" {
+    rewrite r"^(.*)$" "/index.php" {
         file false
         directory false
     }
@@ -244,10 +244,10 @@ http {
 http * {
     map request.header.user_agent is_mobile {
         default "0"
-        regex "mobile" "1" {
+        regex r"mobile" "1" {
             case_insensitive
         }
-        regex "android" "1" {
+        regex r"android" "1" {
             case_insensitive
         }
     }
@@ -336,7 +336,7 @@ rewrite ^/old/(.*)$ /new/$1 permanent;
 # Ferron 3
 example.com {
     status 301 {
-        regex "^/old/(.*)"
+        regex r"^/old/(.*)"
         location /new/$1
     }
 }

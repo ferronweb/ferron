@@ -224,13 +224,17 @@ Ferron manages FastCGI backend connections using a connection pool. This reduces
 **Configuration example:**
 
 ```ferron
-fcgi_concurrent_conns 8192
+{
+    fcgi_concurrent_conns 8192
+}
 ```
 
 **Configuration example with no limit:**
 
 ```ferron
-fcgi_concurrent_conns false
+{
+    fcgi_concurrent_conns false
+}
 ```
 
 > [!note]

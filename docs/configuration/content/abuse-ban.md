@@ -151,7 +151,7 @@ example.com {
     }
 
     match WORDPRESS_SCAN {
-        request.uri.path ~ "/wp-(?:admin|login)(?:.php$|/|$)"
+        request.uri.path ~ r"/wp-(?:admin|login)(?:.php$|/|$)"
     }
 
     if WORDPRESS_SCAN {

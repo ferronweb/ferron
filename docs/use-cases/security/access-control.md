@@ -130,7 +130,7 @@ Use named matchers with `if`/`if_not` for more complex access control logic:
 
 ```ferron
 match internal_network {
-    request.header.x_forwarded_for ~ "^10\\.0\\.0\\."
+    request.header.x_forwarded_for ~ r"^10\.0\.0\."
 }
 
 example.com {
@@ -152,7 +152,7 @@ Use conditional matching to block access to dotfiles and sensitive paths:
 
 ```ferron
 match sensitive_path {
-    request.uri.path ~ "^/(?:\\.|config|private|backup)"
+    request.uri.path ~ r"^/(?:\.|config|private|backup)"
 }
 
 example.com {

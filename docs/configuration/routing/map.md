@@ -88,7 +88,7 @@ Requests to `/api/users` set `category` to `api`, requests to `/blog/post` set i
 http * {
     map request.uri.path user_id {
         default ""
-        regex "^/users/([0-9]+)" "$1"
+        regex r"^/users/([0-9]+)" "$1"
     }
 }
 ```
@@ -101,10 +101,10 @@ A request to `/users/42` sets `user_id` to `42`. Capture groups from the regex a
 http * {
     map request.header.user_agent is_mobile {
         default "0"
-        regex "mobile" "1" {
+        regex r"mobile" "1" {
             case_insensitive
         }
-        regex "android" "1" {
+        regex r"android" "1" {
             case_insensitive
         }
     }

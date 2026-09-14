@@ -12,12 +12,14 @@ The module supports the [StatsD protocol](https://github.com/statsd/statsd) and 
 You configure StatsD metrics in `observability` blocks with `provider statsd`:
 
 ```ferron
-observability {
-    provider statsd
-    host "127.0.0.1"
-    port 8125
-    prefix "myapp"
-    datadog true
+example.com {
+    observability {
+        provider statsd
+        host 127.0.0.1
+        port 8125
+        prefix myapp
+        datadog true
+    }
 }
 ```
 
@@ -77,14 +79,16 @@ Without `datadog`, the module does not add tags and sends all histogram metrics 
 The `baggage` sub-directive promotes specific W3C Baggage keys into DogStatsD tags. This is useful for adding request-scoped context (such as tenant IDs or user roles) to your metrics without custom instrumentation. Promoted keys are only emitted when `datadog` is enabled, because vanilla StatsD has no tag syntax.
 
 ```ferron
-observability {
-    provider statsd
-    datadog true
+example.com {
+    observability {
+        provider statsd
+        datadog true
 
-    baggage {
-        key "tenant.id" {
-            attribute "tenant.id"
-            max_distinct 100
+        baggage {
+            key tenant.id {
+                attribute tenant.id
+                max_distinct 100
+            }
         }
     }
 }
@@ -104,11 +108,13 @@ Each `key` entry configures one baggage key to promote:
 ## Example
 
 ```ferron
-observability {
-    provider statsd
-    host "statsd.internal.example.com"
-    port 8125
-    prefix "web"
+example.com {
+    observability {
+        provider statsd
+        host statsd.internal.example.com
+        port 8125
+        prefix web
+    }
 }
 ```
 

@@ -14,12 +14,12 @@ Declare a named matcher with `match <name> { ... }`. Inside a host block, refere
 
 ```ferron
 match curl_client {
-    request.header.user_agent ~ "curl"
+    request.header.user_agent ~ r"curl"
 }
 
 example.com {
     if curl_client {
-        # Configuration for curl clients
+        root /var/www/curl
     }
 }
 ```

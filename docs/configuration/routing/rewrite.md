@@ -31,7 +31,7 @@ This page documents the `rewrite` directive for transforming request URLs using 
 
 ```ferron
 example.com {
-    rewrite "^/old-path/(.*)" "/new-path/$1"
+    rewrite r"^/old-path/(.*)" "/new-path/$1"
 }
 ```
 
@@ -39,7 +39,7 @@ example.com {
 
 ```ferron
 example.com {
-    rewrite "^/old-path/(.*)" "/new-path/$1"
+    rewrite r"^/old-path/(.*)" "/new-path/$1"
 }
 ```
 
@@ -52,10 +52,10 @@ Ferron internally rewrites all `/old-path/anything` requests to `/new-path/anyth
 
 ```ferron
 example.com {
-    rewrite "^/api/v1/(.*)" "/api/v2/$1" {
+    rewrite r"^/api/v1/(.*)" "/api/v2/$1" {
         last
     }
-    rewrite "^/api/v2/(.*)" "/api/v3/$1"
+    rewrite r"^/api/v2/(.*)" "/api/v3/$1"
 }
 ```
 
@@ -65,8 +65,8 @@ Ferron rewrites `/api/v1/users` requests to `/api/v2/users` and then stops. The 
 
 ```ferron
 example.com {
-    rewrite "^/legacy/(.*)" "/modern/$1"
-    rewrite "^/modern/(.*)" "/current/$1"
+    rewrite r"^/legacy/(.*)" "/modern/$1"
+    rewrite r"^/modern/(.*)" "/current/$1"
 }
 ```
 
@@ -80,7 +80,7 @@ Ferron first rewrites a `/legacy/foo` request to `/modern/foo`. Then the second 
 example.com {
     root /var/www
 
-    rewrite "^/static/(.*)" "/assets/$1" {
+    rewrite r"^/static/(.*)" "/assets/$1" {
         file
         directory false
     }
