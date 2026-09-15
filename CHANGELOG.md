@@ -18,6 +18,10 @@
 
 ### Fixed
 
+#### HTTP server core
+
+- **Jammed unquoted IP address fix**: previously, unquoted IP addresses in `ferron.conf` files could be jammed together leading to unexpected behavior.
+
 #### Admin API
 
 - **Admin API listen fail fix**: previously, when configuration is reloaded, the admin API listener would sometimes fail to bind to the configured address due to a race condition.
