@@ -16,6 +16,16 @@
 
 - **`append_uri` subdirective**: when enabled, the original URI path is appended to the redirect URL. This can be used to restore the previous default behavior before this version.
 
+### Fixed
+
+#### Admin API
+
+- **Admin API listen fail fix**: previously, when configuration is reloaded, the admin API listener would sometimes fail to bind to the configured address due to a race condition.
+
+#### Observability
+
+- **Prometheus reload listen fail fix**: previously, when configuration is reloaded, the Prometheus listener would sometimes fail to bind to the configured address due to a race condition.
+
 ## Ferron 3.0.0-rc.6
 
 **Released in September 13, 2026**

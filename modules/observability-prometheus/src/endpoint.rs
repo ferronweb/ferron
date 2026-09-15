@@ -10,6 +10,7 @@ use prometheus_client::metrics::histogram::Histogram;
 use subtle::ConstantTimeEq;
 use tokio_util::sync::CancellationToken;
 
+use crate::mutex::ListenerMutexGuard;
 use crate::PrometheusBackendConfig;
 
 type EndpointState = (
@@ -64,6 +65,7 @@ pub async fn endpoint_listener_fn(
     scrape_duration: Histogram,
     scrape_total: Counter,
     scrape_errors: Counter,
+    listener_mutex: ListenerMutexGuard,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let auth_token = config.auth_token.as_deref().map(Arc::from);
     let endpoint_state = (
@@ -107,6 +109,8 @@ pub async fn endpoint_listener_fn(
         }
         _ = server => {}
     }
+
+    drop(listener_mutex);
 
     Ok(())
 }

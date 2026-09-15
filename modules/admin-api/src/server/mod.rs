@@ -3,6 +3,7 @@
 //! Spawns a standalone axum HTTP server on a secondary Tokio runtime
 //! for administrative endpoints.
 
+mod mutex;
 mod router;
 
 use std::sync::Arc;
@@ -104,6 +105,7 @@ impl Module for AdminApiModule {
 
         // Spawn on secondary runtime (control plane isolation)
         runtime.spawn_secondary_task(async move {
+            let listener_mutex = mutex::ListenerMutexGuard::acquire().await;
             let state = AdminState {
                 full_config,
                 events,
@@ -168,6 +170,8 @@ impl Module for AdminApiModule {
                     );
                 }
             }
+
+            drop(listener_mutex);
         });
 
         Ok(())

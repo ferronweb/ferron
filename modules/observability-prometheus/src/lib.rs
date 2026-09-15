@@ -1,4 +1,5 @@
 mod endpoint;
+mod mutex;
 mod validator;
 
 use std::collections::{BTreeMap, HashMap};
@@ -31,6 +32,7 @@ use prometheus_client::metrics::histogram::{self, Histogram, NativeHistogramConf
 use tokio_util::sync::CancellationToken;
 
 use crate::endpoint::endpoint_listener_fn;
+use crate::mutex::ListenerMutexGuard;
 
 const DEFAULT_BUCKETS: [f64; 11] = [
     0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
@@ -211,6 +213,7 @@ impl Module for PrometheusObservabilityModule {
         runtime.spawn_secondary_task(async move {
             let mut providers: HashMap<String, PrometheusProviderCache> = HashMap::new();
             let reload_token = RELOAD_TOKEN.load_full();
+            let listener_mutex = ListenerMutexGuard::acquire().await;
 
             while let Some(msg) = tokio::select! {
                 result = async {
@@ -239,6 +242,7 @@ impl Module for PrometheusObservabilityModule {
                         &config,
                         cancel_token.clone(),
                         msg.control_plane_metadata.clone(),
+                        &listener_mutex,
                     )
                 });
 
@@ -294,6 +298,7 @@ fn init_provider(
     config: &PrometheusBackendConfig,
     reload_token: CancellationToken,
     control_plane_metadata: Option<Arc<BTreeMap<String, String>>>,
+    listener_mutex: &ListenerMutexGuard,
 ) -> PrometheusProviderCache {
     let config_clone = config.clone();
     let mut registry = prometheus_client::registry::Registry::default();
@@ -325,6 +330,7 @@ fn init_provider(
     let registry = Arc::new(tokio::sync::RwLock::new(registry));
 
     let registry2 = registry.clone();
+    let listener_mutex = listener_mutex.clone();
     tokio::spawn(async move {
         let socket_addr = config_clone.listen;
         if let Err(err) = endpoint_listener_fn(
@@ -334,6 +340,7 @@ fn init_provider(
             scrape_duration,
             scrape_total,
             scrape_errors,
+            listener_mutex,
         )
         .await
         {
