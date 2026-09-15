@@ -13,7 +13,7 @@ This page documents directives that affect HTTP request matching and configurati
 ### Path matching
 
 - `location <path: string>`
-  - This directive specifies a path prefix for request matching. `/api` matches `/api` and `/api/...`. Longer matches are more specific. If this block matches, Ferron automatically rewrites the URL to remove the base URL. Default: not configured
+  - This directive specifies a path prefix for request matching. `/api` matches `/api` and `/api/...`. Longer matches are more specific. If this block matches, Ferron automatically rewrites the URL to strip away the the base URL (for example, `/api/users` becomes `/users` for `/api` location). Default: not configured
 
 **Configuration example:**
 
