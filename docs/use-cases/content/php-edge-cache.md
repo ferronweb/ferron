@@ -71,6 +71,15 @@ SetEnv LSWS_EDITION Openlitespeed
 SetEnv X-LSCACHE on
 ```
 
+## Web hosting control panel support
+
+Ferron 3 + Apache setups can be configured to work with web hosting control panels that support Apache HTTP Server, with some additional configuration to make them work with Ferron 3 (similarly to how it would be done with an additional caching proxy, such as Varnish).
+
+The additional configuration would be responsible for some aspects like TLS termination. The `.htaccess` setup (used by Apache) does not have to be modified in most cases.
+
+> [!tip]
+> Ferron provides a demo for integrating HestiaCP (an open source web hosting control panel) with a Ferron 3 + Apache setup (replacing NGINX + Apache in the stack). To learn more, see [the HestiaCP demo repository on GitHub](https://github.com/ferronweb/hestiacp-demo).
+
 ## Cache exclusion for admin paths
 
 You must never cache admin areas, login pages, and checkout flows. Use conditional blocks to disable caching for specific paths:
