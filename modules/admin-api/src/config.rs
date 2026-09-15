@@ -40,7 +40,8 @@ impl AdminConfig {
     pub fn from_global(global_config: &ServerConfigurationBlock) -> Option<Self> {
         let admin_entries = global_config.directives.get("admin")?;
         let admin_entry = admin_entries.first()?;
-        let admin_block = admin_entry.children.as_ref()?;
+        let empty_block = Default::default();
+        let admin_block = admin_entry.children.as_ref().unwrap_or(&empty_block);
 
         let listen = parse_listen(admin_block)
             .unwrap_or_else(|| "127.0.0.1:8081".parse().expect("default listen address"));
