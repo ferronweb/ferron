@@ -118,7 +118,7 @@ impl ForwardedAuthenticationStage {
             .query()
             .map(|q| format!("?{}", q))
             .unwrap_or_default();
-        let auth_uri = if config.no_append_uri {
+        let auth_uri = if !config.append_uri {
             config.backend_url.clone()
         } else {
             format!("{}{}{}", config.backend_url, path, query)

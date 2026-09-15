@@ -178,9 +178,9 @@ impl ferron_core::loader::ModuleLoader for ForwardedAuthenticationModuleLoader {
             )
             .register(
                 Directive {
-                    name: "no_append_uri",
-                    usage: "no_append_uri [bool]",
-                    description: "This directive disables appending the URI to the backend URL.",
+                    name: "append_uri",
+                    usage: "append_uri [bool]",
+                    description: "This directive enables appending the URI to the backend URL.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,
                     subblock_link: None,

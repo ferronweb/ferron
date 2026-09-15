@@ -25,24 +25,23 @@ example.com {
 }
 ```
 
-| Nested directive   | Arguments     | Description                                                                                                                   | Default                 |
-| ------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `url`              | `<string>`    | Backend server URL (http:// or https://). Required if you do not provide it as an argument.                                   | none                    |
-| `unix`             | `<path>`      | Connect to the backend via Unix domain socket instead of TCP.                                                                 | TCP                     |
-| `limit`            | `<number>`    | Maximum concurrent connections to this backend.                                                                               | No limit (per upstream) |
-| `idle_timeout`     | `<duration>`  | Keep-alive idle timeout for connections. Connections idle longer than this duration expire from the pool.                     | `60s`                   |
-| `no_verification`  | `[bool]`      | Skip TLS certificate verification for HTTPS backends.                                                                         | `false`                 |
-| `request_header`   | see below     | Add, replace, or remove a header on the request sent to the auth backend. Repeat for multiple headers.                        | none                    |
-| `copy`             | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers.                               | none                    |
-| `last`             | `[bool]`      | Whether this is the last backend in the chain (no further verification).                                                      | `false`                 |
-| `intercept_errors` | `[bool]`      | Whether to intercept upstream error responses and replace them with built-in error pages.                                     | `false`                 |
-| `no_append_uri`    | `[bool]`      | Whether to disable appending the URI to the backend URL. This option is useful for backends that strictly need one fixed URL. | `false`                 |
+| Nested directive   | Arguments     | Description                                                                                               | Default                 |
+| ------------------ | ------------- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `url`              | `<string>`    | Backend server URL (http:// or https://). Required if you do not provide it as an argument.               | none                    |
+| `unix`             | `<path>`      | Connect to the backend via Unix domain socket instead of TCP.                                             | TCP                     |
+| `limit`            | `<number>`    | Maximum concurrent connections to this backend.                                                           | No limit (per upstream) |
+| `idle_timeout`     | `<duration>`  | Keep-alive idle timeout for connections. Connections idle longer than this duration expire from the pool. | `60s`                   |
+| `no_verification`  | `[bool]`      | Skip TLS certificate verification for HTTPS backends.                                                     | `false`                 |
+| `request_header`   | see below     | Add, replace, or remove a header on the request sent to the auth backend. Repeat for multiple headers.    | none                    |
+| `copy`             | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers.           | none                    |
+| `last`             | `[bool]`      | Whether this is the last backend in the chain (no further verification).                                  | `false`                 |
+| `intercept_errors` | `[bool]`      | Whether to intercept upstream error responses and replace them with built-in error pages.                 | `false`                 |
+| `append_uri`       | `[bool]`      | Whether to enable appending the URI to the backend URL.                                                   | `false`                 |
 
 > [!note]
 >
 > - When you enable `client_ip_from_header`, Ferron appends `X-Forwarded-For` to the existing chain rather than replacing it. Ferron removes Upgrade and Connection headers from auth requests.
 > - The forwarded authentication module supports chaining multiple backends together. To terminate the chain, set `last` to `true`.
-> - By default, the request URI is appended to the backend URL. Set `no_append_uri` to `true` to disable this behavior.
 
 #### Backend URL
 

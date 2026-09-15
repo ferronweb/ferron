@@ -4,11 +4,17 @@
 
 **Not yet released**
 
+### Breaking changes
+
+#### Forwarded authentication
+
+- **Forwarded auth URI behavior change**: Ferron no longer appends the original URI path to the redirect URL by default, instead relying on `X-Forwarded-Uri` header. Use the `append_uri` subdirective to restore the previous behavior.
+
 ### Added
 
 #### Forwarded authentication
 
-- **`no_append_uri` subdirective**: when enabled, the original URI path is not appended to the redirect URL. This is useful for some authentication backends that do not support URI path appending.
+- **`append_uri` subdirective**: when enabled, the original URI path is appended to the redirect URL. This can be used to restore the previous default behavior before this version.
 
 ## Ferron 3.0.0-rc.6
 
