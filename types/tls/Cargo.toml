@@ -15,7 +15,7 @@ zincio = { version = "0.2.22", default-features = false }
 tokio-rustls = { version = "0.26.4", default-features = false }
 rasn = { version = "0.28.13", optional = true }
 rasn-pkix = { version = "0.28.13", optional = true }
-num-bigint = { version = "0.4", optional = true }
+num-bigint = { version = "0.5", optional = true }
 ferron-observability = { path = "../../types/observability", optional = true }
 ferron-core = { path = "../../core" }
 tokio = { version = "1.53.1", features = ["io-util"] }
