@@ -29,6 +29,9 @@ pub struct ForwardedAuthConfig {
     pub headers_to_replace: Vec<(HeaderName, String)>,
     /// Headers to remove from the auth request (`request_header -Name`)
     pub headers_to_remove: Vec<HeaderName>,
+    /// Whether to not append the original URI to the auth request URL
+    /// (instead relying on X-Forwarded-URI header)
+    pub no_append_uri: bool,
 }
 
 impl Default for ForwardedAuthConfig {
@@ -44,6 +47,7 @@ impl Default for ForwardedAuthConfig {
             headers_to_add: Vec::new(),
             headers_to_replace: Vec::new(),
             headers_to_remove: Vec::new(),
+            no_append_uri: false,
         }
     }
 }
@@ -210,6 +214,10 @@ pub fn parse_forwarded_auth_from_context(
 
             if children.get_flag("intercept_errors") {
                 config.intercept_errors = true;
+            }
+
+            if children.get_flag("no_append_uri") {
+                config.no_append_uri = true;
             }
         }
 

@@ -175,6 +175,17 @@ impl ferron_core::loader::ModuleLoader for ForwardedAuthenticationModuleLoader {
                     subblock_link: None,
                 },
                 DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
+                    name: "no_append_uri",
+                    usage: "no_append_uri [bool]",
+                    description: "This directive disables appending the URI to the backend URL.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
             );
     }
 

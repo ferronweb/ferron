@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Added
+
+#### Forwarded authentication
+
+- **`no_append_uri` subdirective**: when enabled, the original URI path is not appended to the redirect URL. This is useful for some authentication backends that do not support URI path appending.
+
 ## Ferron 3.0.0-rc.6
 
 **Released in September 13, 2026**
