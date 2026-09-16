@@ -27,6 +27,7 @@
 
 - **Jammed unquoted IP address fix**: previously, unquoted IP addresses in `ferron.conf` files could be jammed together leading to unexpected behavior.
 - **HTTP/2 flow control fixes**: fixed a flow-control bug that caused stream resets when downloading large response bodies with `hyper` (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-048)).
+- **HTTP/2 and HTTP/3 hardening**: improved robustness of HTTP/2 and HTTP/3 server implementation (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0410)).
 
 #### Admin API
 
