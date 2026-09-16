@@ -496,9 +496,33 @@ pub(crate) async fn handle_http2_connection<S>(
         peer_identity,
         tls_params,
     );
+    let stream_error_observability = handler_state.connection_observability.clone();
+    let stream_error_addr = conn_addr.clone();
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
+            .stream_error_callback(move |error: std::io::Error| {
+                let error_type = match stream_error_addr {
+                    ConnectionAddr::Tcp { .. } => "tcp_stream_error",
+                    ConnectionAddr::Unix { .. } => "unix_stream_error",
+                };
+                let error_msg = match &stream_error_addr {
+                    ConnectionAddr::Tcp { .. } => {
+                        format!("HTTP/2 stream error: {error}")
+                    }
+                    ConnectionAddr::Unix { unix_socket_path } => {
+                        format!(
+                            "HTTP/2 stream error on unix:{}: {error}",
+                            unix_socket_path.display()
+                        )
+                    }
+                };
+                emit_error(
+                    &stream_error_observability,
+                    error_msg,
+                    connection_error_attrs(&stream_error_addr, &error, error_type),
+                );
+            })
             .handle_with_error_fn(
                 build_request_handler(handler_state.clone()),
                 build_bad_request_handler(handler_state.clone()),

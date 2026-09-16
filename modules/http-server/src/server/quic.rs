@@ -490,12 +490,43 @@ async fn handle_http3_connection(
         host_control_plane_metadata,
         host_control_plane_span_links,
     });
+    let stream_error_observability = handler_state.connection_observability.clone();
+    let stream_error_remote = handler_state.remote_address;
+    let stream_error_local = handler_state.local_address;
     let mut connection_future = Box::pin(
         Http3::new(
             zincio_http::quinn::Connection::new(conn),
             build_http3_options(&connection_options),
         )
         .graceful_shutdown_token(graceful_shutdown.clone())
+        .stream_error_callback(move |error: std::io::Error| {
+            let (client_ip, client_port) = match stream_error_remote {
+                Some(addr) => (addr.ip().to_canonical().to_string(), i64::from(addr.port())),
+                None => ("unknown".to_string(), 0),
+            };
+            let (server_ip, server_port) = match stream_error_local {
+                Some(addr) => (addr.ip().to_canonical().to_string(), i64::from(addr.port())),
+                None => ("unknown".to_string(), 0),
+            };
+            emit_error(
+                &stream_error_observability,
+                format!("HTTP/3 stream error: {error}"),
+                vec![
+                    (
+                        "error.type",
+                        LogAttributeValue::String("quic_stream_error".into()),
+                    ),
+                    (
+                        "error.message",
+                        LogAttributeValue::String(error.to_string()),
+                    ),
+                    ("client.address", LogAttributeValue::String(client_ip)),
+                    ("client.port", LogAttributeValue::I64(client_port)),
+                    ("server.address", LogAttributeValue::String(server_ip)),
+                    ("server.port", LogAttributeValue::I64(server_port)),
+                ],
+            );
+        })
         .handle(build_request_handler(handler_state.clone())),
     );
     let connection_result = tokio::select! {

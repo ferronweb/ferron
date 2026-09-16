@@ -237,7 +237,7 @@ Structured error logs include contextual attributes to aid troubleshooting:
 
 | Attribute        | Description                                                                                              |
 | ---------------- | -------------------------------------------------------------------------------------------------------- |
-| `error.type`     | Error category (for example `bad_request`, `timeout`, `tcp_connection_error`, `tcp_tls_handshake_error`) |
+| `error.type`     | Error category (for example `bad_request`, `timeout`, `tcp_connection_error`, `tcp_tls_handshake_error`, `tcp_stream_error`, `quic_stream_error`) |
 | `error.message`  | The human-readable error description                                                                     |
 | `client.address` | The client IP address, when available                                                                    |
 | `client.port`    | The client port, when available                                                                          |
@@ -249,6 +249,8 @@ Ferron includes the `client.address` and `server.address` attributes in:
 - **Bad request (400) and timeout (408) logs**: Ferron emits these logs when a request fails before handler execution.
 - **TLS handshake failure logs**: emitted when a TLS connection fails to establish or negotiate a protocol.
 - **TCP connection error logs**: emitted when an HTTP/1.x or HTTP/2 connection encounters a transport-level error.
+- **HTTP/2 stream error logs**: emitted when an HTTP/2 stream fails (for example a malformed request, a flow-control violation, or a reset), with `error.type` `tcp_stream_error` or `unix_stream_error`.
+- **HTTP/3 stream error logs**: emitted when an HTTP/3 stream fails (for example a malformed request, a reset by the peer, or a response write failure), with `error.type` `quic_stream_error`.
 - **Request validation error logs**: emitted for invalid Host headers, malformed URLs, CONNECT path errors, and URL sanitization failures.
 
 > [!note]
