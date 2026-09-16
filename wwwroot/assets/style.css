@@ -4,6 +4,7 @@
     --muted: #5b6268;
     --accent: #3e8e86;
     --border: #d8d9d5;
+    --code: #e3e4e0;
     --surface: #e4e9e6;
     --dot: #bcc3bf;
 }
@@ -39,7 +40,28 @@ body {
 
 pre,
 code {
-    font-family: "Monaspace Neon", monospace;
+    font-family: "Iron Mono", monospace;
+}
+
+code {
+    color: var(--fg);
+    background-color: var(--code);
+    border: 1px solid var(--border);
+    padding: .075em .3em;
+    font-size: .875em;
+}
+
+pre code {
+    background-color: none;
+    border: none;
+    padding: none;
+}
+
+pre {
+    color: var(--fg);
+    background-color: var(--code);
+    border: 1px solid var(--border);
+    padding: .075em .3em;
 }
 
 header {
@@ -135,6 +157,7 @@ main {
         --accent: #46968e;
         --border: #2c3337;
         --surface: #272d30;
+        --code: #1c2024;
         --dot: #2c3337;
     }
 
