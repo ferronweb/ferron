@@ -187,6 +187,7 @@ pub fn parse_litespeed_purge(headers: &HeaderMap) -> Vec<PurgeOperation> {
         for segment in text.split(';') {
             let mut scope = CacheScope::Public;
             let mut selectors = Vec::new();
+            let mut stale_selectors = Vec::new();
             let mut stale = false;
 
             for token in segment.split(',') {
@@ -201,12 +202,20 @@ pub fn parse_litespeed_purge(headers: &HeaderMap) -> Vec<PurgeOperation> {
                     "stale" => stale = true,
                     "*" => selectors.push(PurgeSelector::All),
                     _ => {
-                        if let Some(tag) = token.strip_prefix("tag=") {
-                            selectors.push(PurgeSelector::Tag(tag.trim().to_string()));
+                        let (token, stale_postfix) = token
+                            .strip_suffix("~s")
+                            .map_or((token, false), |t| (t, true));
+                        let selector = if let Some(tag) = token.strip_prefix("tag=") {
+                            PurgeSelector::Tag(tag.trim().to_string())
                         } else if let Some(url) = token.strip_prefix("url=") {
-                            selectors.push(PurgeSelector::Url(url.trim().to_string()));
+                            PurgeSelector::Url(url.trim().to_string())
                         } else {
-                            selectors.push(PurgeSelector::Tag(token.to_string()));
+                            PurgeSelector::Tag(token.to_string())
+                        };
+                        if stale_postfix {
+                            stale_selectors.push(selector);
+                        } else {
+                            selectors.push(selector);
                         }
                     }
                 }
@@ -217,6 +226,13 @@ pub fn parse_litespeed_purge(headers: &HeaderMap) -> Vec<PurgeOperation> {
                     scope,
                     selectors,
                     stale,
+                });
+            }
+            if !stale_selectors.is_empty() {
+                operations.push(PurgeOperation {
+                    scope,
+                    selectors: stale_selectors,
+                    stale: true,
                 });
             }
         }

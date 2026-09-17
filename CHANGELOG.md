@@ -21,6 +21,10 @@
 - **HTTP/2 and HTTP/3 stream error logging**: stream failures (for example malformed requests, flow-control violations, or resets) are now logged to the configured observability sinks with client and server addresses, similarly to connection errors. HTTP/2 stream errors use `error.type` `tcp_stream_error` or `unix_stream_error`, and HTTP/3 stream errors use `quic_stream_error`.
 - **Clearer HTTP/2 and HTTP/3 connection errors**: connection-level protocol violations are now returned as errors (instead of closing silently), so they are logged as connection errors with a descriptive message.
 
+#### HTTP cache
+
+- **LSCache staleness suffix support**: `~s` staleness suffix is now parsed in LSCache compatibility, allowing stale cache entries to be purged by single tag or URL.
+
 ### Fixed
 
 #### HTTP server core
