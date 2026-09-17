@@ -600,11 +600,19 @@ impl BasicHttpModule {
 
                     let observability_block_arc = Arc::new(observability_block);
 
-                    // Extract control_plane metadata and span links from the host block
+                    // Extract control_plane metadata and span links from the host block,
+                    // falling back to the global block when the host defines none.
+                    // This mirrors `ControlPlaneConfig::from_layered` whole-block
+                    // precedence used for post-resolution events.
                     let cp_config =
                         ferron_observability::control_plane::ControlPlaneConfig::from_block(
                             &host_config.1,
-                        );
+                        )
+                        .or_else(|| {
+                            ferron_observability::control_plane::ControlPlaneConfig::from_block(
+                                &global_config,
+                            )
+                        });
                     let cp_metadata = cp_config.as_ref().map(|c| c.metadata.clone());
                     let cp_span_links = cp_config.as_ref().map(|c| c.span_links.clone());
 

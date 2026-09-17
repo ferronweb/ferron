@@ -215,6 +215,24 @@ def _decode_logs(data):
                     )
 
 
+def _decode_link(link):
+    return {
+        "trace_id": link.trace_id.hex(),
+        "span_id": link.span_id.hex(),
+        "trace_state": link.trace_state,
+        "flags": link.flags,
+        "attributes": {kv.key: _attribute(kv.value) for kv in link.attributes},
+    }
+
+
+def _decode_event(event):
+    return {
+        "name": event.name,
+        "time_unix_nano": event.time_unix_nano,
+        "attributes": {kv.key: _attribute(kv.value) for kv in event.attributes},
+    }
+
+
 def _decode_spans(data):
     try:
         req = trace_service_pb2.ExportTraceServiceRequest()
@@ -240,8 +258,37 @@ def _decode_spans(data):
                             "trace_id": span.trace_id.hex(),
                             "span_id": span.span_id.hex(),
                             "parent_span_id": span.parent_span_id.hex(),
+                            "links": [_decode_link(link) for link in span.links],
+                            "events": [_decode_event(event) for event in span.events],
                         }
                     )
+
+
+def _json_attribute_value(value):
+    if not isinstance(value, dict):
+        return None
+    for key in ("stringValue", "intValue", "boolValue", "doubleValue"):
+        if key in value:
+            return value[key]
+    if "arrayValue" in value:
+        return [
+            _json_attribute_value(v)
+            for v in value.get("arrayValue", {}).get("values", [])
+        ]
+    if "kvlistValue" in value:
+        return {
+            kv.get("key"): _json_attribute_value(kv.get("value", {}))
+            for kv in value.get("kvlistValue", {}).get("values", [])
+        }
+    return None
+
+
+def _json_attr_map(attributes):
+    return {
+        attr.get("key"): _json_attribute_value(attr.get("value", {}))
+        for attr in attributes or []
+        if attr.get("key") is not None
+    }
 
 
 def _decode_json_spans(payload):
@@ -255,11 +302,29 @@ def _decode_json_spans(payload):
                     _decoded_spans.append(
                         {
                             "name": span.get("name"),
-                            "attributes": {},
+                            "attributes": _json_attr_map(span.get("attributes", [])),
                             "resource": resource_attrs,
                             "trace_id": span.get("traceId", "").lower(),
                             "span_id": span.get("spanId", "").lower(),
                             "parent_span_id": span.get("parentSpanId", "").lower(),
+                            "links": [
+                                {
+                                    "trace_id": link.get("traceId", "").lower(),
+                                    "span_id": link.get("spanId", "").lower(),
+                                    "trace_state": link.get("traceState", ""),
+                                    "flags": link.get("flags", 0),
+                                    "attributes": _json_attr_map(link.get("attributes", [])),
+                                }
+                                for link in span.get("links", [])
+                            ],
+                            "events": [
+                                {
+                                    "name": event.get("name"),
+                                    "time_unix_nano": event.get("timeUnixNano", "0"),
+                                    "attributes": _json_attr_map(event.get("attributes", [])),
+                                }
+                                for event in span.get("events", [])
+                            ],
                             "json": True,
                         }
                     )

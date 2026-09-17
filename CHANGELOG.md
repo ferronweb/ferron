@@ -36,6 +36,7 @@
 #### Observability
 
 - **Prometheus reload listen fail fix**: previously, when configuration is reloaded, the Prometheus listener would sometimes fail to bind to the configured address due to a race condition.
+- **Global span links fix**: the server now fallback back into global span links (control plane metadata) properly.
 
 ## Ferron 3.0.0-rc.6
 

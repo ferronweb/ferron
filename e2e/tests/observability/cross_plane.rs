@@ -365,8 +365,8 @@ async fn test_control_plane_span_links_in_traces() {
         .await
         .unwrap();
 
-    // Just verify the trace was produced (span link verification requires the mock
-    // collector to expose link data, which is not yet implemented in the mock)
+    // Verify the trace was produced and the configured span link was exported.
+    // The mock collector exposes link data via `links` on each decoded span.
     let received_url = format!("http://localhost:{}/received", otlp_port);
     let mut found = false;
     for _ in 0..60 {
@@ -374,9 +374,34 @@ async fn test_control_plane_span_links_in_traces() {
             && resp.status().is_success()
             && let Ok(json) = resp.json::<serde_json::Value>().await
             && let Some(spans) = json.get("spans").and_then(|v| v.as_array())
-            && !spans.is_empty()
         {
-            found = true;
+            for span in spans {
+                let links = span.get("links").and_then(|v| v.as_array());
+                let Some(links) = links else { continue };
+                for link in links {
+                    let trace_id = link
+                        .get("trace_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_lowercase();
+                    let span_id = link
+                        .get("span_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_lowercase();
+                    if trace_id == "0af7651916cd43dd8448eb211c80319c"
+                        && span_id == "00f067aa0ba902b7"
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if found {
+                    break;
+                }
+            }
+        }
+        if found {
             break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -384,7 +409,7 @@ async fn test_control_plane_span_links_in_traces() {
 
     assert!(
         found,
-        "OTLP collector did not receive spans with span links config"
+        "OTLP collector did not receive spans with the configured span link"
     );
 
     ferron.stop().await.unwrap();

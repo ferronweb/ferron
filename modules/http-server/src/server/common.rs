@@ -170,6 +170,10 @@ pub fn resolve_root_observability_sink(
 }
 
 /// Resolve host-level control plane metadata from the observability resolver.
+///
+/// Falls back to global (root) entries when the most specific entry has no
+/// metadata, so global `control_plane { metadata { ... } }` still applies to
+/// hosts that define their own `observability` block.
 #[inline]
 pub fn resolve_host_control_plane_metadata(
     observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
@@ -180,12 +184,25 @@ pub fn resolve_host_control_plane_metadata(
     let entries = observability_resolver
         .lookup_ip_and_hostname(ip?, normalized_hostname.as_deref().unwrap_or(""))?;
     // first entry = most specific
-    entries
+    if let Some(metadata) = entries
         .first()
         .and_then(|(_, _, metadata, _)| metadata.clone())
+    {
+        return Some(metadata);
+    }
+    if let Some(root_entries) = observability_resolver.root_data() {
+        if let Some((_, _, metadata, _)) = root_entries.first() {
+            return metadata.clone();
+        }
+    }
+    None
 }
 
 /// Resolve host-level control plane span links from the observability resolver.
+///
+/// Falls back to global (root) entries when the most specific entry has no
+/// span links, so global `control_plane { span_links { ... } }` still applies
+/// to hosts that define their own `observability` block.
 #[inline]
 pub fn resolve_host_control_plane_span_links(
     observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
@@ -196,9 +213,18 @@ pub fn resolve_host_control_plane_span_links(
     let entries = observability_resolver
         .lookup_ip_and_hostname(ip?, normalized_hostname.as_deref().unwrap_or(""))?;
     // first entry = most specific
-    entries
+    if let Some(span_links) = entries
         .first()
         .and_then(|(_, _, _, span_links)| span_links.clone())
+    {
+        return Some(span_links);
+    }
+    if let Some(root_entries) = observability_resolver.root_data() {
+        if let Some((_, _, _, span_links)) = root_entries.first() {
+            return span_links.clone();
+        }
+    }
+    None
 }
 
 #[inline]
