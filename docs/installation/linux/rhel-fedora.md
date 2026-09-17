@@ -1,15 +1,15 @@
 ---
 title: Installation via package managers (RHEL/Fedora)
-description: "Install Ferron 3 on RHEL/Fedora using official RPM packages: add the yum repo, install the ferron3 package, and manage the systemd service."
+description: "Install Ferron 3 on RHEL/Fedora/openSUSE using official RPM packages: add the yum repo, install the ferron3 package, and manage the systemd service."
 ---
 
-Ferron 3 has official packages available for Red Hat Enterprise Linux (RHEL), Fedora, and derivatives. Below are the instructions on how to install Ferron 3 on RHEL or Fedora via a package manager.
+Ferron 3 has official packages available for Red Hat Enterprise Linux (RHEL), Fedora, openSUSE and derivatives. Below are the instructions on how to install Ferron 3 on RHEL or Fedora via a package manager.
 
 ## Installation steps
 
 ### 1. Add Ferron's repository
 
-To add Ferron's repository, run the following commands:
+To add Ferron's repository, run the following commands (for RHEL/Fedora):
 
 ```bash
 # Install packages required for adding a new repository
@@ -19,23 +19,36 @@ sudo yum install yum-utils
 sudo yum-config-manager --add-repo https://rpm.ferron.sh/ferron.repo
 ```
 
+For openSUSE, use the following commands instead:
+
+```bash
+sudo zypper addrepo https://rpm.ferron.sh/ferron.repo
+```
+
 ### 2. Install Ferron
 
-To install Ferron 3, run the following command:
+To install Ferron 3, run the following command (for RHEL/Fedora):
 
 ```bash
 sudo yum install ferron3
 ```
 
+For openSUSE, use the following command instead:
+
+```bash
+sudo zypper install ferron3
+```
+
 > [!note]
-> Keep Ferron up to date by running `sudo yum update ferron3`.
+> Keep Ferron up to date by running `sudo yum update ferron3` or `sudo zypper update ferron3`.
 
 #### FIPS-certified cryptography variant
 
 A FIPS-certified variant is available as the `ferron3-fips` package. Install it if you must run Ferron in a FIPS-compliant environment:
 
 ```bash
-sudo yum install ferron3-fips
+sudo yum install ferron3-fips # RHEL/Fedora
+sudo zypper install ferron3-fips # openSUSE
 ```
 
 The `ferron3-fips` package conflicts with the standard `ferron3` package, so you cannot install both at the same time. A FIPS build restricts cryptography to FIPS-approved algorithms: OCSP stapling, TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2 and scrypt are rejected).
