@@ -413,14 +413,29 @@ When the cache module runs, Ferron understands the following response headers fr
 | Header                      | Description                                                                                                                                            | Notes                                                                                                                                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `X-LiteSpeed-Cache-Control` | Controls cache scope and TTL using LSCache-style directives such as `public`, `private`, `max-age`, `s-maxage`, `no-cache`, `no-store`, and `no-vary`. | By default, standard HTTP caching rules still take precedence. Enable `litespeed_override_cache_control` to prefer this header instead.                                                      |
-| `X-LiteSpeed-Vary`          | Adds LSCache-style vary dimensions.                                                                                                                    | Ferron supports `cookie=<name>`. Ferron does not support `value=<name>` yet and skips cache storage for that response. `no-vary` disables all cookie-based vary dimensions for the response. |
+| `X-LiteSpeed-Vary`          | Adds LSCache-style vary dimensions.                                                                                                                    | Ferron supports `cookie=<name>` and `value=<name>`, where `<name>` in `value=` is a request variable name (see below). `no-vary` disables all cookie-based vary dimensions for the response. |
 | `X-LiteSpeed-Tag`           | Assigns tags to cached responses so you can purge them later.                                                                                          | On private responses, `public:` prefixes remain public tags.                                                                                                                                 |
-| `X-LiteSpeed-Purge`         | Purges cached responses by tag, URL, or wildcard.                                                                                                      | The `stale` marker currently falls back to an immediate hard purge.                                                                                                                          |
+| `X-LiteSpeed-Purge`         | Purges cached responses by tag, URL, or wildcard.                                                                                                      | Operations carrying the `stale` marker expire entries in place so they keep serving stale while revalidating (plain miss when no stale window applies) instead of deleting them immediately. |
 | `LSC-Cookie`                | Adds cache-safe cookie replay metadata.                                                                                                                | Ferron converts this header to `Set-Cookie` before sending the response.                                                                                                                     |
 | `X-LiteSpeed-Cache`         | Exposes cache hit, miss, or bypass status on outgoing responses.                                                                                       | Ferron sets this header itself (if enabled). It ignores origin-provided values.                                                                                                              |
 
 > [!note]
-> `X-LiteSpeed-Vary: value=...` is not supported yet because Ferron does not currently have a request-time equivalent of LiteSpeed rewrite-rule vary environment values. The `ignore` directive affects only the stored representation. The live response sent to the client still includes those headers unless another module removes them.
+> `X-LiteSpeed-Vary: value=<name>` varies on the request variable `<name>`, resolved per request (empty when unset). Populate it with `set_var`, which runs before cache lookup:
+>
+> ```conf
+> *:80 {
+>   set_var request.header.user_agent r"Mobile|Android" device_class {
+>     value mobile
+>   }
+>   proxy "http://backend:3000"
+>   cache {
+>     emit_litespeed_headers true
+>     litespeed_override_cache_control true
+>   }
+> }
+> ```
+>
+> With the upstream sending `X-LiteSpeed-Vary: value=device_class`, mobile clients share one variant and everyone else shares the default one. Like LiteSpeed, only one value dimension is supported (last `value=` wins). Keep values low-entropy labels (device class, country); they are normalized, truncated past 256 characters, and always part of the key once declared. The `ignore` directive affects only the stored representation. The live response sent to the client still includes those headers unless another module removes them.
 
 ### Automatic vary cookies
 
@@ -506,11 +521,10 @@ Persistence runs on a background task, so its metrics above are emitted on the w
 
 ### Logs
 
-- `DEBUG`: Logged when Ferron skips cache storage because `X-LiteSpeed-Vary: value=...` is not supported yet.
 - `DEBUG`: Logged when Ferron skips cache storage because the response body exceeds `cache.max_response_size`.
 - `DEBUG`: Logged when Ferron purges through `X-LiteSpeed-Purge`.
 - `DEBUG`: Logged when Ferron purges through `PURGE` HTTP method.
-- `DEBUG`: Logged when Ferron receives an LSCache `stale` purge marker and falls back to a hard purge.
+- `DEBUG`: Logged when Ferron performs an LSCache stale purge (entries stay stored and serve stale until revalidated).
 - `WARN`: Logged when outbound purge propagation to the control-plane fails.
 
 ### Structured logs
@@ -518,10 +532,9 @@ Persistence runs on a background task, so its metrics above are emitted on the w
 | Description (summary)                                              | Level | Attributes                                                                           |
 | ------------------------------------------------------------------ | ----- | ------------------------------------------------------------------------------------ |
 | Skipping cache store because response body exceeded maximum size   | DEBUG | -                                                                                    |
-| Skipping cache store because X-LiteSpeed-Vary is not supported yet | DEBUG | -                                                                                    |
 | Cache purged via LSCache controls                                  | DEBUG | `cache.purged.count` (purged cache entries)                                          |
 | Cache purged via PURGE method                                      | DEBUG | `cache.purged.count` (purged cache entries)                                          |
-| LSCache stale purge marker ignored                                 | DEBUG | -                                                                                    |
+| LSCache stale purge                                                | DEBUG | -                                                                                    |
 | Cache entries evicted                                              | DEBUG | `eviction.reason` (string), `eviction.count` (integer), `ferron.cache.zone` (string) |
 | Cache entries restored from disk at startup                        | DEBUG | `ferron.cache.zone` (string)                                                         |
 | Truncated tail in the persistence files, treated as a clean stop   | DEBUG | `ferron.cache.zone` (string)                                                         |

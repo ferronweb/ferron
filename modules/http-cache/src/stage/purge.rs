@@ -112,6 +112,7 @@ pub(super) fn purge(
     propagation: &PurgePropagationConfig,
 ) -> PurgeStats {
     let mut total_purged = 0;
+    let mut total_stale = 0;
     for scope in [CacheScope::Public, CacheScope::Private] {
         let scope_operations: Vec<PurgeOperation> = operations
             .iter()
@@ -121,9 +122,23 @@ pub(super) fn purge(
         if scope_operations.is_empty() {
             continue;
         }
-        let (stats, remaining) = store.purge(&scope_operations, private_key, requesting_host);
-        emit_purge_metric(ctx, zone_id, scope, stats.purged, remaining);
-        total_purged += stats.purged;
+        // Operations carrying the `stale` marker expire entries in place so
+        // they can still serve stale; the rest are deleted immediately.
+        let (stale_operations, hard_operations): (Vec<_>, Vec<_>) = scope_operations
+            .into_iter()
+            .partition(|operation| operation.stale);
+        if !hard_operations.is_empty() {
+            let (stats, remaining) = store.purge(&hard_operations, private_key, requesting_host);
+            emit_purge_metric(ctx, zone_id, scope, stats.purged, remaining);
+            total_purged += stats.purged;
+        }
+        if !stale_operations.is_empty() {
+            let (stats, remaining) =
+                store.purge_stale(&stale_operations, private_key, requesting_host);
+            emit_purge_metric(ctx, zone_id, scope, stats.purged, remaining);
+            total_purged += stats.purged;
+            total_stale += stats.purged;
+        }
     }
 
     if total_purged > 0 {
@@ -133,7 +148,14 @@ pub(super) fn purge(
         ctx.events.emit(Event::Log(LogEvent {
             level: LogLevel::Debug,
             target: LOG_TARGET,
-            message: format!("Purged {} cache entries", stats.purged),
+            message: if total_stale > 0 {
+                format!(
+                    "Purged {} cache entries ({} stale; served stale until revalidated)",
+                    stats.purged, total_stale
+                )
+            } else {
+                format!("Purged {} cache entries", stats.purged)
+            },
             summary: "Cache purged".into(),
             attributes: vec![(
                 "cache.purged.count",

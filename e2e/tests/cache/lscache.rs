@@ -1093,7 +1093,7 @@ async fn test_lscache_purge_stale_flag() {
         .get_with_headers(
             "/stale-test",
             &[
-                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Upstream-Cache-Control", "public,max-age=60,stale-while-revalidate=120"),
                 ("X-Test-Tag", "StaleTag"),
                 ("X-Test-Body", "stale-v1"),
             ],
@@ -1113,63 +1113,125 @@ async fn test_lscache_purge_stale_flag() {
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
+    // The stale purge expires the entry in place instead of deleting it:
+    // the next request revalidates (detail=revalidated) rather than missing,
+    // and concurrent followers would keep serving stale while it does.
     let resp = ctx
         .get_with_headers(
             "/stale-test",
             &[
-                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Upstream-Cache-Control", "public,max-age=60,stale-while-revalidate=120"),
                 ("X-Test-Tag", "StaleTag"),
                 ("X-Test-Body", "stale-v2"),
             ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let cache_status = resp
+        .headers()
+        .get("Cache-Status")
+        .expect("Cache-Status header missing")
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        cache_status.contains("revalidated"),
+        "Cache-Status should be revalidated after a stale purge, got: {}",
+        cache_status
+    );
     assert_eq!(resp.text().await.unwrap(), "stale-v2");
 }
 
+const VARY_VALUE_CONFIG: &str = r#"
+*:80 {
+  set_var request.header.user_agent r"Mobile|Android" device_class {
+    value mobile
+  }
+  proxy "http://backend:3000"
+  cache {
+    emit_litespeed_headers true
+    litespeed_override_cache_control true
+  }
+}
+"#;
+
 #[tokio::test]
 async fn test_lscache_vary_value() {
-    // Note: vary values aren't supported by Ferron cache implementation.
-    let ctx = LSCacheTestContext::new("vary-value", BASE_CONFIG_OVERRIDE_LS).await;
+    // `X-LiteSpeed-Vary: value=<name>` partitions variants by the request
+    // variable `<name>` (populated here with `set_var` from the User-Agent).
+    let ctx = LSCacheTestContext::new("vary-value", VARY_VALUE_CONFIG).await;
 
+    let desktop_ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36";
+    let mobile_ua =
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Mobile Safari/537.36";
+
+    // Desktop request misses and stores the default (empty value) variant.
     let resp = ctx
         .get_with_headers(
             "/vary-value-test",
             &[
                 ("X-Test-Cache-Control", "public,max-age=60"),
-                ("X-Test-Vary", "value=mobile"),
+                ("X-Test-Vary", "value=device_class"),
                 ("X-Test-Body", "desktop"),
+                ("User-Agent", desktop_ua),
             ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "desktop");
 
+    // Mobile request misses (different key) and stores its own variant.
     let resp = ctx
         .get_with_headers(
             "/vary-value-test",
             &[
                 ("X-Test-Cache-Control", "public,max-age=60"),
-                ("X-Test-Vary", "value=mobile"),
+                ("X-Test-Vary", "value=device_class"),
                 ("X-Test-Body", "mobile-version"),
+                ("User-Agent", mobile_ua),
             ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "mobile-version");
 
+    // Mobile request hits its variant instead of passing through upstream.
     let resp = ctx
         .get_with_headers(
             "/vary-value-test",
             &[
                 ("X-Test-Cache-Control", "public,max-age=60"),
-                ("X-Test-Vary", "value=mobile"),
+                ("X-Test-Vary", "value=device_class"),
                 ("X-Test-Body", "mobile-hit"),
+                ("User-Agent", mobile_ua),
             ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    assert_eq!(resp.text().await.unwrap(), "mobile-hit");
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(ls_cache, "hit");
+    assert_eq!(resp.text().await.unwrap(), "mobile-version");
+
+    // Desktop request still hits the default variant.
+    let resp = ctx
+        .get_with_headers(
+            "/vary-value-test",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "value=device_class"),
+                ("X-Test-Body", "desktop-hit"),
+                ("User-Agent", desktop_ua),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "desktop");
 }
 
 #[tokio::test]
@@ -1232,18 +1294,37 @@ async fn test_lscache_multiple_vary_cookies() {
     assert_eq!(resp.text().await.unwrap(), "fr-light");
 }
 
+const VARY_COMBINED_CONFIG: &str = r#"
+*:80 {
+  set_var request.header.x_segment r"^us$" segment {
+    value us
+  }
+  set_var request.header.x_segment r"^eu$" segment {
+    value eu
+  }
+  proxy "http://backend:3000"
+  cache {
+    emit_litespeed_headers true
+    litespeed_override_cache_control true
+  }
+}
+"#;
+
 #[tokio::test]
 async fn test_lscache_combined_vary_cookie_and_value() {
-    let ctx = LSCacheTestContext::new("vary-combined", BASE_CONFIG_OVERRIDE_LS).await;
+    // `cookie=` varies on a request cookie while `value=<name>` varies on the
+    // request variable `<name>`; the two dimensions combine in the cache key.
+    let ctx = LSCacheTestContext::new("vary-combined", VARY_COMBINED_CONFIG).await;
 
     let resp = ctx
         .get_with_headers(
             "/combined-vary",
             &[
                 ("X-Test-Cache-Control", "public,max-age=60"),
-                ("X-Test-Vary", "cookie=region,value=us"),
+                ("X-Test-Vary", "cookie=region,value=segment"),
                 ("X-Test-Body", "region-us"),
                 ("Cookie", "region=west"),
+                ("X-Segment", "us"),
             ],
         )
         .await;
@@ -1255,28 +1336,55 @@ async fn test_lscache_combined_vary_cookie_and_value() {
             "/combined-vary",
             &[
                 ("X-Test-Cache-Control", "public,max-age=60"),
-                ("X-Test-Vary", "cookie=region,value=eu"),
+                ("X-Test-Vary", "cookie=region,value=segment"),
                 ("X-Test-Body", "region-eu"),
                 ("Cookie", "region=east"),
+                ("X-Segment", "eu"),
             ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "region-eu");
 
+    // Same cookie and segment hits instead of passing through upstream.
     let resp = ctx
         .get_with_headers(
             "/combined-vary",
             &[
                 ("X-Test-Cache-Control", "public,max-age=60"),
-                ("X-Test-Vary", "cookie=region,value=us"),
+                ("X-Test-Vary", "cookie=region,value=segment"),
                 ("X-Test-Body", "region-us-hit"),
                 ("Cookie", "region=west"),
+                ("X-Segment", "us"),
             ],
         )
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
-    assert_eq!(resp.text().await.unwrap(), "region-us-hit");
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(ls_cache, "hit");
+    assert_eq!(resp.text().await.unwrap(), "region-us");
+
+    // Same cookie but a different segment misses (other variant).
+    let resp = ctx
+        .get_with_headers(
+            "/combined-vary",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Vary", "cookie=region,value=segment"),
+                ("X-Test-Body", "region-west-eu"),
+                ("Cookie", "region=west"),
+                ("X-Segment", "eu"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "region-west-eu");
 }
 
 const BASE_CONFIG_PURGE_METHOD: &str = r#"

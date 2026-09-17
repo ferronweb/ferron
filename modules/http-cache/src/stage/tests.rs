@@ -724,6 +724,7 @@ fn purge_reports_purged_and_remaining_entry_counts() {
         None,
         &http::HeaderMap::new(),
         &Default::default(),
+        &Default::default(),
     );
 
     let second = StoredEntry {
@@ -731,7 +732,13 @@ fn purge_reports_purged_and_remaining_entry_counts() {
         purge_url: "/purge/me".to_string(),
         ..entry
     };
-    store.insert_with_request(second, None, &http::HeaderMap::new(), &Default::default());
+    store.insert_with_request(
+        second,
+        None,
+        &http::HeaderMap::new(),
+        &Default::default(),
+        &Default::default(),
+    );
 
     let operations = vec![PurgeOperation {
         scope: CacheScope::Public,

@@ -1,9 +1,35 @@
 use ahash::AHashMap;
 use http::header::{HeaderMap, HeaderName};
+use rustc_hash::FxHashMap;
 
 use crate::policy::CacheScope;
 
 use super::types::VaryRule;
+
+/// Maximum length of a resolved vary value admitted into a cache key.
+///
+/// Values are operator-controlled `set_var` outputs and must stay
+/// low-entropy labels (device class, country); truncation bounds key growth
+/// the same way private-key cookie values are bounded.
+pub const MAX_VARY_VALUE_LEN: usize = 256;
+
+/// Resolve an `X-LiteSpeed-Vary: value=<name>` dimension for a request.
+///
+/// Returns `None` when the stored variant declares no value dimension, and
+/// `Some(normalized)` otherwise — empty when the variable is unset, so the
+/// default variant still keys distinctly from labeled ones.
+pub fn resolve_vary_value(
+    vary: &VaryRule,
+    variables: &FxHashMap<String, String>,
+) -> Option<String> {
+    let name = vary.value.as_ref()?;
+    let raw = variables.get(name).map(String::as_str).unwrap_or("");
+    let mut normalized = normalize_key_value(raw);
+    if normalized.len() > MAX_VARY_VALUE_LEN {
+        normalized.truncate(normalized.floor_char_boundary(MAX_VARY_VALUE_LEN));
+    }
+    Some(normalized)
+}
 
 pub fn build_entry_key(
     base_key: &str,
@@ -12,6 +38,7 @@ pub fn build_entry_key(
     vary: &VaryRule,
     headers: &HeaderMap,
     cookies: &AHashMap<String, String>,
+    variables: &FxHashMap<String, String>,
 ) -> String {
     let mut key = String::with_capacity(base_key.len() + 128);
     key.push_str(base_key);
@@ -69,10 +96,10 @@ pub fn build_entry_key(
         }
     }
 
-    if let Some(value) = &vary.value {
+    if let Some(resolved) = resolve_vary_value(vary, variables) {
         key.push('\n');
         key.push_str("v:");
-        key.push_str(value);
+        key.push_str(&resolved);
     }
 
     key
@@ -145,7 +172,7 @@ mod tests {
 
     use crate::policy::CacheScope;
 
-    use super::{build_entry_key, normalize_key_value, VaryRule};
+    use super::{build_entry_key, normalize_key_value, resolve_vary_value, VaryRule};
 
     fn vary_on(headers: &[HeaderName]) -> VaryRule {
         VaryRule {
@@ -169,6 +196,7 @@ mod tests {
             &vary_on(&[ACCEPT_LANGUAGE]),
             &headers,
             &Default::default(),
+            &rustc_hash::FxHashMap::default(),
         );
 
         assert!(key.contains("h:accept-language=de de, en fr"), "{key}");
@@ -192,6 +220,7 @@ mod tests {
             &vary_on(&[]),
             &HeaderMap::new(),
             &cookies,
+            &rustc_hash::FxHashMap::default(),
         );
 
         assert!(key.contains("c:_lscache_vary=logged-in"), "{key}");
@@ -212,6 +241,7 @@ mod tests {
             &vary_on(&[]),
             &HeaderMap::new(),
             &cookies_a,
+            &rustc_hash::FxHashMap::default(),
         );
         let key_b = build_entry_key(
             "base",
@@ -220,6 +250,7 @@ mod tests {
             &vary_on(&[]),
             &HeaderMap::new(),
             &cookies_b,
+            &rustc_hash::FxHashMap::default(),
         );
         let key_none = build_entry_key(
             "base",
@@ -228,6 +259,7 @@ mod tests {
             &vary_on(&[]),
             &HeaderMap::new(),
             &Default::default(),
+            &rustc_hash::FxHashMap::default(),
         );
 
         assert_ne!(key_a, key_b);
@@ -241,6 +273,7 @@ mod tests {
             &vary_on(&[]),
             &HeaderMap::new(),
             &cookies_a,
+            &rustc_hash::FxHashMap::default(),
         );
         assert_eq!(key_a, key_a_repeat);
     }
@@ -261,6 +294,7 @@ mod tests {
             &rule,
             &HeaderMap::new(),
             &cookies,
+            &rustc_hash::FxHashMap::default(),
         );
 
         // The explicitly listed cookie appears once, and the other default
@@ -286,6 +320,7 @@ mod tests {
             &rule,
             &HeaderMap::new(),
             &cookies,
+            &rustc_hash::FxHashMap::default(),
         );
 
         assert!(!key.contains("_lscache_vary"), "{key}");
@@ -306,8 +341,89 @@ mod tests {
             &rule,
             &HeaderMap::new(),
             &cookies,
+            &rustc_hash::FxHashMap::default(),
         );
 
         assert!(key.contains("c:session=abc def"), "{key}");
+    }
+
+    fn vars(pairs: &[(&str, &str)]) -> rustc_hash::FxHashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+            .collect()
+    }
+
+    fn vary_value_on(name: &str) -> VaryRule {
+        VaryRule {
+            header_names: Vec::new(),
+            cookie_names: Vec::new(),
+            value: Some(name.to_string()),
+            no_vary: false,
+        }
+    }
+
+    #[test]
+    fn vary_value_resolves_request_variable() {
+        let rule = vary_value_on("device_class");
+        assert_eq!(
+            resolve_vary_value(&rule, &vars(&[("device_class", "mobile")])),
+            Some("mobile".to_string())
+        );
+        // Unset variable resolves to the default (empty) variant.
+        assert_eq!(resolve_vary_value(&rule, &vars(&[])), Some(String::new()));
+        // No declared dimension means no key component at all.
+        assert_eq!(resolve_vary_value(&vary_on(&[]), &vars(&[])), None);
+    }
+
+    #[test]
+    fn vary_value_is_normalized_and_bounded() {
+        let rule = vary_value_on("device_class");
+        assert_eq!(
+            resolve_vary_value(&rule, &vars(&[("device_class", "  a\tb  ")])),
+            Some("a b".to_string())
+        );
+        let long = "x".repeat(super::MAX_VARY_VALUE_LEN + 100);
+        let resolved = resolve_vary_value(&rule, &vars(&[("device_class", &long)])).unwrap();
+        assert_eq!(resolved.len(), super::MAX_VARY_VALUE_LEN);
+    }
+
+    #[test]
+    fn vary_value_partitions_entry_key() {
+        let rule = vary_value_on("device_class");
+        let headers = HeaderMap::new();
+        let cookies: ahash::AHashMap<String, String> = Default::default();
+        let mobile = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &rule,
+            &headers,
+            &cookies,
+            &vars(&[("device_class", "mobile")]),
+        );
+        let desktop = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &rule,
+            &headers,
+            &cookies,
+            &vars(&[]),
+        );
+        assert!(mobile.contains("\nv:mobile"), "{mobile}");
+        assert!(desktop.contains("\nv:"), "{desktop}");
+        assert_ne!(mobile, desktop);
+        // Repeating the same variable value hits the same key.
+        let mobile_repeat = build_entry_key(
+            "base",
+            CacheScope::Public,
+            None,
+            &rule,
+            &headers,
+            &cookies,
+            &vars(&[("device_class", "mobile")]),
+        );
+        assert_eq!(mobile, mobile_repeat);
     }
 }

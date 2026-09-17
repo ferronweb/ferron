@@ -6,13 +6,13 @@ pub mod types;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ahash::{AHashMap, AHashSet, RandomState};
 use http::header::{self, HeaderMap};
 use quick_cache::sync::Cache;
 use quick_cache::{DefaultHashBuilder, Lifecycle, UnitWeighter};
-use rustc_hash::{FxBuildHasher, FxHashSet};
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use tokio::sync::Notify;
 
 use crate::lscache::PurgeOperation;
@@ -45,6 +45,7 @@ fn build_candidate_keys(
     private_key: Option<&str>,
     headers: &HeaderMap,
     cookies: &AHashMap<String, String>,
+    variables: &FxHashMap<String, String>,
     variants: &[StoredVariant],
 ) -> Vec<String> {
     let mut candidate_keys = Vec::with_capacity(variants.len());
@@ -60,6 +61,7 @@ fn build_candidate_keys(
                 &variant.vary,
                 headers,
                 cookies,
+                variables,
             ));
         }
     }
@@ -74,6 +76,7 @@ fn build_candidate_keys(
             &variant.vary,
             headers,
             cookies,
+            variables,
         ));
     }
     candidate_keys
@@ -313,6 +316,7 @@ impl CacheStore {
         headers: &HeaderMap,
         cookies: &AHashMap<String, String>,
         private_key: Option<&str>,
+        variables: &FxHashMap<String, String>,
     ) -> LookupOutcome {
         let stats = StoreStats {
             expired_evictions: self.get_cleanup_expired(),
@@ -330,8 +334,14 @@ impl CacheStore {
         let variants = Arc::clone(variants.value());
         let has_variants = true;
 
-        let candidate_keys =
-            build_candidate_keys(base_key, private_key, headers, cookies, &variants);
+        let candidate_keys = build_candidate_keys(
+            base_key,
+            private_key,
+            headers,
+            cookies,
+            variables,
+            &variants,
+        );
 
         let now = Instant::now();
         let mut first_stale: Option<(LookupEntry, String, LookupHit)> = None;
@@ -416,11 +426,19 @@ impl CacheStore {
         headers: &HeaderMap,
         cookies: &AHashMap<String, String>,
         private_key: Option<&str>,
+        variables: &FxHashMap<String, String>,
     ) -> Option<String> {
         let variants = self.variants_by_base.get(base_key)?;
-        build_candidate_keys(base_key, private_key, headers, cookies, variants.value())
-            .into_iter()
-            .next()
+        build_candidate_keys(
+            base_key,
+            private_key,
+            headers,
+            cookies,
+            variables,
+            variants.value(),
+        )
+        .into_iter()
+        .next()
     }
 
     #[inline]
@@ -430,6 +448,7 @@ impl CacheStore {
         private_key: Option<&str>,
         request_headers: &HeaderMap,
         request_cookies: &AHashMap<String, String>,
+        variables: &FxHashMap<String, String>,
     ) -> (StoreStats, usize) {
         let mut stats = StoreStats {
             expired_evictions: self.get_cleanup_expired(),
@@ -448,6 +467,7 @@ impl CacheStore {
             &entry.vary,
             request_headers,
             request_cookies,
+            variables,
         );
 
         entry.access_at = 0;
@@ -519,6 +539,51 @@ impl CacheStore {
 
         for base_key in &affected_base_keys {
             self.remove_orphaned_base_key(base_key);
+        }
+
+        (stats, self.cached_len.load(Ordering::Relaxed))
+    }
+
+    /// Soft-purge matching entries: expire them in place instead of deleting.
+    ///
+    /// Expired entries stay stored with `ttl` zeroed, so the next lookup can
+    /// still serve them as `StaleWhileRevalidate` (or `StaleIfError`) when the
+    /// stored freshness windows allow it. Without a stale window this degrades
+    /// to a plain miss, exactly like a hard purge. Persistence mirrors the
+    /// mutation via `Put` records so replay converges.
+    #[inline]
+    pub fn purge_stale(
+        &self,
+        operations: &[PurgeOperation],
+        current_private_key: Option<&str>,
+        requesting_host: Option<&str>,
+    ) -> (StoreStats, usize) {
+        let mut stats = StoreStats::default();
+
+        let mut keys_to_expire = AHashSet::default();
+        for (key, entry) in self.entries.iter() {
+            if operations.iter().any(|operation| {
+                purge::entry_matches_purge(&entry, operation, current_private_key, requesting_host)
+            }) {
+                keys_to_expire.insert(key);
+            }
+        }
+
+        stats.purged = keys_to_expire.len();
+        for key in keys_to_expire {
+            let Some(mut entry) = self.entries.get(&key) else {
+                continue;
+            };
+            entry.ttl = Duration::ZERO;
+            let updated = entry.clone();
+            drop(entry);
+            if self
+                .entries
+                .replace(key.clone(), updated.clone(), false)
+                .is_ok()
+            {
+                self.record_put(&key, &updated);
+            }
         }
 
         (stats, self.cached_len.load(Ordering::Relaxed))

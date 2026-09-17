@@ -2,6 +2,8 @@
 
 use super::*;
 
+use rustc_hash::FxHashMap;
+
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Read;
@@ -104,14 +106,19 @@ fn round_trip_restores_inserted_entries() {
             );
             entry.purge_url = "/page".to_string();
             entry.purge_host = "example.com".to_string();
-            store.insert_with_request(entry, None, &headers, &cookies);
+            store.insert_with_request(entry, None, &headers, &cookies, &FxHashMap::default());
             persist.flush_all_sync().unwrap();
 
             let fresh = Arc::new(CacheStore::new(16));
             restore_into(&fresh, dir.path()).await;
 
-            let LookupOutcome { entry: lookup, .. } =
-                fresh.lookup("https://example.com/page", &headers, &cookies, None);
+            let LookupOutcome { entry: lookup, .. } = fresh.lookup(
+                "https://example.com/page",
+                &headers,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            );
             let (lookup, _, _) = lookup.expect("expected restored cache hit");
             assert_eq!(lookup.scope, CacheScope::Public);
             assert_eq!(lookup.body, Some(Bytes::from_static(b"body-1")));
@@ -139,6 +146,7 @@ fn purge_persists_tombstone() {
                 None,
                 &headers,
                 &cookies,
+                &FxHashMap::default(),
             );
             let (stats, len) = store.purge(
                 &[PurgeOperation {
@@ -156,8 +164,13 @@ fn purge_persists_tombstone() {
             let fresh = Arc::new(CacheStore::new(16));
             restore_into(&fresh, dir.path()).await;
 
-            let LookupOutcome { entry: lookup, .. } =
-                fresh.lookup("https://example.com/page", &headers, &cookies, None);
+            let LookupOutcome { entry: lookup, .. } = fresh.lookup(
+                "https://example.com/page",
+                &headers,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            );
             assert!(
                 lookup.is_none(),
                 "tombstone must suppress the restored entry"
@@ -184,7 +197,7 @@ fn eviction_at_capacity_records_delete() {
             );
             first.purge_url = "/a".to_string();
             first.purge_host = "example.com".to_string();
-            store.insert_with_request(first, None, &headers, &cookies);
+            store.insert_with_request(first, None, &headers, &cookies, &FxHashMap::default());
             let mut second = stored_entry(
                 "https://example.com/b",
                 CacheScope::Public,
@@ -193,17 +206,27 @@ fn eviction_at_capacity_records_delete() {
             );
             second.purge_url = "/b".to_string();
             second.purge_host = "example.com".to_string();
-            store.insert_with_request(second, None, &headers, &cookies);
+            store.insert_with_request(second, None, &headers, &cookies, &FxHashMap::default());
             persist.flush_all_sync().unwrap();
 
             let fresh = Arc::new(CacheStore::new(1));
             restore_into(&fresh, dir.path()).await;
 
-            let LookupOutcome { entry: a, .. } =
-                fresh.lookup("https://example.com/a", &headers, &cookies, None);
+            let LookupOutcome { entry: a, .. } = fresh.lookup(
+                "https://example.com/a",
+                &headers,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            );
             assert!(a.is_none(), "evicted entry must not be restored");
-            let LookupOutcome { entry: b, .. } =
-                fresh.lookup("https://example.com/b", &headers, &cookies, None);
+            let LookupOutcome { entry: b, .. } = fresh.lookup(
+                "https://example.com/b",
+                &headers,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            );
             assert!(b.is_some(), "live entry must be restored");
         })
 }
@@ -228,6 +251,7 @@ fn restore_entry_drops_expired() {
         &HeaderMap::new(),
         &AHashMap::default(),
         None,
+        &FxHashMap::default(),
     );
     assert!(lookup.is_none());
 }
@@ -275,26 +299,38 @@ fn restore_entry_rebuilds_variants() {
                 None,
                 &headers_en,
                 &cookies,
+                &FxHashMap::default(),
             );
             store.insert_with_request(
                 stored_entry("https://example.com/page", CacheScope::Public, "fr", vary),
                 None,
                 &headers_fr,
                 &cookies,
+                &FxHashMap::default(),
             );
             persist.flush_all_sync().unwrap();
 
             let fresh = Arc::new(CacheStore::new(16));
             restore_into(&fresh, dir.path()).await;
 
-            let LookupOutcome { entry: en, .. } =
-                fresh.lookup("https://example.com/page", &headers_en, &cookies, None);
+            let LookupOutcome { entry: en, .. } = fresh.lookup(
+                "https://example.com/page",
+                &headers_en,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            );
             assert_eq!(
                 en.expect("expected en variant").0.body,
                 Some(Bytes::from_static(b"en"))
             );
-            let LookupOutcome { entry: fr, .. } =
-                fresh.lookup("https://example.com/page", &headers_fr, &cookies, None);
+            let LookupOutcome { entry: fr, .. } = fresh.lookup(
+                "https://example.com/page",
+                &headers_fr,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            );
             assert_eq!(
                 fr.expect("expected fr variant").0.body,
                 Some(Bytes::from_static(b"fr"))
@@ -323,6 +359,7 @@ fn update_entry_headers_records_admitted_replace() {
                 None,
                 &headers,
                 &cookies,
+                &FxHashMap::default(),
             );
             let mut refreshed = HeaderMap::new();
             refreshed.insert(
@@ -344,8 +381,13 @@ fn update_entry_headers_records_admitted_replace() {
             let fresh = Arc::new(CacheStore::new(16));
             restore_into(&fresh, dir.path()).await;
 
-            let LookupOutcome { entry: lookup, .. } =
-                fresh.lookup("https://example.com/page", &headers, &cookies, None);
+            let LookupOutcome { entry: lookup, .. } = fresh.lookup(
+                "https://example.com/page",
+                &headers,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            );
             let lookup = lookup.expect("expected restored cache hit").0;
             assert_eq!(
                 lookup.headers.get("x-refreshed").unwrap(),

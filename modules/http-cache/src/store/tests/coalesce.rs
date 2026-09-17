@@ -1,4 +1,5 @@
 use super::*;
+use rustc_hash::FxHashMap;
 #[test]
 fn begin_fetch_returns_leader_and_follower() {
     let store = CacheStore::new(4);
@@ -71,19 +72,27 @@ async fn vary_variants_have_distinct_inflight_keys() {
         None,
         &gzip_headers,
         &cookies,
+        &FxHashMap::default(),
     );
     store.insert_with_request(
         stored_entry(base_key, CacheScope::Public, "br-body", vary.clone()),
         None,
         &br_headers,
         &cookies,
+        &FxHashMap::default(),
     );
 
     let gzip_key = store
-        .primary_candidate_key(base_key, &gzip_headers, &cookies, None)
+        .primary_candidate_key(
+            base_key,
+            &gzip_headers,
+            &cookies,
+            None,
+            &FxHashMap::default(),
+        )
         .expect("gzip candidate key");
     let br_key = store
-        .primary_candidate_key(base_key, &br_headers, &cookies, None)
+        .primary_candidate_key(base_key, &br_headers, &cookies, None, &FxHashMap::default())
         .expect("br candidate key");
     assert_ne!(
         gzip_key, br_key,
@@ -155,6 +164,7 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
     {
         let mut entry = store
@@ -173,7 +183,7 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
     store.last_cleanup.store(0, Ordering::Relaxed);
     let LookupOutcome {
         stats, had_expired, ..
-    } = store.lookup(base_key, &headers, &cookies, None);
+    } = store.lookup(base_key, &headers, &cookies, None, &FxHashMap::default());
     assert!(!had_expired);
     assert_eq!(stats.expired_evictions, 1);
     let fetch_count = Arc::new(AtomicUsize::new(0));
@@ -195,7 +205,7 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
                 notify.notified().await;
                 // Re-check cache
                 let LookupOutcome { entry: lookup, .. } =
-                    store.lookup(&base_key, &headers, &cookies, None);
+                    store.lookup(&base_key, &headers, &cookies, None, &FxHashMap::default());
                 if lookup.is_some() {
                     return;
                 }
@@ -215,6 +225,7 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
                     None,
                     &headers,
                     &cookies,
+                    &FxHashMap::default(),
                 );
                 store.complete_fetch(&base_key);
             }
@@ -233,7 +244,7 @@ async fn concurrent_misses_coalesce_to_single_upstream_fetch() {
     );
 
     // Cache should now have the entry
-    let LookupOutcome { entry: lookup, .. } = store.lookup(base_key, &headers, &cookies, None);
+    let LookupOutcome { entry: lookup, .. } = store.lookup(base_key, &headers, &cookies, None, &FxHashMap::default());
     assert!(
         lookup.is_some(),
         "cache should be populated after coalesced fetch"
@@ -255,6 +266,7 @@ async fn follower_gets_cached_response_after_leader_stores() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
     {
         let mut entry = store
@@ -282,8 +294,13 @@ async fn follower_gets_cached_response_after_leader_stores() {
         // Follower waits
         notify.notified().await;
         // After notification, re-check cache
-        let LookupOutcome { entry: lookup, .. } =
-            store_clone.lookup(&base_key_clone, &headers_clone, &cookies_clone, None);
+        let LookupOutcome { entry: lookup, .. } = store_clone.lookup(
+            &base_key_clone,
+            &headers_clone,
+            &cookies_clone,
+            None,
+            &FxHashMap::default(),
+        );
         lookup.and_then(|(entry, _, _)| entry.body)
     });
 
@@ -301,6 +318,7 @@ async fn follower_gets_cached_response_after_leader_stores() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
     store.complete_fetch(base_key);
 
@@ -323,6 +341,7 @@ async fn leader_non_cacheable_wakes_followers_without_cached_entry() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
     {
         let mut entry = store
@@ -347,8 +366,13 @@ async fn leader_non_cacheable_wakes_followers_without_cached_entry() {
     let cookies_clone = cookies.clone();
     let follower_handle = tokio::spawn(async move {
         notify.notified().await;
-        let LookupOutcome { entry: lookup, .. } =
-            store_clone.lookup(&base_key_clone, &headers_clone, &cookies_clone, None);
+        let LookupOutcome { entry: lookup, .. } = store_clone.lookup(
+            &base_key_clone,
+            &headers_clone,
+            &cookies_clone,
+            None,
+            &FxHashMap::default(),
+        );
         lookup.is_none() // Should be None since leader didn't store
     });
 

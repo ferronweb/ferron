@@ -24,8 +24,13 @@
 #### HTTP cache
 
 - **LSCache staleness suffix support**: `~s` staleness suffix is now parsed in LSCache compatibility, allowing stale cache entries to be purged by single tag or URL.
+- **`X-LiteSpeed-Vary: value=` support via request variables**: responses declaring `value=<name>` are now stored instead of bypassed, partitioned per request by the `set_var` variable `<name>` (empty when unset). Only one value dimension is supported (last wins); values are normalized and truncated past 256 characters.
 
 ### Fixed
+
+#### HTTP cache
+
+- **LSCache `stale` purge now serves stale**: purge operations carrying the `stale` marker expire matching entries in place instead of deleting them, so they keep serving stale while revalidating (or on error) when a stale window applies, and miss otherwise.
 
 #### HTTP server core
 

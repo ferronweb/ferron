@@ -1,4 +1,5 @@
 use super::*;
+use rustc_hash::FxHashMap;
 #[test]
 fn builds_distinct_public_and_private_keys() {
     let vary = VaryRule::default();
@@ -12,6 +13,7 @@ fn builds_distinct_public_and_private_keys() {
         &vary,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
     let private = build_entry_key(
         "https://example.com/test",
@@ -20,6 +22,7 @@ fn builds_distinct_public_and_private_keys() {
         &vary,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
 
     assert_ne!(public, private);
@@ -39,7 +42,8 @@ fn lookup_returns_matching_public_entry() {
     let cookies = request_cookies(&[("currency", "USD")]);
 
     let entry = stored_entry(base_key, CacheScope::Public, "cached-body", vary);
-    let (stats, len) = store.insert_with_request(entry, None, &headers, &cookies);
+    let (stats, len) =
+        store.insert_with_request(entry, None, &headers, &cookies, &FxHashMap::default());
     assert_eq!(stats.size_evictions, 0);
     assert_eq!(len, 1);
 
@@ -48,7 +52,7 @@ fn lookup_returns_matching_public_entry() {
         stats: _,
         items: len,
         had_expired,
-    } = store.lookup(base_key, &headers, &cookies, None);
+    } = store.lookup(base_key, &headers, &cookies, None, &FxHashMap::default());
     let (lookup, _key, _hit) = lookup.expect("expected cache hit");
     //assert_eq!(stats.expired_evictions, 0);
     assert_eq!(len, 1);
@@ -67,7 +71,7 @@ fn lookup_prefers_private_entry_for_matching_private_key() {
     let cookies = AHashMap::default();
 
     let public = stored_entry(base_key, CacheScope::Public, "public", VaryRule::default());
-    store.insert_with_request(public, None, &headers, &cookies);
+    store.insert_with_request(public, None, &headers, &cookies, &FxHashMap::default());
 
     let private = stored_entry(
         base_key,
@@ -75,15 +79,27 @@ fn lookup_prefers_private_entry_for_matching_private_key() {
         "private",
         VaryRule::default(),
     );
-    store.insert_with_request(private, Some("user=1"), &headers, &cookies);
+    store.insert_with_request(
+        private,
+        Some("user=1"),
+        &headers,
+        &cookies,
+        &FxHashMap::default(),
+    );
 
-    let LookupOutcome { entry: lookup, .. } =
-        store.lookup(base_key, &headers, &cookies, Some("user=1"));
+    let LookupOutcome { entry: lookup, .. } = store.lookup(
+        base_key,
+        &headers,
+        &cookies,
+        Some("user=1"),
+        &FxHashMap::default(),
+    );
     let (lookup, _, _) = lookup.expect("expected private cache hit");
     assert_eq!(lookup.scope, CacheScope::Private);
     assert_eq!(lookup.body, Some(Bytes::from_static(b"private")));
 
-    let LookupOutcome { entry: lookup, .. } = store.lookup(base_key, &headers, &cookies, None);
+    let LookupOutcome { entry: lookup, .. } =
+        store.lookup(base_key, &headers, &cookies, None, &FxHashMap::default());
     let (lookup, _, _) = lookup.expect("expected public cache hit");
     assert_eq!(lookup.scope, CacheScope::Public);
     assert_eq!(lookup.body, Some(Bytes::from_static(b"public")));
@@ -105,6 +121,7 @@ fn insert_evicts_least_recently_used_entry_at_capacity() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
     store.insert_with_request(
         stored_entry(
@@ -116,10 +133,16 @@ fn insert_evicts_least_recently_used_entry_at_capacity() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
 
-    let LookupOutcome { entry: lookup, .. } =
-        store.lookup("https://example.com/a", &headers, &cookies, None);
+    let LookupOutcome { entry: lookup, .. } = store.lookup(
+        "https://example.com/a",
+        &headers,
+        &cookies,
+        None,
+        &FxHashMap::default(),
+    );
     assert!(lookup.is_some(), "expected a to become most recently used");
 
     let (stats, len) = store.insert_with_request(
@@ -132,20 +155,39 @@ fn insert_evicts_least_recently_used_entry_at_capacity() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
     assert_eq!(stats.size_evictions, 1);
     assert_eq!(len, 2);
 
     assert!(store
-        .lookup("https://example.com/b", &headers, &cookies, None)
+        .lookup(
+            "https://example.com/b",
+            &headers,
+            &cookies,
+            None,
+            &FxHashMap::default()
+        )
         .entry
         .is_none());
     assert!(store
-        .lookup("https://example.com/a", &headers, &cookies, None)
+        .lookup(
+            "https://example.com/a",
+            &headers,
+            &cookies,
+            None,
+            &FxHashMap::default()
+        )
         .entry
         .is_some());
     assert!(store
-        .lookup("https://example.com/c", &headers, &cookies, None)
+        .lookup(
+            "https://example.com/c",
+            &headers,
+            &cookies,
+            None,
+            &FxHashMap::default()
+        )
         .entry
         .is_some());
 }
@@ -169,6 +211,7 @@ fn variant_map_per_base_is_bounded_and_evicts_oldest() {
             None,
             &headers,
             &cookies,
+            &FxHashMap::default(),
         );
     }
 
@@ -212,6 +255,7 @@ fn set_max_entries_trims_entries_to_capacity() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
     store.insert_with_request(
         stored_entry(
@@ -223,6 +267,7 @@ fn set_max_entries_trims_entries_to_capacity() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
     store.insert_with_request(
         stored_entry(
@@ -234,6 +279,7 @@ fn set_max_entries_trims_entries_to_capacity() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
 
     store.set_max_entries(1);
@@ -241,15 +287,33 @@ fn set_max_entries_trims_entries_to_capacity() {
     assert_eq!(store.len(), 1);
     let survivors = [
         store
-            .lookup("https://example.com/a", &headers, &cookies, None)
+            .lookup(
+                "https://example.com/a",
+                &headers,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            )
             .entry
             .is_some(),
         store
-            .lookup("https://example.com/b", &headers, &cookies, None)
+            .lookup(
+                "https://example.com/b",
+                &headers,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            )
             .entry
             .is_some(),
         store
-            .lookup("https://example.com/c", &headers, &cookies, None)
+            .lookup(
+                "https://example.com/c",
+                &headers,
+                &cookies,
+                None,
+                &FxHashMap::default(),
+            )
             .entry
             .is_some(),
     ];
@@ -276,7 +340,7 @@ fn purge_respects_scope_selectors_and_private_key() {
         name: "listing".to_string(),
     }];
     public.purge_url = "/listing".to_string();
-    store.insert_with_request(public, None, &headers, &cookies);
+    store.insert_with_request(public, None, &headers, &cookies, &FxHashMap::default());
 
     let mut private_user_1 = stored_entry(
         "https://example.com/account",
@@ -289,7 +353,13 @@ fn purge_respects_scope_selectors_and_private_key() {
         name: "account".to_string(),
     }];
     private_user_1.purge_url = "/account".to_string();
-    store.insert_with_request(private_user_1, Some("user=1"), &headers, &cookies);
+    store.insert_with_request(
+        private_user_1,
+        Some("user=1"),
+        &headers,
+        &cookies,
+        &FxHashMap::default(),
+    );
 
     let mut private_user_2 = stored_entry(
         "https://example.com/account-2",
@@ -302,7 +372,13 @@ fn purge_respects_scope_selectors_and_private_key() {
         name: "account".to_string(),
     }];
     private_user_2.purge_url = "/account".to_string();
-    store.insert_with_request(private_user_2, Some("user=2"), &headers, &cookies);
+    store.insert_with_request(
+        private_user_2,
+        Some("user=2"),
+        &headers,
+        &cookies,
+        &FxHashMap::default(),
+    );
 
     let operations = vec![
         PurgeOperation {
@@ -321,7 +397,13 @@ fn purge_respects_scope_selectors_and_private_key() {
     assert_eq!(stats.purged, 2);
     assert_eq!(len, 1);
     assert!(store
-        .lookup("https://example.com/listing", &headers, &cookies, None)
+        .lookup(
+            "https://example.com/listing",
+            &headers,
+            &cookies,
+            None,
+            &FxHashMap::default()
+        )
         .entry
         .is_none());
     assert!(store
@@ -329,7 +411,8 @@ fn purge_respects_scope_selectors_and_private_key() {
             "https://example.com/account",
             &headers,
             &cookies,
-            Some("user=1")
+            Some("user=1"),
+            &FxHashMap::default(),
         )
         .entry
         .is_none());
@@ -339,6 +422,7 @@ fn purge_respects_scope_selectors_and_private_key() {
             &headers,
             &cookies,
             Some("user=2"),
+            &FxHashMap::default(),
         )
         .entry
         .expect("expected unmatched private entry to remain");
@@ -361,6 +445,7 @@ fn zero_capacity_store_skips_insert() {
         None,
         &headers,
         &cookies,
+        &FxHashMap::default(),
     );
 
     assert_eq!(stats.size_evictions, 0);
@@ -440,10 +525,21 @@ fn stored_entry_keeps_lsc_cookies_but_drops_origin_set_cookie() {
     );
     entry.headers = std::sync::Arc::new(upstream_headers);
     entry.lsc_cookies = std::sync::Arc::new(lsc_cookies);
-    store.insert_with_request(entry, Some("user=1"), &headers, &cookies);
+    store.insert_with_request(
+        entry,
+        Some("user=1"),
+        &headers,
+        &cookies,
+        &FxHashMap::default(),
+    );
 
-    let LookupOutcome { entry: lookup, .. } =
-        store.lookup(base_key, &headers, &cookies, Some("user=1"));
+    let LookupOutcome { entry: lookup, .. } = store.lookup(
+        base_key,
+        &headers,
+        &cookies,
+        Some("user=1"),
+        &FxHashMap::default(),
+    );
     let (lookup, _, _) = lookup.expect("expected private cache hit");
     assert!(!lookup.headers.contains_key(SET_COOKIE));
     assert_eq!(lookup.lsc_cookies.len(), 1);
@@ -468,11 +564,17 @@ fn had_expired_when_variants_exist_but_no_request_matches() {
         None,
         &en_headers,
         &cookies,
+        &FxHashMap::default(),
     );
 
     // A request whose headers match no stored variant still reports the base
     // as expired-so-fetch, because variants exist for it.
-    let LookupOutcome { had_expired, .. } =
-        store.lookup("https://example.com/vary", &fr_headers, &cookies, None);
+    let LookupOutcome { had_expired, .. } = store.lookup(
+        "https://example.com/vary",
+        &fr_headers,
+        &cookies,
+        None,
+        &FxHashMap::default(),
+    );
     assert!(had_expired);
 }

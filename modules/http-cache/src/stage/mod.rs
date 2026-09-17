@@ -19,6 +19,7 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::StageConstraint;
 use ferron_http::HttpContext;
 use http::HeaderMap;
+use rustc_hash::FxHashMap;
 use typemap_rev::TypeMapKey;
 
 use crate::config::{
@@ -44,6 +45,7 @@ pub(super) struct RequestState {
     base_key: String,
     request_headers: HeaderMap,
     request_cookies: AHashMap<String, String>,
+    request_variables: FxHashMap<String, String>,
     private_key: Option<String>,
     purge_url: String,
     request_policy: RequestCachePolicy,
@@ -304,6 +306,9 @@ impl Stage<HttpContext> for HttpCacheStage {
             StageConstraint::After("http_response".to_string()),
             StageConstraint::After("abuse_protection".to_string()),
             StageConstraint::After("basicauth".to_string()),
+            // `set_var` variables feed `X-LiteSpeed-Vary: value=<name>`, so the
+            // variables stage must run before cache lookups capture them.
+            StageConstraint::After("variables".to_string()),
             StageConstraint::Before("forward_proxy".to_string()),
             StageConstraint::Before("reverse_proxy".to_string()),
         ]

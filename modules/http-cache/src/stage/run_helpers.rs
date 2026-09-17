@@ -251,6 +251,7 @@ pub(super) async fn run_forward(
             &request_headers,
             &request_cookies,
             private_key.as_deref(),
+            &ctx.variables,
         );
         if let Some((entry, cache_key, hit_kind)) = lookup {
             let scope = entry.scope;
@@ -334,6 +335,7 @@ pub(super) async fn run_forward(
                         &request_headers,
                         &request_cookies,
                         private_key.as_deref(),
+                        &ctx.variables,
                     )
                     .unwrap_or_else(|| base_key.clone());
                 let (is_leader, notify) = store.begin_fetch(&coalesce_key);
@@ -357,6 +359,7 @@ pub(super) async fn run_forward(
                             &request_headers,
                             &request_cookies,
                             private_key.as_deref(),
+                            &ctx.variables,
                         )
                     } else {
                         // Leader never completed. Stop coalescing and treat
@@ -542,6 +545,7 @@ pub(super) async fn run_forward(
         base_key,
         request_headers,
         request_cookies,
+        request_variables: ctx.variables.clone(),
         private_key,
         purge_url,
         request_policy,
@@ -700,6 +704,7 @@ pub(super) async fn run_inverse_handler(
             &state.request_headers,
             &state.request_cookies,
             state.private_key.as_deref(),
+            &state.request_variables,
         ) {
             if let Some(sie_duration) = stale_entry.stale_if_error {
                 if !stale_entry.must_revalidate && stale_entry.age <= stale_entry.ttl + sie_duration
@@ -740,13 +745,16 @@ pub(super) async fn run_inverse_handler(
     }
 
     let purge_ops = parse_litespeed_purge(response.headers());
-    if purge_ops.iter().any(|operation| operation.stale) {
+    let stale_purge_ops = purge_ops.iter().filter(|op| op.stale).count();
+    if stale_purge_ops > 0 {
         ctx.events.emit(Event::Log(LogEvent {
             level: LogLevel::Debug,
             target: LOG_TARGET,
-            message: "Ignoring unsupported LSCache stale purge marker and performing a hard purge"
-                .to_string(),
-            summary: "LSCache stale purge marker ignored".into(),
+            message: format!(
+                "Performing stale purge for {stale_purge_ops} operation(s); matching entries \
+                 stay stored and serve stale until revalidated"
+            ),
+            summary: "LSCache stale purge".into(),
             attributes: Vec::new(),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
@@ -780,25 +788,11 @@ pub(super) async fn run_inverse_handler(
     } else {
         parse_litespeed_vary(response.headers())
     };
-    let has_unsupported_vary_value = ls_vary.value.is_some();
-    if has_unsupported_vary_value {
-        ctx.events.emit(Event::Log(LogEvent {
-            level: LogLevel::Debug,
-            target: LOG_TARGET,
-            message:
-                "Skipping cache store because X-LiteSpeed-Vary: value=... is not supported yet"
-                    .to_string(),
-            summary: "Skipping cache store because X-LiteSpeed-Vary is not supported yet".into(),
-            attributes: Vec::new(),
-            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-        }));
-    }
     let has_set_cookie = response.headers().contains_key(header::SET_COOKIE);
     let decision = if !state.request_policy.allow_store
         || (matches!(state.lookup_result, LookupResult::Bypass)
             && state.request_policy.allow_lookup)
         || state.head_only
-        || has_unsupported_vary_value
     {
         crate::policy::ResponseCacheDecision {
             store: false,
@@ -810,8 +804,6 @@ pub(super) async fn run_inverse_handler(
             no_cache_field_names: Vec::new(),
             reason: if state.head_only {
                 "head-no-store"
-            } else if has_unsupported_vary_value {
-                "unsupported-litespeed-vary-value"
             } else {
                 state.request_policy.reason
             },
@@ -919,6 +911,7 @@ pub(super) async fn run_inverse_handler(
                     state.private_key.as_deref(),
                     &state.request_headers,
                     &state.request_cookies,
+                    &state.request_variables,
                 );
 
                 if let LookupResult::StaleWhileRevalidate {

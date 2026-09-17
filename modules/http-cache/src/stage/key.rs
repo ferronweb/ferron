@@ -166,7 +166,9 @@ pub(super) fn build_vary_rule(
     Ok(Some(VaryRule {
         header_names,
         cookie_names,
-        value: None,
+        // `X-LiteSpeed-Vary: value=<name>` names a request variable (populated
+        // e.g. via `set_var`) resolved per request in `build_entry_key`.
+        value: ls_vary.value.clone(),
         no_vary,
     }))
 }
@@ -252,5 +254,18 @@ mod tests {
             .expect("rule builds")
             .expect("rule present");
         assert!(!rule.no_vary);
+    }
+
+    #[test]
+    fn vary_rule_records_value_variable_name() {
+        let config = CacheConfig::default();
+        let vary = crate::lscache::LiteSpeedVary {
+            cookies: Vec::new(),
+            value: Some("device_class".to_string()),
+        };
+        let rule = build_vary_rule(&HeaderMap::new(), &config, &vary, false)
+            .expect("rule builds")
+            .expect("rule present");
+        assert_eq!(rule.value.as_deref(), Some("device_class"));
     }
 }

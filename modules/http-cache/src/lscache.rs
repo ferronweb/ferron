@@ -46,6 +46,13 @@ pub struct LiteSpeedCacheControl {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct LiteSpeedVary {
     pub cookies: Vec<String>,
+    /// Request variable named by `X-LiteSpeed-Vary: value=<name>`.
+    ///
+    /// Like LiteSpeed's vary environment value, this is a single dimension
+    /// (last `value=` wins) resolved per request from `set_var` variables:
+    /// the request's cache key embeds the variable's current value (empty
+    /// when unset), so e.g. `value=device_class` partitions mobile and
+    /// desktop variants. See `build_entry_key`.
     pub value: Option<String>,
 }
 
