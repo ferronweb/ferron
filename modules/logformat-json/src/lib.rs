@@ -232,6 +232,8 @@ impl ConfigurationValidator for JsonFormatLogApplicationFormatConfigurationValid
         _config: &ferron_core::config::ServerConfigurationBlock,
         _validator_ctx: &mut ferron_core::config::validator::ConfigurationValidatorContext,
     ) -> Result<(), ConfigurationValidationError> {
+        // STUB: currently, there are no additional directives that need to be validated
+
         Ok(())
     }
 }
