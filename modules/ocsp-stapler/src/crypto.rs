@@ -21,6 +21,9 @@ pub(crate) fn hash_oid(data: impl AsRef<[u8]>, oid: ObjectIdentifier) -> Result<
         }
         #[cfg(feature = "fips")]
         {
+            // STUB: Intentional FIPS stub. SHA-1 is disallowed under `fips`,
+            // so this branch always errors; the full implementation is the
+            // `#[cfg(not(feature = "fips"))]` variant above.
             return Err(anyhow!(
                 "Unsupported hash algorithm OID in OCSP response: {}",
                 oid

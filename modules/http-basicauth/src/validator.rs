@@ -174,6 +174,9 @@ impl BasicAuthValidator {
             || hash.starts_with("$pbkdf2-sha384$")
             || hash.starts_with("$pbkdf2-sha512$")
             || hash.starts_with("$scrypt$");
+        // STUB: Intentional FIPS stub allowlist. Only FIPS-compliant PBKDF2 variants
+        // are accepted under `fips`; the full allowlist is the `#[cfg(not(feature = "fips"))]`
+        // variant above.
         #[cfg(feature = "fips")]
         let is_valid = hash.starts_with("$pbkdf2-sha256$")
             || hash.starts_with("$pbkdf2-sha384$")

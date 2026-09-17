@@ -158,7 +158,8 @@ fn parse_argon2_params(params: &str) -> Option<(u32, u32, u32)> {
     Some((m_cost?, t_cost?, p_cost?))
 }
 
-/// A stub for Argon2 verification that always denies it (Argon2 isn't FIPS-compliant)
+/// STUB: Intentional FIPS stub for Argon2 verification that always denies it (Argon2 isn't FIPS-compliant).
+/// The full implementation is the `#[cfg(not(feature = "fips"))]` variant above.
 #[cfg(feature = "fips")]
 #[inline]
 fn verify_argon2(_plain: &str, _hash: &str) -> bool {
@@ -312,7 +313,8 @@ fn parse_scrypt_params(params: &str) -> Option<(u64, u64, u64)> {
     Some((n_log?, r?, p?))
 }
 
-/// A stub for scrypt verification that always denies it (scrypt isn't FIPS-compliant)
+/// STUB: Intentional FIPS stub for scrypt verification that always denies it (scrypt isn't FIPS-compliant).
+/// The full implementation is the `#[cfg(not(feature = "fips"))]` variant above.
 #[cfg(feature = "fips")]
 #[inline]
 fn verify_scrypt(_plain: &str, _hash: &str) -> bool {

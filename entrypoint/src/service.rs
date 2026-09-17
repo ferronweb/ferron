@@ -165,7 +165,7 @@ fn parse_config_params(params_str: &str) -> HashMap<String, String> {
     params
 }
 
-/// On non-Windows platforms, service support is not available
+/// STUB: Intentional platform stub. On non-Windows platforms, service support is not available.
 #[cfg(not(windows))]
 pub fn run_service() -> Result<(), Box<dyn std::error::Error>> {
     Err("Windows services are not supported on this platform".into())
@@ -258,11 +258,15 @@ pub fn uninstall_service() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// STUB: Intentional platform stub. Service installation is only supported on Windows;
+/// the full implementation is the `#[cfg(windows)]` variant above.
 #[cfg(not(windows))]
 pub fn install_service(_args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     Err("Service installation is only supported on Windows".into())
 }
 
+/// STUB: Intentional platform stub. Service uninstallation is only supported on Windows;
+/// the full implementation is the `#[cfg(windows)]` variant above.
 #[cfg(not(windows))]
 pub fn uninstall_service() -> Result<(), Box<dyn std::error::Error>> {
     Err("Service uninstallation is only supported on Windows".into())

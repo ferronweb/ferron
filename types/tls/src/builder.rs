@@ -42,6 +42,9 @@ pub fn build_crypto_provider(
     let mut provider = default_provider();
 
     if !crypto.cipher_suites.is_empty() {
+        // STUB: Intentional FIPS stub filtering. Under `fips`, only FIPS-approved
+        // cipher suites are kept; the full implementation is the `#[cfg(not(feature = "fips"))]`
+        // variant below.
         #[cfg(feature = "fips")]
         let cipher_suites = crypto
             .cipher_suites
@@ -62,6 +65,9 @@ pub fn build_crypto_provider(
     }
 
     if !crypto.kx_groups.is_empty() {
+        // STUB: Intentional FIPS stub filtering. Under `fips`, only FIPS-approved
+        // key exchange groups are kept; the full implementation is the
+        // `#[cfg(not(feature = "fips"))]` variant below.
         #[cfg(feature = "fips")]
         let kx_groups = crypto
             .kx_groups

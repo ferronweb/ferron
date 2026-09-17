@@ -640,6 +640,8 @@ fn build_tcp_listener(
         socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))?
     };
 
+    // STUB: Intentional platform stub. MPTCP is Linux-only, so on other platforms
+    // fall back to standard TCP; the full MPTCP implementation is the Linux branch above.
     #[cfg(not(target_os = "linux"))]
     let listener_socket = {
         if multipath {

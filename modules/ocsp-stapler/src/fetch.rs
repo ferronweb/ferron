@@ -85,8 +85,10 @@ pub(crate) fn build_https_connector() -> Result<
         .build())
 }
 
-/// Build a fresh digest context for the requested hash algorithm, honoring the
-/// `fips` feature (which disallows SHA-1).
+/// STUB: Intentional FIPS stub behavior documented here. Build a fresh digest context
+/// for the requested hash algorithm, honoring the `fips` feature (which disallows SHA-1).
+/// Under `fips`, `use_sha256` is ignored and SHA-256 is always used; the full
+/// implementation is the `#[cfg(not(feature = "fips"))]` branch below.
 fn hash_context(use_sha256: bool) -> Context {
     #[cfg(not(feature = "fips"))]
     {
@@ -103,8 +105,10 @@ fn hash_context(use_sha256: bool) -> Context {
     }
 }
 
-/// Select the hash algorithm OID for the OCSP `CertId`, honoring the `fips`
-/// feature (which disallows SHA-1).
+/// STUB: Intentional FIPS stub behavior documented here. Select the hash algorithm OID
+/// for the OCSP `CertId`, honoring the `fips` feature (which disallows SHA-1).
+/// Under `fips`, `use_sha256` is ignored and the SHA-256 OID is always returned; the full
+/// implementation is the `#[cfg(not(feature = "fips"))]` branch below.
 fn ocsp_hash_oid(use_sha256: bool) -> ObjectIdentifier {
     #[cfg(not(feature = "fips"))]
     {

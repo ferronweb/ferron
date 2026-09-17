@@ -46,6 +46,8 @@ impl ConnectedSocket {
         })
     }
 
+    /// STUB: Intentional platform stub. Unix sockets are unavailable on non-Unix platforms;
+    /// the full implementation is the `#[cfg(unix)]` variant above.
     #[cfg(not(unix))]
     pub async fn connect_unix(_path: &str) -> Result<Self, std::io::Error> {
         Err(std::io::Error::new(

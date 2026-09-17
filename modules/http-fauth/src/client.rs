@@ -306,6 +306,8 @@ impl ForwardedAuthClient {
         let unix_socket = &key.unix_socket;
 
         if let Some(unix_path) = unix_socket {
+            // STUB: Intentional platform stub. Unix sockets are unavailable on non-Unix
+            // platforms; the full implementation is the `#[cfg(unix)]` branch below.
             #[cfg(not(unix))]
             {
                 let _ = unix_path; // Discard the variable to avoid unused variable warning

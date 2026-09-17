@@ -267,6 +267,8 @@ fn validate_upstream_block(
         sub.insert("connection_timeout".to_string());
     }
     validate_duration(block, "connection_timeout")?;
+    // STUB: Intentional platform stub. The `unix` subdirective is rejected on non-Unix
+    // platforms; on Unix the full validation below applies.
     #[cfg(not(unix))]
     if block.directives.contains_key("unix") {
         return Err(ConfigurationValidationError::from(
