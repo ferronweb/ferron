@@ -53,6 +53,15 @@ api.example.com {
 
 More examples are available in the [configuration documentation](https://ferron.sh/docs/configuration/fundamentals/syntax).
 
+## Easypanel
+
+[Easypanel](https://easypanel.io) is a self-hosted Docker deployment platform, and Ferron has a one-click deployment template there:
+
+[![Deploy on Easypanel][easypanel-btn]][easypanel-deploy]
+
+[easypanel-btn]: https://easypanel.io/img/deploy-on-easypanel-40.svg
+[easypanel-deploy]: https://easypanel.io/templates/ferron
+
 ## Installing Ferron (pre-built)
 
 The most convenient way to get started with Ferron is to use the installer script for Linux:
