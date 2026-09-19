@@ -25,6 +25,8 @@ This page documents directives for forwarding incoming HTTP requests to one or m
   - This directive enables a token-bucket retry budget that limits retries to a share of steady-state traffic. When you enable it alongside `retry_connection true`, retries consume tokens from a shared pool. Successful requests replenish the pool. If the retry budget runs out, Ferron refuses further retries and the request immediately returns `503 Service Unavailable`. This prevents cascading retry storms from overwhelming remaining healthy backends. It supports `max_retry_rate`, `max_tokens`, and `refill_rate` nested directives. Default: `retry_budget false`
 - `max_retries_per_upstream <count: integer>` (`http-proxy`)
   - This directive sets how many times Ferron retries the same upstream on a transport or connection failure before it falls back to another backend via `retry_connection`. Only requests that can be replayed (idempotent methods with a buffered body that has not been sent yet) are retried. Each retry consumes a token from `retry_budget` when it is enabled. Set to `0` to disable same-upstream retries and fall back immediately. Default: `max_retries_per_upstream 1`
+- `retry_interval <duration: string>` (`http-proxy`)
+  - This directive sets the delay between same-upstream retry attempts, plus up to 25% jitter. It masks brief backend restarts such as Docker Compose recreates or Apache graceful reloads. Set to `"0s"` to retry immediately. Default: `retry_interval "200ms"`
 - `metrics_resolved_ip [bool: boolean]` (`http-proxy`)
   - This directive controls whether Ferron includes the `ferron.proxy.backend_resolved_ip` and `ferron.proxy.dns_status` attributes in proxy metrics and access logs. When `false` (default), metrics identify backends by their configured URL and optional Unix socket path only. This keeps metric cardinality low. When `true`, each resolved IP address becomes a distinct metric label value. A `ferron.proxy.dns_status` attribute indicates the DNS resolution outcome (`resolved`, `nxdomain`, `dns_error`, `logical_dns`, `static`). Enable this only when you need per-IP metric granularity and the IP set is stable. Default: `metrics_resolved_ip false`
 
@@ -72,7 +74,7 @@ In this example, the first backend receives approximately 62.5% of requests (5/8
 | ---------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `max_fails`            | `<count: integer>`      | Number of transport failures (and `5xx` responses when you enable `record_5xx`) within the rolling `window` needed to open the circuit.                                                                                                                                                                           | 5        |
 | `window`               | `<duration: string>`    | Rolling time window used for counting breaker failures.                                                                                                                                                                                                                                                           | `30s`    |
-| `open_duration`        | `<duration: string>`    | How long the circuit stays open before you can send a half-open trial request.                                                                                                                                                                                                                                    | `30s`    |
+| `open_duration`        | `<duration: string>`    | How long the circuit stays open before you can send a half-open trial request.                                                                                                                                                                                                                                    | `5s`     |
 | `consecutive_passes`   | `<count: integer>`      | Number of successful half-open trial requests required to close the circuit again.                                                                                                                                                                                                                                | 1        |
 | `record_5xx`           | `[bool: boolean]`       | Whether upstream `5xx` responses count toward tripping the circuit. Transport failures always count.                                                                                                                                                                                                              | `false`  |
 | `latency_threshold`    | `<threshold: duration>` | Upstream response time threshold. Responses exceeding this duration count as failures toward tripping the circuit, alongside transport failures and (optionally) `5xx` responses. Uses duration strings (for example `"0.1s"`, `"0.5s"`).                                                                         | disabled |
@@ -137,15 +139,53 @@ example.com {
 }
 ```
 
-If you need to forward the original host to a backend, use the `Host` header manipulation instead:
+If you need to forward the original host to a backend, use the `Host` header manipulation instead. By default Ferron already preserves the incoming `Host` header, so no override is needed. If you must set it explicitly (for example after other header rules), use the raw header variable — not `request.host`, which is Ferron's matched server name:
 
 ```ferron
 example.com {
     proxy http://localhost:8080 {
-        request_header Host "{{request.host}}"
+        request_header Host "{{request.header.host}}"
     }
 }
 ```
+
+`request.host` is server-controlled (TLS/SNI matcher) and safe for upstream URLs. `request.header.host` is the raw client header: unsafe in upstream URLs (SSRF), but correct when forwarding `Host` to a shared-hosting backend that distinguishes domains by `Host`.
+
+### Shared hosting (Apache, Host-based vhosts)
+
+When multiple domains share one Apache backend IP and Apache selects the vhost by `Host`:
+
+- Keep the wire `Host` header intact (default). Do not normalize it to `request.host`, or distinct domains behind a wildcard/catch-all will collapse to one vhost.
+- Isolate circuit breakers per domain: use a separate `proxy {}` block or distinct `upstream` URL per vhost. The breaker key is the upstream URL/IP, not `Host` — one bare `http://192.0.2.10/` shared by N domains trips together.
+- Tolerate graceful reloads (Apache closes idle keepalives, first reused connection returns `502` then succeeds on retry):
+
+```ferron
+example.com {
+    proxy {
+        upstream http://192.0.2.10:80 {
+            idle_timeout "5s"
+            connection_timeout "2s"
+            active_check {
+                uri "/health"
+                expect_status "200"
+                interval "10s"
+            }
+        }
+        max_retries_per_upstream 1
+        retry_interval "200ms"
+        circuit_breaker {
+            max_fails 5
+            window "30s"
+            open_duration "5s"
+        }
+    }
+}
+```
+
+- Set `idle_timeout` at or below Apache `KeepAliveTimeout` (often `5s`).
+- Point `active_check.uri` at a real per-vhost path; the default probe can hit Apache's default vhost instead of your domain.
+- For `https` backends, TLS SNI uses the upstream URL host, not the client `Host`. Use per-vhost upstream hostnames when Apache uses SNI-based vhosts.
+- To tell a stale-pool `502` from a real outage, check `ferron.proxy.connection_reused=true` with `retry_count>0` and `ferron.proxy.circuit.state` in metrics/logs.
 
 ### Connection behavior
 
@@ -248,7 +288,7 @@ example.com {
 | -------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | `limit`              | `<number>`          | Maximum concurrent connections to this specific upstream.                                                                                                                                                   | unlimited |
 | `idle_timeout`       | `<duration>`        | Keep-alive idle timeout. Ferron evicts connections idle longer than this from the pool.                                                                                                                     | `60s`     |
-| `connection_timeout` | `<duration\|false>` | Maximum time to wait for a TCP connection to establish. Set to `false` to disable.                                                                                                                          | `5s`      |
+| `connection_timeout` | `<duration\|false>` | Maximum time to wait for a TCP connection to establish. Set to `false` to disable.                                                                                                                          | `2s`      |
 | `unix`               | `<path>`            | Connect via Unix domain socket instead of TCP. The URL scheme remains required.                                                                                                                             | TCP       |
 | `weight`             | `<number>`          | Weight for weighted load balancing. Higher values receive more requests. Supported by all load balancing algorithms (`random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`) and session affinity. | 1         |
 | `priority`           | `<number>`          | Priority for tiered failover. Lower values are higher priority. When the highest-priority tier has no available backends, Ferron tries the next tier.                                                       | 0         |
@@ -276,7 +316,7 @@ example.com {
 | `dns_servers`        | `<string>`          | Comma-separated DNS server IPs. Uses system resolver if empty.                                                                                                                                                                                                                  | system    |
 | `limit`              | `<number>`          | Maximum concurrent connections per resolved backend.                                                                                                                                                                                                                            | unlimited |
 | `idle_timeout`       | `<duration>`        | Keep-alive idle timeout per resolved backend.                                                                                                                                                                                                                                   | `60s`     |
-| `connection_timeout` | `<duration\|false>` | Maximum time to wait for a TCP connection to establish. Set to `false` to disable.                                                                                                                                                                                              | `5s`      |
+| `connection_timeout` | `<duration\|false>` | Maximum time to wait for a TCP connection to establish. Set to `false` to disable.                                                                                                                                                                                              | `2s`      |
 | `weight`             | `<number>`          | Multiplier applied to DNS SRV weights. Each backend's effective weight is `dns_weight × config_weight`. Set to `1` to use DNS weights as-is. Supported by all load balancing algorithms (`random`, `round_robin`, `least_conn`, `two_random`, `p2c_ewma`) and session affinity. | 1         |
 | `priority`           | `<number>`          | Additive offset applied to DNS SRV priorities. Ferron calculates a backend's effective priority as `dns_priority + offset`. Ferron tries lower effective values first.                                                                                                          | 0         |
 | `cert`               | `<path: string>`    | Path to a PEM file containing the client certificate chain to present to resolved backends for mTLS. Use together with `key`.                                                                                                                                                   | disabled  |
@@ -636,7 +676,7 @@ The retry budget uses a token-bucket algorithm shared across all requests for a 
 This prevents retry storms. When multiple backends fail simultaneously, the retry budget caps the total retry amplification factor. For example, with `max_retry_rate 0.1` and three backends where two fail, at most ~10% of total traffic will be retries. The remaining healthy backend is not overwhelmed.
 
 > [!note]
-> Ferron scopes the retry budget per proxy config block. Different hosts or locations can have independent budgets. The budget does not add delays between retries. It limits the _count_ of retries, not their timing. For delay-based retry control, use circuit breakers with `open_duration`.
+> Ferron scopes the retry budget per proxy config block. Different hosts or locations can have independent budgets. The budget does not add delays between retries. It limits the _count_ of retries, not their timing. For delay-based retry control, use `retry_interval` (same-upstream wait) and circuit breakers with `open_duration`.
 
 > [!tip]
 > Start with the defaults (`max_retry_rate 0.1`, `max_tokens 10`, `refill_rate 2.0`) for most workloads. Increase `max_retry_rate` only if you see the retry budget rejecting legitimate transient failures. Increase `max_tokens` if your traffic pattern has bursty spikes that need more retry headroom.
