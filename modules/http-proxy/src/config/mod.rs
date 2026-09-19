@@ -152,6 +152,15 @@ fn parse_proxy_block(
                     }
                 }
             }
+            "retry_interval" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_duration())
+                {
+                    cfg.retry_interval = val;
+                }
+            }
             "retry_budget" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     if val {

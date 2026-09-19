@@ -35,6 +35,24 @@ use self::tls::cached_tls_config;
 
 const LOG_TARGET: &str = "ferron-http-proxy";
 
+/// Sleep for the configured retry interval plus up to 25% jitter.
+///
+/// Uses the primary `zincio` runtime (see CONTRIBUTING.md runtime note).
+/// Zero interval disables waiting.
+#[inline]
+async fn sleep_retry_interval(interval: std::time::Duration) {
+    if interval.is_zero() {
+        return;
+    }
+    let base_ms = interval.as_millis() as u64;
+    let jitter_ms = if base_ms > 0 {
+        rand::random_range(0..=base_ms / 4)
+    } else {
+        0
+    };
+    zincio::time::sleep(interval + std::time::Duration::from_millis(jitter_ms)).await;
+}
+
 /// Categorize an HTTP method into a bounded set for metric labels.
 ///
 /// Standard methods are kept as-is; unknown methods are collapsed into `_other`
@@ -321,6 +339,7 @@ pub async fn execute_proxy(
                             )],
                             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                         }));
+                        sleep_retry_interval(config.retry_interval).await;
                         continue; // retry same upstream
                     }
 

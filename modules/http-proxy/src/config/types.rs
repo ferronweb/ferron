@@ -66,6 +66,10 @@ pub struct ProxyConfig {
     pub circuit_breaker: CircuitBreakerConfig,
     pub retry_connection: bool,
     pub max_retries_per_upstream: u32,
+    /// Delay between same-upstream retry attempts (plus up to 25% jitter).
+    /// Covers brief backend restarts (Docker Compose recreates, Apache
+    /// graceful reloads) without holding the client for long. Zero disables waiting.
+    pub retry_interval: Duration,
     pub retry_budget: Option<RetryBudgetConfig>,
     pub keepalive: bool,
     pub http2: bool,
@@ -90,6 +94,7 @@ impl Default for ProxyConfig {
             circuit_breaker: CircuitBreakerConfig::default(),
             retry_connection: true,
             max_retries_per_upstream: 1,
+            retry_interval: Duration::from_millis(200),
             retry_budget: None,
             keepalive: true,
             http2: false,

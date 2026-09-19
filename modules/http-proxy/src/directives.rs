@@ -269,6 +269,13 @@ pub(crate) fn register_retry_budget_directives(
         "This directive sets how many times to retry the same upstream on connection failure before trying another backend.",
         subblock("http_proxy"),
     );
+    register_directive(
+        registry,
+        "retry_interval",
+        "retry_interval <duration>",
+        "This directive sets the delay between same-upstream retry attempts (plus up to 25% jitter).",
+        subblock("http_proxy"),
+    );
 }
 
 #[inline]

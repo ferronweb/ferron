@@ -91,6 +91,10 @@ fn validate_proxy_block(
         sub.insert("max_retries_per_upstream".to_string());
     }
     validate_number(block, "max_retries_per_upstream", 0)?;
+    if block.directives.contains_key("retry_interval") {
+        sub.insert("retry_interval".to_string());
+    }
+    validate_duration(block, "retry_interval")?;
     ferron_core::validate_nested!(block, used(sub), keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), http2, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
     ferron_core::validate_nested!(block, used(sub), http2_only, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
