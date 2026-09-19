@@ -86,7 +86,7 @@ async fn test_retry_interval_recovers() {
     upstream "http://backend:3000"
     algorithm round_robin
     max_retries_per_upstream 1
-    retry_interval "200ms"
+    retry_interval "0.2s"
   }
 }
 "#,

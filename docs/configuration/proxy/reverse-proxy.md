@@ -26,7 +26,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 - `max_retries_per_upstream <count: integer>` (`http-proxy`)
   - This directive sets how many times Ferron retries the same upstream on a transport or connection failure before it falls back to another backend via `retry_connection`. Only requests that can be replayed (idempotent methods with a buffered body that has not been sent yet) are retried. Each retry consumes a token from `retry_budget` when it is enabled. Set to `0` to disable same-upstream retries and fall back immediately. Default: `max_retries_per_upstream 1`
 - `retry_interval <duration: string>` (`http-proxy`)
-  - This directive sets the delay between same-upstream retry attempts, plus up to 25% jitter. It masks brief backend restarts such as Docker Compose recreates or Apache graceful reloads. Set to `"0s"` to retry immediately. Default: `retry_interval "200ms"`
+  - This directive sets the delay between same-upstream retry attempts, plus up to 25% jitter. It masks brief backend restarts such as Docker Compose recreates or Apache graceful reloads. Set to `"0s"` to retry immediately. Default: `retry_interval "0.2s"`
 - `metrics_resolved_ip [bool: boolean]` (`http-proxy`)
   - This directive controls whether Ferron includes the `ferron.proxy.backend_resolved_ip` and `ferron.proxy.dns_status` attributes in proxy metrics and access logs. When `false` (default), metrics identify backends by their configured URL and optional Unix socket path only. This keeps metric cardinality low. When `true`, each resolved IP address becomes a distinct metric label value. A `ferron.proxy.dns_status` attribute indicates the DNS resolution outcome (`resolved`, `nxdomain`, `dns_error`, `logical_dns`, `static`). Enable this only when you need per-IP metric granularity and the IP set is stable. Default: `metrics_resolved_ip false`
 
@@ -172,7 +172,7 @@ example.com {
             }
         }
         max_retries_per_upstream 1
-        retry_interval "200ms"
+        retry_interval "0.2s"
         circuit_breaker {
             max_fails 5
             window "30s"
