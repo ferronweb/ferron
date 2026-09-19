@@ -193,6 +193,7 @@ pub async fn execute_proxy(
         let mut same_upstream_attempt: u32 = 0;
         loop {
             let tracker_for_attempt = selected.tracker.clone();
+            let reused_before = metrics.connection_reused;
             match pool::try_send_with_pool(
                 ctx,
                 config,
@@ -257,22 +258,36 @@ pub async fn execute_proxy(
                     return Ok((resp, metrics));
                 }
                 Err(e) => {
-                    record_backend_transport_failure(
-                        Some(&circuit_breaker_state),
-                        Some(&flapping_state),
-                        &config.circuit_breaker,
-                        &selected.upstream,
-                        &mut metrics,
-                        &ctx.events,
-                        ferron_http::trace_context::current_event_trace_context(ctx),
-                        config.metrics_resolved_ip,
-                    );
+                    // Stale pooled connections (e.g. Apache graceful reload or
+                    // Compose recreate closing idle keepalives) fail once with
+                    // SendRequestError and succeed on a fresh connection. Don't
+                    // count that first reused failure toward the breaker when a
+                    // same-upstream retry will be attempted; it is forgiven if
+                    // the retry succeeds. Subsequent failures are recorded.
+                    let reused_this_attempt =
+                        metrics.connection_reused && !reused_before;
+                    let can_retry_same = same_upstream_attempt < config.max_retries_per_upstream
+                        && ctx.req.is_some();
+                    let is_stale_reuse = reused_this_attempt
+                        && can_retry_same
+                        && matches!(e, ProxyError::SendRequestError(_));
+                    if !is_stale_reuse {
+                        record_backend_transport_failure(
+                            Some(&circuit_breaker_state),
+                            Some(&flapping_state),
+                            &config.circuit_breaker,
+                            &selected.upstream,
+                            &mut metrics,
+                            &ctx.events,
+                            ferron_http::trace_context::current_event_trace_context(ctx),
+                            config.metrics_resolved_ip,
+                        );
+                    }
 
                     // First, try to retry the same upstream on intermittent failures.
                     // Only idempotent/replayable requests (ctx.req still present after
                     // body recycle in send_via_wrapper) are retried.
-                    let can_retry_same = same_upstream_attempt < config.max_retries_per_upstream
-                        && ctx.req.is_some();
+                    // Note: can_retry_same was computed above for stale-reuse detection.
                     if can_retry_same {
                         if let Some(budget) = retry_budget {
                             if !budget.try_consume_retry_token() {
