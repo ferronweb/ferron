@@ -264,8 +264,7 @@ pub async fn execute_proxy(
                     // count that first reused failure toward the breaker when a
                     // same-upstream retry will be attempted; it is forgiven if
                     // the retry succeeds. Subsequent failures are recorded.
-                    let reused_this_attempt =
-                        metrics.connection_reused && !reused_before;
+                    let reused_this_attempt = metrics.connection_reused && !reused_before;
                     let can_retry_same = same_upstream_attempt < config.max_retries_per_upstream
                         && ctx.req.is_some();
                     let is_stale_reuse = reused_this_attempt

@@ -111,3 +111,16 @@ impl Default for ProxyConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resilience_defaults_suit_ephemeral_backends() {
+        let cfg = ProxyConfig::default();
+        assert_eq!(cfg.circuit_breaker.open_duration, Duration::from_secs(5));
+        assert_eq!(cfg.retry_interval, Duration::from_millis(200));
+        assert_eq!(cfg.max_retries_per_upstream, 1);
+    }
+}

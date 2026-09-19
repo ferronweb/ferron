@@ -13,6 +13,7 @@ mod proxy_circuit_breaker_status_code;
 mod proxy_failover;
 mod proxy_header;
 mod proxy_redirect;
+mod proxy_retry_interval;
 mod proxy_same_upstream_retry;
 mod rproxy;
 mod srv;
