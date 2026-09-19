@@ -26,6 +26,12 @@
 - **LSCache staleness suffix support**: `~s` staleness suffix is now parsed in LSCache compatibility, allowing stale cache entries to be purged by single tag or URL.
 - **`X-LiteSpeed-Vary: value=` support via request variables**: responses declaring `value=<name>` are now stored instead of bypassed, partitioned per request by the `set_var` variable `<name>` (empty when unset). Only one value dimension is supported (last wins); values are normalized and truncated past 256 characters.
 
+### Changed
+
+#### Reverse proxy
+
+- **`localhost` exception from strict DNS resolution**: `localhost` URLs are no longer resolved via strict DNS; they are treated as local addresses and bypassed to avoid unnecessary DNS lookups.
+
 ### Fixed
 
 #### HTTP cache
