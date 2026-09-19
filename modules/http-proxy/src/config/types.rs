@@ -47,7 +47,7 @@ impl Default for CircuitBreakerConfig {
             enabled: true,
             max_fails: 5,
             window: Duration::from_secs(30),
-            open_duration: Duration::from_secs(30),
+            open_duration: Duration::from_secs(5),
             consecutive_passes: 1,
             record_5xx: false,
             latency_threshold: None,

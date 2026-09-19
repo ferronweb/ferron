@@ -24,7 +24,7 @@ use crate::types::upstream::ProxyHeader;
 /// Default keep-alive idle timeout in milliseconds.
 pub(super) const DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS: u64 = 60_000;
 /// Default connection timeout in milliseconds.
-pub(super) const DEFAULT_CONNECTION_TIMEOUT_MS: u64 = 5_000;
+pub(super) const DEFAULT_CONNECTION_TIMEOUT_MS: u64 = 2_000;
 /// mTLS file cache
 pub static MTLS_FILE_CACHE: LazyLock<DashMap<String, std::sync::Arc<Vec<u8>>>> =
     LazyLock::new(DashMap::new);
