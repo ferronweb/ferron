@@ -6,11 +6,19 @@
 
 ### Breaking changes
 
+#### Reverse proxy
+
+- **Shorter breaker and timeout defaults**: `circuit_breaker.open_duration` default is now `5s` (was `30s`) and upstream `connection_timeout` default is now `2s` (was `5s`), so brief Docker Compose recreates and Apache graceful reloads recover quickly. Increase them explicitly if you need the old behavior.
+
 #### Forwarded authentication
 
 - **Forwarded auth URI behavior change**: Ferron no longer appends the original URI path to the redirect URL by default, instead relying on `X-Forwarded-Uri` header. Use the `append_uri` subdirective to restore the previous behavior.
 
 ### Added
+
+#### Reverse proxy
+
+- **`retry_interval` directive**: delay between same-upstream retry attempts plus up to 25% jitter (default `200ms`, `"0s"` disables waiting). Masks brief backend restarts such as Docker Compose recreates or Apache graceful reloads.
 
 #### Forwarded authentication
 
@@ -31,6 +39,7 @@
 #### Reverse proxy
 
 - **`localhost` exception from strict DNS resolution**: `localhost` URLs are no longer resolved via strict DNS; they are treated as local addresses and bypassed to avoid unnecessary DNS lookups.
+- **Stale pooled-connection forgiveness**: a first failure on a reused keepalive connection (`SendRequestError`) is no longer counted toward the circuit breaker when a same-upstream retry will be attempted. This prevents one dead socket closed during reloads from tripping the breaker when the retry succeeds.
 
 ### Fixed
 
