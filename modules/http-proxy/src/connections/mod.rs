@@ -563,36 +563,82 @@ pub fn return_connection_to_pool(
             )
         };
 
-        // Fast path: if no thread is waiting for a connection, skip the
-        // PENDING_PULLS lock entirely. This avoids RwLock contention on the
-        // hot path when the pool is not exhausted.
-        if PENDING_PULL_COUNT.load(Ordering::Relaxed) > 0 {
-            if let Some(pending_pull) = PENDING_PULLS
-                .read()
-                .get(&(local_limit_key.clone(), is_unix))
-                .and_then(|q| q.pop())
-            {
-                // Cancel any pending pull for this local limit key, if one exists.
-                PENDING_PULL_COUNT.fetch_sub(1, Ordering::Relaxed);
-                pending_pull.cancel();
-            } else if local_limit_key.is_some() {
-                if let Some(pending_pull) = PENDING_PULLS
-                    .read()
-                    .get(&(None, is_unix))
-                    .and_then(|q| q.pop())
-                {
-                    // Cancel any pending pull for the global key, if one exists.
-                    PENDING_PULL_COUNT.fetch_sub(1, Ordering::Relaxed);
-                    pending_pull.cancel();
-                }
-            }
-        }
+        // Freed capacity may unblock a waiter regardless of storing.
+        wake_pending_pull(&local_limit_key, is_unix);
 
         stored
     });
 
     let thread_id = get_tls_thread_id();
     POOL_STATS.record_return(thread_id, &key.0, stored);
+}
+
+/// Discard a pulled pool slot without returning a connection.
+///
+/// Used when a proxied response body was truncated or abandoned mid-stream:
+/// an HTTP/1 connection with unread bytes cannot be safely reused, so the
+/// slot is released (outstanding is decremented, waiters are woken) and the
+/// connection is dropped instead of parked as idle.
+#[inline]
+pub fn discard_connection_to_pool(
+    key: &PoolKey,
+    local_limit_key: Option<Arc<UpstreamInner>>,
+    is_unix: bool,
+) {
+    TLS_POOLS.with(|tls| {
+        // SAFETY: same single-threaded-per-core confinement as the return path.
+        let guard = unsafe { &*tls.get() };
+        let Some(pools) = guard.as_ref() else {
+            return;
+        };
+
+        if is_unix {
+            #[cfg(unix)]
+            pools
+                .unix_pool
+                .discard_slot_with_local_limit(local_limit_key.as_ref());
+        } else {
+            pools
+                .tcp_pool
+                .discard_slot_with_local_limit(local_limit_key.as_ref());
+        }
+
+        wake_pending_pull(&local_limit_key, is_unix);
+    });
+
+    let thread_id = get_tls_thread_id();
+    POOL_STATS.record_return(thread_id, &key.0, false);
+}
+
+/// Wake one waiter for freed pool capacity, if any.
+///
+/// Shared by the return and discard paths: both release an outstanding slot.
+#[inline]
+fn wake_pending_pull(local_limit_key: &Option<Arc<UpstreamInner>>, is_unix: bool) {
+    // Fast path: if no thread is waiting for a connection, skip the
+    // PENDING_PULLS lock entirely. This avoids RwLock contention on the
+    // hot path when the pool is not exhausted.
+    if PENDING_PULL_COUNT.load(Ordering::Relaxed) > 0 {
+        if let Some(pending_pull) = PENDING_PULLS
+            .read()
+            .get(&(local_limit_key.clone(), is_unix))
+            .and_then(|q| q.pop())
+        {
+            // Cancel any pending pull for this local limit key, if one exists.
+            PENDING_PULL_COUNT.fetch_sub(1, Ordering::Relaxed);
+            pending_pull.cancel();
+        } else if local_limit_key.is_some() {
+            if let Some(pending_pull) = PENDING_PULLS
+                .read()
+                .get(&(None, is_unix))
+                .and_then(|q| q.pop())
+            {
+                // Cancel any pending pull for the global key, if one exists.
+                PENDING_PULL_COUNT.fetch_sub(1, Ordering::Relaxed);
+                pending_pull.cancel();
+            }
+        }
+    }
 }
 
 /// Get the cached thread ID from thread-local pool storage.

@@ -219,12 +219,21 @@ pub async fn try_send_with_pool(
 }
 
 /// Wait for the pending connection to become ready.
+///
+/// Bounded by `idle_timeout`: a connection whose previous body never drains
+/// must not hold its pool slot (and the downstream active-request slot)
+/// until pipeline timeout. On timeout the caller falls back to establishing
+/// a fresh connection. Dropping the surrounding stage future (pipeline
+/// timeout) drops the owned `PooledConnection`, releasing the slot via its
+/// `Drop` impl, so no slot leaks on cancellation either.
 #[inline]
 async fn wait_for_ready(pending_item: &mut PooledConnection, idle_timeout: Duration) -> bool {
     if let Some(wrapper) = pending_item.inner_mut() {
-        if wrapper.wait_ready(Some(idle_timeout)).await {
-            return true;
-        }
+        // `wait_ready` only enforces idle expiry after readiness, so bound
+        // the pend itself.
+        return zincio::time::timeout(idle_timeout, wrapper.wait_ready(Some(idle_timeout)))
+            .await
+            .unwrap_or_default();
     }
 
     false
@@ -268,12 +277,23 @@ async fn wait_for_returned(
                     .expect("pool item state is invalid at this point");
                 return Some((next_item, w));
             }
-            if should_keep && wrapper.wait_ready(Some(idle_timeout)).await {
-                let w = next_item
-                    .inner_mut()
-                    .take()
-                    .expect("pool item state is invalid at this point");
-                return Some((next_item, w));
+            if should_keep {
+                // Bound like `wait_for_ready`: never hold the pull loop
+                // past `idle_timeout` for one busy connection. This loop is
+                // additionally raced against establishing a new connection
+                // by the caller, so a timeout here just moves to the next
+                // candidate instead of stalling the request.
+                let ready =
+                    zincio::time::timeout(idle_timeout, wrapper.wait_ready(Some(idle_timeout)))
+                        .await
+                        .unwrap_or_default();
+                if ready {
+                    let w = next_item
+                        .inner_mut()
+                        .take()
+                        .expect("pool item state is invalid at this point");
+                    return Some((next_item, w));
+                }
             }
             // Dead or not ready after wait, discard and continue
             let _ = next_item.take();
@@ -608,15 +628,20 @@ pub async fn send_via_wrapper(
 
         let backend_url = item.key().map(|k| k.0.proxy_to.clone()).unwrap_or_default();
 
-        let pool_return_info = if enable_keepalive && !wrapper.is_closed() {
-            Some(crate::send_request::PoolReturnInfo::from_item(
-                item, wrapper, is_unix,
-            ))
+        let (pool_return_info, return_later) = if enable_keepalive && !wrapper.is_closed() {
+            // If HTTP/1.x is returned early, this might cause stall in the connection pool...
+            let return_later = !wrapper.multiplexable();
+            (
+                Some(crate::send_request::PoolReturnInfo::from_item(
+                    item, wrapper, is_unix,
+                )),
+                return_later,
+            )
         } else {
             // Item will be dropped here, returning connection to pool via its Drop impl
             // (wrapper is consumed by the response and not returned to pool)
             drop(item);
-            None
+            (None, false)
         };
 
         let expected_length = parts
@@ -641,14 +666,18 @@ pub async fn send_via_wrapper(
             tracking_body.map_err(std::io::Error::other),
             tracked_connection,
             Some(truncated_tracker),
+            if return_later {
+                pool_return_info
+            } else {
+                drop(pool_return_info);
+                None
+            },
         );
 
         crate::proxy::response::remove_headers_rfc7230(&mut parts);
 
         let mut response = http::Response::from_parts(parts, tracked_body.boxed_unsync());
         *response.version_mut() = http::Version::default();
-
-        drop(pool_return_info);
 
         Ok(ferron_http::HttpResponse::Custom(response))
     }

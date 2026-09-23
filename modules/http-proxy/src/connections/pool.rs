@@ -337,6 +337,20 @@ where
 
         self.return_connection(key, inner)
     }
+
+    /// Discard a pulled slot without storing a connection.
+    ///
+    /// Decrements outstanding (and local outstanding) without growing idle.
+    /// Used for poisoned connections (e.g. truncated HTTP/1 bodies with
+    /// unread bytes) that must not be reused by the next pull.
+    #[inline]
+    pub fn discard_slot_with_local_limit(&self, local_limit_key: Option<&L>) {
+        if let Some(limit_key) = local_limit_key {
+            self.decrement_local_outstanding(limit_key);
+        }
+        let state = unsafe { &mut *self.inner.get() };
+        state.outstanding = state.outstanding.saturating_sub(1);
+    }
 }
 
 /// An item pulled from the connection pool.
@@ -653,6 +667,33 @@ mod tests {
 
         drop(item);
         assert_eq!(pool.total_idle_count(), 1);
+    }
+
+    #[test]
+    fn test_discard_slot_releases_outstanding_without_growing_idle() {
+        let pool = Rc::new(SingleThreadPool::<String, String, u32>::new(10));
+
+        // Two outstanding pulls, one sharing a local limit key.
+        let _first = pool
+            .pull_with_local_limit(
+                "key1".to_string(),
+                Some(("upstream-a".to_string(), 10)),
+                |_| (true, true),
+            )
+            .unwrap();
+        let _second = pool.pull("key2".to_string(), |_| (true, true)).unwrap();
+        assert_eq!(pool.outstanding_count(), 2);
+        assert_eq!(pool.total_idle_count(), 0);
+
+        // Discarding a poisoned slot (truncated body) must release
+        // outstanding + local counts without parking anything as idle.
+        pool.discard_slot_with_local_limit(Some(&"upstream-a".to_string()));
+        assert_eq!(pool.outstanding_count(), 1);
+        assert_eq!(pool.total_idle_count(), 0);
+
+        // A fresh pull still fits within the freed capacity.
+        let _third = pool.pull("key3".to_string(), |_| (true, true)).unwrap();
+        assert_eq!(pool.outstanding_count(), 2);
     }
 
     #[test]

@@ -23,15 +23,13 @@ pub struct ProxyBodyInner {
 
 #[derive(Clone)]
 pub struct ProxyBody {
-    inner: std::rc::Rc<std::cell::RefCell<Option<ProxyBodyInner>>>,
+    inner: Arc<parking_lot::Mutex<Option<ProxyBodyInner>>>,
 }
-
-// Somehow, it compiles even if it uses Rc<RefCell<T>>, which is !Sync and even !Send...
 
 impl ProxyBody {
     #[inline]
     pub fn new(body: UnsyncBoxBody<Bytes, std::io::Error>) -> Self {
-        let inner = std::rc::Rc::new(std::cell::RefCell::new(Some(ProxyBodyInner {
+        let inner = Arc::new(parking_lot::Mutex::new(Some(ProxyBodyInner {
             inner: body,
             recycleable: true,
         })));
@@ -40,7 +38,7 @@ impl ProxyBody {
 
     #[inline]
     pub fn recycle(self) -> Option<UnsyncBoxBody<Bytes, std::io::Error>> {
-        let mut guard = self.inner.borrow_mut();
+        let mut guard = self.inner.lock();
         if !guard.as_ref().is_some_and(|i| i.recycleable) {
             return None;
         }
@@ -57,7 +55,7 @@ impl hyper::body::Body for ProxyBody {
         self: std::pin::Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
-        let mut guard = self.inner.borrow_mut();
+        let mut guard = self.inner.lock();
         if let Some(inner) = guard.as_mut() {
             let ready_inner =
                 std::task::ready!(std::pin::Pin::new(&mut inner.inner).poll_frame(cx));
@@ -71,7 +69,7 @@ impl hyper::body::Body for ProxyBody {
     #[inline]
     fn size_hint(&self) -> hyper::body::SizeHint {
         self.inner
-            .borrow()
+            .lock()
             .as_ref()
             .map(|i| i.inner.size_hint())
             .unwrap_or_default()
@@ -80,7 +78,7 @@ impl hyper::body::Body for ProxyBody {
     #[inline]
     fn is_end_stream(&self) -> bool {
         self.inner
-            .borrow()
+            .lock()
             .as_ref()
             .is_some_and(|i| i.inner.is_end_stream())
     }
@@ -162,7 +160,9 @@ impl SendRequestWrapper {
             }
             return (true, true);
         }
-        self.last_used = std::time::Instant::now();
+        // Intentionally do NOT refresh `last_used` here: it marks the last
+        // actual send, and refreshing on every busy poll would defeat idle
+        // expiry (a perpetually-busy connection would look forever fresh).
         (false, true)
     }
 
@@ -208,6 +208,16 @@ impl SendRequestWrapper {
             None => Err(ProxyError::SendRequestError(
                 "send_request wrapper empty".into(),
             )),
+        }
+    }
+
+    /// Check if the connection is multiplexable (HTTP/2).
+    #[inline]
+    pub fn multiplexable(&self) -> bool {
+        match &self.inner {
+            Some(SendRequestInner::Http1(_)) => false,
+            Some(SendRequestInner::Http2(_)) => true,
+            None => false,
         }
     }
 }
@@ -288,6 +298,33 @@ impl PoolReturnInfo {
             is_unix,
         }
     }
+
+    /// Whether the pooled connection is already closed.
+    ///
+    /// Closed connections must not be returned to the pool; they are
+    /// discarded instead so the next pull establishes a fresh one.
+    #[inline]
+    fn is_closed(&self) -> bool {
+        self.wrapper.as_ref().is_some_and(|w| w.is_closed())
+    }
+
+    /// Discard the pulled slot without returning the connection.
+    ///
+    /// Used when the response body was truncated or abandoned mid-stream:
+    /// an HTTP/1 connection with unread bytes cannot be safely reused, so
+    /// the slot is released (outstanding is decremented, waiters are woken)
+    /// and the connection is dropped instead of parked as idle.
+    #[inline]
+    fn discard(mut self) {
+        let _ = self.wrapper.take();
+        if let Some(key) = self.key.take() {
+            crate::connections::discard_connection_to_pool(
+                &key,
+                self.local_limit_key.take(),
+                self.is_unix,
+            );
+        }
+    }
 }
 
 impl Drop for PoolReturnInfo {
@@ -313,8 +350,16 @@ impl Drop for PoolReturnInfo {
 /// tracker for LeastConnections/TwoRandomChoices algorithms.
 pub struct TrackedBody<B> {
     inner: B,
+    /// Whether the upstream body has been fully drained.
+    ///
+    /// Updated on every `poll_frame` (and initialized at construction for
+    /// already-ended empty bodies). `Drop` is intentionally unbounded
+    /// (`Drop` impls may not add trait bounds), so the drain state is
+    /// cached here instead of querying `is_end_stream` at drop time.
+    drained: bool,
     _tracker: Option<Arc<()>>,
     _truncated_tracker: Option<TruncatedTracker>,
+    _pool_return_info: Option<PoolReturnInfo>,
 }
 
 impl<B> TrackedBody<B> {
@@ -323,11 +368,50 @@ impl<B> TrackedBody<B> {
         inner: B,
         tracker: Option<Arc<()>>,
         truncated_tracker: Option<TruncatedTracker>,
-    ) -> Self {
+        pool_return_info: Option<PoolReturnInfo>,
+    ) -> Self
+    where
+        B: hyper::body::Body,
+    {
+        let drained = inner.is_end_stream();
         Self {
             inner,
+            drained,
             _tracker: tracker,
             _truncated_tracker: truncated_tracker,
+            _pool_return_info: pool_return_info,
+        }
+    }
+
+    /// Whether the upstream body was fully drained without truncation.
+    ///
+    /// Only fully-drained bodies leave an HTTP/1 connection reusable: any
+    /// unread remainder would be parsed as the next response. Testable
+    /// without touching pool globals.
+    #[inline]
+    fn response_fully_drained(&self) -> bool {
+        self.drained
+            && !self
+                ._truncated_tracker
+                .as_ref()
+                .is_some_and(TruncatedTracker::is_truncated)
+    }
+}
+
+impl<B> Drop for TrackedBody<B> {
+    #[inline]
+    fn drop(&mut self) {
+        let Some(info) = self._pool_return_info.take() else {
+            return;
+        };
+        // Fully-drained bodies on live connections go back to idle.
+        // Truncated/abandoned bodies (e.g. downstream QUIC stall mid-stream)
+        // poison HTTP/1 reuse: discard the slot instead of parking a
+        // half-read connection as idle for the next pull to block on.
+        if self.response_fully_drained() && !info.is_closed() {
+            drop(info);
+        } else {
+            info.discard();
         }
     }
 }
@@ -344,7 +428,10 @@ where
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
-        std::pin::Pin::new(&mut self.inner).poll_frame(cx)
+        let this = self.as_mut().get_mut();
+        let result = std::pin::Pin::new(&mut this.inner).poll_frame(cx);
+        this.drained = this.inner.is_end_stream();
+        result
     }
 
     #[inline]
@@ -480,6 +567,14 @@ impl TruncatedTracker {
             events,
             trace_context,
         }
+    }
+
+    /// Whether the upstream body ended before its declared Content-Length.
+    #[inline]
+    pub(crate) fn is_truncated(&self) -> bool {
+        self.state
+            .truncated
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -691,5 +786,51 @@ mod tests {
             5
         );
         assert!(!state.truncated.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    /// Helper: wrap a tracking body the way `send_via_wrapper` does, without
+    /// pool globals (no `PoolReturnInfo`, so `Drop` is a no-op here).
+    #[inline]
+    fn drained_tracked_body(
+        expected_length: Option<u64>,
+        frames: Vec<Bytes>,
+    ) -> (
+        TrackedBody<ContentLengthTrackingBody<TestBody>>,
+        Arc<BodyTrackingState>,
+    ) {
+        let state = BodyTrackingState::new(expected_length);
+        let tracking = ContentLengthTrackingBody::new(TestBody::new(frames), state.clone());
+        let tracker = TruncatedTracker::new(
+            state.clone(),
+            "http://backend".to_string(),
+            ferron_observability::CompositeEventSink::with_sampler(vec![], None),
+            None,
+        );
+        let tracked = TrackedBody::new(tracking, None, Some(tracker), None);
+        (tracked, state)
+    }
+
+    #[test]
+    fn test_response_fully_drained_when_complete() {
+        let (mut tracked, _state) =
+            drained_tracked_body(Some(11), vec![Bytes::from("hello"), Bytes::from(" world")]);
+        drive_to_completion(&mut tracked);
+        assert!(tracked.response_fully_drained());
+    }
+
+    #[test]
+    fn test_response_not_drained_when_abandoned() {
+        let (tracked, _state) =
+            drained_tracked_body(Some(11), vec![Bytes::from("hello"), Bytes::from(" world")]);
+        // Never polled: upstream bytes still unread, connection unusable.
+        assert!(!tracked.response_fully_drained());
+    }
+
+    #[test]
+    fn test_response_not_drained_when_truncated() {
+        let (mut tracked, state) = drained_tracked_body(Some(100), vec![Bytes::from("hello")]);
+        drive_to_completion(&mut tracked);
+        assert!(state.truncated.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(!tracked.response_fully_drained());
     }
 }

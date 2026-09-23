@@ -62,6 +62,10 @@
 - **Prometheus reload listen fail fix**: previously, when configuration is reloaded, the Prometheus listener would sometimes fail to bind to the configured address due to a race condition.
 - **Global span links fix**: the server now fallback back into global span links (control plane metadata) properly.
 
+#### Reverse proxying
+
+- **Reverse proxy stall fix**: fixed stalls on some connections caused by aborted connections when the reverse proxy was waiting for a response from an HTTP/1.x upstream server.
+
 ## Ferron 3.0.0-rc.6
 
 **Released in September 13, 2026**
