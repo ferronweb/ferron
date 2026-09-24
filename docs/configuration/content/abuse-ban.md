@@ -13,6 +13,7 @@ The abuse protection module tracks abuse events that other HTTP modules emit. Th
 example.com {
     abuse_protection {
         ban_duration "15m"
+        log_rejections
 
         rate_limit_threshold {
             events 5
@@ -29,14 +30,15 @@ example.com {
 
 You can place the `abuse_protection` block inside an HTTP host block.
 
-| Nested directive        | Arguments                 | Description                                                                                  | Default              |
-| ----------------------- | ------------------------- | -------------------------------------------------------------------------------------------- | -------------------- |
-| `ban_duration`          | `<duration>`              | How long to ban an IP.                                                                       | `"15m"` (15 minutes) |
-| `rate_limit_threshold`  | block                     | Ban after N rate limit events in window.                                                     | 5 in 300s            |
-| `brute_force_threshold` | block                     | Ban after N brute force failures in window.                                                  | 3 in 120s            |
-| `custom_threshold`      | block                     | Ban after N custom events in window.                                                         | none                 |
-| `error_rate_threshold`  | block                     | Ban after N error responses (for example, 404, 403) in window.                               | none                 |
-| `allowlist`             | `<string> [<string> ...]` | IP addresses or CIDR ranges exempt from bans. You can specify this directive multiple times. | none                 |
+| Nested directive        | Arguments                 | Description                                                                                                     | Default              |
+| ----------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `ban_duration`          | `<duration>`              | How long to ban an IP.                                                                                          | `"15m"` (15 minutes) |
+| `rate_limit_threshold`  | block                     | Ban after N rate limit events in window.                                                                        | 5 in 300s            |
+| `brute_force_threshold` | block                     | Ban after N brute force failures in window.                                                                     | 3 in 120s            |
+| `custom_threshold`      | block                     | Ban after N custom events in window.                                                                            | none                 |
+| `error_rate_threshold`  | block                     | Ban after N error responses (for example, 404, 403) in window.                                                  | none                 |
+| `allowlist`             | `<string> [<string> ...]` | IP addresses or CIDR ranges exempt from bans. You can specify this directive multiple times.                    | none                 |
+| `log_rejections`        | `[bool]`                  | Re-enable per-request ban rejection debug logs for forensics. Off by default; ban lifecycle transitions are logged instead. | `false` |
 
 ### Threshold blocks
 
@@ -223,22 +225,26 @@ example.com {
 
 The abuse protection module emits the following metrics:
 
-| Metric                      | Type    | Attributes                                                                 | Description                       |
-| --------------------------- | ------- | -------------------------------------------------------------------------- | --------------------------------- |
-| `ferron.abuseban.rejected`  | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`)                 | Requests rejected due to IP ban   |
-| `ferron.abuseban.triggered` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`, `"error_rate"`) | Requests that triggered an IP ban |
+| Metric                      | Type    | Attributes                                                                 | Description                                          |
+| --------------------------- | ------- | -------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `ferron.abuseban.rejected`  | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`)                 | Requests rejected due to IP ban                      |
+| `ferron.abuseban.triggered` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`, `"error_rate"`) | Requests that triggered an IP ban                    |
+| `ferron.abuseban.expired`   | Counter | `ferron.abuseban.reason`                                                   | IP bans that expired                                 |
+| `ferron.abuseban.active_bans` | Gauge | None                                                                       | Current number of active IP bans                     |
 
 ### Logs
 
-- **`DEBUG`**: logged when a ban rejection occurs. The message includes the banned IP address and reason.
 - **`WARN`**: logged when the module triggers a ban for an IP.
+- **`INFO`**: logged once when a ban expires.
+- Per-request ban rejections are **not** logged by default: under a ban wave they would exhaust the observability pipeline. Rejection volume remains visible via the `ferron.abuseban.rejected` counter. Set `log_rejections` to re-enable per-request `DEBUG` rejection logs for forensics.
 
 ### Structured logs
 
 | Description (summary) | Level | Attributes                                                                                                                                                                |
 | --------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ban rejection         | DEBUG | `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
+| Ban rejection         | DEBUG | Only emitted when `log_rejections` is set. `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
 | Ban triggered         | WARN  | `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`)                                                                          |
+| Ban expired           | INFO  | `client.address` (client IP address), `ferron.abuseban.reason`                                                                                                            |
 
 ### Access log fields
 

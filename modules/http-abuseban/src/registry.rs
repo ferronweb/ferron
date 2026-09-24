@@ -1,6 +1,7 @@
 //! Central abuse registry: tracks bans, records events, and enforces thresholds.
 
 use cidr::IpCidr;
+use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 use ferron_http::HttpContext;
 use rustc_hash::FxBuildHasher;
@@ -154,6 +155,30 @@ pub struct AbuseRegistry {
     event_trackers: DashMap<String, EventTracker, FxBuildHasher>,
     /// Metrics: total bans triggered.
     bans_triggered: AtomicU64,
+    /// Current number of active (unexpired) bans. Maintained on every
+    /// insert and every lazy eviction so transition logs and gauges stay
+    /// exact without scanning the map.
+    active_bans: AtomicU64,
+}
+
+/// Outcome of checking an IP against the ban list.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BanCheck {
+    /// The IP is currently banned.
+    Banned {
+        /// Reason recorded when the ban was triggered.
+        reason: String,
+        /// Remaining ban duration.
+        remaining: Duration,
+    },
+    /// The IP had a ban that has just expired. The entry was evicted by
+    /// this call; only the first observer sees this variant.
+    Expired {
+        /// Reason recorded when the ban was triggered.
+        reason: String,
+    },
+    /// The IP is not (and was not) banned.
+    Clean,
 }
 
 impl Default for AbuseRegistry {
@@ -169,6 +194,7 @@ impl AbuseRegistry {
             bans: DashMap::with_hasher(FxBuildHasher),
             event_trackers: DashMap::with_hasher(FxBuildHasher),
             bans_triggered: AtomicU64::new(0),
+            active_bans: AtomicU64::new(0),
         }
     }
 
@@ -181,57 +207,79 @@ impl AbuseRegistry {
     ///
     /// Lazily evicts expired bans on access.
     pub fn is_banned(&self, ip: IpAddr, config: &AbuseRegistryConfig) -> bool {
+        matches!(self.check_ban(ip, config), BanCheck::Banned { .. })
+    }
+
+    /// Check an IP against the ban list, evicting expired bans.
+    ///
+    /// Uses the entry API so observing an expiry and evicting it is atomic:
+    /// concurrent observers either see the active ban or a clean map, and
+    /// only the first observer of an expiry sees [`BanCheck::Expired`].
+    pub fn check_ban(&self, ip: IpAddr, config: &AbuseRegistryConfig) -> BanCheck {
         if !config.enabled {
-            return false;
+            return BanCheck::Clean;
         }
 
         let ip = ip.to_canonical();
 
         if Self::is_allowlisted(ip, config) {
-            return false;
+            return BanCheck::Clean;
         }
 
+        // Read-lock fast path (write-lock path below is mutually exclusive to single thread)
         if let Some(entry) = self.bans.get(&ip) {
             if entry.is_active() {
-                return true;
+                return BanCheck::Banned {
+                    reason: entry.reason.clone(),
+                    remaining: entry.time_remaining(),
+                };
             }
-
-            // Ban expired, remove it.
-            drop(entry);
-            self.bans.remove(&ip);
+        } else {
+            return BanCheck::Clean;
         }
 
-        false
+        match self.bans.entry(ip) {
+            Entry::Occupied(slot) => {
+                if slot.get().is_active() {
+                    BanCheck::Banned {
+                        reason: slot.get().reason.clone(),
+                        remaining: slot.get().time_remaining(),
+                    }
+                } else {
+                    let entry = slot.remove();
+                    self.active_bans.fetch_sub(1, Ordering::Relaxed);
+                    BanCheck::Expired {
+                        reason: entry.reason,
+                    }
+                }
+            }
+            Entry::Vacant(_) => BanCheck::Clean,
+        }
     }
 
-    /// Get the remaining ban duration for an IP, if banned.
-    pub fn ban_time_remaining(&self, ip: IpAddr, config: &AbuseRegistryConfig) -> Option<Duration> {
-        if !config.enabled {
-            return None;
-        }
-
-        self.bans.get(&ip.to_canonical()).and_then(|entry| {
-            if entry.is_active() {
-                Some(entry.time_remaining())
-            } else {
-                None
-            }
-        })
+    /// Current number of active (unexpired) bans.
+    pub fn active_ban_count(&self) -> u64 {
+        self.active_bans.load(Ordering::Relaxed)
     }
 
-    /// Get the reason for the current ban on an IP.
-    pub fn ban_reason(&self, ip: IpAddr, config: &AbuseRegistryConfig) -> Option<String> {
-        if !config.enabled {
-            return None;
-        }
-
-        self.bans.get(&ip.to_canonical()).and_then(|entry| {
-            if entry.is_active() {
-                Some(entry.reason.clone())
-            } else {
-                None
+    /// Insert or refresh a ban, maintaining the active-ban count.
+    ///
+    /// Refreshing an already-active ban keeps the counter exact by only
+    /// counting transitions from inactive to active.
+    fn insert_ban(&self, ip: IpAddr, entry: BanEntry) {
+        match self.bans.entry(ip) {
+            Entry::Occupied(mut slot) => {
+                let was_active = slot.get().is_active();
+                slot.insert(entry);
+                if !was_active {
+                    self.active_bans.fetch_add(1, Ordering::Relaxed);
+                }
             }
-        })
+            Entry::Vacant(slot) => {
+                slot.insert(entry);
+                self.active_bans.fetch_add(1, Ordering::Relaxed);
+            }
+        }
     }
 
     /// Record an abuse event and check thresholds.
@@ -302,7 +350,7 @@ impl AbuseRegistry {
                 expires_at: Instant::now() + ban_duration,
             };
 
-            self.bans.insert(event.ip.to_canonical(), ban_entry);
+            self.insert_ban(event.ip.to_canonical(), ban_entry);
             self.bans_triggered.fetch_add(1, Ordering::Relaxed);
 
             // Clear the tracker after ban. We must drop the RefMut first to avoid
@@ -372,7 +420,7 @@ impl AbuseRegistry {
                     expires_at: Instant::now() + ban_duration,
                 };
 
-                self.bans.insert(event.ip.to_canonical(), ban_entry);
+                self.insert_ban(event.ip.to_canonical(), ban_entry);
                 self.bans_triggered.fetch_add(1, Ordering::Relaxed);
 
                 tracker.events.clear();
@@ -462,18 +510,86 @@ impl AbuseRecorder for AbuseRegistry {
                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                 },
             ));
+
+            emit_active_bans_gauge(ctx, self.active_ban_count());
         }
 
         result
     }
 
     fn is_banned(&self, ip: IpAddr, ctx: &HttpContext) -> bool {
-        if let Some(config) = ctx.extensions.get::<AbuseRegistryConfig>() {
-            self.is_banned(ip, config)
-        } else {
-            false
+        let Some(config) = ctx.extensions.get::<AbuseRegistryConfig>() else {
+            return false;
+        };
+        match self.check_ban(ip, config) {
+            BanCheck::Banned { .. } => true,
+            // Only the first observer of an expiry sees this variant, so the
+            // transition is logged exactly once per ban lifecycle.
+            BanCheck::Expired { reason } => {
+                emit_ban_expired(ctx, ip.to_canonical(), &reason, self.active_ban_count());
+                false
+            }
+            BanCheck::Clean => false,
         }
     }
+}
+
+/// Emit the ban-expired transition log, expiry counter, and active-ban gauge.
+///
+/// Callers must only invoke this for bans they evicted themselves (see
+/// [`AbuseRegistry::check_ban`]) so each expiry is reported exactly once.
+pub(crate) fn emit_ban_expired(ctx: &HttpContext, ip: IpAddr, reason: &str, active_bans: u64) {
+    ctx.events.emit(ferron_observability::Event::Log(
+        ferron_observability::LogEvent {
+            level: ferron_observability::LogLevel::Info,
+            message: format!("Ban expired: IP {ip} - {reason}"),
+            summary: "Ban expired".into(),
+            target: "ferron-http-abuseban",
+            attributes: vec![
+                (
+                    "client.address",
+                    ferron_observability::LogAttributeValue::String(ip.to_string()),
+                ),
+                (
+                    "ferron.abuseban.reason",
+                    ferron_observability::LogAttributeValue::String(reason.to_string()),
+                ),
+            ],
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+        },
+    ));
+
+    ctx.events.emit(ferron_observability::Event::Metric(
+        ferron_observability::MetricEvent {
+            name: "ferron.abuseban.expired",
+            attributes: vec![(
+                "ferron.abuseban.reason",
+                ferron_observability::MetricAttributeValue::String(reason.to_string()),
+            )],
+            ty: ferron_observability::MetricType::Counter,
+            value: ferron_observability::MetricValue::U64(1),
+            unit: Some("{ban}"),
+            description: Some("IP bans that expired."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+        },
+    ));
+
+    emit_active_bans_gauge(ctx, active_bans);
+}
+
+/// Emit the current active-ban count gauge.
+fn emit_active_bans_gauge(ctx: &HttpContext, active_bans: u64) {
+    ctx.events.emit(ferron_observability::Event::Metric(
+        ferron_observability::MetricEvent {
+            name: "ferron.abuseban.active_bans",
+            attributes: vec![],
+            ty: ferron_observability::MetricType::Gauge,
+            value: ferron_observability::MetricValue::U64(active_bans),
+            unit: Some("{ban}"),
+            description: Some("Current number of active IP bans."),
+            trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+        },
+    ));
 }
 
 #[cfg(test)]
@@ -507,9 +623,10 @@ mod tests {
     fn empty_registry_has_no_bans() {
         let registry = AbuseRegistry::new();
         assert!(!registry.is_banned(test_ip(), &make_test_config()));
-        assert!(registry
-            .ban_reason(test_ip(), &make_test_config())
-            .is_none());
+        assert_eq!(
+            registry.check_ban(test_ip(), &make_test_config()),
+            BanCheck::Clean
+        );
     }
 
     #[test]
@@ -550,10 +667,10 @@ mod tests {
 
         assert_eq!(result, EventResult::BanTriggered);
         assert!(registry.is_banned(test_ip(), &make_test_config()));
-        assert_eq!(
-            registry.ban_reason(test_ip(), &make_test_config()),
-            Some("Too fast".to_string())
-        );
+        match registry.check_ban(test_ip(), &make_test_config()) {
+            BanCheck::Banned { reason, .. } => assert_eq!(reason, "Too fast"),
+            other => panic!("expected Banned, got {other:?}"),
+        }
         assert_eq!(registry.total_bans_triggered(), 1);
     }
 
@@ -646,36 +763,6 @@ mod tests {
     }
 
     #[test]
-    fn ban_with_zero_duration_expires_immediately() {
-        let config = AbuseRegistryConfig {
-            enabled: true,
-            ban_duration_secs: 0,
-            thresholds: vec![EventThreshold::new(
-                AbuseEventType::RateLimitExceeded,
-                1,
-                10,
-            )],
-            error_rate_thresholds: Vec::new(),
-            allowlist: Vec::new(),
-        };
-        let registry = AbuseRegistry::new();
-        let event = AbuseEvent::new(
-            AbuseEventType::RateLimitExceeded,
-            test_ip(),
-            "Instant ban".into(),
-            50,
-        );
-
-        assert_eq!(
-            registry.record_event(&event, &config),
-            EventResult::BanTriggered
-        );
-        // With zero duration, the ban should already be expired
-        assert!(!registry.is_banned(test_ip(), &config));
-        assert!(registry.ban_time_remaining(test_ip(), &config).is_none());
-    }
-
-    #[test]
     fn concurrent_event_recording() {
         let registry = Arc::new(AbuseRegistry::new());
         let mut handles = Vec::new();
@@ -759,35 +846,6 @@ mod tests {
             );
         }
         assert!(!registry.is_banned(test_ip(), &config));
-    }
-
-    #[test]
-    fn ban_time_remaining_returns_reasonable_duration() {
-        let config = AbuseRegistryConfig {
-            enabled: true,
-            ban_duration_secs: 3600,
-            thresholds: vec![EventThreshold::new(
-                AbuseEventType::RateLimitExceeded,
-                1,
-                10,
-            )],
-            error_rate_thresholds: Vec::new(),
-            allowlist: Vec::new(),
-        };
-        let registry = AbuseRegistry::new();
-        let event = AbuseEvent::new(
-            AbuseEventType::RateLimitExceeded,
-            test_ip(),
-            "Long ban".into(),
-            50,
-        );
-
-        registry.record_event(&event, &config);
-        let remaining = registry.ban_time_remaining(test_ip(), &config);
-        assert!(remaining.is_some());
-        let secs = remaining.unwrap().as_secs();
-        // Should be close to 3600 seconds (allow slight clock drift)
-        assert!(secs > 3590 && secs <= 3600, "expected ~3600s, got {secs}s");
     }
 
     #[test]
@@ -1068,5 +1126,109 @@ mod tests {
             );
         }
         assert!(!registry.is_banned(ip, &config));
+    }
+
+    fn ban_test_ip(registry: &AbuseRegistry, config: &AbuseRegistryConfig) {
+        let event = AbuseEvent::new(
+            AbuseEventType::RateLimitExceeded,
+            test_ip(),
+            "Too fast".into(),
+            50,
+        );
+        for _ in 0..3 {
+            registry.record_event(&event, config);
+        }
+        assert!(registry.is_banned(test_ip(), config));
+    }
+
+    #[test]
+    fn check_ban_reports_active_ban() {
+        let config = AbuseRegistryConfig {
+            ban_duration_secs: 60,
+            ..make_test_config()
+        };
+        let registry = AbuseRegistry::new();
+        ban_test_ip(&registry, &config);
+
+        match registry.check_ban(test_ip(), &config) {
+            BanCheck::Banned { reason, remaining } => {
+                assert_eq!(reason, "Too fast");
+                assert!(remaining.as_secs() <= 60);
+            }
+            other => panic!("expected Banned, got {other:?}"),
+        }
+        // Observing an active ban must not evict it.
+        assert!(registry.is_banned(test_ip(), &config));
+        assert_eq!(registry.active_ban_count(), 1);
+    }
+
+    #[test]
+    fn check_ban_reports_expiry_exactly_once() {
+        let config = AbuseRegistryConfig {
+            ban_duration_secs: 0,
+            ..make_test_config()
+        };
+        let registry = AbuseRegistry::new();
+        let event = AbuseEvent::new(
+            AbuseEventType::RateLimitExceeded,
+            test_ip(),
+            "Too fast".into(),
+            50,
+        );
+        for _ in 0..3 {
+            registry.record_event(&event, &config);
+        }
+
+        // Zero-duration bans are already expired on first observation.
+        match registry.check_ban(test_ip(), &config) {
+            BanCheck::Expired { reason } => assert_eq!(reason, "Too fast"),
+            other => panic!("expected Expired, got {other:?}"),
+        }
+        // The entry was evicted: later observers see a clean map, so an
+        // expiry transition can only ever be reported once.
+        assert_eq!(registry.check_ban(test_ip(), &config), BanCheck::Clean);
+        assert!(!registry.is_banned(test_ip(), &config));
+        assert_eq!(registry.active_ban_count(), 0);
+    }
+
+    #[test]
+    fn active_ban_count_tracks_lifecycle() {
+        let config = make_test_config();
+        let registry = AbuseRegistry::new();
+        assert_eq!(registry.active_ban_count(), 0);
+
+        ban_test_ip(&registry, &config);
+        assert_eq!(registry.active_ban_count(), 1);
+
+        // Recording further events while banned is a no-op for the ban
+        // set, so the counter must stay exact.
+        let event = AbuseEvent::new(
+            AbuseEventType::RateLimitExceeded,
+            test_ip(),
+            "Too fast".into(),
+            50,
+        );
+        registry.record_event(&event, &config);
+        assert_eq!(registry.active_ban_count(), 1);
+    }
+
+    #[test]
+    fn check_ban_respects_disabled_and_allowlist() {
+        let registry = AbuseRegistry::new();
+        ban_test_ip(&registry, &make_test_config());
+
+        let disabled = AbuseRegistryConfig {
+            enabled: false,
+            ..make_test_config()
+        };
+        assert_eq!(registry.check_ban(test_ip(), &disabled), BanCheck::Clean);
+
+        let allowlisted = AbuseRegistryConfig {
+            allowlist: vec!["192.168.1.0/24".parse().unwrap()],
+            ..make_test_config()
+        };
+        assert_eq!(registry.check_ban(test_ip(), &allowlisted), BanCheck::Clean);
+        // Neither path may evict or report the still-active ban.
+        assert_eq!(registry.active_ban_count(), 1);
     }
 }

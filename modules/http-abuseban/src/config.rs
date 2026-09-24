@@ -10,6 +10,11 @@ use crate::registry::{AbuseRegistryConfig, ErrorRateThresholdConfig, EventThresh
 #[derive(Debug, Clone, Default)]
 pub struct AbuseProtectionConfig {
     pub registry_config: AbuseRegistryConfig,
+    /// Opt back into per-request ban rejection debug logs (for forensics).
+    /// Defaults to `false`: ban lifecycle transitions (triggered / expired)
+    /// are logged instead, since per-request logs can exhaust the
+    /// observability pipeline under ban waves.
+    pub log_rejections: bool,
 }
 
 /// Parse `abuse_protection { }` directive from configuration.
@@ -46,13 +51,18 @@ pub fn parse_abuse_protection_config(
                 enabled: false,
                 ..Default::default()
             },
+            log_rejections: false,
         });
     }
 
     if let Some(children) = &entry.children {
+        let log_rejections = children.get_flag("log_rejections");
         parse_abuse_protection_block(children)
             .ok()
-            .map(|registry_config| AbuseProtectionConfig { registry_config })
+            .map(|registry_config| AbuseProtectionConfig {
+                registry_config,
+                log_rejections,
+            })
     } else {
         None
     }

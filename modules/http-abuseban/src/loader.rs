@@ -113,6 +113,17 @@ impl ModuleLoader for HttpAbuseProtectionModuleLoader {
                     subblock_link: None,
                 },
                 DirectiveSubblock::custom("http_abuse_protection"),
+            )
+            .register(
+                Directive {
+                    name: "log_rejections",
+                    usage: "log_rejections [bool]",
+                    description: "This directive re-enables per-request ban rejection debug logs for forensics. Defaults to off; ban lifecycle transitions are logged instead.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_abuse_protection"),
             );
     }
 

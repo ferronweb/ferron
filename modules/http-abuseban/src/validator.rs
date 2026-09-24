@@ -13,6 +13,7 @@ const RECOGNIZED_DIRECTIVES: &[&str] = &[
     "custom_threshold",
     "error_rate_threshold",
     "allowlist",
+    "log_rejections",
 ];
 
 const THRESHOLD_DIRECTIVES: &[&str] = &["events", "window"];
@@ -73,6 +74,24 @@ impl AbuseProtectionValidator {
             sub.insert("ban_duration".to_string());
             for entry in entries {
                 self.validate_duration_entry(entry, "ban_duration")?;
+            }
+        }
+
+        if let Some(entries) = block.directives.get("log_rejections") {
+            sub.insert("log_rejections".to_string());
+            for entry in entries {
+                if !entry.args.is_empty()
+                    && entry
+                        .args
+                        .first()
+                        .and_then(|arg| arg.as_boolean())
+                        .is_none()
+                {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `log_rejections` — expected a boolean value",
+                    )
+                    .with_span(entry_span(entry)));
+                }
             }
         }
 
