@@ -28,12 +28,17 @@ fuzz_target!(|data: &[u8]| {
 
         // OTLP/HTTP JSON encoding: must not panic, must be deterministic,
         // and must serialize back to JSON.
-        let json = request_to_json(&request);
-        assert!(
-            serde_json::to_vec(&json).is_ok(),
-            "OTLP JSON payload failed to re-serialize"
-        );
-        assert_eq!(request_to_json(&request), json, "JSON encoding not deterministic");
+        if let Ok(json) = request_to_json(&request) {
+            assert!(
+                serde_json::to_vec(&json).is_ok(),
+                "OTLP JSON payload failed to re-serialize"
+            );
+            assert_eq!(
+                request_to_json(&request).unwrap(),
+                json,
+                "JSON encoding not deterministic"
+            );
+        }
     }
 
     // The hex-ID rewrite applied to arbitrary JSON values must be idempotent.

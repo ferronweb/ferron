@@ -149,7 +149,16 @@ impl HttpSignal {
         Resp: Message + Default + serde::de::DeserializeOwned,
         F: Fn(&Resp) -> (u64, String),
     {
-        let body = self.encode(request);
+        let body = match self.encode(request) {
+            Ok(body) => body,
+            Err(error) => {
+                return ExportResult::Failure {
+                    retryable: false,
+                    retry_after: None,
+                    message: format!("could not encode OTLP request: {error}"),
+                }
+            }
+        };
         retry_with_backoff(retry, || {
             self.single_attempt::<Resp, _>(&body, &extract_rejected)
         })
@@ -159,20 +168,19 @@ impl HttpSignal {
     /// Encode the request body: OTLP JSON (pbjson + hex-ID handling) or
     /// binary protobuf, optionally gzip-compressed.
     #[inline]
-    fn encode<T>(&self, request: &T) -> Bytes
+    fn encode<T>(&self, request: &T) -> Result<Bytes, serde_json::Error>
     where
         T: serde::Serialize + Message + Default,
     {
         let body = if self.json {
-            serde_json::to_vec(&request_to_json(request))
-                .expect("OTLP request JSON serialization must not fail")
+            serde_json::to_vec(&request_to_json(request)?)?
         } else {
             request.encode_to_vec()
         };
         if self.gzip {
-            gzip_compress(&body)
+            Ok(gzip_compress(&body))
         } else {
-            body.into()
+            Ok(body.into())
         }
     }
 
@@ -625,6 +633,32 @@ mod tests {
             json["resourceSpans"][0]["resource"]["attributes"][0]["key"],
             "service.name"
         );
+    }
+
+    #[tokio::test]
+    async fn http_json_invalid_enum_returns_encoding_failure() {
+        let signal = HttpSignal::new(
+            SignalKind::Traces,
+            "http://127.0.0.1:1/v1/traces".to_string(),
+            true,
+            false,
+            None,
+            false,
+        )
+        .unwrap();
+        let mut request = sample_trace_request();
+        request.resource_spans[0].scope_spans[0].spans[0].kind = 80;
+
+        let result = signal.export_traces(&request, &test_retry()).await;
+
+        assert!(matches!(
+            result,
+            ExportResult::Failure {
+                retryable: false,
+                message,
+                ..
+            } if message.contains("Invalid variant 80")
+        ));
     }
 
     #[tokio::test]

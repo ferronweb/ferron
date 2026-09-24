@@ -9,11 +9,10 @@ use serde_json::Value;
 /// strings instead of base64 (see the OTLP specification, "JSON Protobuf
 /// Encoding"). [`hexify_id_fields`] rewrites those fields after serialization.
 #[inline]
-pub fn request_to_json<T: serde::Serialize>(message: &T) -> Value {
-    let mut value =
-        serde_json::to_value(message).expect("OTLP request JSON serialization must not fail");
+pub fn request_to_json<T: serde::Serialize>(message: &T) -> Result<Value, serde_json::Error> {
+    let mut value = serde_json::to_value(message)?;
     hexify_id_fields(&mut value);
-    value
+    Ok(value)
 }
 
 /// Recursively rewrite `traceId`, `spanId`, and `parentSpanId` string fields
@@ -81,7 +80,7 @@ mod tests {
             ..Default::default()
         };
 
-        let json = request_to_json(&span);
+        let json = request_to_json(&span).unwrap();
 
         // OTLP JSON encoding: trace/span/parent IDs are hex strings, not base64.
         assert_eq!(json["traceId"], "5B8EFFF798038103D269B633813FC60C");
@@ -96,6 +95,16 @@ mod tests {
     }
 
     #[test]
+    fn invalid_enum_returns_error_instead_of_panicking() {
+        let span = Span {
+            kind: 80,
+            ..Default::default()
+        };
+
+        assert!(request_to_json(&span).is_err());
+    }
+
+    #[test]
     fn exemplar_json_uses_hex_encoded_ids() {
         let exemplar = Exemplar {
             time_unix_nano: 1544712660300000000,
@@ -105,7 +114,7 @@ mod tests {
             ..Default::default()
         };
 
-        let json = request_to_json(&exemplar);
+        let json = request_to_json(&exemplar).unwrap();
 
         assert_eq!(json["traceId"], "5B8EFFF798038103D269B633813FC60C");
         assert_eq!(json["spanId"], "EEE19B7EC3C1B174");
@@ -127,7 +136,7 @@ mod tests {
             ..Default::default()
         };
 
-        let json = request_to_json(&log_record);
+        let json = request_to_json(&log_record).unwrap();
 
         assert_eq!(json["traceId"], "5B8EFFF798038103D269B633813FC60C");
         assert_eq!(json["spanId"], "EEE19B7EC3C1B174");
@@ -230,7 +239,7 @@ mod tests {
             }],
         };
 
-        let json = request_to_json(&request);
+        let json = request_to_json(&request).unwrap();
 
         assert_eq!(json, fixture);
     }
