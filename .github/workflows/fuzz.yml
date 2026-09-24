@@ -45,6 +45,7 @@ jobs:
             | sh
 
       - name: Upload fuzz artifacts
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: fuzz-artifacts
