@@ -74,6 +74,10 @@ If direct access fails, fix the upstream first. Ferron cannot proxy to an unreac
 
 If Ferron and the upstream are in different hosts, containers, or namespaces, do not bind the upstream to `127.0.0.1`. Bind to `0.0.0.0` or the correct interface when needed.
 
+### Upstream rate-limiting or banning everyone?
+
+If the upstream has rate-limiting or anti-abuse rules, it may block Ferron requests. This might be caused by the upstream not recognizing the client IP correctly. Make sure the upstream has `X-Forwarded-For` or `Forwarded` header setting enabled and that Ferron is configured to send them (it sends them by default).
+
 ### Is TLS verification failing?
 
 For HTTPS upstreams with private or self-signed certs:
