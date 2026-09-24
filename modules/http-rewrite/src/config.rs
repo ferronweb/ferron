@@ -62,6 +62,9 @@ pub struct RewriteRule {
     pub regex: Arc<Regex>,
     /// Replacement string (may contain capture group references like `$1`).
     pub replacement: String,
+    /// Optional operator-chosen identifier, surfaced in observability output.
+    /// Must be a plain (non-interpolated) string so metric labels stay bounded.
+    pub name: Option<String>,
     /// Whether the rule applies when the path corresponds to a directory.
     pub is_directory: bool,
     /// Whether the rule applies when the path corresponds to a file.
@@ -140,9 +143,19 @@ fn parse_rewrite_entry(
             )
         };
 
+    // `name` must be a plain string (interpolated values are rejected by the
+    // validator), so it is safe to reuse as a metric label.
+    let name = entry
+        .children
+        .as_ref()
+        .and_then(|children| children.get_value("name"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+
     Some(RewriteRule {
         regex,
         replacement,
+        name,
         is_directory,
         is_file,
         last,
@@ -223,15 +236,30 @@ async fn resolve_path_metadata(url_path: &str, root: &str) -> (PathBuf, Option<(
     (joined, meta)
 }
 
+/// One rewrite rule firing within a request: which rule ran and what it did.
+#[derive(Debug, PartialEq, Clone)]
+pub struct RewriteStep {
+    /// 0-based position of the rule among the evaluated rules.
+    pub rule_index: usize,
+    /// URL before this rule ran.
+    pub from: String,
+    /// URL after this rule ran.
+    pub to: String,
+}
+
 /// Result of applying rewrite rules.
 #[derive(Debug, PartialEq)]
 pub enum RewriteResult {
     /// No rules matched the URL.
     NoMatch,
-    /// URL was successfully rewritten to the given value.
-    Rewritten(String),
-    /// A rule matched but produced an invalid URL (missing leading `/`).
-    InvalidRewrite,
+    /// URL was successfully rewritten, with one step per rule that fired.
+    Rewritten {
+        url: String,
+        steps: Vec<RewriteStep>,
+    },
+    /// A rule matched but produced an invalid URL (missing leading `/`),
+    /// with the 0-based position of the offending rule.
+    InvalidRewrite { rule_index: usize },
 }
 
 /// Apply rewrite rules to a URL, returning the result.
@@ -241,9 +269,9 @@ pub async fn apply_rewrite_rules(
     root: Option<&str>,
 ) -> RewriteResult {
     let mut rewritten = url.to_string();
-    let mut any_rule_matched = false;
+    let mut steps = Vec::new();
 
-    for rule in rules {
+    for (rule_index, rule) in rules.iter().enumerate() {
         if !rule.allow_double_slashes {
             while rewritten.contains("//") {
                 rewritten = rewritten.replace("//", "/");
@@ -268,21 +296,29 @@ pub async fn apply_rewrite_rules(
             .to_string();
 
         if !rewritten.starts_with('/') {
-            return RewriteResult::InvalidRewrite;
+            return RewriteResult::InvalidRewrite { rule_index };
         }
 
-        if old != rewritten {
-            any_rule_matched = true;
+        let matched_this_rule = old != rewritten;
+        if matched_this_rule {
+            steps.push(RewriteStep {
+                rule_index,
+                from: old,
+                to: rewritten.clone(),
+            });
         }
 
-        if rule.last && old != rewritten {
+        if rule.last && matched_this_rule {
             break;
         }
     }
 
-    if any_rule_matched {
-        RewriteResult::Rewritten(rewritten)
-    } else {
+    if steps.is_empty() {
         RewriteResult::NoMatch
+    } else {
+        RewriteResult::Rewritten {
+            url: rewritten,
+            steps,
+        }
     }
 }

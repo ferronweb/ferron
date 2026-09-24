@@ -19,7 +19,8 @@ use ferron_http::span::HttpContextSpanExt;
 use ferron_http::trace_context::current_event_trace_context;
 use ferron_http::HttpContext;
 use ferron_observability::{
-    Event, LogAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue,
+    Event, LogAttributeValue, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+    TraceAttributeValue,
 };
 use rustc_hash::FxBuildHasher;
 
@@ -59,7 +60,7 @@ impl ModuleLoader for HttpRewriteModuleLoader {
                 Directive {
                     name: "rewrite",
                     usage: "rewrite <regex> <replacement> { ... }",
-                    description: "This directive rewrites request URIs using a regex pattern with optional last, directory, file, and allow_double_slashes options.",
+                    description: "This directive rewrites request URIs using a regex pattern with optional last, directory, file, allow_double_slashes, and name options.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,
                     subblock_link: Some(DirectiveSubblock::custom("http_rewrite")),
@@ -115,6 +116,17 @@ impl ModuleLoader for HttpRewriteModuleLoader {
                     name: "allow_double_slashes",
                     usage: "allow_double_slashes [bool]",
                     description: "This directive preserves double slashes in the rewritten URL.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_rewrite"),
+            )
+            .register(
+                Directive {
+                    name: "name",
+                    usage: "name <label>",
+                    description: "This directive sets an operator-chosen identifier for a rewrite rule, surfaced in rewrite observability output. Must be a plain string.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,
                     subblock_link: None,
@@ -214,7 +226,7 @@ impl Stage<HttpContext> for RewriteStage {
         );
 
         let result = apply_rewrite_rules(&original_url, &rules, root.as_deref()).await;
-        let rewritten = match result {
+        let (rewritten, steps) = match result {
             RewriteResult::NoMatch => {
                 ctx.get_span_attributes()
                     .insert("ferron.rewrite.applied", TraceAttributeValue::Bool(false));
@@ -228,11 +240,21 @@ impl Stage<HttpContext> for RewriteStage {
                 );
                 return Ok(true);
             }
-            RewriteResult::InvalidRewrite => {
+            RewriteResult::InvalidRewrite { rule_index } => {
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
+                let mut invalid_attrs = vec![(
+                    "ferron.rewrite.rule_index",
+                    MetricAttributeValue::I64(rule_index as i64 + 1),
+                )];
+                if let Some(name) = rules.get(rule_index).and_then(|rule| rule.name.as_deref()) {
+                    invalid_attrs.push((
+                        "ferron.rewrite.rule_name",
+                        MetricAttributeValue::String(name.to_string()),
+                    ));
+                }
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.rewrite.invalid",
-                    attributes: vec![],
+                    attributes: invalid_attrs,
                     ty: MetricType::Counter,
                     value: MetricValue::U64(1),
                     unit: Some("{request}"),
@@ -241,15 +263,19 @@ impl Stage<HttpContext> for RewriteStage {
                     ),
                     trace_context: current_event_trace_context(ctx),
                 }));
-                ctx.get_span_attributes()
-                    .insert("ferron.rewrite.applied", TraceAttributeValue::Bool(false));
-                ctx.get_span_attributes().insert(
+                let sa = ctx.get_span_attributes();
+                sa.insert("ferron.rewrite.applied", TraceAttributeValue::Bool(false));
+                sa.insert(
                     "ferron.rewrite.pattern_count",
                     TraceAttributeValue::I64(rules.len() as i64),
                 );
+                sa.insert(
+                    "ferron.rewrite.rule_index",
+                    TraceAttributeValue::I64(rule_index as i64 + 1),
+                );
                 return Ok(false);
             }
-            RewriteResult::Rewritten(url) => url,
+            RewriteResult::Rewritten { url, steps } => (url, steps),
         };
 
         let should_log = is_rewrite_log_enabled(&ctx.configuration);
@@ -281,44 +307,117 @@ impl Stage<HttpContext> for RewriteStage {
         }
 
         if should_log {
-            ctx.events.emit(ferron_observability::Event::Log(
-                ferron_observability::LogEvent {
-                    target: "ferron-rewrite",
-                    level: ferron_observability::LogLevel::Info,
-                    message: format!("URL rewritten from \"{original_url}\" to \"{rewritten}\""),
-                    summary: "URL rewritten".into(),
-                    attributes: vec![
-                        (
-                            "ferron.rewrite.from",
-                            LogAttributeValue::String(original_url),
-                        ),
-                        ("ferron.rewrite.to", LogAttributeValue::String(rewritten)),
-                    ],
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                },
-            ));
+            // One log line per fired rule so chained rewrites stay debuggable;
+            // chains are short (bounded by the configured rule count).
+            for step in &steps {
+                let mut attributes = vec![
+                    (
+                        "ferron.rewrite.from",
+                        LogAttributeValue::String(step.from.clone()),
+                    ),
+                    (
+                        "ferron.rewrite.to",
+                        LogAttributeValue::String(step.to.clone()),
+                    ),
+                    (
+                        "ferron.rewrite.rule_index",
+                        LogAttributeValue::I64(step.rule_index as i64 + 1),
+                    ),
+                ];
+                if let Some(name) = rules
+                    .get(step.rule_index)
+                    .and_then(|rule| rule.name.as_deref())
+                {
+                    attributes.push((
+                        "ferron.rewrite.rule_name",
+                        LogAttributeValue::String(name.to_string()),
+                    ));
+                }
+                ctx.events.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        target: "ferron-rewrite",
+                        level: ferron_observability::LogLevel::Info,
+                        message: format!("URL rewritten from \"{}\" to \"{}\"", step.from, step.to),
+                        summary: "URL rewritten".into(),
+                        attributes,
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    },
+                ));
+            }
         }
 
-        ctx.events.emit(Event::Metric(MetricEvent {
-            name: "ferron.rewrite.rewrites_applied",
-            attributes: vec![],
-            ty: MetricType::Counter,
-            value: MetricValue::U64(1),
-            unit: Some("{request}"),
-            description: Some("URLs successfully rewritten."),
-            trace_context: current_event_trace_context(ctx),
-        }));
+        // One counter increment per fired rule so dashboards can break down
+        // rewrites by rule. Single-rule rewrites behave exactly as before.
+        for step in &steps {
+            let mut metric_attrs = vec![(
+                "ferron.rewrite.rule_index",
+                MetricAttributeValue::I64(step.rule_index as i64 + 1),
+            )];
+            if let Some(name) = rules
+                .get(step.rule_index)
+                .and_then(|rule| rule.name.as_deref())
+            {
+                metric_attrs.push((
+                    "ferron.rewrite.rule_name",
+                    MetricAttributeValue::String(name.to_string()),
+                ));
+            }
+            ctx.events.emit(Event::Metric(MetricEvent {
+                name: "ferron.rewrite.rewrites_applied",
+                attributes: metric_attrs,
+                ty: MetricType::Counter,
+                value: MetricValue::U64(1),
+                unit: Some("{request}"),
+                description: Some("Rewrite rule firings (one per matched rule)."),
+                trace_context: current_event_trace_context(ctx),
+            }));
+        }
 
-        ctx.get_span_attributes()
-            .insert("ferron.rewrite.applied", TraceAttributeValue::Bool(true));
-        ctx.get_span_attributes().insert(
+        let first_step = steps
+            .first()
+            .expect("rewritten URLs have at least one step");
+        let first_rule_name = rules
+            .get(first_step.rule_index)
+            .and_then(|rule| rule.name.as_deref());
+        let sa = ctx.get_span_attributes();
+        sa.insert("ferron.rewrite.applied", TraceAttributeValue::Bool(true));
+        sa.insert(
             "ferron.rewrite.pattern_count",
             TraceAttributeValue::I64(rules.len() as i64),
         );
-        custom_access_log_fields(ctx).insert(
+        sa.insert(
+            "ferron.rewrite.matched_rule_count",
+            TraceAttributeValue::I64(steps.len() as i64),
+        );
+        sa.insert(
+            "ferron.rewrite.rule_index",
+            TraceAttributeValue::I64(first_step.rule_index as i64 + 1),
+        );
+        if let Some(name) = first_rule_name {
+            sa.insert(
+                "ferron.rewrite.rule_name",
+                TraceAttributeValue::String(name.to_string()),
+            );
+        }
+        let log_fields = custom_access_log_fields(ctx);
+        log_fields.insert(
             "ferron.rewrite.applied".into(),
             CustomAccessLogField::Bool(true),
         );
+        log_fields.insert(
+            "ferron.rewrite.matched_rules".into(),
+            CustomAccessLogField::U64(steps.len() as u64),
+        );
+        log_fields.insert(
+            "ferron.rewrite.rule_index".into(),
+            CustomAccessLogField::U64(first_step.rule_index as u64 + 1),
+        );
+        if let Some(name) = first_rule_name {
+            log_fields.insert(
+                "ferron.rewrite.rule_name".into(),
+                CustomAccessLogField::String(name.to_string()),
+            );
+        }
 
         Ok(true)
     }
@@ -399,6 +498,28 @@ mod tests {
         }
     }
 
+    fn make_named_options_block(name: &str) -> ServerConfigurationBlock {
+        let mut directives = StdHashMap::default();
+        directives.insert(
+            "name".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(name.to_string(), None)],
+                children: None,
+                span: None,
+            }],
+        );
+        ServerConfigurationBlock {
+            directives: Arc::new(directives),
+            matchers: StdHashMap::default(),
+            span: None,
+        }
+    }
+
+    fn span_attr(ctx: &mut HttpContext, key: &str) -> Option<TraceAttributeValue> {
+        use ferron_http::span::HttpContextSpanExt;
+        ctx.get_span_attributes().get(key).cloned()
+    }
+
     #[tokio::test]
     async fn rewrites_url_with_simple_rule() {
         let config = make_rewrite_config(vec![("^/old/(.*)", "/new/$1", None)]);
@@ -454,5 +575,95 @@ mod tests {
         let _ = stage.run(&mut ctx).await.unwrap();
         assert!(ctx.original_uri.is_some());
         assert_eq!(ctx.original_uri.as_ref().unwrap().path(), "/x/foo");
+    }
+
+    #[tokio::test]
+    async fn chained_rewrite_reports_first_rule_and_step_count() {
+        let config = make_rewrite_config(vec![
+            ("^/legacy/(.*)", "/modern/$1", None),
+            ("^/modern/(.*)", "/current/$1", None),
+        ]);
+        let mut ctx = make_test_context("/legacy/foo", Some(config));
+        let stage = RewriteStage::new(Default::default());
+        assert!(stage.run(&mut ctx).await.unwrap());
+        assert_eq!(ctx.req.as_ref().unwrap().uri().path(), "/current/foo");
+        assert_eq!(
+            span_attr(&mut ctx, "ferron.rewrite.rule_index"),
+            Some(TraceAttributeValue::I64(1))
+        );
+        assert_eq!(
+            span_attr(&mut ctx, "ferron.rewrite.matched_rule_count"),
+            Some(TraceAttributeValue::I64(2))
+        );
+        assert_eq!(
+            span_attr(&mut ctx, "ferron.rewrite.rule_name"),
+            None,
+            "unnamed rules must not emit a rule name"
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_rewrite_reports_offending_rule_index() {
+        let config = make_rewrite_config(vec![
+            ("^/ok/(.*)", "/fine/$1", None),
+            ("^/bad/(.*)", "$1", None),
+        ]);
+        let mut ctx = make_test_context("/bad/path", Some(config));
+        let stage = RewriteStage::new(Default::default());
+        assert!(!stage.run(&mut ctx).await.unwrap());
+        assert!(matches!(
+            ctx.res,
+            Some(ferron_http::HttpResponse::BuiltinError(400, None))
+        ));
+        assert_eq!(
+            span_attr(&mut ctx, "ferron.rewrite.rule_index"),
+            Some(TraceAttributeValue::I64(2))
+        );
+    }
+
+    #[tokio::test]
+    async fn named_rule_surfaces_name_in_span() {
+        let config = make_rewrite_config(vec![(
+            "^/old/(.*)",
+            "/new/$1",
+            Some(make_named_options_block("legacy-redirect")),
+        )]);
+        let mut ctx = make_test_context("/old/path", Some(config));
+        let stage = RewriteStage::new(Default::default());
+        assert!(stage.run(&mut ctx).await.unwrap());
+        assert_eq!(
+            span_attr(&mut ctx, "ferron.rewrite.rule_name"),
+            Some(TraceAttributeValue::String("legacy-redirect".to_string()))
+        );
+        assert_eq!(
+            span_attr(&mut ctx, "ferron.rewrite.rule_index"),
+            Some(TraceAttributeValue::I64(1))
+        );
+    }
+
+    #[test]
+    fn rewrite_rule_name_is_parsed() {
+        let engine = RewriteEngine::new();
+        let mut directives = StdHashMap::default();
+        directives.insert(
+            "rewrite".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![
+                    ServerConfigurationValue::String("^/old/(.*)".to_string(), None),
+                    ServerConfigurationValue::String("/new/$1".to_string(), None),
+                ],
+                children: Some(make_named_options_block("legacy-redirect")),
+                span: None,
+            }],
+        );
+        let mut config = LayeredConfiguration::new();
+        config.add_layer(Arc::new(ServerConfigurationBlock {
+            directives: Arc::new(directives),
+            matchers: StdHashMap::default(),
+            span: None,
+        }));
+        let rules = crate::config::parse_rewrite_config(&config, &engine);
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].name.as_deref(), Some("legacy-redirect"));
     }
 }

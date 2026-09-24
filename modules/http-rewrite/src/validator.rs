@@ -3,7 +3,7 @@ use ferron_core::config::validator::{
 };
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
-const RECOGNIZED_OPTIONS: &[&str] = &["last", "directory", "file", "allow_double_slashes"];
+const RECOGNIZED_OPTIONS: &[&str] = &["last", "directory", "file", "allow_double_slashes", "name"];
 
 #[derive(Default)]
 pub struct RewriteValidator;
@@ -100,14 +100,30 @@ impl RewriteValidator {
                     .with_span(entry_span(nested_entry)));
                 }
                 if !nested_entry.args.is_empty() {
-                    match &nested_entry.args[0] {
-                        ServerConfigurationValue::Boolean(_, _) => {}
-                        _ => {
-                            return Err(ConfigurationValidationError::from(format!(
-                                "Invalid `{key}` — must be a boolean"
-                            ))
-                            .with_span(entry_span(nested_entry)));
-                        }
+                    let valid = if key == "name" {
+                        // Rule names are reused as metric labels, so only
+                        // plain strings are allowed: interpolated values could
+                        // vary per request.
+                        matches!(
+                            &nested_entry.args[0],
+                            ServerConfigurationValue::String(_, _)
+                        )
+                    } else {
+                        matches!(
+                            &nested_entry.args[0],
+                            ServerConfigurationValue::Boolean(_, _)
+                        )
+                    };
+                    if !valid {
+                        let expected = if key == "name" {
+                            "a plain string"
+                        } else {
+                            "a boolean"
+                        };
+                        return Err(ConfigurationValidationError::from(format!(
+                            "Invalid `{key}` — must be {expected}"
+                        ))
+                        .with_span(entry_span(nested_entry)));
                     }
                 }
             }

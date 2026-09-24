@@ -42,12 +42,21 @@
 
 - **`name` subdirective for `status` rules**: `status` blocks accept an optional plain-string `name`, surfaced as the `ferron.rule_id` metric label so same-code rules can be told apart in dashboards.
 
+#### URL rewriting
+
+- **`name` option for `rewrite` rules**: `rewrite` blocks accept an optional plain-string `name`, surfaced as `ferron.rewrite.rule_name` across rewrite metrics, spans, logs, and access-log fields.
+- **Per-rule rewrite attribution**: `ferron.rewrite.rewrites_applied` and `ferron.rewrite.invalid` now carry `ferron.rewrite.rule_index` (1-based rule position); spans, access logs, and `rewrite_log` output additionally report matched-rule counts and per-step from/to URLs for chained rewrites.
+
 ### Changed
 
 #### Reverse proxy
 
 - **`localhost` exception from strict DNS resolution**: `localhost` URLs are no longer resolved via strict DNS; they are treated as local addresses and bypassed to avoid unnecessary DNS lookups.
 - **Stale pooled-connection forgiveness**: a first failure on a reused keepalive connection (`SendRequestError`) is no longer counted toward the circuit breaker when a same-upstream retry will be attempted. This prevents one dead socket closed during reloads from tripping the breaker when the retry succeeds.
+
+#### URL rewriting
+
+- **`ferron.rewrite.rewrites_applied` counts rule firings**: the counter now increments once per matched rule (instead of once per rewritten request), so chained rewrites contribute one increment per step. Single-rule rewrites are unaffected.
 
 ### Fixed
 

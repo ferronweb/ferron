@@ -2,9 +2,9 @@
 use std::{io::Write, path::Path};
 
 use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
-    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
+    core::{wait::HttpWaitStrategy, ContainerPort, Mount, WaitFor},
     runners::AsyncRunner,
+    ContainerAsync, GenericImage, ImageExt, TestcontainersError,
 };
 
 async fn create_ferron_container(
@@ -57,9 +57,20 @@ async fn test_url_rewriting() {
     root "/var/www/ferron"
     rewrite "^/($|[?#].*)" "/basic.txt$1" {
       last true
+      name "index-to-basic"
     }
     rewrite "^/([^?#]*)($|[?#].*)" "/$1.txt$2" {
       file false
+      name "append-txt-extension"
+    }
+  }
+  location "/chain/" {
+    root "/var/www/ferron"
+    rewrite "^/foo$" "/intermediate" {
+      name "chain-first"
+    }
+    rewrite "^/intermediate$" "/basic.txt" {
+      name "chain-second"
     }
   }
 }
@@ -93,6 +104,16 @@ async fn test_url_rewriting() {
     // Test rewriting with path
     let response = client
         .get(format!("http://localhost:{}/basic", port))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(response.text().await.unwrap(), "test content");
+
+    // Test chained named rewrites: /chain/foo -> /intermediate -> /basic.txt
+    let response = client
+        .get(format!("http://localhost:{}/chain/foo", port))
         .send()
         .await
         .unwrap();
