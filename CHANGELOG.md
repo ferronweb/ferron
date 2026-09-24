@@ -47,6 +47,10 @@
 - **`name` option for `rewrite` rules**: `rewrite` blocks accept an optional plain-string `name`, surfaced as `ferron.rewrite.rule_name` across rewrite metrics, spans, logs, and access-log fields.
 - **Per-rule rewrite attribution**: `ferron.rewrite.rewrites_applied` and `ferron.rewrite.invalid` now carry `ferron.rewrite.rule_index` (1-based rule position); spans, access logs, and `rewrite_log` output additionally report matched-rule counts and per-step from/to URLs for chained rewrites.
 
+#### Abuse protection and rate limiting
+
+- **`log_rejections` option**: `abuse_protection` and `rate_limit` blocks accept an optional `log_rejections` flag that re-enables per-request rejection debug logs for forensics (default off).
+
 ### Changed
 
 #### Reverse proxy
@@ -58,7 +62,15 @@
 
 - **`ferron.rewrite.rewrites_applied` counts rule firings**: the counter now increments once per matched rule (instead of once per rewritten request), so chained rewrites contribute one increment per step. Single-rule rewrites are unaffected.
 
+#### Abuse protection and rate limiting
+
+- **Transition-only rejection logging**: ban rejections and rate-limit rejections no longer emit a debug log per request, which could exhaust the observability pipeline under abuse waves. Bans now log `Ban triggered` / `Ban expired` transitions plus a `ferron.abuseban.active_bans` gauge; rate limiting logs the first rejection per key (then at most once per minute) without the raw key value. Set the new `log_rejections` option to restore per-request debug logs for forensics.
+
 ### Fixed
+
+#### Abuse protection and rate limiting
+
+- **Ban eviction race fix**: observing an expired ban and evicting it is now atomic, so concurrent requests can no longer delete a freshly re-triggered ban, and each ban expiry is reported exactly once.
 
 #### HTTP cache
 
