@@ -247,15 +247,11 @@ pub async fn request_handler(
         .requests_total
         .fetch_add(1, Ordering::Relaxed);
 
-    let active_request_guard = if let Some(metric_attrs) = metric_attrs.as_ref() {
-        Some(ActiveRequestGuard::new(
+    let active_request_guard = metric_attrs.as_ref().map(|metric_attrs| ActiveRequestGuard::new(
             metric_attrs.clone(),
             request_trace_context.as_ref().map(to_event_trace_context),
             &events,
-        ))
-    } else {
-        None
-    };
+        ));
 
     let request_timer = std::time::Instant::now();
 
@@ -344,7 +340,7 @@ pub async fn request_handler(
         }
 
         let mut duration_attrs = Vec::with_capacity(base_len + extra_capacity);
-        duration_attrs.extend(metric_attrs.into_iter());
+        duration_attrs.extend(metric_attrs);
         duration_attrs.push(status_code_attr.clone());
         if let Some(ref attr) = error_type_attr {
             duration_attrs.push(attr.clone());
