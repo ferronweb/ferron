@@ -16,7 +16,7 @@ parking_lot = "0.12.5"
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 zincio = { version = "0.2.22", default-features = false, features = ["time"] }
 zincio-hyper = { version = "0.2.22" }
-rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
 tokio-rustls = { version = "0.26", default-features = false }
 webpki-roots = "1.0"
 anyhow = "1.0.102"

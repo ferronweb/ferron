@@ -9,3 +9,6 @@ ferron-dns = { path = "../../types/dns" }
 async-trait = "0.1.89"
 anyhow = "1.0.102"
 tokio = { version = "1", features = ["rt", "process", "macros"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -98,8 +98,14 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    fn write_script(dir: &std::path::Path, name: &str, body: &str) -> String {
-        let path = dir.join(name);
+    /// Write a helper script into a fresh unique temp dir.
+    ///
+    /// Each test gets its own directory so parallel test execution can never
+    /// observe another test's script or log files. The returned `TempDir`
+    /// must be kept alive for the duration of the test.
+    fn write_script(body: &str) -> (tempfile::TempDir, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("helper.sh");
         let mut file = std::fs::File::create(&path).unwrap();
         writeln!(file, "#!/bin/sh").unwrap();
         writeln!(file, "{body}").unwrap();
@@ -110,23 +116,19 @@ mod tests {
             perms.set_mode(0o755);
             std::fs::set_permissions(&path, perms).unwrap();
         }
-        path.to_string_lossy().to_string()
+        let program = path.to_string_lossy().to_string();
+        (dir, program)
     }
 
     #[cfg(unix)]
     #[tokio::test]
     async fn update_record_passes_env_and_succeeds() {
-        let dir = std::env::temp_dir();
-        let log = dir.join("ferron_dns_command_test.log");
-        let _ = std::fs::remove_file(&log);
-        let script = write_script(
-            &dir,
-            "ferron_dns_command_ok.sh",
-            &format!(
-                "echo \"$FERRON_DNS_ACTION|$FERRON_DNS_DOMAIN|$FERRON_DNS_RECORD_TYPE|$FERRON_DNS_RECORD_VALUE|$FERRON_DNS_RECORD_TTL\" >> {}; exit 0",
-                log.display()
-            ),
-        );
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("env.log");
+        let (_script_dir, script) = write_script(&format!(
+            "echo \"$FERRON_DNS_ACTION|$FERRON_DNS_DOMAIN|$FERRON_DNS_RECORD_TYPE|$FERRON_DNS_RECORD_VALUE|$FERRON_DNS_RECORD_TTL\" >> {}; exit 0",
+            log.display()
+        ));
 
         let client = CommandDnsClient::new(script, 60);
         let record = DnsRecord {
@@ -149,17 +151,12 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn delete_record_omits_value_and_ttl() {
-        let dir = std::env::temp_dir();
-        let log = dir.join("ferron_dns_command_del.log");
-        let _ = std::fs::remove_file(&log);
-        let script = write_script(
-            &dir,
-            "ferron_dns_command_del.sh",
-            &format!(
-                "echo \"$FERRON_DNS_ACTION|$FERRON_DNS_RECORD_TYPE|$FERRON_DNS_RECORD_VALUE|$FERRON_DNS_RECORD_TTL\" >> {}; exit 0",
-                log.display()
-            ),
-        );
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("env.log");
+        let (_script_dir, script) = write_script(&format!(
+            "echo \"$FERRON_DNS_ACTION|$FERRON_DNS_RECORD_TYPE|$FERRON_DNS_RECORD_VALUE|$FERRON_DNS_RECORD_TTL\" >> {}; exit 0",
+            log.display()
+        ));
 
         let client = CommandDnsClient::new(script, 60);
         client
@@ -175,8 +172,7 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn non_zero_exit_is_an_error() {
-        let dir = std::env::temp_dir();
-        let script = write_script(&dir, "ferron_dns_command_fail.sh", "exit 3");
+        let (_script_dir, script) = write_script("exit 3");
         let client = CommandDnsClient::new(script, 60);
         let record = DnsRecord {
             name: "x.example.com".to_string(),
@@ -185,6 +181,14 @@ mod tests {
             ttl: 60,
         };
         let err = client.update_record(&record).await.unwrap_err();
-        assert!(err.to_string().contains("exited with status 3"));
+        let message = err.to_string();
+        assert!(
+            !message.contains("failed to run"),
+            "script must execute; got spawn error: {message}"
+        );
+        assert!(
+            message.contains("exited with status 3"),
+            "unexpected error message: {message}"
+        );
     }
 }
