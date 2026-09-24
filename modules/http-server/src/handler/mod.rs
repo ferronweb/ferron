@@ -247,17 +247,15 @@ pub async fn request_handler(
         .requests_total
         .fetch_add(1, Ordering::Relaxed);
 
-    if let Some(metric_attrs) = metric_attrs.as_ref() {
-        events.emit(Event::Metric(MetricEvent {
-            name: "http.server.active_requests",
-            attributes: metric_attrs.clone(),
-            ty: MetricType::UpDownCounter,
-            value: MetricValue::I64(1),
-            unit: Some("{request}"),
-            description: Some("Number of active HTTP server requests."),
-            trace_context: request_trace_context.as_ref().map(to_event_trace_context),
-        }));
-    }
+    let active_request_guard = if let Some(metric_attrs) = metric_attrs.as_ref() {
+        Some(ActiveRequestGuard::new(
+            metric_attrs.clone(),
+            request_trace_context.as_ref().map(to_event_trace_context),
+            &events,
+        ))
+    } else {
+        None
+    };
 
     let request_timer = std::time::Instant::now();
 
@@ -346,7 +344,7 @@ pub async fn request_handler(
         }
 
         let mut duration_attrs = Vec::with_capacity(base_len + extra_capacity);
-        duration_attrs.extend(metric_attrs.iter().cloned());
+        duration_attrs.extend(metric_attrs.into_iter());
         duration_attrs.push(status_code_attr.clone());
         if let Some(ref attr) = error_type_attr {
             duration_attrs.push(attr.clone());
@@ -354,15 +352,7 @@ pub async fn request_handler(
 
         // Decrement active requests (moves metric_attrs, no clone)
         // It would happen even when the pipeline timed out...
-        events.emit(Event::Metric(MetricEvent {
-            name: "http.server.active_requests",
-            attributes: metric_attrs,
-            ty: MetricType::UpDownCounter,
-            value: MetricValue::I64(-1),
-            unit: Some("{request}"),
-            description: Some("Number of active HTTP server requests."),
-            trace_context: request_trace_context.as_ref().map(to_event_trace_context),
-        }));
+        drop(active_request_guard);
 
         events.emit(Event::Metric(MetricEvent {
             name: "http.server.request.duration",

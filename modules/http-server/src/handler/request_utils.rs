@@ -3,8 +3,8 @@ use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::Pipeline;
 use ferron_http::{HttpErrorContext, HttpRequest};
 use ferron_observability::{
-    CompositeEventSink, Event, EventTraceContext, LogAttributeValue, LogEvent, LogLevel, Parent,
-    SpanLink, TraceAttributeValue, TraceEvent,
+    CompositeEventSink, Event, EventTraceContext, LogAttributeValue, LogEvent, LogLevel,
+    MetricAttributeValue, Parent, SpanLink, TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
@@ -418,5 +418,51 @@ mod tests {
 
         // No Host header should be added from authority when authority is absent
         assert!(!request.headers().contains_key(http::header::HOST));
+    }
+}
+
+pub struct ActiveRequestGuard<'a> {
+    attrs: Vec<(&'static str, MetricAttributeValue)>,
+    trace_ctx: Option<EventTraceContext>,
+    events: &'a CompositeEventSink,
+}
+
+impl<'a> ActiveRequestGuard<'a> {
+    #[inline]
+    pub fn new(
+        attrs: Vec<(&'static str, MetricAttributeValue)>,
+        trace_ctx: Option<EventTraceContext>,
+        events: &'a CompositeEventSink,
+    ) -> Self {
+        events.emit(Event::Metric(ferron_observability::MetricEvent {
+            name: "http.server.active_requests",
+            attributes: attrs.clone(),
+            ty: ferron_observability::MetricType::UpDownCounter,
+            value: ferron_observability::MetricValue::I64(1),
+            unit: Some("{request}"),
+            description: Some("Number of active HTTP server requests."),
+            trace_context: trace_ctx.clone(),
+        }));
+        Self {
+            attrs,
+            trace_ctx,
+            events,
+        }
+    }
+}
+
+impl<'a> Drop for ActiveRequestGuard<'a> {
+    #[inline]
+    fn drop(&mut self) {
+        self.events
+            .emit(Event::Metric(ferron_observability::MetricEvent {
+                name: "http.server.active_requests",
+                attributes: std::mem::take(&mut self.attrs),
+                ty: ferron_observability::MetricType::UpDownCounter,
+                value: ferron_observability::MetricValue::I64(-1),
+                unit: Some("{request}"),
+                description: Some("Number of active HTTP server requests."),
+                trace_context: self.trace_ctx.take(),
+            }));
     }
 }
