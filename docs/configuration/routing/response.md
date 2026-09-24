@@ -16,16 +16,17 @@ This page documents directives for returning custom status codes, aborting conne
 ### Custom status codes
 
 - `status <code: integer>` (`http-response`)
-  - This directive specifies an HTTP status code to return. In block form, supports nested `url`, `regex`, `body`, and `location` directives. Default: none
+  - This directive specifies an HTTP status code to return. In block form, supports nested `url`, `regex`, `body`, `location`, and `name` directives. Default: none
 
 #### Block form options
 
-| Nested directive | Arguments  | Description                                                          | Default      |
-| ---------------- | ---------- | -------------------------------------------------------------------- | ------------ |
-| `url`            | `<string>` | Only apply this status to requests matching this exact path.         | all requests |
-| `regex`          | `<string>` | Only apply this status to requests matching this regular expression. | all requests |
-| `body`           | `<string>` | Response body to include.                                            | empty body   |
-| `location`       | `<string>` | Redirect destination for 3xx responses.                              | no redirect  |
+| Nested directive | Arguments  | Description                                                                                   | Default      |
+| ---------------- | ---------- | --------------------------------------------------------------------------------------------- | ------------ |
+| `url`            | `<string>` | Only apply this status to requests matching this exact path.                                  | all requests |
+| `regex`          | `<string>` | Only apply this status to requests matching this regular expression.                          | all requests |
+| `body`           | `<string>` | Response body to include.                                                                     | empty body   |
+| `location`       | `<string>` | Redirect destination for 3xx responses.                                                       | no redirect  |
+| `name`           | `<string>` | Operator-chosen rule identifier, surfaced as the `ferron.rule_id` metric label. Must be a plain string (no interpolation). | derived from status code and rule position |
 
 **Configuration example:**
 
@@ -48,6 +49,12 @@ example.com {
     status 410 {
         regex r"^/api/v1/.*"
         body "API v1 has been deprecated"
+    }
+
+    status 410 {
+        name "legacy-docs"
+        url /docs/old
+        body "Docs have moved"
     }
 }
 ```
@@ -155,7 +162,7 @@ Without this option, Ferron silently skips 103 Early Hints on HTTP/1.1 connectio
 | ------------------------------------- | ------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `ferron.response.aborted`             | Counter | None                                          | Connections aborted via the `abort` directive                                         |
 | `ferron.response.ip_blocked`          | Counter | None                                          | Connections blocked via `block`/`allow` directives. Does not include raw IP addresses |
-| `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives                                  |
+| `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives. `ferron.rule_id` is the rule's `name` when set; otherwise it is `status-<code>-rule-<n>`, where `<n>` is the 1-based position of the rule among the evaluated `status` directives |
 
 ### Access log fields
 

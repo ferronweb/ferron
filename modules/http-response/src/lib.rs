@@ -8,7 +8,7 @@
 //! - `abort true`: Immediately close the connection without a response
 //! - `block "ip" "cidr"`: Block listed IPs/CIDRs
 //! - `allow "ip" "cidr"`: Allow listed IPs/CIDRs only
-//! - `status <code> { url|regex|body|location }`: Return a custom status code
+//! - `status <code> { url|regex|body|location|name }`: Return a custom status code
 //! - `early_hints { link "..." }`: Send 103 Early Hints with Link headers
 
 mod config;
@@ -69,12 +69,23 @@ impl ModuleLoader for HttpResponseModuleLoader {
                 Directive {
                     name: "status",
                     usage: "status <code> { ... }",
-                    description: "This directive returns a custom HTTP status code with optional url, regex, location, and body rules.",
+                    description: "This directive returns a custom HTTP status code with optional url, regex, location, body, and name rules.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,
                     subblock_link: Some(DirectiveSubblock::custom("http_status")),
                 },
                 DirectiveSubblock::default(),
+            )
+            .register(
+                Directive {
+                    name: "name",
+                    usage: "name <label>",
+                    description: "This directive sets an operator-chosen identifier for a custom status rule, surfaced as the `ferron.rule_id` metric label. Must be a plain string.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_status"),
             )
             .register(
                 Directive {

@@ -128,7 +128,7 @@ impl HttpResponseStage {
                 .unwrap_or_default(),
         };
 
-        for rule in &config.status_rules {
+        for (rule_index, rule) in config.status_rules.iter().enumerate() {
             let Some(path_match) = Self::rule_matches(rule, &request_path) else {
                 continue;
             };
@@ -145,7 +145,7 @@ impl HttpResponseStage {
                     ),
                     (
                         "ferron.rule_id",
-                        MetricAttributeValue::String(rule.status_code.to_string()),
+                        MetricAttributeValue::String(Self::rule_id(rule, rule_index)),
                     ),
                 ],
                 ty: MetricType::Counter,
@@ -172,6 +172,21 @@ impl HttpResponseStage {
         }
 
         Ok(true)
+    }
+
+    /// Stable identifier for a matched status rule, surfaced as `ferron.rule_id`.
+    ///
+    /// Prefers an explicit `name` when the rule sets one; otherwise falls back
+    /// to the status code plus the 1-based position of the rule among the
+    /// evaluated `status` directives. The fallback deliberately avoids request
+    /// data (matched paths can vary per request), so metric labels stay
+    /// bounded. The previous behavior duplicated the status code, making
+    /// same-code rules indistinguishable.
+    fn rule_id(rule: &StatusRule, rule_index: usize) -> String {
+        if let Some(name) = rule.name.as_deref().filter(|name| !name.is_empty()) {
+            return name.to_string();
+        }
+        format!("status-{}-rule-{}", rule.status_code, rule_index + 1)
     }
 
     /// Check whether a status rule matches the given request path.
@@ -734,6 +749,7 @@ mod tests {
     fn rule_matches_without_url_or_regex() {
         let rule = StatusRule {
             status_code: 403,
+            name: None,
             url: None,
             regex: None,
             location: None,
@@ -747,6 +763,7 @@ mod tests {
     fn rule_matches_url_exact() {
         let rule = StatusRule {
             status_code: 404,
+            name: None,
             url: Some("/missing".to_string()),
             regex: None,
             location: None,
@@ -754,5 +771,74 @@ mod tests {
         };
         assert!(HttpResponseStage::rule_matches(&rule, "/missing").is_some());
         assert!(HttpResponseStage::rule_matches(&rule, "/other").is_none());
+    }
+
+    #[test]
+    fn status_rule_name_is_parsed() {
+        let engine = Arc::new(ResponseEngine::new());
+        let child = make_child_block(vec![(
+            "name",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![make_value_string("gone")],
+                children: None,
+                span: None,
+            }],
+        )]);
+
+        let mut directives = FxHashMap::default();
+        directives.insert(
+            "status".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![make_value_number(410)],
+                children: Some(child),
+                span: None,
+            }],
+        );
+
+        let config = ResponseConfig::from_config(&make_config_with_layer(directives), &engine);
+        assert_eq!(config.status_rules.len(), 1);
+        assert_eq!(config.status_rules[0].name.as_deref(), Some("gone"));
+    }
+
+    #[test]
+    fn rule_id_prefers_explicit_name() {
+        let rule = StatusRule {
+            status_code: 410,
+            name: Some("api-v1-deprecated".to_string()),
+            url: None,
+            regex: None,
+            location: None,
+            body: None,
+        };
+        assert_eq!(HttpResponseStage::rule_id(&rule, 0), "api-v1-deprecated");
+    }
+
+    #[test]
+    fn rule_id_falls_back_to_code_and_position() {
+        let rule = StatusRule {
+            status_code: 410,
+            name: None,
+            url: Some("/old".to_string()),
+            regex: None,
+            location: None,
+            body: None,
+        };
+        // 1-based position among evaluated rules; distinct per rule even when
+        // the status code is the same.
+        assert_eq!(HttpResponseStage::rule_id(&rule, 0), "status-410-rule-1");
+        assert_eq!(HttpResponseStage::rule_id(&rule, 1), "status-410-rule-2");
+    }
+
+    #[test]
+    fn rule_id_ignores_empty_name() {
+        let rule = StatusRule {
+            status_code: 403,
+            name: Some(String::new()),
+            url: None,
+            regex: None,
+            location: None,
+            body: None,
+        };
+        assert_eq!(HttpResponseStage::rule_id(&rule, 2), "status-403-rule-3");
     }
 }

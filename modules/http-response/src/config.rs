@@ -16,6 +16,9 @@ use crate::ResponseEngine;
 pub struct StatusRule {
     /// The HTTP status code to return.
     pub status_code: u16,
+    /// Optional operator-chosen identifier, surfaced as `ferron.rule_id`.
+    /// Must be a plain (non-interpolated) string so metric labels stay bounded.
+    pub name: Option<String>,
     /// Optional exact path match.
     pub url: Option<String>,
     /// Optional regex match against the request path.
@@ -214,8 +217,15 @@ fn parse_status_rules(
         let mut regex = None;
         let mut location = None;
         let mut body = None;
+        let mut name = None;
 
         if let Some(children) = &entry.children {
+            // `name` must be a plain string (interpolated values are rejected
+            // by the validator), so it is safe to reuse as a metric label.
+            name = children
+                .get_value("name")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
             url = children.get_value("url").and_then(|v| {
                 if let Some(ctx) = ctx {
                     v.as_string_with_interpolations(ctx)
@@ -262,6 +272,7 @@ fn parse_status_rules(
 
         rules.push(StatusRule {
             status_code,
+            name,
             url,
             regex,
             location,

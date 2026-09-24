@@ -113,6 +113,28 @@ impl ConfigurationValidator for HttpResponseValidator {
                                     }
                                 }
                             }
+                            "name" => {
+                                // Rule names are reused as metric labels, so
+                                // only plain strings are allowed here:
+                                // interpolated values could vary per request.
+                                if let Some(child_entries) = children.directives.get(child_name) {
+                                    for child_entry in child_entries {
+                                        if child_entry
+                                            .args
+                                            .first()
+                                            .and_then(|arg| arg.as_str())
+                                            .is_none()
+                                        {
+                                            return Err(ConfigurationValidationError::from(
+                                                format!(
+                                                "Invalid `{child_name}` — value must be a plain string"
+                                            ),
+                                            )
+                                            .with_span(entry_span(child_entry)));
+                                        }
+                                    }
+                                }
+                            }
                             _ => (),
                         }
                     }

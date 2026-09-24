@@ -14,6 +14,10 @@
 
 - **Forwarded auth URI behavior change**: Ferron no longer appends the original URI path to the redirect URL by default, instead relying on `X-Forwarded-Uri` header. Use the `append_uri` subdirective to restore the previous behavior.
 
+#### HTTP response control
+
+- **`ferron.rule_id` no longer duplicates the status code**: the `ferron.response.status_rule_matched` metric now labels each match with the rule's `name` when set, or `status-<code>-rule-<n>` (1-based rule position) otherwise. Update dashboards that filter `ferron.rule_id` by bare status code to use `http.response.status_code` or the new identifiers instead.
+
 ### Added
 
 #### Reverse proxy
@@ -33,6 +37,10 @@
 
 - **LSCache staleness suffix support**: `~s` staleness suffix is now parsed in LSCache compatibility, allowing stale cache entries to be purged by single tag or URL.
 - **`X-LiteSpeed-Vary: value=` support via request variables**: responses declaring `value=<name>` are now stored instead of bypassed, partitioned per request by the `set_var` variable `<name>` (empty when unset). Only one value dimension is supported (last wins); values are normalized and truncated past 256 characters.
+
+#### HTTP response control
+
+- **`name` subdirective for `status` rules**: `status` blocks accept an optional plain-string `name`, surfaced as the `ferron.rule_id` metric label so same-code rules can be told apart in dashboards.
 
 ### Changed
 
