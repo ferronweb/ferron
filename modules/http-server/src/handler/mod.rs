@@ -353,6 +353,7 @@ pub async fn request_handler(
         }
 
         // Decrement active requests (moves metric_attrs, no clone)
+        // It would happen even when the pipeline timed out...
         events.emit(Event::Metric(MetricEvent {
             name: "http.server.active_requests",
             attributes: metric_attrs,
