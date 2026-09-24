@@ -20,13 +20,13 @@ This page documents the `rewrite` directive for transforming request URLs using 
 
 #### Block options
 
-| Option                 | Arguments | Description                                                                                                              | Default |
-| ---------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------ | ------- |
-| `last`                 | `<bool>`  | When `true`, stop processing further rewrite rules after this one matches.                                               | `false` |
-| `directory`            | `<bool>`  | When `true`, apply this rule when the URL corresponds to a directory.                                                    | `true`  |
-| `file`                 | `<bool>`  | When `true`, apply this rule when the URL corresponds to a file.                                                         | `true`  |
-| `allow_double_slashes` | `<bool>`  | When `true`, preserve double slashes (`//`) in the URL instead of collapsing them.                                       | `false` |
-| `name`                 | `<string>` | Operator-chosen rule identifier, surfaced in rewrite observability output. Must be a plain string (no interpolation).   | derived from rule position |
+| Option                 | Arguments  | Description                                                                                                           | Default                    |
+| ---------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `last`                 | `<bool>`   | When `true`, stop processing further rewrite rules after this one matches.                                            | `false`                    |
+| `directory`            | `<bool>`   | When `true`, apply this rule when the URL corresponds to a directory.                                                 | `true`                     |
+| `file`                 | `<bool>`   | When `true`, apply this rule when the URL corresponds to a file.                                                      | `true`                     |
+| `allow_double_slashes` | `<bool>`   | When `true`, preserve double slashes (`//`) in the URL instead of collapsing them.                                    | `false`                    |
+| `name`                 | `<string>` | Operator-chosen rule identifier, surfaced in rewrite observability output. Must be a plain string (no interpolation). | derived from rule position |
 
 **Configuration example:**
 
@@ -143,16 +143,10 @@ Rule positions below are 1-based: the first `rewrite` directive in a block is ru
 
 ### Metrics
 
-| Metric                            | Type    | Attributes                                                              | Description                                                                                   |
-| --------------------------------- | ------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `ferron.rewrite.rewrites_applied` | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named)    | Rewrite rule firings — one increment per matched rule, so chained rewrites count once per step |
-| `ferron.rewrite.invalid`          | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named)    | Rewrite rules that produced an invalid path (resulting in a 400 response)                     |
-
-To break down rewrites by rule in Grafana:
-
-```promql
-sum by (ferron_rewrite_rule_name) (rate(ferron_rewrite_rewrites_applied_total[5m]))
-```
+| Metric                            | Type    | Attributes                                                           | Description                                                                                    |
+| --------------------------------- | ------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `ferron.rewrite.rewrites_applied` | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named) | Rewrite rule firings — one increment per matched rule, so chained rewrites count once per step |
+| `ferron.rewrite.invalid`          | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named) | Rewrite rules that produced an invalid path (resulting in a 400 response)                      |
 
 ### Logs
 
@@ -160,29 +154,29 @@ When `rewrite_log` is on, Ferron logs each rewrite operation to the error log at
 
 ### Structured logs
 
-| Description (summary) | Level | Attributes                                                                                                                                                                                                                        |
-| --------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Description (summary) | Level | Attributes                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | URL rewritten         | INFO  | `ferron.rewrite.from` (string) shows the path + query string before the step. `ferron.rewrite.to` (string) shows the path + query string after the step. `ferron.rewrite.rule_index` (int) identifies the fired rule. `ferron.rewrite.rule_name` (string) is present when the rule is named. One line is emitted per fired rule, so chained rewrites produce one line per step |
 
 ### Access log fields
 
 The rewrite module contributes the following fields to the HTTP access log line:
 
-| Field                            | Type | Description                                                              |
-| -------------------------------- | ---- | ------------------------------------------------------------------------ |
-| `ferron.rewrite.applied`         | bool | Whether Ferron applied a URL rewrite to the request.                     |
-| `ferron.rewrite.matched_rules`   | int  | Number of rewrite rules that fired for the request.                      |
-| `ferron.rewrite.rule_index`      | int  | 1-based position of the first fired rule.                                |
-| `ferron.rewrite.rule_name`       | string | Name of the first fired rule, when it sets `name`.                     |
+| Field                          | Type   | Description                                          |
+| ------------------------------ | ------ | ---------------------------------------------------- |
+| `ferron.rewrite.applied`       | bool   | Whether Ferron applied a URL rewrite to the request. |
+| `ferron.rewrite.matched_rules` | int    | Number of rewrite rules that fired for the request.  |
+| `ferron.rewrite.rule_index`    | int    | 1-based position of the first fired rule.            |
+| `ferron.rewrite.rule_name`     | string | Name of the first fired rule, when it sets `name`.   |
 
 ### Trace spans
 
 The rewrite stage sets the following attributes on its `ferron.stage.rewrite` span:
 
-| Attribute                      | Type   | Description                                                                |
-| ------------------------------ | ------ | -------------------------------------------------------------------------- |
-| `ferron.rewrite.applied`       | bool   | Whether Ferron applied a rewrite rule to the request.                      |
-| `ferron.rewrite.pattern_count` | int    | Number of rewrite rules evaluated (not the number that matched).           |
-| `ferron.rewrite.matched_rule_count` | int | Number of rewrite rules that fired for the request.                     |
-| `ferron.rewrite.rule_index`    | int    | 1-based position of the first fired rule.                                  |
-| `ferron.rewrite.rule_name`     | string | Name of the first fired rule, when it sets `name`.                         |
+| Attribute                           | Type   | Description                                                      |
+| ----------------------------------- | ------ | ---------------------------------------------------------------- |
+| `ferron.rewrite.applied`            | bool   | Whether Ferron applied a rewrite rule to the request.            |
+| `ferron.rewrite.pattern_count`      | int    | Number of rewrite rules evaluated (not the number that matched). |
+| `ferron.rewrite.matched_rule_count` | int    | Number of rewrite rules that fired for the request.              |
+| `ferron.rewrite.rule_index`         | int    | 1-based position of the first fired rule.                        |
+| `ferron.rewrite.rule_name`          | string | Name of the first fired rule, when it sets `name`.               |
