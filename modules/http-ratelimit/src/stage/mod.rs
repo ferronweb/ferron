@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::StageConstraint;
@@ -29,6 +30,16 @@ use crate::config::{
     RateLimitConfig, RateLimitZoneId,
 };
 use crate::key_extractor::KeyExtractor;
+use dashmap::DashMap;
+use rustc_hash::FxBuildHasher;
+
+/// Suppression window for rejection transition logs: after logging a
+/// rejection for a key, further rejections for the same key stay silent
+/// until this window elapses. Bounds log volume under rejection storms.
+const REJECTION_LOG_SUPPRESSION_SECS: u64 = 60;
+/// Cap on keys tracked for rejection-log suppression; entries older than
+/// the suppression window are evicted opportunistically past this bound.
+const MAX_REJECTION_LOG_KEYS: usize = 10_000;
 
 /// Shared rate limit engine that manages backends per scope.
 ///
@@ -40,6 +51,10 @@ use crate::key_extractor::KeyExtractor;
 pub struct RateLimitEngine {
     /// Backends keyed by (zone_id, rule fingerprint, backend fingerprint).
     backends: Mutex<HashMap<(RateLimitZoneId, String, String), Arc<RateLimitBackendKind>>>,
+    /// Last rejection-log time per (zone, rule fingerprint, lookup key).
+    /// Bounds transition-log volume: a key logs at most once per
+    /// suppression window while it stays over limit.
+    rejection_logs: DashMap<(String, String, String), Instant, FxBuildHasher>,
 }
 
 impl RateLimitEngine {
@@ -47,6 +62,7 @@ impl RateLimitEngine {
     pub fn new() -> Self {
         Self {
             backends: Mutex::new(HashMap::new()),
+            rejection_logs: DashMap::with_hasher(FxBuildHasher),
         }
     }
 
@@ -121,6 +137,53 @@ impl RateLimitEngine {
         // Another task may have inserted while we built the client.
         let entry = backends.entry(key).or_insert_with(|| Arc::new(backend));
         Ok(entry.clone())
+    }
+
+    /// Decide whether a rejection for this key may be logged.
+    ///
+    /// Returns true for the first observed rejection and at most once per
+    /// suppression window afterwards, so a key stuck over limit cannot spam
+    /// the observability pipeline. Callers that opt into `log_rejections`
+    /// bypass this and log every rejection.
+    fn should_log_rejection(&self, zone: &str, fingerprint: &str, lookup_key: &str) -> bool {
+        use dashmap::mapref::entry::Entry;
+        // Opportunistically evict stale suppression entries past the cap.
+        // This must happen before taking the entry below: `len`/`retain`
+        // lock every shard and would deadlock against the entry guard.
+        if self.rejection_logs.len() >= MAX_REJECTION_LOG_KEYS {
+            let now = Instant::now();
+            let window = Duration::from_secs(REJECTION_LOG_SUPPRESSION_SECS);
+            self.rejection_logs
+                .retain(|_, logged_at| now.duration_since(*logged_at) < window);
+        }
+        let key = (
+            zone.to_string(),
+            fingerprint.to_string(),
+            lookup_key.to_string(),
+        );
+        let now = Instant::now();
+
+        // Read-lock fast path
+        if let Some(logged_at) = self.rejection_logs.get(&key) {
+            if now.duration_since(*logged_at.value()).as_secs() < REJECTION_LOG_SUPPRESSION_SECS {
+                return false;
+            }
+        }
+
+        match self.rejection_logs.entry(key) {
+            Entry::Occupied(mut slot) => {
+                if now.duration_since(*slot.get()).as_secs() >= REJECTION_LOG_SUPPRESSION_SECS {
+                    slot.insert(now);
+                    true
+                } else {
+                    false
+                }
+            }
+            Entry::Vacant(slot) => {
+                slot.insert(now);
+                true
+            }
+        }
     }
 
     /// Check all rate limit rules against the current request.
@@ -318,28 +381,68 @@ impl RateLimitEngine {
                 (decision.allowed, false, decision.retry_after_secs)
             };
             if !allowed {
-                ctx.events.emit(Event::Log(LogEvent {
-                    level: LogLevel::Debug,
-                    message: format!(
-                        "Rate limit bucket exhausted for key \"{}\" (type: {})",
-                        key,
-                        key_type_label(&config.key)
-                    ),
-                    summary: "Rate limit bucket exhausted".into(),
-                    target: "ferron-ratelimit",
-                    attributes: vec![
-                        (
-                            "ferron.ratelimit.zone",
-                            LogAttributeValue::String(zone_id.label().to_string()),
+                // Per-request rejection logs would spam the observability
+                // pipeline under rejection storms. Log the first rejection
+                // per key per suppression window instead; full per-request
+                // logs remain available via `log_rejections`. The raw key is
+                // only included in the opt-in log since it can identify a
+                // client (IP or user identifier).
+                if config.log_rejections {
+                    ctx.events.emit(Event::Log(LogEvent {
+                        level: LogLevel::Debug,
+                        message: format!(
+                            "Rate limit bucket exhausted for key \"{}\" (type: {})",
+                            key,
+                            key_type_label(&config.key)
                         ),
-                        ("ferron.ratelimit.key", LogAttributeValue::String(key)),
-                        (
-                            "ferron.ratelimit.key_type",
-                            LogAttributeValue::String(key_type_label(&config.key).to_string()),
+                        summary: "Rate limit bucket exhausted".into(),
+                        target: "ferron-ratelimit",
+                        attributes: vec![
+                            (
+                                "ferron.ratelimit.zone",
+                                LogAttributeValue::String(zone_id.label().to_string()),
+                            ),
+                            ("ferron.ratelimit.key", LogAttributeValue::String(key)),
+                            (
+                                "ferron.ratelimit.key_type",
+                                LogAttributeValue::String(key_type_label(&config.key).to_string()),
+                            ),
+                        ],
+                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                    }));
+                } else if self.should_log_rejection(zone_id.label(), &fingerprint, &lookup_key) {
+                    ctx.events.emit(Event::Log(LogEvent {
+                        level: LogLevel::Info,
+                        message: format!(
+                            "Rate limit rejecting requests in zone \"{}\" ({} req/s exceeded; further rejections for this key suppressed for {REJECTION_LOG_SUPPRESSION_SECS}s)",
+                            zone_id.label(),
+                            config.rate,
                         ),
-                    ],
-                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                }));
+                        summary: "Rate limit rejecting key".into(),
+                        target: "ferron-ratelimit",
+                        attributes: vec![
+                            (
+                                "ferron.ratelimit.zone",
+                                LogAttributeValue::String(zone_id.label().to_string()),
+                            ),
+                            (
+                                "ferron.ratelimit.key_type",
+                                LogAttributeValue::String(key_type_label(&config.key).to_string()),
+                            ),
+                            (
+                                "ferron.ratelimit.backend",
+                                LogAttributeValue::String(backend_label.clone()),
+                            ),
+                            (
+                                "ferron.ratelimit.limit",
+                                LogAttributeValue::I64(config.rate as i64),
+                            ),
+                        ],
+                        trace_context: ferron_http::trace_context::current_event_trace_context(
+                            ctx,
+                        ),
+                    }));
+                }
                 ctx.events.emit(Event::Metric(MetricEvent {
                     name: "ferron.ratelimit.rejected",
                     attributes: vec![

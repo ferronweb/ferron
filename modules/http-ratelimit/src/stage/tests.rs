@@ -89,6 +89,16 @@ fn make_config_with_backend(
     throttle: bool,
     backend: Option<ServerConfigurationBlock>,
 ) -> LayeredConfiguration {
+    make_config_with_backend_and_log_rejections(rate, burst, throttle, backend, false)
+}
+
+fn make_config_with_backend_and_log_rejections(
+    rate: u64,
+    burst: u64,
+    throttle: bool,
+    backend: Option<ServerConfigurationBlock>,
+    log_rejections: bool,
+) -> LayeredConfiguration {
     let mut inner_directives: FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>> =
         FxHashMap::default();
     inner_directives.insert(
@@ -110,6 +120,16 @@ fn make_config_with_backend(
     if throttle {
         inner_directives.insert(
             "throttle".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: None,
+                span: None,
+            }],
+        );
+    }
+    if log_rejections {
+        inner_directives.insert(
+            "log_rejections".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![],
                 children: None,
@@ -347,5 +367,104 @@ async fn redis_throttle_sleeps_once_and_allows() {
         start.elapsed() >= std::time::Duration::from_millis(50),
         "expected throttle sleep, elapsed {:?}",
         start.elapsed()
+    );
+}
+
+#[test]
+fn rejection_log_suppression_allows_first_then_silences() {
+    let engine = RateLimitEngine::new();
+    assert!(
+        engine.should_log_rejection("global", "fp", "key"),
+        "first rejection must be logged"
+    );
+    assert!(
+        !engine.should_log_rejection("global", "fp", "key"),
+        "immediate repeat must be suppressed"
+    );
+    assert!(
+        engine.should_log_rejection("global", "fp", "other-key"),
+        "different keys are tracked independently"
+    );
+}
+
+/// Test sink that records every event for assertions.
+#[derive(Default)]
+struct RecordingSink {
+    events: std::sync::Mutex<Vec<ferron_observability::Event>>,
+}
+
+impl ferron_observability::EventSink for RecordingSink {
+    fn emit(&self, event: ferron_observability::Event) {
+        self.events.lock().unwrap().push(event);
+    }
+}
+
+fn log_summaries(recorder: &RecordingSink) -> Vec<String> {
+    recorder
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|event| match event {
+            ferron_observability::Event::Log(log) => Some(log.summary.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn rejection_emits_no_per_request_log_by_default() {
+    let engine = Arc::new(RateLimitEngine::new());
+    let stage = RateLimitStage::new(engine);
+    let config = make_rate_limit_config(1, 0);
+
+    // Exhaust the bucket, then reject twice.
+    let mut ctx = make_test_context("192.0.2.70:12345", Some(config.clone()));
+    assert!(stage.run(&mut ctx).await.unwrap());
+
+    let recorder = Arc::new(RecordingSink::default());
+    for _ in 0..2 {
+        let mut ctx = make_test_context("192.0.2.70:12345", Some(config.clone()));
+        ctx.events = CompositeEventSink::new(vec![recorder.clone()]);
+        assert!(!stage.run(&mut ctx).await.unwrap());
+    }
+
+    // Exactly one transition log for both rejections; no per-request spam.
+    assert_eq!(
+        log_summaries(&recorder)
+            .iter()
+            .filter(|summary| *summary == "Rate limit rejecting key")
+            .count(),
+        1
+    );
+    assert!(
+        !log_summaries(&recorder).contains(&"Rate limit bucket exhausted".to_string()),
+        "per-request rejection log must be gone by default"
+    );
+}
+
+#[tokio::test]
+async fn rejection_logs_every_request_when_opted_in() {
+    let engine = Arc::new(RateLimitEngine::new());
+    let stage = RateLimitStage::new(engine);
+    let config = make_config_with_backend_and_log_rejections(1, 0, false, None, true);
+
+    let mut ctx = make_test_context("192.0.2.71:12345", Some(config.clone()));
+    assert!(stage.run(&mut ctx).await.unwrap());
+
+    let recorder = Arc::new(RecordingSink::default());
+    for _ in 0..2 {
+        let mut ctx = make_test_context("192.0.2.71:12345", Some(config.clone()));
+        ctx.events = CompositeEventSink::new(vec![recorder.clone()]);
+        assert!(!stage.run(&mut ctx).await.unwrap());
+    }
+
+    assert_eq!(
+        log_summaries(&recorder)
+            .iter()
+            .filter(|summary| *summary == "Rate limit bucket exhausted")
+            .count(),
+        2,
+        "opted-in per-request rejections must all be logged"
     );
 }

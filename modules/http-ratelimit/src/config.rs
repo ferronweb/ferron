@@ -197,6 +197,11 @@ pub struct RateLimitConfig {
     pub max_buckets: usize,
     /// Whether to throttle requests instead of rejecting them.
     pub throttle: bool,
+    /// Opt back into per-request rejection debug logs (for forensics).
+    /// Defaults to `false`: only the first rejection per key per suppression
+    /// window is logged, since per-request logs can exhaust the
+    /// observability pipeline under rejection storms.
+    pub log_rejections: bool,
 }
 
 impl RateLimitZoneId {
@@ -283,6 +288,8 @@ fn parse_rate_limit_block(block: &ServerConfigurationBlock) -> Option<RateLimitC
 
     let throttle = block.get_flag("throttle");
 
+    let log_rejections = block.get_flag("log_rejections");
+
     Some(RateLimitConfig {
         rate,
         burst,
@@ -291,6 +298,7 @@ fn parse_rate_limit_block(block: &ServerConfigurationBlock) -> Option<RateLimitC
         bucket_ttl_secs,
         max_buckets,
         throttle,
+        log_rejections,
     })
 }
 

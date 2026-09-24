@@ -18,6 +18,7 @@ const GLOBAL_RATE_LIMIT_DIRECTIVES: &[&str] = &[
     "bucket_ttl",
     "max_buckets",
     "throttle",
+    "log_rejections",
 ];
 
 /// Directives allowed inside a host-level `rate_limit { ... }` block.
@@ -30,6 +31,7 @@ const HOST_RATE_LIMIT_DIRECTIVES: &[&str] = &[
     "max_buckets",
     "zone",
     "throttle",
+    "log_rejections",
 ];
 
 /// Validator for `rate_limit` configuration blocks.
@@ -378,6 +380,20 @@ impl RateLimitValidator {
                 {
                     return Err(ConfigurationValidationError::from(
                         "Invalid `throttle` — expected a boolean value",
+                    )
+                    .with_span(entry_span(entry)));
+                }
+            }
+        }
+
+        if let Some(entries) = block.directives.get("log_rejections") {
+            sub.insert("log_rejections".to_string());
+            for entry in entries {
+                if !entry.args.is_empty()
+                    && entry.args.first().and_then(|a| a.as_boolean()).is_none()
+                {
+                    return Err(ConfigurationValidationError::from(
+                        "Invalid `log_rejections` — expected a boolean value",
                     )
                     .with_span(entry_span(entry)));
                 }

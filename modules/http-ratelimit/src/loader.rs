@@ -86,16 +86,16 @@ fn register_rate_limit_directives(registry: &mut ferron_core::directives::Direct
     use ferron_core::directives::{Directive, DirectiveSubblock};
     registry
         .register(
-            Directive {
-                name: "rate_limit",
-                usage: "rate_limit { ... }",
-                description: "This directive configures rate limiting with rate, burst, key, deny status, bucket TTL, max buckets, throttle, and zone settings.",
-                applicable_protocols: Some(&["http"]),
-                global_only: false,
-                subblock_link: Some(DirectiveSubblock::custom("http_rate_limit")),
-            },
-            DirectiveSubblock::default(),
-        )
+                Directive {
+                    name: "rate_limit",
+                    usage: "rate_limit { ... }",
+                    description: "This directive configures rate limiting with rate, burst, key, deny status, bucket TTL, max buckets, throttle, log rejections, and zone settings.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: Some(DirectiveSubblock::custom("http_rate_limit")),
+                },
+                DirectiveSubblock::default(),
+            )
         .register(
             Directive {
                 name: "rate",
@@ -162,17 +162,28 @@ fn register_rate_limit_directives(registry: &mut ferron_core::directives::Direct
             },
             DirectiveSubblock::custom("http_rate_limit"),
         )
-        .register(
-            Directive {
-                name: "throttle",
-                usage: "throttle [bool]",
-                description: "This directive enables throttling instead of denying requests when rate limit is exceeded.",
-                applicable_protocols: Some(&["http"]),
-                global_only: false,
-                subblock_link: None,
-            },
-            DirectiveSubblock::custom("http_rate_limit"),
-        )
+            .register(
+                Directive {
+                    name: "throttle",
+                    usage: "throttle [bool]",
+                    description: "This directive enables throttling instead of denying requests when rate limit is exceeded.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_rate_limit"),
+            )
+            .register(
+                Directive {
+                    name: "log_rejections",
+                    usage: "log_rejections [bool]",
+                    description: "This directive re-enables per-request rate limit rejection debug logs for forensics. Defaults to off; only the first rejection per key per minute is logged.",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_rate_limit"),
+            )
         .register(
             Directive {
                 name: "zone",
