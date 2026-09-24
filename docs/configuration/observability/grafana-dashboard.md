@@ -30,21 +30,23 @@ Top-level variables let a single dashboard adapt to any deployment without editi
 | `Cache zone`       | Named cache zone                | `ferron.cache.zone`        |
 | `Rate-limit zone`  | Named rate-limit zone           | `ferron.ratelimit.zone`    |
 
+Latency and egress panels query both native and classic histograms side by side (for example `p95` and `p95 classic`), so panels render regardless of the exporter's histogram mode. Only the matching series carries data; the other stays empty. There is no histogram-mode switch to set.
+
 > [!warning]
 > Ferron does not expose a per-route (request-path) metric label. The sketch `$route` variable from generic dashboard designs has no matching signal. Filter by upstream backend or by cache/rate-limit zone instead. If you need per-route granularity, promote a bounded route attribute with [baggage promotion](/docs/configuration/observability/prometheus#baggage-promotion). Add it as a variable, but cap `max_distinct` to avoid label explosion.
 
 ## Rows
 
-### Row 1 — Core L7 Matrix (RED, always expanded)
+### Row 1: core L7 matrix (RED, always expanded)
 
 The row every deployment reads first:
 
 - **Traffic rate by status class**: `sum by (http_response_status_code) (rate(ferron_http_server_request_count_total{...}))`
 - **Active requests**: `sum(http_server_active_requests)`
 - **5xx / 4xx error ratio**: error-class request rate divided by total request rate
-- **Request latency (p50/p95/p99)**: `histogram_quantile` over `http_server_request_duration_seconds_bucket`. With [native exponential histograms](/docs/configuration/observability/metrics#exponential-histograms) enabled, tail latencies (p99/p99.9) stay sharp without manual bucket tuning.
+- **Request latency (p50/p95/p99)**: `histogram_quantile` over `http_server_request_duration_seconds`, queried twice — once for [native exponential histograms](/docs/configuration/observability/metrics#exponential-histograms) and once for classic `_bucket` series — so tail latencies stay sharp without manual bucket tuning on either export mode.
 
-### Row 2 — Resiliency primitives (collapsible)
+### Row 2: resiliency primitives (collapsible)
 
 Maps the token-bucket retry budget and rate limiting:
 
@@ -56,27 +58,36 @@ Maps the token-bucket retry budget and rate limiting:
 
 An API gateway engineer keeps this row open to watch JWT-adjacent throttling and endpoint rejection spikes. A CDN operator can leave it collapsed.
 
-### Row 3 — Infrastructure saturation (USE, collapsible)
+### Row 3: infrastructure saturation (USE, collapsible)
 
 Connection-pool and host-pressure panels, crucial for multi-tenant edges and service meshes:
 
 - **Pool saturation**: `ferron_proxy_pool_outstanding` against `ferron_proxy_pool_local_limit` and `ferron_proxy_pool_global_limit`
-- **Pool wait time p95**: `histogram_quantile` over `ferron_proxy_pool_wait_time_seconds_bucket`
+- **Pool wait time p95**: `histogram_quantile` over `ferron_proxy_pool_wait_time_seconds`, native and classic queries side by side
 - **Pool waits /s**: `rate(ferron_proxy_pool_waits_total)` (exhaustion events)
 - **Pool hit ratio**: hits divided by hits + misses
 - **Top backends by outstanding connections**: a table answering "who is the noisy neighbor" directly
 - **Circuit breaker state & unhealthy backends**: `ferron_proxy_circuit_state`, `rate(ferron_proxy_backends_unhealthy_total)`, `ferron_proxy_lb_active_connections`
 - **Host saturation**: `process_cpu_utilization_ratio`, `process_unix_file_descriptor_count`, `process_memory_usage_bytes`
 
-### Row 4 — Edge cache (collapsible)
+### Row 4: edge cache (collapsible)
 
 - **Cache hit ratio**: `rate(ferron_cache_requests_total{...,result="hit"})` / total
 - **Cache entries**: `ferron_cache_entries` by zone
 - **Cache evictions /s (by reason)**: `rate(ferron_cache_evictions_total)` split by `ferron.cache.reason`
-- **Egress bandwidth**: `sum(rate(ferron_static_bytes_sent_sum))` (static-file and PHP-accelerator egress. See the gap below)
+- **Cache request outcomes /s (by reason)**: `rate(ferron_cache_requests_total)` split by zone, result, and `ferron.cache.reason` — answers why the hit ratio is low (`response-no-store`, `private-no-identity`, `zero-ttl`, bypasses)
+- **Egress bandwidth: static file bytes/s**: native `histogram_sum` and classic `_sum` queries side by side (static-file and PHP-accelerator egress. See the gap below)
 - **DNS cache TTL remaining**: `ferron_proxy_dns_cache_ttl_remaining_seconds` (min/avg/max via the `aggregation` label) and DNS hit ratio
 
 A CDN or PHP-accelerator operator keeps this row pinned. An API gateway user can ignore it.
+
+### Row 5: edge policy (4xx attribution, collapsible)
+
+Splits 4xx traffic into intentional edge-policy decisions versus unexpected application errors:
+
+- **Policy decisions /s**: `rate(ferron_response_status_rule_matched_total)` by `ferron.rule_id`, `rate(ferron_abuseban_rejected_total)` by `ferron.abuseban.reason`, `rate(ferron_ratelimit_rejected_total)` by zone, and `rate(ferron_response_ip_blocked_total)`
+
+When the 4xx ratio spikes, check this row first: if the spike is fully explained here, it is scanners and policy enforcement, not a backend failure.
 
 ## Deploying the dashboard
 
@@ -114,6 +125,7 @@ Enable the features whose rows you care about:
 - **Row 2 (retry budget, rate limiting)**: configure [`rate_limit`](/docs/configuration/content/rate-limit) and a proxy with [`retry`](/docs/configuration/proxy/reverse-proxy) settings.
 - **Row 3 (pools, circuit)**: configure a [`proxy`](/docs/configuration/proxy/reverse-proxy) with upstreams.
 - **Row 4 (cache, DNS cache)**: configure [`cache`](/docs/configuration/content/cache) and strict/SRV [`dns_servers`](/docs/configuration/proxy/reverse-proxy).
+- **Row 5 (policy attribution)**: configure [`status`](/docs/configuration/routing/response) rules, [`abuse_protection`](/docs/configuration/content/abuse-ban), or [`rate_limit`](/docs/configuration/content/rate-limit). Readable `ferron.rule_id` values require giving `status` rules `name` values.
 
 ## Known gaps
 

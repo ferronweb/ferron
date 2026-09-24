@@ -22,7 +22,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Core L7 Matrix \u2014 RED method (always on)",
+      "title": "Core L7 matrix: RED method (always on)",
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -315,7 +315,7 @@
             "type": "prometheus",
             "uid": "$data_source"
           },
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds$metric_type{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_request_duration_seconds{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
           "refId": "A",
           "legendFormat": "p50"
         },
@@ -324,7 +324,16 @@
             "type": "prometheus",
             "uid": "$data_source"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds$metric_type{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "refId": "D",
+          "legendFormat": "p50 classic"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
           "refId": "B",
           "legendFormat": "p95"
         },
@@ -333,15 +342,33 @@
             "type": "prometheus",
             "uid": "$data_source"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds$metric_type{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "refId": "E",
+          "legendFormat": "p95 classic"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
           "refId": "C",
           "legendFormat": "p99"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "refId": "F",
+          "legendFormat": "p99 classic"
         }
       ]
     },
     {
       "type": "row",
-      "title": "Resiliency primitives \u2014 retry budget & rate limiting",
+      "title": "Resiliency primitives: retry budget & rate limiting",
       "collapsed": true,
       "gridPos": {
         "h": 1,
@@ -662,7 +689,7 @@
     },
     {
       "type": "row",
-      "title": "Infrastructure saturation \u2014 USE method (pools, circuit, host)",
+      "title": "Infrastructure saturation: USE method (pools, circuit, host)",
       "collapsed": true,
       "gridPos": {
         "h": 1,
@@ -804,9 +831,18 @@
             "type": "prometheus",
             "uid": "$data_source"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(ferron_proxy_pool_wait_time_seconds$metric_type{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum(rate(ferron_proxy_pool_wait_time_seconds{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval])))",
           "refId": "A",
           "legendFormat": "wait p95"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(ferron_proxy_pool_wait_time_seconds_bucket{job=\"$job\",instance=~\"$instance\",ferron_proxy_backend_url=~\"$backend\"}[$__rate_interval])))",
+          "refId": "B",
+          "legendFormat": "wait p95 classic"
         }
       ]
     },
@@ -1139,7 +1175,7 @@
     },
     {
       "type": "row",
-      "title": "Edge cache \u2014 hits, evictions, DNS cache, egress",
+      "title": "Edge cache: hits, evictions, DNS cache, egress",
       "collapsed": true,
       "gridPos": {
         "h": 1,
@@ -1330,7 +1366,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Egress bandwidth \u2014 static file bytes/s",
+      "title": "Egress bandwidth: static file bytes/s",
       "datasource": {
         "type": "prometheus",
         "uid": "$data_source"
@@ -1382,9 +1418,18 @@
             "type": "prometheus",
             "uid": "$data_source"
           },
-          "expr": "sum($metric_type_hsum_fn(rate(ferron_static_bytes_sent$metric_type_hsum{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "histogram_sum(sum(rate(ferron_static_bytes_sent{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
           "refId": "A",
           "legendFormat": "bytes/s"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum(rate(ferron_static_bytes_sent_sum{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "refId": "B",
+          "legendFormat": "bytes/s classic"
         }
       ]
     },
@@ -1534,6 +1579,165 @@
           "legendFormat": "hit_ratio"
         }
       ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache request outcomes /s (by reason)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 100
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "rps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_cache_zone, ferron_cache_result, ferron_cache_reason) (rate(ferron_cache_requests_total{job=\"$job\",instance=~\"$instance\",ferron_cache_zone=~\"$cache_zone\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{ferron_cache_result}} {{ferron_cache_reason}} ({{ferron_cache_zone}})"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Edge policy: 4xx attribution",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 108
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Policy decisions /s (abuse bans, response rules, rate limits)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$data_source"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 109
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never",
+            "axisCenteredZero": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "rps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_rule_id) (rate(ferron_response_status_rule_matched_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "status rule {{ferron_rule_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_abuseban_reason) (rate(ferron_abuseban_rejected_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "refId": "B",
+          "legendFormat": "ban {{ferron_abuseban_reason}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum by (ferron_ratelimit_zone) (rate(ferron_ratelimit_rejected_total{job=\"$job\",instance=~\"$instance\",ferron_ratelimit_zone=~\"$ratelimit_zone\"}[$__rate_interval]))",
+          "refId": "C",
+          "legendFormat": "ratelimit {{ferron_ratelimit_zone}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$data_source"
+          },
+          "expr": "sum(rate(ferron_response_ip_blocked_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "refId": "D",
+          "legendFormat": "ip_blocked"
+        }
+      ]
     }
   ],
   "refresh": "10s",
@@ -1663,68 +1867,6 @@
         "hide": 0
       },
       {
-        "allowCustomValue": false,
-        "type": "custom",
-        "current": {
-          "text": "classic",
-          "value": "_bucket"
-        },
-        "description": "Metric type based on Prometheus settings (native or classic)",
-        "hide": "dontHide",
-        "includeAll": false,
-        "label": "Metric type",
-        "multi": false,
-        "name": "metric_type",
-        "options": [],
-        "query": "[{\"text\":\"classic\",\"value\":\"_bucket\"},{\"text\":\"native\",\"value\":\"\"}]",
-        "skipUrlSync": false,
-        "valuesFormat": "json"
-      },
-      {
-        "allowCustomValue": true,
-        "current": {},
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${data_source}"
-        },
-        "definition": "query_result((absent(___fake_metric_seriously_dont_populate_it{a=\"_\", b=\"\"}) or absent(___fake_metric_seriously_dont_populate_it{a=\"__bucket\", b=\"_sum\"})) and on(a) absent(___fake_metric_seriously_dont_populate_it{a=\"_$metric_type\"}))",
-        "hide": 2,
-        "includeAll": false,
-        "name": "metric_type_hsum",
-        "options": [],
-        "query": {
-          "qryType": 3,
-          "query": "query_result((absent(___fake_metric_seriously_dont_populate_it{a=\"_\", b=\"\"}) or absent(___fake_metric_seriously_dont_populate_it{a=\"__bucket\", b=\"_sum\"})) and on(a) absent(___fake_metric_seriously_dont_populate_it{a=\"_$metric_type\"}))",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "/\\{[^},]*(?:, *)?(?:b=\")?(?<value>[^\"}]*)\"?/",
-        "regexApplyTo": "value",
-        "type": "query"
-      },
-      {
-        "allowCustomValue": true,
-        "current": {},
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${data_source}"
-        },
-        "definition": "query_result((absent(___fake_metric_seriously_dont_populate_it{a=\"_\", b=\"histogram_sum\"}) or absent(___fake_metric_seriously_dont_populate_it{a=\"__bucket\", b=\"sum\"})) and on(a) absent(___fake_metric_seriously_dont_populate_it{a=\"_$metric_type\"}))",
-        "hide": 2,
-        "includeAll": false,
-        "name": "metric_type_hsum_fn",
-        "options": [],
-        "query": {
-          "qryType": 3,
-          "query": "query_result((absent(___fake_metric_seriously_dont_populate_it{a=\"_\", b=\"histogram_sum\"}) or absent(___fake_metric_seriously_dont_populate_it{a=\"__bucket\", b=\"\"})) and on(a) absent(___fake_metric_seriously_dont_populate_it{a=\"_$metric_type\"}))",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "/\\{[^},]*(?:, *)?(?:b=\")?(?<value>[^\"}]*)\"?/",
-        "regexApplyTo": "value",
-        "type": "query"
-      },
-      {
         "allowCustomValue": true,
         "type": "datasource",
         "hide": "dontHide",
@@ -1746,7 +1888,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Ferron 3 \u2014 Reference Dashboard",
+  "title": "Ferron 3: reference dashboard",
   "uid": "ferron3-reference",
   "version": 1,
   "weekStart": ""
