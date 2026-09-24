@@ -247,11 +247,13 @@ pub async fn request_handler(
         .requests_total
         .fetch_add(1, Ordering::Relaxed);
 
-    let active_request_guard = metric_attrs.as_ref().map(|metric_attrs| ActiveRequestGuard::new(
+    let active_request_guard = metric_attrs.as_ref().map(|metric_attrs| {
+        ActiveRequestGuard::new(
             metric_attrs.clone(),
             request_trace_context.as_ref().map(to_event_trace_context),
             &events,
-        ));
+        )
+    });
 
     let request_timer = std::time::Instant::now();
 
