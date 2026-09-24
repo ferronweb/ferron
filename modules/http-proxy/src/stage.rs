@@ -364,8 +364,14 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // Emit per-request circuit breaker state gauge for the selected backend
         if let Some(backend) = metrics.final_selected_backend.as_ref() {
-            if let Some(cb_state) = self.state.circuit_breaker_state.get(backend) {
-                let status = cb_state.status.load(std::sync::atomic::Ordering::Relaxed);
+            if config.circuit_breaker.enabled {
+                let status = self
+                    .state
+                    .circuit_breaker_state
+                    .get(backend)
+                    .map_or(0, |cb_state| {
+                        cb_state.status.load(std::sync::atomic::Ordering::Relaxed)
+                    });
                 ctx.events
                     .emit(ferron_observability::Event::Metric(MetricEvent {
                         name: "ferron.proxy.circuit.state",
@@ -377,11 +383,15 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         trace_context: current_event_trace_context(ctx),
 
                     }));
-            }
-            if let Some(flapping) = self.state.flapping_state.get(&backend.proxy_to) {
-                let is_flapping = flapping.is_flapping();
-                ctx.events
-                    .emit(ferron_observability::Event::Metric(MetricEvent {
+                if config.circuit_breaker.flapping_transitions != 0 {
+                    // If flapping transitions are set to 0, flapping detection would be disabled...
+                    let is_flapping = self
+                        .state
+                        .flapping_state
+                        .get(&backend.proxy_to)
+                        .is_some_and(|flapping| flapping.is_flapping());
+                    ctx.events
+                        .emit(ferron_observability::Event::Metric(MetricEvent {
                         name: "ferron.proxy.circuit.flapping",
                         attributes: upstream_attrs.clone(),
                         ty: MetricType::Gauge,
@@ -392,6 +402,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         ),
                         trace_context: current_event_trace_context(ctx),
                     }));
+                }
             }
         }
 
