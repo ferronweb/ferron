@@ -336,7 +336,7 @@ impl Stage<HttpContext> for RewriteStage {
                 ctx.events.emit(ferron_observability::Event::Log(
                     ferron_observability::LogEvent {
                         target: "ferron-rewrite",
-                        level: ferron_observability::LogLevel::Info,
+                        level: ferron_observability::LogLevel::Debug,
                         message: format!("URL rewritten from \"{}\" to \"{}\"", step.from, step.to),
                         summary: "URL rewritten".into(),
                         attributes,

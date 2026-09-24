@@ -18,6 +18,10 @@
 
 - **`ferron.rule_id` no longer duplicates the status code**: the `ferron.response.status_rule_matched` metric now labels each match with the rule's `name` when set, or `status-<code>-rule-<n>` (1-based rule position) otherwise. Update dashboards that filter `ferron.rule_id` by bare status code to use `http.response.status_code` or the new identifiers instead.
 
+#### URL rewriting
+
+- **`rewrite_log` logs `DEBUG` instead of `INFO`**: the `rewrite_log` directive now logs each rewrite operation to the error log at `DEBUG` level instead of `INFO`, so that it does not pollute normal logs. Update log-level filters to include `DEBUG` for rewrite logs, or use the new structured log attributes instead.
+
 ### Added
 
 #### Reverse proxy

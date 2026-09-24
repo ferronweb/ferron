@@ -150,7 +150,7 @@ Rule positions below are 1-based: the first `rewrite` directive in a block is ru
 
 ### Logs
 
-When `rewrite_log` is on, Ferron logs each rewrite operation to the error log at `INFO` level.
+When `rewrite_log` is on, Ferron logs each rewrite operation to the error log at `DEBUG` level.
 
 ### Structured logs
 
