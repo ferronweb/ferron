@@ -78,6 +78,31 @@ impl<'a> PerStageSpanHooks<'a> {
             }));
         }
     }
+
+    /// End all unfinished stage spans, attaching span attributes staged in
+    /// the request context.
+    ///
+    /// The regular [`StageHooks::after_stage`] path drains the context
+    /// attributes into the finished span automatically, but it never runs
+    /// when a pipeline timeout cancels the stage future. Call this from the
+    /// timeout path so timed-out spans keep the context (e.g. proxy backend
+    /// selection) staged before the timeout fired instead of ending empty.
+    #[inline]
+    pub fn flush_with_context<C: HttpContextSpanExt>(&mut self, ctx: &mut C) {
+        if !self.has_traces {
+            return;
+        }
+        let attributes = ctx.remove_span_attributes();
+        for (event_key, event_name) in self.keys.drain() {
+            self.events.emit(Event::Trace(TraceEvent::EndSpan {
+                key: Cow::Owned(event_key),
+                name: Cow::Owned(event_name),
+                error: Some("Pipeline couldn't complete (timeout or error)".to_string()),
+                attributes: attributes.clone(),
+                control_plane_metadata: self.control_plane_metadata.clone(),
+            }));
+        }
+    }
 }
 
 impl Drop for PerStageSpanHooks<'_> {
@@ -562,5 +587,92 @@ mod tests {
             MetricAttributeValue::StaticStr(val) => assert_eq!(*val, "_other"),
             _ => panic!("method should be StaticStr after categorization"),
         }
+    }
+
+    struct RecordingSink {
+        events: std::sync::Mutex<Vec<Event>>,
+    }
+
+    impl Default for RecordingSink {
+        fn default() -> Self {
+            Self {
+                events: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl ferron_observability::EventSink for RecordingSink {
+        fn emit(&self, event: Event) {
+            self.events.lock().unwrap().push(event);
+        }
+
+        fn processes_traces(&self) -> bool {
+            true
+        }
+    }
+
+    struct DummyStage;
+
+    #[async_trait::async_trait(?Send)]
+    impl ferron_core::pipeline::Stage<ferron_http::HttpContext> for DummyStage {
+        fn name(&self) -> &str {
+            "dummy"
+        }
+
+        async fn run(
+            &self,
+            _ctx: &mut ferron_http::HttpContext,
+        ) -> Result<bool, ferron_core::pipeline::PipelineError> {
+            Ok(true)
+        }
+    }
+
+    #[tokio::test]
+    async fn timeout_flush_attaches_staged_span_attributes() {
+        use ferron_core::pipeline::StageHooks;
+
+        let recorder = std::sync::Arc::new(RecordingSink::default());
+        let events = CompositeEventSink::new(vec![recorder.clone()]);
+        let mut hooks = PerStageSpanHooks::new(&events, true, "parent", "http", None);
+
+        // Simulate a stage that started but was cancelled by a timeout: its
+        // `after_stage` hook never runs.
+        hooks.before_stage(&DummyStage).await;
+
+        // Attributes staged by the stage before the timeout fired.
+        let mut ctx = ferron_http::HttpContext::default();
+        ctx.get_span_attributes().insert(
+            "ferron.proxy.backend_url",
+            TraceAttributeValue::String("http://backend:8080".to_string()),
+        );
+
+        hooks.flush_with_context(&mut ctx);
+
+        let events = recorder.events.lock().unwrap();
+        assert_eq!(events.len(), 2, "expected StartSpan followed by EndSpan");
+        match &events[1] {
+            Event::Trace(TraceEvent::EndSpan {
+                name,
+                error,
+                attributes,
+                ..
+            }) => {
+                assert_eq!(name.as_ref(), "ferron.stage.dummy");
+                assert!(error.is_some(), "timed-out span must carry an error");
+                assert!(
+                    attributes.iter().any(|(key, value)| {
+                        *key == "ferron.proxy.backend_url"
+                            && *value
+                                == TraceAttributeValue::String("http://backend:8080".to_string())
+                    }),
+                    "timed-out span must keep staged backend attributes"
+                );
+            }
+            _ => panic!("expected the second event to be the stage EndSpan"),
+        }
+        assert!(
+            ctx.get_span_attributes().is_empty(),
+            "staged attributes must be drained by the flush"
+        );
     }
 }

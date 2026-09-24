@@ -255,6 +255,53 @@ pub(crate) fn emit_backend_excluded(
     }));
 }
 
+/// Inject span attributes for the selected backend immediately after backend
+/// selection, before any network I/O.
+///
+/// The post-request injection in `ReverseProxyStage` runs only after
+/// `execute_proxy` returns. When a pipeline timeout cancels the stage future,
+/// that code never runs and the `reverse_proxy` span would otherwise be
+/// emitted with no backend context. Attributes staged here survive in the
+/// request context, so the pipeline timeout path can attach them to the
+/// unfinished span.
+#[inline]
+pub(crate) fn inject_selected_backend_span_attributes(
+    ctx: &mut HttpContext,
+    backend: &Arc<types::upstream::UpstreamInner>,
+) {
+    let sa = ctx.get_span_attributes();
+    sa.insert(
+        "ferron.proxy.backend_url",
+        TraceAttributeValue::String(backend.proxy_to.clone()),
+    );
+    if let Some(ref unix_path) = backend.proxy_unix {
+        sa.insert(
+            "ferron.proxy.backend_unix_path",
+            TraceAttributeValue::String(unix_path.clone()),
+        );
+    }
+    if let Some(ref resolved_ip) = backend.connect_to {
+        sa.insert(
+            "ferron.proxy.backend_resolved_ip",
+            TraceAttributeValue::String(resolved_ip.to_string()),
+        );
+    }
+    sa.insert(
+        "ferron.proxy.dns_status",
+        TraceAttributeValue::StaticStr(backend.dns_status.as_label()),
+    );
+    if let Some(connection_timeout) = backend.connection_timeout {
+        sa.insert(
+            "ferron.proxy.upstream.connection_timeout_secs",
+            TraceAttributeValue::F64(connection_timeout.as_secs_f64()),
+        );
+    }
+    sa.insert(
+        "ferron.proxy.upstream.idle_timeout_secs",
+        TraceAttributeValue::F64(backend.idle_timeout.as_secs_f64()),
+    );
+}
+
 /// Background task that periodically emits reverse proxy pool depth and DNS
 /// cache metrics on the secondary runtime.
 ///
@@ -443,4 +490,56 @@ fn emit_dns_ttl_gauges(
         description: Some("Number of active entries in the DNS cache."),
         trace_context: None,
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn test_upstream() -> Arc<types::upstream::UpstreamInner> {
+        Arc::new(types::upstream::UpstreamInner {
+            proxy_to: "http://backend:8080".to_string(),
+            connect_to: Some("127.0.0.1:8080".parse().unwrap()),
+            proxy_unix: None,
+            weight: 1,
+            mtls: None,
+            priority: 0,
+            connection_timeout: Some(Duration::from_secs(5)),
+            idle_timeout: Duration::from_secs(60),
+            dns_status: Default::default(),
+            limit: None,
+        })
+    }
+
+    #[test]
+    fn selected_backend_attributes_are_staged_before_io() {
+        let mut ctx = HttpContext::default();
+
+        inject_selected_backend_span_attributes(&mut ctx, &test_upstream());
+
+        let attrs = ctx.get_span_attributes();
+        assert_eq!(
+            attrs.get("ferron.proxy.backend_url"),
+            Some(&TraceAttributeValue::String(
+                "http://backend:8080".to_string()
+            ))
+        );
+        assert_eq!(
+            attrs.get("ferron.proxy.backend_resolved_ip"),
+            Some(&TraceAttributeValue::String("127.0.0.1:8080".to_string()))
+        );
+        assert_eq!(
+            attrs.get("ferron.proxy.dns_status"),
+            Some(&TraceAttributeValue::StaticStr("static"))
+        );
+        assert_eq!(
+            attrs.get("ferron.proxy.upstream.connection_timeout_secs"),
+            Some(&TraceAttributeValue::F64(5.0))
+        );
+        assert_eq!(
+            attrs.get("ferron.proxy.upstream.idle_timeout_secs"),
+            Some(&TraceAttributeValue::F64(60.0))
+        );
+    }
 }

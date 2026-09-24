@@ -67,6 +67,7 @@
 
 - **Reverse proxy stall fix**: fixed stalls on some connections caused by aborted connections when the reverse proxy was waiting for a response from an HTTP/1.x upstream server.
 - **Circuit breaker metric fix**: fixed missing circuit breaker metrics when circuit breaker is enabled but not yet opened, so that the `ferron.proxy.circuit_breaker.state` metric is always emitted.
+- **Reverse proxy canceled span fix**: the server now emits span attributes even when the reverse proxy request is canceled (due to timeout or explicit cancellation), so that the span is not empty and can be correlated with the request.
 
 ## Ferron 3.0.0-rc.6
 

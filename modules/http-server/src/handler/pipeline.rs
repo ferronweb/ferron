@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferron_core::pipeline::Pipeline;
+use ferron_http::span::HttpContextSpanExt;
 use ferron_http::{trace_context, HttpContext, HttpFileContext, HttpResponse};
 use ferron_observability::{
     CompositeEventSink, Event, LogAttributeValue, Parent, TraceAttributeValue, TraceEvent,
@@ -118,6 +119,17 @@ pub async fn execute_pipeline_stages(
             None
         }
         Err(_) => {
+            // The stage future was cancelled, so `after_stage` never ran and
+            // the in-flight span would otherwise end with no attributes.
+            // Record which timeout fired, then attach anything staged before
+            // the timeout (e.g. proxy backend selection) to that span.
+            if let Some(timeout) = timeout_duration {
+                ctx.get_span_attributes().insert(
+                    "ferron.pipeline.timeout_secs",
+                    TraceAttributeValue::F64(timeout.as_secs_f64()),
+                );
+            }
+            stage_hooks.flush_with_context(ctx);
             emit_error_with_trace(
                 events,
                 format!("{log_prefix}Pipeline execution timeout"),

@@ -176,6 +176,23 @@ pub async fn execute_proxy(
             .excluded_overloaded
             .extend(selected.exclusions.overloaded);
 
+        // Stage span attributes for the selected backend before any network
+        // I/O. The post-request injection in `ReverseProxyStage` never runs
+        // when a pipeline timeout cancels this future, so without this the
+        // timed-out `reverse_proxy` span would carry no backend context.
+        crate::metrics::inject_selected_backend_span_attributes(ctx, &selected.upstream);
+        if let (Some(health_check_state), Some(conn_state)) = (health_check_state, conn_state) {
+            crate::metrics::inject_upstream_state_span_attributes(
+                ctx,
+                &selected.upstream,
+                &circuit_breaker_state,
+                &flapping_state,
+                health_check_state,
+                conn_state,
+                config.circuit_breaker.slow_start_duration,
+            );
+        }
+
         let proxy_request_url: http::Uri = selected
             .upstream
             .proxy_to
