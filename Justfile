@@ -60,3 +60,13 @@ package-sbom target="" fips="false":
 [unix]
 installer:
     cd installer && make
+
+# Build the Ferron Nix packages (prebuilt binaries by default, `ferron` for source)
+[unix]
+package-nix package="default":
+    nix build .#{{ package }}
+
+# Refresh Nix pins (latest published release and git submodule hashes)
+[unix]
+update-nix-pins:
+    bash nix/update-pins.sh

@@ -430,3 +430,52 @@ jobs:
           subject-name: index.docker.io/ferronserver/ferron
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+  nix:
+    needs: release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout 3.x
+        uses: actions/checkout@v7
+        with:
+          ref: 3.x
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v23
+
+      - name: Refresh pins
+        run: |
+          bash nix/update-pins.sh
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet -- nix/package-bin.nix nix/package.nix; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- nix/package-bin.nix nix/package.nix
+          fi
+
+      - name: Validate updated pins
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          nix-instantiate --parse nix/package-bin.nix
+          nix-instantiate --parse nix/package.nix
+          nix build .#ferron-bin --no-link
+
+      - name: Commit updated pins
+        if: steps.diff.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add .
+            git commit -m 'chore: auto-update Nix pins [skip ci]'
+            git push origin 3.x
+          fi

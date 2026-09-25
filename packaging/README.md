@@ -53,6 +53,17 @@ Windows installer built with Inno Setup (Windows host only):
 
 Output: `dist/ferron-<version>-<triple>-setup.exe`.
 
+## `nix/`
+
+Nix packaging lives outside this directory, next to the root `flake.nix`:
+
+- `nix/package.nix` — source build from `Cargo.lock` (no separate vendor hash; git submodule checkouts are stitched in, so no `--recurse-submodules` needed).
+- `nix/package-bin.nix` — prebuilt release binaries from `dl.ferron.sh`, pinned by version plus hashes. Default package (`nix build .#`).
+- `nix/module.nix` — the `services.ferron` NixOS module: typed host options with verbatim escape hatches.
+- `nix/update-pins.sh` — refreshes release and submodule pins (also runs weekly in CI).
+
+See the [NixOS installation guide](../docs/installation/linux/nixos.md) for usage. Justfile shortcuts: `just package-nix [package]`, `just update-nix-pins`.
+
 ## Justfile shortcuts (run from project root)
 
 ```

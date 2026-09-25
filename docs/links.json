@@ -40,6 +40,12 @@
     "sub": true
   },
   {
+    "href": "/docs/installation/linux/nixos",
+    "target": "_self",
+    "label": "NixOS",
+    "sub": true
+  },
+  {
     "href": "/docs/installation/windows",
     "target": "_self",
     "label": "Windows"
