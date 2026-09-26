@@ -509,6 +509,7 @@ The cache module emits the following metrics:
 | `ferron.cache.stores`                      | Counter | `ferron.cache.zone`, `ferron.cache.scope`, `http.response.status_code`                                     | Responses stored in the cache                                                                       |
 | `ferron.cache.evictions`                   | Counter | `ferron.cache.zone`, `ferron.cache.reason` (`"expired"` or `"size"`)                                       | Entries evicted from the cache                                                                      |
 | `ferron.cache.purges`                      | Counter | `ferron.cache.zone`, `ferron.cache.scope`                                                                  | Entries purged through LSCache-compatible controls                                                  |
+| `ferron.cache.zero_purge`                  | Counter | `ferron.cache.zone`, `ferron.cache.scope`                                                                  | Number of cache purge requests that did not match any entries.                                      |
 | `ferron.cache.coalesced_requests`          | Counter | None                                                                                                       | Requests intercepted by the singleflight deduplication layer                                        |
 | `ferron.cache.singleflight_active_locks`   | Gauge   | None                                                                                                       | Active in-flight upstream fetches coordinated by singleflight                                       |
 | `ferron.cache.persistence_errors`          | Counter | `ferron.cache.zone`                                                                                        | Cache persistence failures for the zone: a journal flush failure, or a snapshot compaction failure. |
@@ -529,21 +530,21 @@ Persistence runs on a background task, so its metrics above are emitted on the w
 
 ### Structured logs
 
-| Description (summary)                                              | Level | Attributes                                                                           |
-| ------------------------------------------------------------------ | ----- | ------------------------------------------------------------------------------------ |
-| Skipping cache store because response body exceeded maximum size   | DEBUG | -                                                                                    |
-| Cache purged via LSCache controls                                  | DEBUG | `cache.purged.count` (purged cache entries)                                          |
-| Cache purged via PURGE method                                      | DEBUG | `cache.purged.count` (purged cache entries)                                          |
-| LSCache stale purge                                                | DEBUG | -                                                                                    |
-| Cache entries evicted                                              | DEBUG | `eviction.reason` (string), `eviction.count` (integer), `ferron.cache.zone` (string) |
-| Cache entries restored from disk at startup                        | DEBUG | `ferron.cache.zone` (string)                                                         |
-| Truncated tail in the persistence files, treated as a clean stop   | DEBUG | `ferron.cache.zone` (string)                                                         |
-| Snapshot compaction completed                                      | DEBUG | `ferron.cache.zone` (string)                                                         |
-| Could not read the persistence files on disk                       | WARN  | `ferron.cache.zone` (string)                                                         |
-| Corrupted record in the persistence files; replay stopped          | WARN  | `ferron.cache.zone` (string)                                                         |
-| Cache persistence journal flush failed                             | WARN  | `ferron.cache.zone` (string), `error` (string)                                       |
-| Snapshot compaction failed                                         | WARN  | `ferron.cache.zone` (string)                                                         |
-| Journal records dropped because the write queue exceeded capacity  | WARN  | `ferron.cache.zone` (string), `cache.dropped.count` (integer)                        |
+| Description (summary)                                             | Level | Attributes                                                                           |
+| ----------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------ |
+| Skipping cache store because response body exceeded maximum size  | DEBUG | -                                                                                    |
+| Cache purged via LSCache controls                                 | DEBUG | `cache.purged.count` (purged cache entries)                                          |
+| Cache purged via PURGE method                                     | DEBUG | `cache.purged.count` (purged cache entries)                                          |
+| LSCache stale purge                                               | DEBUG | -                                                                                    |
+| Cache entries evicted                                             | DEBUG | `eviction.reason` (string), `eviction.count` (integer), `ferron.cache.zone` (string) |
+| Cache entries restored from disk at startup                       | DEBUG | `ferron.cache.zone` (string)                                                         |
+| Truncated tail in the persistence files, treated as a clean stop  | DEBUG | `ferron.cache.zone` (string)                                                         |
+| Snapshot compaction completed                                     | DEBUG | `ferron.cache.zone` (string)                                                         |
+| Could not read the persistence files on disk                      | WARN  | `ferron.cache.zone` (string)                                                         |
+| Corrupted record in the persistence files; replay stopped         | WARN  | `ferron.cache.zone` (string)                                                         |
+| Cache persistence journal flush failed                            | WARN  | `ferron.cache.zone` (string), `error` (string)                                       |
+| Snapshot compaction failed                                        | WARN  | `ferron.cache.zone` (string)                                                         |
+| Journal records dropped because the write queue exceeded capacity | WARN  | `ferron.cache.zone` (string), `cache.dropped.count` (integer)                        |
 
 ### Access log fields
 

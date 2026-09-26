@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Changed
+
+#### HTTP cache
+
+- **Zero-result cache purge metric**: purges with zero results are now visible via a `ferron.cache.zero_purge` metric, which can help debug or monitor cache purge requests that did not match any entries.
+
 ## Ferron 3.0.0-rc.7
 
 **Released in September 24, 2026**

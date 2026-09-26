@@ -178,6 +178,23 @@ pub(super) fn purge(
                 }
             }
         }
+    } else {
+        // Metrics so that purges that ended up not purging anythins are still visible.
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.cache.zero_purge",
+            attributes: vec![
+                (
+                    "ferron.cache.zone",
+                    MetricAttributeValue::String(zone_id.label().to_string()),
+                ),
+                ("ferron.cache.scope", MetricAttributeValue::StaticStr("all")),
+            ],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{purge}"),
+            description: Some("Number of cache purge requests that did not match any entries."),
+            trace_context: trace_context::current_event_trace_context(ctx),
+        }));
     }
 
     PurgeStats {
