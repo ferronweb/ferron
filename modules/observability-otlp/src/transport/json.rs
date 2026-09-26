@@ -22,19 +22,34 @@ pub fn request_to_json<T: serde::Serialize>(message: &T) -> Result<Value, serde_
 /// These are the only `bytes` fields in the OTLP telemetry messages Ferron
 /// emits, so any string value under one of these keys was base64-encoded by
 /// `pbjson`. Strings that cannot be base64-decoded are left untouched.
+///
+/// The rewrite is idempotent: strings that already look like hexified IDs
+/// (even-length ASCII hex) are left untouched (normalized to uppercase)
+/// instead of being base64-decoded again. This matters because the hex
+/// alphabet is a subset of the base64 alphabet, so hex output would
+/// otherwise decode as base64 on a second pass and get mangled. Genuine
+/// `pbjson` IDs always carry base64 padding (`=`) for the valid 8/16-byte
+/// ID lengths, so they are never mistaken for hex.
 #[inline]
 pub fn hexify_id_fields(value: &mut Value) {
     match value {
         Value::Object(map) => {
             for (key, field) in map.iter_mut() {
                 if matches!(key.as_str(), "traceId" | "spanId" | "parentSpanId") {
-                    if let Value::String(encoded) = field {
-                        if let Ok(bytes) = base64::Engine::decode(
-                            &base64::engine::general_purpose::STANDARD,
-                            encoded,
-                        ) {
-                            *field = Value::String(hex::encode_upper(bytes));
+                    match field {
+                        Value::String(encoded) => {
+                            if is_already_hexified(encoded) {
+                                encoded.make_ascii_uppercase();
+                                continue;
+                            }
+                            if let Ok(bytes) = base64::Engine::decode(
+                                &base64::engine::general_purpose::STANDARD,
+                                encoded.as_str(),
+                            ) {
+                                *field = Value::String(hex::encode_upper(bytes));
+                            }
                         }
+                        other => hexify_id_fields(other),
                     }
                 } else {
                     hexify_id_fields(field);
@@ -48,6 +63,12 @@ pub fn hexify_id_fields(value: &mut Value) {
         }
         _ => {}
     }
+}
+
+/// Returns true if `s` already looks like [`hexify_id_fields`] output:
+/// non-empty, even length, all ASCII hex digits.
+fn is_already_hexified(s: &str) -> bool {
+    !s.is_empty() && s.len() % 2 == 0 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 #[cfg(test)]
@@ -242,5 +263,57 @@ mod tests {
         let json = request_to_json(&request).unwrap();
 
         assert_eq!(json, fixture);
+    }
+
+    fn assert_idempotent(value: &mut Value) {
+        let once = {
+            let mut cloned = value.clone();
+            hexify_id_fields(&mut cloned);
+            cloned
+        };
+        hexify_id_fields(value);
+        assert_eq!(*value, once);
+        // A second application must be a fixed point.
+        let mut twice = value.clone();
+        hexify_id_fields(&mut twice);
+        assert_eq!(twice, *value);
+    }
+
+    #[test]
+    fn hexify_is_idempotent_on_fuzz_crash_input() {
+        // From nightly fuzz failure (fuzz_otlp_http_request):
+        // `{"spanId":"555f5555555555QQQQQQQQQQQQQQQQQQQQQQ555555555555"}`
+        // decoded as base64 to 36 bytes, whose hex re-decoded as base64.
+        let mut value: Value = serde_json::from_str(
+            r#"{"spanId":"555f5555555555QQQQQQQQQQQQQQQQQQQQQQ555555555555"}"#,
+        )
+        .unwrap();
+        assert_idempotent(&mut value);
+    }
+
+    #[test]
+    fn hexify_leaves_uppercase_hex_untouched() {
+        let mut value: Value =
+            serde_json::from_str(r#"{"traceId":"5B8EFFF798038103D269B633813FC60C"}"#).unwrap();
+        let expected = value.clone();
+        hexify_id_fields(&mut value);
+        assert_eq!(value, expected);
+    }
+
+    #[test]
+    fn hexify_uppercases_lowercase_hex_instead_of_mangling() {
+        let mut value: Value = serde_json::from_str(r#"{"spanId":"eee19b7ec3c1b174"}"#).unwrap();
+        hexify_id_fields(&mut value);
+        assert_eq!(value["spanId"], "EEE19B7EC3C1B174");
+        assert_idempotent(&mut value);
+    }
+
+    #[test]
+    fn hexify_still_converts_padded_base64_ids() {
+        // 8 zero bytes -> "AAAAAAAAAAA=" must still become hex.
+        let mut value: Value = serde_json::from_str(r#"{"spanId":"AAAAAAAAAAA="}"#).unwrap();
+        hexify_id_fields(&mut value);
+        assert_eq!(value["spanId"], "0000000000000000");
+        assert_idempotent(&mut value);
     }
 }
