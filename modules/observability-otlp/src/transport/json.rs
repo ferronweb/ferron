@@ -68,7 +68,7 @@ pub fn hexify_id_fields(value: &mut Value) {
 /// Returns true if `s` already looks like [`hexify_id_fields`] output:
 /// non-empty, even length, all ASCII hex digits.
 fn is_already_hexified(s: &str) -> bool {
-    !s.is_empty() && s.len() % 2 == 0 && s.bytes().all(|b| b.is_ascii_hexdigit())
+    !s.is_empty() && s.len().is_multiple_of(2) && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 #[cfg(test)]
