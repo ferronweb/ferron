@@ -9,7 +9,7 @@ use ferron_core::config::adapter::{
 use ferron_core::config::ServerConfigurationSpan;
 use ferron_core::loader::ModuleLoader;
 use notify::RecursiveMode;
-use notify_debouncer_full::{new_debouncer, DebounceEventResult};
+use notify_debouncer_full::{new_debouncer_opt, DebounceEventResult};
 use tokio::sync::mpsc;
 
 struct JsonConfigurationAdapter;
@@ -101,7 +101,7 @@ impl JsonConfigurationWatcher {
     fn new(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let (tx, rx) = mpsc::channel(32);
 
-        let mut debouncer = new_debouncer(
+        let mut debouncer = new_debouncer_opt(
             Duration::from_millis(100),
             None,
             move |result: DebounceEventResult| {
@@ -125,6 +125,8 @@ impl JsonConfigurationWatcher {
                 };
                 let _ = tx.blocking_send(new_result);
             },
+            notify_debouncer_full::NoCache,
+            notify::Config::default(),
         )?;
 
         debouncer.watch(&path, RecursiveMode::NonRecursive)?;
