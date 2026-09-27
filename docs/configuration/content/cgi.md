@@ -7,6 +7,9 @@ This page documents the `cgi` directive for configuring CGI (Common Gateway Inte
 
 ## `cgi`
 
+> [!note]
+> Host isolation: a named host does not inherit `cgi` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host.
+
 ```ferron
 example.com {
     cgi {

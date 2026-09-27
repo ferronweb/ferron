@@ -22,7 +22,7 @@ impl Default for TraceIdConfig {
 impl TraceIdConfig {
     #[inline]
     pub fn from_layered_config(layered_config: &LayeredConfiguration) -> Option<Self> {
-        let trace_id_header_block = layered_config.get_entry("trace_id_header", true)?;
+        let trace_id_header_block = layered_config.get_entry("trace_id_header", false)?;
 
         if !trace_id_header_block.get_flag() {
             // `trace_id_header false`

@@ -348,3 +348,39 @@ fn layers_error_handlers_from_matching_scopes() {
     );
     assert_eq!(result.location_path.error_key, Some(404));
 }
+
+#[test]
+fn wildcard_host_directives_do_not_leak_into_named_host() {
+    // Reproduces the `* { proxy ... }` + `example.com { root ... }` case:
+    // a host-isolated lookup (`inherit = false`) must not see the wildcard
+    // `proxy`, while a full lookup (`inherit = true`) still does.
+    let mut hosts = HostConfigs::new();
+    hosts.insert(
+        None,
+        Arc::new(string_block("proxy", "http://127.0.0.1:3000/")),
+    );
+    hosts.insert(
+        Some("example.com".to_string()),
+        Arc::new(string_block("root", "wwwroot")),
+    );
+
+    let mut prepared = PreparedConfiguration::new();
+    prepared.insert(Some("127.0.0.1".parse().unwrap()), hosts);
+
+    let resolver = ThreeStageResolver::from_prepared(prepared);
+    let result = resolver
+        .resolve(
+            Some("127.0.0.1".parse().unwrap()),
+            "example.com",
+            "/",
+            &make_test_context(empty_request(), "example.com"),
+        )
+        .expect("request should resolve");
+
+    assert!(
+        result.configuration.get_entries("proxy", false).is_empty(),
+        "wildcard proxy must not leak into the named host"
+    );
+    assert!(!result.configuration.get_entries("proxy", true).is_empty());
+    assert!(!result.configuration.get_entries("root", false).is_empty());
+}

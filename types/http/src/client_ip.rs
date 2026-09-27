@@ -83,7 +83,9 @@ impl ClientIpFromHeaderConfig {
     /// Resolve which header to use from the configuration. Returns `None` if the
     /// directive is absent or invalid (meaning this stage is a no-op).
     pub fn resolve_from_context(ctx: &HttpContext) -> Option<Self> {
-        let entry = ctx.configuration.get_entry("client_ip_from_header", true)?;
+        let entry = ctx
+            .configuration
+            .get_entry("client_ip_from_header", false)?;
         let header_value = entry.args.first()?.as_string_with_interpolations(ctx)?;
         let header = ClientIpHeader::from_str(&header_value)?;
         let trusted_proxies = parse_trusted_proxy_allowlist(entry.children.as_ref(), ctx);

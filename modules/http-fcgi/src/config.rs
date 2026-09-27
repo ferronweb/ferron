@@ -116,12 +116,12 @@ impl FcgiConfiguration {
 
     pub fn from_http_ctx(ctx: &HttpContext) -> Vec<Self> {
         let mut result = Vec::new();
-        for entry in ctx.configuration.get_entries("fcgi_php", true) {
+        for entry in ctx.configuration.get_entries("fcgi_php", false) {
             if let Some(config) = Self::from_config_entry(entry, true, ctx) {
                 result.push(config);
             }
         }
-        for entry in ctx.configuration.get_entries("fcgi", true) {
+        for entry in ctx.configuration.get_entries("fcgi", false) {
             if let Some(config) = Self::from_config_entry(entry, false, ctx) {
                 result.push(config);
             }

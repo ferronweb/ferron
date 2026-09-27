@@ -211,6 +211,7 @@ Directives inherit from outer blocks to inner blocks. A `location` block starts 
 - When a directive appears in both a parent block and a child block, the child value wins for that block.
 - When a directive appears only in the parent block, the child block inherits it.
 - Some directives accumulate across layers instead of overriding, for example `rewrite` rules and `map` entries. Their reference pages state the behavior.
+- Handler and backend selectors are host-isolated: `proxy`, `proxy_concurrent_conns`, `fcgi`, `fcgi_php`, `cgi`, `scgi`, `forward_proxy`, `root`, `index`, `basic_auth`, `rate_limit_backend`, static-file tunables (`compressed`, `etag`, `file_cache_control`, `precompressed`, `mime_type`, `directory_listing`, `disable_symlinks`), `client_ip_from_header`, `trace_id_header`, `https_redirect`, and `trailing_slash_redirect` do not inherit from the wildcard `*` host into a named host, but they still inherit from global defaults and a `location` block still inherits them from its own host. For example, `* { proxy ... }` does not cause a named host that only sets `root` to reverse-proxy. Each directive page states its exact behavior.
 
 > [!note]
 > When validation and runtime behavior differ, the directive pages explain that.

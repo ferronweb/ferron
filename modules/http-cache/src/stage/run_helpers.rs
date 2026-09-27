@@ -140,8 +140,10 @@ pub(super) async fn run_forward(
             // authenticated user from a foreign host's basic_auth must not
             // be able to purge this host's cache.
             if !is_propagated {
-                let has_basic_auth_in_scope =
-                    !ctx.configuration.get_entries("basic_auth", true).is_empty();
+                let has_basic_auth_in_scope = !ctx
+                    .configuration
+                    .get_entries("basic_auth", false)
+                    .is_empty();
                 // Without a client IP (e.g. Unix socket listeners) a non-propagated
                 // purge cannot be allow-listed; deny it.
                 let purge_allowed = ctx

@@ -211,7 +211,7 @@ impl Stage<HttpContext> for RewriteStage {
 
         let root = ctx
             .configuration
-            .get_value("root", true)
+            .get_value("root", false)
             .and_then(|v| v.as_string_with_interpolations(ctx));
 
         // We need a mutable request reference to mutate the URI

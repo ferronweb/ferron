@@ -38,7 +38,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         &self,
         ctx: &mut HttpContext,
     ) -> Result<bool, ferron_core::pipeline::PipelineError> {
-        let entries = ctx.configuration.get_entries("proxy", true);
+        let entries = ctx.configuration.get_entries("proxy", false);
         if entries.is_empty() {
             return Ok(true);
         }

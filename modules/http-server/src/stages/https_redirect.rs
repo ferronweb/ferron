@@ -112,7 +112,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
         // Check per-host configuration: `https_redirect false` disables the redirect
         let redirect_enabled = ctx
             .configuration
-            .get_value("https_redirect", true)
+            .get_value("https_redirect", false)
             .and_then(|v| v.as_boolean())
             .unwrap_or(true);
 

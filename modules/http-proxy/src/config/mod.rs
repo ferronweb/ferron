@@ -34,7 +34,7 @@ pub static MTLS_FILE_CACHE: LazyLock<DashMap<String, std::sync::Arc<Vec<u8>>>> =
 pub fn parse_proxy_config(
     ctx: &ferron_http::HttpContext,
 ) -> Result<Option<ProxyConfig>, Box<dyn Error + Send + Sync>> {
-    let entries = ctx.configuration.get_entries("proxy", true);
+    let entries = ctx.configuration.get_entries("proxy", false);
     if entries.is_empty() {
         return Ok(None);
     }
@@ -73,7 +73,7 @@ pub fn parse_proxy_config(
 
     if let Some(conns_entries) = ctx
         .configuration
-        .get_entries("proxy_concurrent_conns", true)
+        .get_entries("proxy_concurrent_conns", false)
         .first()
     {
         if let Some(val) = conns_entries

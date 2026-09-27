@@ -127,6 +127,9 @@ Ferron can inject the trace ID of the current request into HTTP response headers
 
 #### `trace_id_header`
 
+> [!note]
+> Host isolation: a named host does not inherit `trace_id_header` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host.
+
 The `trace_id_header` directive configures whether and how Ferron injects the trace ID into response headers.
 
 ```ferron

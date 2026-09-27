@@ -7,6 +7,9 @@ This page documents directives for configuring Ferron as an HTTP forward proxy. 
 
 ## `forward_proxy`
 
+> [!note]
+> Host isolation: a named host does not inherit `forward_proxy` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host.
+
 ```ferron
 proxy.example.com {
     forward_proxy {

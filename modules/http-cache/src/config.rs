@@ -158,11 +158,12 @@ pub fn parse_max_entries(configuration: &LayeredConfiguration) -> usize {
 /// Check whether the host-level cache block explicitly specifies `max_entries`.
 ///
 /// This is distinct from `parse_max_entries()` which reads from any layer
-/// (including inherited global values). This function only checks the highest-
-/// priority (host-level) cache block, using `inherit = false`.
+/// (including inherited global values). This function only checks the host
+/// chain (the matched host plus nested `location`/`if` layers), excluding
+/// both less-specific hosts and global scope, using `get_host_chain_entries`.
 #[inline]
 pub fn has_host_max_entries(configuration: &LayeredConfiguration) -> bool {
-    for entry in configuration.get_entries("cache", false) {
+    for entry in configuration.get_host_chain_entries("cache") {
         if let Some(children) = &entry.children {
             if children.directives.contains_key("max_entries") {
                 return true;

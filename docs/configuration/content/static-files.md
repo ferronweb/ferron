@@ -17,7 +17,7 @@ This page documents directives that configure static file serving, directory lis
 ### Web root
 
 - `root <path: string>`
-  - This directive specifies the webroot that the HTTP file-handler pipeline uses after regular HTTP stages leave the request without a response. Ferron canonicalizes the resolved path before file stages run. Ferron rejects requests that try to escape the webroot. Default: not configured
+  - This directive specifies the webroot that the HTTP file-handler pipeline uses after regular HTTP stages leave the request without a response. Ferron canonicalizes the resolved path before file stages run. Ferron rejects requests that try to escape the webroot. Host isolation: a named host does not inherit `root` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: not configured
 
 **Configuration example:**
 
@@ -33,9 +33,9 @@ example.com {
 ### Index and directory listings
 
 - `index <filename: string>...`
-  - This directive specifies one or more filenames to try when a request path resolves to a directory. Ferron tries them in order. The first existing file replaces the directory path in the file context. This applies only when the resolved path is a directory and no `path_info` is present. Default: `index index.html index.htm index.xhtml`
+  - This directive specifies one or more filenames to try when a request path resolves to a directory. Ferron tries them in order. The first existing file replaces the directory path in the file context. This applies only when the resolved path is a directory and no `path_info` is present. Host isolation: a named host does not inherit `index` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: `index index.html index.htm index.xhtml`
 - `directory_listing [bool: boolean]` (`http-static`)
-  - This directive controls whether Ferron auto-generates an HTML listing when a request path resolves to a directory. Ferron generates a listing only when no index file exists. Default: `directory_listing false`
+  - This directive controls whether Ferron auto-generates an HTML listing when a request path resolves to a directory. Ferron generates a listing only when no index file exists. Host isolation: a named host does not inherit `directory_listing` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: `directory_listing false`
 
 **Configuration example:**
 
@@ -56,9 +56,9 @@ example.com {
 ### Caching headers
 
 - `etag [bool: boolean]` (`http-static`)
-  - This directive controls whether Ferron generates ETags for static file responses. Ferron uses weak ETags (`W/"..."`) and derives them from an xxHash3 hash of the file path, size, and modification time. Default: `etag true`
+  - This directive controls whether Ferron generates ETags for static file responses. Ferron uses weak ETags (`W/"..."`) and derives them from an xxHash3 hash of the file path, size, and modification time. Host isolation: a named host does not inherit `etag` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: `etag true`
 - `file_cache_control <value: string>` (`http-static`)
-  - This directive specifies the `Cache-Control` response header for all static file responses. Ferron passes the value through as-is. Default: not set
+  - This directive specifies the `Cache-Control` response header for all static file responses. Ferron passes the value through as-is. Host isolation: a named host does not inherit `file_cache_control` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: not set
 
 **Configuration example:**
 
@@ -79,7 +79,7 @@ example.com {
 ### MIME types
 
 - `mime_type <extension: string> <mime-type: string>` (`http-static`)
-  - This directive maps a file extension (with or without leading dot) to a MIME type. Custom MIME type mappings override the built-in database for matching extensions. You can use multiple `mime_type` directives to map different extensions. Default: built-in MIME database
+  - This directive maps a file extension (with or without leading dot) to a MIME type. Custom MIME type mappings override the built-in database for matching extensions. You can use multiple `mime_type` directives to map different extensions. Host isolation: a named host does not inherit `mime_type` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: built-in MIME database
 
 **Configuration example:**
 
@@ -130,6 +130,7 @@ example.com {
     - `false`: Allow all symlinks without restriction.
     - `true` (default): Reject all symbolic links with a `403 Forbidden` response. The resolver detects symlinks during path traversal without following them, mitigating symlink-based escape attacks.
     - `"if_not_owner"`: Allow symlinks when the same user owns the link and the target file. On non-Unix systems, Ferron treats this value as `true`.
+  - Host isolation: a named host does not inherit `disable_symlinks` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host.
   - Default: `disable_symlinks true`
 
 > [!warning]

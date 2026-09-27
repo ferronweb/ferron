@@ -128,7 +128,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
     #[inline]
     async fn run(&self, ctx: &mut HttpFileContext) -> Result<bool, PipelineError> {
         // Skip if root is not configured
-        if ctx.http.configuration.get_value("root", true).is_none() {
+        if ctx.http.configuration.get_value("root", false).is_none() {
             return Ok(true);
         }
 
@@ -195,16 +195,16 @@ impl Stage<HttpFileContext> for StaticFileStage {
         let config = &ctx.http.configuration;
 
         let compressed = config
-            .get_value("compressed", true)
+            .get_value("compressed", false)
             .and_then(|v| v.as_boolean())
             .unwrap_or(true);
-        let precompressed = config.get_flag("precompressed", true);
+        let precompressed = config.get_flag("precompressed", false);
         let etag_enabled = config
-            .get_value("etag", true)
+            .get_value("etag", false)
             .and_then(|v| v.as_boolean())
             .unwrap_or(true);
         let cache_control = config
-            .get_value("file_cache_control", true)
+            .get_value("file_cache_control", false)
             .and_then(|v| v.as_str().map(|s| s.to_string()));
 
         let content_type = get_content_type(&ctx.file_path, config);

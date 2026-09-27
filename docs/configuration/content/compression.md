@@ -33,7 +33,7 @@ Ferron uses two separate directives for the two response paths. Do not mix them 
 
 ### Static file compression
 
-The `compressed` directive (`http-static`) enables on-the-fly compression for static file responses only. It applies when Ferron serves files from `root`. Ferron compresses files larger than 256 bytes with compressible extensions. Default: `compressed true`
+The `compressed` directive (`http-static`) enables on-the-fly compression for static file responses only. It applies when Ferron serves files from `root`. Ferron compresses files larger than 256 bytes with compressible extensions. Host isolation: a named host does not inherit `compressed` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: `compressed true`
 
 ### Dynamic response compression
 
@@ -45,7 +45,7 @@ The `dynamic_compressed` directive (`http-compression`) enables on-the-fly compr
 ### Pre-compressed sidecar files
 
 - `precompressed [bool: boolean]` (`http-static`)
-  - Enables serving pre-compressed sidecar files (for example, `style.css.zst`, `app.js.br`) instead of compressing on the fly. The server checks for a pre-compressed file alongside the original based on which algorithms the client lists in `Accept-Encoding`. Default: `precompressed false`
+  - Enables serving pre-compressed sidecar files (for example, `style.css.zst`, `app.js.br`) instead of compressing on the fly. The server checks for a pre-compressed file alongside the original based on which algorithms the client lists in `Accept-Encoding`. Host isolation: a named host does not inherit `precompressed` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: `precompressed false`
 
 **Configuration example:**
 

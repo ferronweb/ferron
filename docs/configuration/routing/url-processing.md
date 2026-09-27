@@ -34,7 +34,7 @@ example.com {
 
 ### Inheritance
 
-A `location` block inherits directives from the enclosing host block and from global defaults. When the same directive appears at both levels, the value in the `location` block wins for requests in that block. The same rule applies to `if` and `if_not` blocks nested in a host or `location` block.
+A `location` block inherits directives from the enclosing host block and from global defaults. When the same directive appears at both levels, the value in the `location` block wins for requests in that block. The same rule applies to `if` and `if_not` blocks nested in a host or `location` block. Handler and backend selectors (`proxy`, `fcgi`, `cgi`, `scgi`, `forward_proxy`, `root`, `index`, `basic_auth`, and related static-file tunables) are host-isolated: they inherit from global defaults and from the enclosing named host into its `location` blocks, but a named host does not inherit them from the wildcard `*` host.
 
 ### Conditional matching
 
@@ -78,7 +78,7 @@ example.com {
 ### URL redirects
 
 - `trailing_slash_redirect [bool: boolean]`
-  - This directive specifies whether automatic 301 redirects from directory paths without a trailing slash to the same path with a trailing slash are enabled. When omitted, defaults to `true`. Default: `trailing_slash_redirect true`
+  - This directive specifies whether automatic 301 redirects from directory paths without a trailing slash to the same path with a trailing slash are enabled. When omitted, defaults to `true`. Host isolation: a named host does not inherit `trailing_slash_redirect` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: `trailing_slash_redirect true`
 
 **Configuration example:**
 

@@ -52,6 +52,14 @@ static EMPTY_LAYERS: LazyLock<Arc<Vec<Arc<crate::config::ServerConfigurationBloc
 pub struct LayeredConfiguration {
     /// Configuration layers, searched in reverse order
     pub layers: Arc<Vec<Arc<crate::config::ServerConfigurationBlock>>>,
+    /// Layer index to start skipping no-inherit rules.
+    skip_noinherit_from: usize,
+    /// Number of leading layers that belong to global scope.
+    ///
+    /// Global layers stay inheritable even when `inherit` is `false`; that
+    /// flag only cuts less-specific *host* layers (for example the wildcard
+    /// `*` host underneath a named host).
+    global_layer_count: usize,
 }
 
 impl Default for LayeredConfiguration {
@@ -59,6 +67,8 @@ impl Default for LayeredConfiguration {
     fn default() -> Self {
         Self {
             layers: EMPTY_LAYERS.clone(),
+            skip_noinherit_from: usize::MAX,
+            global_layer_count: 0,
         }
     }
 }
@@ -69,7 +79,25 @@ impl LayeredConfiguration {
     pub fn new() -> Self {
         Self {
             layers: EMPTY_LAYERS.clone(),
+            skip_noinherit_from: usize::MAX,
+            global_layer_count: 0,
         }
+    }
+
+    /// Mark the current layer index to skip no-inherit rules.
+    #[inline]
+    pub fn mark_current_skip_noinherit(&mut self) {
+        self.skip_noinherit_from = self.layers.len();
+    }
+
+    /// Mark the layers added so far as global-scope layers.
+    ///
+    /// The resolver calls this after adding the global configuration block
+    /// and before adding host layers, so that `inherit = false` lookups still
+    /// fall back to global defaults while skipping less-specific host layers.
+    #[inline]
+    pub fn mark_end_of_global_layers(&mut self) {
+        self.global_layer_count = self.layers.len();
     }
 
     /// Add a configuration layer.
@@ -87,8 +115,9 @@ impl LayeredConfiguration {
     ///
     /// * `directive` -- The directive name to search for.
     /// * `inherit` -- If `true`, search all layers in reverse order (highest
-    ///   priority first). If `false`, search only the first layer that
-    ///   contains the directive.
+    ///   priority first). If `false`, search the host chain (the matched host
+    ///   plus nested `location`/`if` layers) and then global-scope layers,
+    ///   skipping less-specific host layers such as the wildcard `*` host.
     ///
     /// # Returns
     ///
@@ -100,12 +129,55 @@ impl LayeredConfiguration {
         inherit: bool,
     ) -> Vec<&'a crate::config::ServerConfigurationDirectiveEntry> {
         let mut entries = Vec::new();
-        for layer in self.layers.iter().rev() {
+        for (i, layer) in self.layers.iter().enumerate().rev() {
             if let Some(directives) = layer.directives.get(directive) {
                 entries.extend(directives);
             }
-            if !inherit {
+            if !inherit && i < self.skip_noinherit_from {
+                entries.extend(self.global_fallback_entries(directive));
                 break;
+            }
+        }
+        entries
+    }
+
+    /// Get entries for a directive from the host chain only.
+    ///
+    /// This covers the matched host plus nested `location`/`if` layers,
+    /// excluding both less-specific host layers and global-scope layers.
+    /// It mirrors the layers a `get_*` call with `inherit = false` checks,
+    /// minus the global-scope fallback.
+    #[inline]
+    pub fn get_host_chain_entries<'a>(
+        &'a self,
+        directive: &str,
+    ) -> Vec<&'a crate::config::ServerConfigurationDirectiveEntry> {
+        let mut entries = Vec::new();
+        if self.layers.is_empty() {
+            return entries;
+        }
+        let chain_start = self
+            .skip_noinherit_from
+            .min(self.layers.len())
+            .saturating_sub(1);
+        for layer in self.layers[chain_start..].iter().rev() {
+            if let Some(directives) = layer.directives.get(directive) {
+                entries.extend(directives);
+            }
+        }
+        entries
+    }
+
+    /// Entries for a directive from global-scope layers only.
+    #[inline]
+    fn global_fallback_entries<'a>(
+        &'a self,
+        directive: &str,
+    ) -> Vec<&'a crate::config::ServerConfigurationDirectiveEntry> {
+        let mut entries = Vec::new();
+        for layer in self.layers.iter().take(self.global_layer_count).rev() {
+            if let Some(directives) = layer.directives.get(directive) {
+                entries.extend(directives);
             }
         }
         entries
@@ -114,15 +186,16 @@ impl LayeredConfiguration {
     /// Get the first entry for a directive across layers.
     ///
     /// Returns the highest-priority matching entry, or `None` if not found.
-    /// When `inherit` is `false`, only the most recently added layer is
-    /// checked.
+    /// When `inherit` is `false`, only the host chain (matched host plus
+    /// nested layers) and global-scope layers are checked; less-specific
+    /// host layers are skipped.
     #[inline]
     pub fn get_entry<'a>(
         &'a self,
         directive: &str,
         inherit: bool,
     ) -> Option<&'a crate::config::ServerConfigurationDirectiveEntry> {
-        for layer in self.layers.iter().rev() {
+        for (i, layer) in self.layers.iter().enumerate().rev() {
             if let Some(entry) = layer
                 .directives
                 .get(directive)
@@ -130,25 +203,44 @@ impl LayeredConfiguration {
             {
                 return Some(entry);
             }
-            if !inherit {
-                break;
+            if !inherit && i < self.skip_noinherit_from {
+                return self.global_fallback_entry(directive);
             }
         }
         None
     }
 
+    /// Entry from global-scope layers only.
+    #[inline]
+    fn global_fallback_entry<'a>(
+        &'a self,
+        directive: &str,
+    ) -> Option<&'a crate::config::ServerConfigurationDirectiveEntry> {
+        self.layers
+            .iter()
+            .take(self.global_layer_count)
+            .rev()
+            .find_map(|layer| {
+                layer
+                    .directives
+                    .get(directive)
+                    .and_then(|entries| entries.last())
+            })
+    }
+
     /// Get the first value for a directive across layers.
     ///
     /// Returns the first argument of the highest-priority matching entry.
-    /// When `inherit` is `false`, only the most recently added layer is
-    /// checked.
+    /// When `inherit` is `false`, only the host chain (matched host plus
+    /// nested layers) and global-scope layers are checked; less-specific
+    /// host layers are skipped.
     #[inline]
     pub fn get_value(
         &self,
         directive: &str,
         inherit: bool,
     ) -> Option<&crate::config::ServerConfigurationValue> {
-        for layer in self.layers.iter().rev() {
+        for (i, layer) in self.layers.iter().enumerate().rev() {
             if let Some(value) = layer
                 .directives
                 .get(directive)
@@ -157,11 +249,30 @@ impl LayeredConfiguration {
             {
                 return Some(value);
             }
-            if !inherit {
-                break;
+            if !inherit && i < self.skip_noinherit_from {
+                return self.global_fallback_value(directive);
             }
         }
         None
+    }
+
+    /// Value from global-scope layers only.
+    #[inline]
+    fn global_fallback_value(
+        &self,
+        directive: &str,
+    ) -> Option<&crate::config::ServerConfigurationValue> {
+        self.layers
+            .iter()
+            .take(self.global_layer_count)
+            .rev()
+            .find_map(|layer| {
+                layer
+                    .directives
+                    .get(directive)
+                    .and_then(|entries| entries.last())
+                    .and_then(|entry| entry.args.first())
+            })
     }
 
     /// Get a directive as a boolean flag across layers.
@@ -169,9 +280,12 @@ impl LayeredConfiguration {
     /// Returns `true` if the directive is present and its first argument is
     /// a boolean with value `true`, or if the directive is present with no
     /// arguments. Returns `false` if the directive is absent.
+    /// When `inherit` is `false`, only the host chain (matched host plus
+    /// nested layers) and global-scope layers are checked; less-specific
+    /// host layers are skipped.
     #[inline]
     pub fn get_flag(&self, directive: &str, inherit: bool) -> bool {
-        for layer in self.layers.iter().rev() {
+        for (i, layer) in self.layers.iter().enumerate().rev() {
             if let Some(entry) = layer
                 .directives
                 .get(directive)
@@ -184,8 +298,28 @@ impl LayeredConfiguration {
                 }
                 return true;
             }
-            if !inherit {
-                break;
+            if !inherit && i < self.skip_noinherit_from {
+                return self.global_fallback_flag(directive);
+            }
+        }
+        false
+    }
+
+    /// Flag from global-scope layers only.
+    #[inline]
+    fn global_fallback_flag(&self, directive: &str) -> bool {
+        for layer in self.layers.iter().take(self.global_layer_count).rev() {
+            if let Some(entry) = layer
+                .directives
+                .get(directive)
+                .and_then(|entries| entries.last())
+            {
+                if let Some(crate::config::ServerConfigurationValue::Boolean(value, _)) =
+                    entry.args.first()
+                {
+                    return *value;
+                }
+                return true;
             }
         }
         false
@@ -259,5 +393,34 @@ mod tests {
                 .and_then(|value| value.as_str()),
             Some("/srv/low")
         );
+    }
+
+    #[test]
+    fn noinherit_false_skips_generic_hosts_but_keeps_host_chain() {
+        // Simulates resolver layers: [global, wildcard `*`, specific host, location].
+        let global = make_block(vec![("global_only", vec!["yes"])]);
+        let wildcard = make_block(vec![("proxy", vec!["http://127.0.0.1:3001/"])]);
+        let host = make_block(vec![("root", vec!["wwwroot"])]);
+        let location = make_block(vec![("index", vec!["index.html"])]);
+
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(Arc::new(global));
+        layered.mark_end_of_global_layers();
+        layered.add_layer(Arc::new(wildcard));
+        layered.add_layer(Arc::new(host));
+        layered.mark_current_skip_noinherit();
+        layered.add_layer(Arc::new(location));
+
+        // Host-isolated lookups must not leak the wildcard `proxy` into the named host.
+        assert!(layered.get_entries("proxy", false).is_empty());
+        assert!(!layered.get_entries("proxy", true).is_empty());
+        // Host-chain lookups still see the specific host and its locations.
+        assert!(!layered.get_entries("root", false).is_empty());
+        assert!(!layered.get_entries("index", false).is_empty());
+        // Global-scope defaults still apply when `inherit` is `false`.
+        assert!(!layered.get_entries("global_only", false).is_empty());
+        assert!(!layered.get_host_chain_entries("root").is_empty());
+        assert!(layered.get_host_chain_entries("global_only").is_empty());
+        assert!(layered.get_host_chain_entries("proxy").is_empty());
     }
 }

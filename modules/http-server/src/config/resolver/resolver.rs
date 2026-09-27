@@ -396,6 +396,9 @@ impl ThreeStageResolver {
         if let Some(global) = self.global.clone() {
             configuration.add_layer(global);
         }
+        // Layers added so far are global scope: they stay inheritable even
+        // for host-isolated (`inherit = false`) lookups.
+        configuration.mark_end_of_global_layers();
 
         let mut matched_scopes = Vec::new();
         let mut matched_path_segments = Vec::new();
@@ -407,7 +410,15 @@ impl ThreeStageResolver {
                 block: Arc::clone(&host_match.block),
                 remaining_path_segments: request_path_segments.clone(),
             });
+        }
 
+        // Mark the current layer index to skip no-inherit rules, so that any higher-level scopes
+        // that are less specific than the last matched host are not inherited.
+        configuration.mark_current_skip_noinherit();
+
+        if let Some(host_match) = host_matches.last() {
+            // Don't add higher-level scopes under hosts that are less specific than the last
+            // matched host, as they are overridden by the last match.
             Self::resolve_block(
                 &host_match.block,
                 &request_path_keys,

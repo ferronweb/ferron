@@ -55,7 +55,7 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpFileContext) -> Result<bool, PipelineError> {
-        if ctx.http.configuration.get_value("root", true).is_none() {
+        if ctx.http.configuration.get_value("root", false).is_none() {
             return Ok(true);
         }
 
@@ -116,7 +116,7 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
             return Ok(false);
         }
 
-        if !ctx.http.configuration.get_flag("directory_listing", true) {
+        if !ctx.http.configuration.get_flag("directory_listing", false) {
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::BuiltinError(403, None));
             ctx.get_span_attributes()

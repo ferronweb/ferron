@@ -109,7 +109,7 @@ impl BackendConfig {
 pub fn parse_backend_config(
     config: &ferron_core::config::layer::LayeredConfiguration,
 ) -> BackendConfig {
-    let Some(entry) = config.get_entry("rate_limit_backend", true) else {
+    let Some(entry) = config.get_entry("rate_limit_backend", false) else {
         return BackendConfig::default();
     };
     let Some(children) = entry.children.as_ref() else {

@@ -7,6 +7,9 @@ This page documents the `fcgi` directive, which configures FastCGI support in Fe
 
 ## `fcgi`
 
+> [!note]
+> Host isolation: a named host does not inherit `fcgi` (or `fcgi_php`) from the wildcard `*` host. They still inherit from global defaults, and a `location` block inherits them from its own host.
+
 ```ferron
 example.com {
     fcgi {
@@ -164,7 +167,7 @@ example.com {
 }
 ```
 
-The `fcgi_php` directive is an alias for PHP FastCGI backends. It enables FastCGI and automatically registers the `.php` file extension. This is the recommended way to host PHP applications with PHP-FPM.
+The `fcgi_php` directive is an alias for PHP FastCGI backends. It enables FastCGI and automatically registers the `.php` file extension. This is the recommended way to host PHP applications with PHP-FPM. Host isolation: a named host does not inherit `fcgi_php` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host.
 
 | Form                     | Description                                                                                                                            |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |

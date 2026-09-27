@@ -76,7 +76,7 @@ When you specify an explicit port (for example, `example.com:8080`), Ferron star
 ### HTTPS redirect
 
 - `https_redirect <bool>`
-  - This directive enables or disables automatic HTTP-to-HTTPS redirects. The redirect uses 308 Permanent Redirect, which preserves the HTTP method and request body. Default: `https_redirect true` (when you enable TLS)
+  - This directive enables or disables automatic HTTP-to-HTTPS redirects. The redirect uses 308 Permanent Redirect, which preserves the HTTP method and request body. Host isolation: a named host does not inherit `https_redirect` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: `https_redirect true` (when you enable TLS)
 
 **Configuration example:**
 
@@ -95,7 +95,7 @@ example.com {
 ### Client IP from forwarded headers
 
 - `client_ip_from_header <header: string> { ... }` (global scope)
-  - This directive specifies the header to read the client IP from. Supported values: `x-forwarded-for`, `forwarded`. Default: disabled
+  - This directive specifies the header to read the client IP from. Supported values: `x-forwarded-for`, `forwarded`. Host isolation: a named host does not inherit `client_ip_from_header` from the wildcard `*` host, but it still inherits the global one. Default: disabled
 
 | Nested directive | Arguments                 | Description                                                                            | Default |
 | ---------------- | ------------------------- | -------------------------------------------------------------------------------------- | ------- |

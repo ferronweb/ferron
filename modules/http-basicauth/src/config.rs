@@ -34,7 +34,7 @@ pub fn parse_basicauth_config(
     config: &LayeredConfiguration,
     vars: &impl Variables,
 ) -> Option<BasicAuthConfig> {
-    let entries = config.get_entries("basic_auth", true);
+    let entries = config.get_entries("basic_auth", false);
     if entries.is_empty() {
         return None;
     }

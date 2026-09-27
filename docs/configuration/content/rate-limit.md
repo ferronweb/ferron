@@ -73,7 +73,7 @@ To prevent unbounded memory growth from one-shot clients, the module evicts buck
 
 ### Distributed backend with Redis or Valkey
 
-Rate limit state is selected by a `rate_limit_backend` block, a sibling of `rate_limit` (not nested inside it). A host or location without its own `rate_limit_backend` block inherits the global one; absent entirely means in-memory.
+Rate limit state is selected by a `rate_limit_backend` block, a sibling of `rate_limit` (not nested inside it). A host or location without its own `rate_limit_backend` block inherits the global one; absent entirely means in-memory. Host isolation: a named host does not inherit `rate_limit_backend` from the wildcard `*` host, but it still inherits the global one.
 
 ```ferron
 {

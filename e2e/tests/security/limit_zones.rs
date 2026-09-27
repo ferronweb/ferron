@@ -152,6 +152,7 @@ async fn test_ratelimit_zone_per_host_opt_out() {
 }
 
 host-b.example.com:80 {
+    root "/var/www/ferron"
     rate_limit {
         rate 10
         burst 0

@@ -55,6 +55,9 @@ This is a global-only directive that limits the number of concurrent password ve
 
 ## `basic_auth`
 
+> [!note]
+> Host isolation: a named host does not inherit `basic_auth` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host.
+
 ```ferron
 example.com {
     basic_auth {

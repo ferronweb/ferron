@@ -184,7 +184,7 @@ pub(super) async fn execute_http_file_pipeline(
             if resolved_file.metadata.is_dir() || resolved_file.is_index_file {
                 let trailing_slash_redirect_enabled = ctx
                     .configuration
-                    .get_value("trailing_slash_redirect", true)
+                    .get_value("trailing_slash_redirect", false)
                     .map(|v| v.as_boolean())
                     .unwrap_or(Some(true))
                     .unwrap_or(true);
@@ -458,7 +458,7 @@ async fn apply_resolved_file_to_context(
 
 #[inline]
 fn resolve_webroot(ctx: &HttpContext) -> Result<Option<PathBuf>, FilePipelineExecutionError> {
-    let root_entries = ctx.configuration.get_entries("root", true);
+    let root_entries = ctx.configuration.get_entries("root", false);
     let Some(root_entry) = root_entries.first() else {
         return Ok(None);
     };
@@ -477,7 +477,7 @@ fn resolve_webroot(ctx: &HttpContext) -> Result<Option<PathBuf>, FilePipelineExe
 
 #[inline]
 fn resolve_index_files(ctx: &HttpContext) -> Vec<String> {
-    let entries = ctx.configuration.get_entries("index", true);
+    let entries = ctx.configuration.get_entries("index", false);
     if entries.is_empty() {
         vec![
             "index.html".into(),
@@ -499,7 +499,7 @@ fn resolve_index_files(ctx: &HttpContext) -> Vec<String> {
 
 #[inline]
 fn resolve_disable_symlinks(ctx: &HttpContext) -> Result<SymlinkMode, FilePipelineExecutionError> {
-    let value = ctx.configuration.get_entry("disable_symlinks", true);
+    let value = ctx.configuration.get_entry("disable_symlinks", false);
 
     if let Some(s) = value.map(|v| {
         v.args

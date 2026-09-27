@@ -10,7 +10,7 @@ This page documents directives for forwarding incoming HTTP requests to one or m
 ### Reverse proxy and load balancing
 
 - `proxy` (`http-proxy`)
-  - This directive configures the reverse proxy with one or more upstream backends. You can use block form with nested directives or shorthand form with upstreams as arguments. Default: none
+  - This directive configures the reverse proxy with one or more upstream backends. You can use block form with nested directives or shorthand form with upstreams as arguments. Host isolation: a named host does not inherit `proxy` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: none
 - `upstream <url: string>` (`http-proxy`)
   - This directive specifies a backend upstream server URL. It accepts `http://` or `https://` URLs. You can nest it inside a `proxy` block with optional `limit`, `idle_timeout`, `unix`, `logical_dns`, and `dns_servers` properties. When the URL contains a hostname, Ferron resolves A/AAAA records via Hickory DNS by default. This strict DNS mode creates a separate backend per resolved IP. Default: none
 - `srv <name: string>` (`http-proxy`)
@@ -252,7 +252,7 @@ example.com {
 ### Global connection limit
 
 - `proxy_concurrent_conns <limit: integer>` (global scope)
-  - This directive specifies the global maximum number of concurrent TCP connections in the keep-alive connection pool across all upstream backends. Unix socket connections are always unbounded. Default: `proxy_concurrent_conns 16384`
+  - This directive specifies the global maximum number of concurrent TCP connections in the keep-alive connection pool across all upstream backends. Unix socket connections are always unbounded. Host isolation: a named host does not inherit `proxy_concurrent_conns` from the wildcard `*` host, but it still inherits from global defaults. Default: `proxy_concurrent_conns 16384`
 
 **Configuration example:**
 

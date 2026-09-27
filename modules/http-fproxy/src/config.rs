@@ -87,7 +87,7 @@ impl Default for ForwardProxyConfig {
 pub fn parse_forward_proxy_config(
     ctx: &ferron_http::HttpContext,
 ) -> Result<Option<ForwardProxyConfig>, Box<dyn Error + Send + Sync>> {
-    let entries = ctx.configuration.get_entries("forward_proxy", true);
+    let entries = ctx.configuration.get_entries("forward_proxy", false);
     if entries.is_empty() {
         return Ok(None);
     }
