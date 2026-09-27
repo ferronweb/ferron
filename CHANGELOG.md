@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Added
+
+#### Access control
+
+- **Basic auth bcrypt hashes**: bcrypt hash formats `$2a$`, `$2b$`, `$2x$`, `$2y$` are now supported for Basic Auth. This allows using Ferron with control planes and services that expect bcrypt password hashes.
+
 ### Changed
 
 #### HTTP cache

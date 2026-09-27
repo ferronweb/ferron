@@ -50,6 +50,8 @@ pub(crate) fn verify_password(plain: &str, hash: &str) -> bool {
         verify_pbkdf2(plain, hash)
     } else if hash.starts_with("$scrypt$") {
         verify_scrypt(plain, hash)
+    } else if hash.starts_with("$2") {
+        verify_bcrypt(plain, hash)
     } else {
         false
     }
@@ -321,6 +323,21 @@ fn verify_scrypt(_plain: &str, _hash: &str) -> bool {
     false
 }
 
+/// Verify a password against a bcrypt hash string.
+#[cfg(not(feature = "fips"))]
+#[inline]
+fn verify_bcrypt(plain: &str, hash: &str) -> bool {
+    bcrypt::verify(plain, hash).unwrap_or(false)
+}
+
+/// STUB: Intentional FIPS stub for bcrypt verification that always denies it (bcrypt isn't FIPS-compliant).
+/// The full implementation is the `#[cfg(not(feature = "fips"))]` variant above.
+#[cfg(feature = "fips")]
+#[inline]
+fn verify_bcrypt(_plain: &str, _hash: &str) -> bool {
+    false
+}
+
 /// Decode a base64 value accepting both padded and unpadded encodings.
 #[inline]
 fn decode_b64_ignore_padding(input: &str) -> Option<Vec<u8>> {
@@ -346,6 +363,9 @@ mod tests {
         M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=";
     const PBKDF2_SHA256_HASH: &str = "$pbkdf2-sha256$600000$\
         q/OlsSBToMqk35bOAlik5w==$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=";
+    #[cfg(not(feature = "fips"))]
+    const BCRYPT_HASH: &str = "$2a$10$\
+        pB25l7z4Jx53TWwB7kzCeeKsGmNJ/ewTst8GdmBISV02ZnKZKiMBW";
 
     /// Re-encode the salt and hash segments (indices 4 and 5) with base64
     /// padding.
@@ -419,6 +439,13 @@ mod tests {
         let unpadded = with_unpadded_segments(SCRYPT_HASH);
         assert!(!unpadded.split('$').nth(4).unwrap().contains('='));
         assert!(verify(PASSWORD, &unpadded));
+    }
+
+    #[cfg(not(feature = "fips"))]
+    #[test]
+    fn verifies_bcrypt() {
+        assert!(verify(PASSWORD, BCRYPT_HASH));
+        assert!(!verify("wrong", BCRYPT_HASH));
     }
 
     #[test]
@@ -545,33 +572,36 @@ mod tests {
     #[test]
     fn rejects_malformed_hashes() {
         let cases = [
-            "plaintext",
-            "$argon2id$v=19$m=19456,t=2,p=1",
-            "$argon2id$v=19$m=19456,t=2,p=1$abc",
-            "$argon2x$v=19$m=19456,t=2,p=1$abc$def",
-            "$argon2id$v=18$m=19456,t=2,p=1$c2FsdA$aGFzaA==",
-            "$argon2id$v=19$m=19456,t=2$c2FsdA$aGFzaA==",
-            "$argon2id$v=19$m=19456,t=2,p=1$x$aGFzaA==",
-            "$argon2id$v=19$m=99999999999,t=2,p=1$c2FsdA$aGFzaA==",
-            "$argon2id$v=19$m=8388608,t=99999999,p=1$c2FsdA$aGFzaA==",
-            "$argon2id$v=19$m=8388608,t=2,p=999$c2FsdA$aGFzaA==",
-            "$pbkdf2-sha256$600000$!!!$!!!",
-            "$pbkdf2-sha256$0$c2FsdA$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=",
-            "$pbkdf2-sha256$99999999999$c2FsdA$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=",
-            "$pbkdf2-sha256$x=1$c2FsdA$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=",
+            "plaintext", // not hashed
+            "$argon2id$v=19$m=19456,t=2,p=1", // missing field
+            "$argon2id$v=19$m=19456,t=2,p=1$abc", // missing field
+            "$argon2x$v=19$m=19456,t=2,p=1$abc$def", // wrong variant
+            "$argon2id$v=18$m=19456,t=2,p=1$c2FsdA$aGFzaA==", // wrong version
+            "$argon2id$v=19$m=19456,t=2$c2FsdA$aGFzaA==", // missing field
+            "$argon2id$v=19$m=19456,t=2,p=1$x$aGFzaA==", // invalid hash
+            "$argon2id$v=19$m=99999999999,t=2,p=1$c2FsdA$aGFzaA==", // extreme parameters!
+            "$argon2id$v=19$m=8388608,t=99999999,p=1$c2FsdA$aGFzaA==", // extreme parameters!
+            "$argon2id$v=19$m=8388608,t=2,p=999$c2FsdA$aGFzaA==", // extreme parameters!
+            "$pbkdf2-sha256$600000$!!!$!!!", // "!!!"
+            "$pbkdf2-sha256$0$c2FsdA$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=", // 0 iters
+            "$pbkdf2-sha256$99999999999$c2FsdA$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=", // extreme parameters!
+            "$pbkdf2-sha256$x=1$c2FsdA$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=", // malformed parameters
             "$pbkdf2-sha256$i=600000,l=16$\
                 q/OlsSBToMqk35bOAlik5w==$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=",
-            "$pbkdf2-sha256$600000$$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=",
-            "$pbkdf2-sha256$600000$c2FsdA$",
-            "$pbkdf2-md5$600000$c2FsdA$ZGVyaXZlZA==",
-            "$scrypt$ln=0,r=8,p=1$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=",
-            "$scrypt$ln=100,r=8,p=1$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=",
-            "$scrypt$ln=14,r=0,p=1$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=",
-            "$scrypt$ln=14,r=8,p=0$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=",
-            "$scrypt$ln=14,r=8$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=",
-            "$scrypt$ln=14,r=8,p=1$$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=",
-            "$scrypt$ln=14,r=8,p=1$M1J2e6IxMyKOibSPlT0NKw==$",
-            "$scrypt$ln=14,r=8,p=1,extra=1$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=",
+            "$pbkdf2-sha256$600000$$2hVHUFyEgG0urpqr2/JjQaMbLvlFUncpwoqRx0j1Kbk=", // "$$"
+            "$pbkdf2-sha256$600000$c2FsdA$", // missing field
+            "$pbkdf2-md5$600000$c2FsdA$ZGVyaXZlZA==", // broken algorithm (MD5)
+            "$scrypt$ln=0,r=8,p=1$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=", // ln = 0
+            "$scrypt$ln=100,r=8,p=1$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=", // wrong ln
+            "$scrypt$ln=14,r=0,p=1$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=", // r = 0
+            "$scrypt$ln=14,r=8,p=0$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=", // p = 0
+            "$scrypt$ln=14,r=8$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=", // missing parameter
+            "$scrypt$ln=14,r=8,p=1$$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=", // "$$"
+            "$scrypt$ln=14,r=8,p=1$M1J2e6IxMyKOibSPlT0NKw==$", // missing field
+            "$scrypt$ln=14,r=8,p=1,extra=1$M1J2e6IxMyKOibSPlT0NKw==$K2jSRWWk89vtjk0207snEFx7Opbfi08uhqg8AZWIObw=", // extra parameter
+            "$2f$10$pB25l7z4Jx53TWwB7kzCeeKsGmNJ/ewTst8GdmBISV02ZnKZKiMBW", // wrong version
+            "$2a$15$pB25l7z4Jx53TWwB7kzCeeKsGmNJ/ewTst8GdmBISV02ZnKZKiMBW", // wrong rounds
+            "$2b$10$sdfgkohsdfhjksdfhjkwersfhjkrtsdfghjkm" // bazgraniny... randomly smashed on a keyboard
         ];
         for hash in cases {
             assert!(!verify(PASSWORD, hash), "should reject {hash}");

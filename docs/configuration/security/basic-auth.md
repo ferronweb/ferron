@@ -104,6 +104,10 @@ users {
 | `$pbkdf2-sha384$` | PBKDF2-SHA384          |
 | `$pbkdf2-sha512$` | PBKDF2-SHA512          |
 | `$scrypt$`        | scrypt                 |
+| `$2a$`            | bcrypt (legacy)        |
+| `$2b$`            | bcrypt (modern)        |
+| `$2x$`            | bcrypt (broken PHP)    |
+| `$2y$`            | bcrypt (PHP default)   |
 
 > [!note]
 >

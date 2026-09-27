@@ -41,7 +41,7 @@ A FIPS build restricts the cryptography that Ferron uses:
 
 - OCSP stapling disables SHA1, Ed25519 and secp256k1 algorithms.
 - TLS cipher suites and key exchange groups are filtered to FIPS-approved algorithms.
-- HTTP basic auth password verification accepts only PBKDF2 password hashes. Argon2 and scrypt hashes are rejected, because those algorithms are not FIPS-approved.
+- HTTP basic auth password verification accepts only PBKDF2 password hashes. Argon2, bcrypt and scrypt hashes are rejected, because those algorithms are not FIPS-approved.
 
 > [!note]
 > Use a FIPS build when you need to run Ferron in a FIPS-compliant environment. The default build uses a broader set of algorithms and is not FIPS-certified.

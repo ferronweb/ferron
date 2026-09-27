@@ -89,14 +89,15 @@ example.com {
 
 Ferron supports only hashed passwords. Ferron accepts the following hash formats:
 
-| Prefix            | Algorithm              |
-| ----------------- | ---------------------- |
-| `$argon2id$`      | Argon2id (recommended) |
-| `$argon2i$`       | Argon2i                |
-| `$argon2d$`       | Argon2d                |
-| `$pbkdf2$`        | PBKDF2                 |
-| `$pbkdf2-sha256$` | PBKDF2-SHA256          |
-| `$scrypt$`        | scrypt                 |
+| Prefix                 | Algorithm              |
+| ---------------------- | ---------------------- |
+| `$argon2id$`           | Argon2id (recommended) |
+| `$argon2i$`            | Argon2i                |
+| `$argon2d$`            | Argon2d                |
+| `$pbkdf2$`             | PBKDF2                 |
+| `$pbkdf2-sha256$`      | PBKDF2-SHA256          |
+| `$scrypt$`             | scrypt                 |
+| `$2a$`, `$2b$`, `$2y$` | bcrypt                 |
 
 > [!important]
 > For Basic Auth, always use TLS. The `Authorization` header sends credentials on every request.
