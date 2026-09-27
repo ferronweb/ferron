@@ -18,6 +18,10 @@
 
 ### Fixed
 
+#### Configuration
+
+- **Spurious configuration file hot-reload fix**: previously, the server would sometimes hot-reload the configuration even when no changes were made to the configuration file (something would just read the file). This has been fixed.
+
 #### Admin API
 
 - **Admin API listen fail fix**: previously, when configuration is reloaded very frequently, the admin API listener would sometimes fail to bind to the configured address due to a race condition.

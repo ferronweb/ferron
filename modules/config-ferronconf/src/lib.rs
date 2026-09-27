@@ -71,7 +71,7 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
 
         let watcher: Box<dyn ferron_core::config::adapter::ConfigurationWatcher> = if watch_enabled
         {
-            Box::new(FerronConfConfigurationWatcher::new(loaded_files.clone())?)
+            Box::new(FerronConfConfigurationWatcher::new(&loaded_files)?)
         } else {
             Box::new(DisabledConfigurationWatcher)
         };

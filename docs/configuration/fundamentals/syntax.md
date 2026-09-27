@@ -220,7 +220,7 @@ Directives inherit from outer blocks to inner blocks. A `location` block starts 
 
 ### Hot-reload
 
-Ferron `.conf` configuration files support hot reload. It detects a change and reloads the configuration gracefully. The `ConfigurationWatcher` monitors the file for changes.
+Ferron `.conf` configuration files support hot reload. It detects a change and reloads the configuration gracefully.
 
 ```bash
 ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferronconf

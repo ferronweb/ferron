@@ -9,7 +9,7 @@ use ferron_core::config::adapter::{
 use ferron_core::config::ServerConfigurationSpan;
 use ferron_core::loader::ModuleLoader;
 use notify::RecursiveMode;
-use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
+use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use tokio::sync::mpsc;
 
 struct JsonConfigurationAdapter;
@@ -90,9 +90,11 @@ impl ferron_core::config::adapter::ConfigurationWatcher for DisabledConfiguratio
 }
 
 struct JsonConfigurationWatcher {
-    _debouncer: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
-    change_rx: mpsc::Receiver<DebounceEventResult>,
-    path: PathBuf,
+    _debouncer: notify_debouncer_full::Debouncer<
+        notify::RecommendedWatcher,
+        notify_debouncer_full::NoCache,
+    >,
+    change_rx: mpsc::Receiver<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
 }
 
 impl JsonConfigurationWatcher {
@@ -101,19 +103,35 @@ impl JsonConfigurationWatcher {
 
         let mut debouncer = new_debouncer(
             Duration::from_millis(100),
+            None,
             move |result: DebounceEventResult| {
-                let _ = tx.blocking_send(result);
+                let new_result: Result<(), Box<dyn std::error::Error + Send + Sync>> = match result
+                {
+                    Ok(events) => {
+                        let hash_change_events = events.iter().any(|e| {
+                            e.kind.is_create() || e.kind.is_modify() || e.kind.is_remove()
+                        });
+                        if hash_change_events {
+                            Ok(())
+                        } else {
+                            return; // No significant events...
+                        }
+                    }
+                    Err(e) => Err(if let Some(e) = e.into_iter().next() {
+                        Box::new(e)
+                    } else {
+                        "Unknown watcher error".into()
+                    }),
+                };
+                let _ = tx.blocking_send(new_result);
             },
         )?;
 
-        debouncer
-            .watcher()
-            .watch(&path, RecursiveMode::NonRecursive)?;
+        debouncer.watch(&path, RecursiveMode::NonRecursive)?;
 
         Ok(Self {
             _debouncer: debouncer,
             change_rx: rx,
-            path,
         })
     }
 }
@@ -122,17 +140,10 @@ impl JsonConfigurationWatcher {
 impl ferron_core::config::adapter::ConfigurationWatcher for JsonConfigurationWatcher {
     async fn watch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         match self.change_rx.recv().await {
-            Some(Ok(_events)) => Ok(()),
-            Some(Err(e)) => Err(Box::new(e)),
+            Some(Ok(_)) => Ok(()),
+            Some(Err(e)) => Err(e),
             None => Err("Watcher channel closed".into()),
         }
-    }
-
-    fn check_drift(&self, metadata: &ferron_core::config::adapter::ConfigurationMetadata) -> bool {
-        let current_mtime = std::fs::metadata(&self.path)
-            .and_then(|m| m.modified())
-            .unwrap_or(std::time::UNIX_EPOCH);
-        current_mtime != metadata.config_mtime
     }
 }
 

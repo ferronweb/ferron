@@ -90,7 +90,7 @@ Traits: `ferron_core::config::adapter::{ConfigurationAdapter, ConfigurationWatch
 - `adapt(&self, params: &HashMap<String,String>) -> AdaptResult` returns
   `(ServerConfiguration, Box<dyn ConfigurationWatcher>, ConfigurationMetadata)`.
 - `file_extension() -> Vec<&'static str>` selects the adapter by file suffix.
-- The watcher implements `watch(&mut self) -> Future` and `check_drift`.
+- The watcher implements `watch(&mut self) -> Future`.
 
 Drift detection uses `ConfigurationMetadata` (`config_hash`, `config_mtime`,
 `config_files`) and the `ADMIN_METRICS.config_drift` gauge.

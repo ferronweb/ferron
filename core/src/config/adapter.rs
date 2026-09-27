@@ -59,9 +59,6 @@ pub type ConfigurationAdapterError = ConfigurationValidationError;
 /// has changed (e.g. file modification, database update). The server calls
 /// [`watch`](Self::watch) in a loop to block until a change is detected,
 /// then triggers a configuration reload.
-///
-/// For lightweight change detection without full re-parsing, implement
-/// [`check_drift`](Self::check_drift).
 #[async_trait]
 pub trait ConfigurationWatcher: Send + Sync {
     /// Wait until the configuration changes, then return.
@@ -74,10 +71,9 @@ pub trait ConfigurationWatcher: Send + Sync {
     /// Returns an error if watching fails (e.g., file deleted, permission denied).
     async fn watch(&mut self) -> Result<(), Box<dyn std::error::Error>>;
 
-    /// Check whether the configuration source has drifted since the last load.
-    ///
-    /// This performs a lightweight check (e.g., re-stat files) without
-    /// re-parsing the configuration. Returns `true` if the source has changed.
+    /// A trait method currently unused by Ferron. Don't implement it for now.
+    #[doc(hidden)]
+    #[deprecated = "unused trait method during the early development of Ferron 3"]
     fn check_drift(&self, _metadata: &ConfigurationMetadata) -> bool {
         false
     }
