@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Breaking changes
+
+#### Configuration
+
+- **Host-isolated handler directives**: backend/handler selectors (`proxy`, `fcgi`, `fcgi_php`, `cgi`, `scgi`, `forward_proxy`, `root`, `index`, `basic_auth`, `rate_limit_backend`, static-file tunables, `client_ip_from_header`, `trace_id_header`, `https_redirect`, `trailing_slash_redirect`, `disable_symlinks`, `directory_listing`) no longer inherit from the wildcard `*` host into named hosts, while global-scope defaults and `location`-from-host inheritance keep working. Previously, `* { proxy ... }` would unexpectedly reverse-proxy a named host that only set `root`. Note: a named host no longer inherits `root` from `*`, so give each host its own `root` (or set it globally).
+
 ### Added
 
 #### Access control
@@ -20,7 +26,6 @@
 
 #### Configuration
 
-- **Host-isolated handler directives**: backend/handler selectors (`proxy`, `fcgi`, `fcgi_php`, `cgi`, `scgi`, `forward_proxy`, `root`, `index`, `basic_auth`, `rate_limit_backend`, static-file tunables, `client_ip_from_header`, `trace_id_header`, `https_redirect`, `trailing_slash_redirect`, `disable_symlinks`, `directory_listing`) no longer inherit from the wildcard `*` host into named hosts, while global-scope defaults and `location`-from-host inheritance keep working. Previously, `* { proxy ... }` would unexpectedly reverse-proxy a named host that only set `root`. Note: a named host no longer inherits `root` from `*`, so give each host its own `root` (or set it globally).
 - **Spurious configuration file hot-reload fix**: previously, the server would sometimes hot-reload the configuration even when no changes were made to the configuration file (something would just read the file). This has been fixed.
 
 #### Admin API
