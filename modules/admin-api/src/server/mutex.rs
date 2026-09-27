@@ -1,37 +1,19 @@
-static LISTENER_MUTEX: std::sync::Mutex<Option<tokio_util::sync::CancellationToken>> =
-    std::sync::Mutex::new(None);
+static LISTENER_MUTEX: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
 
 #[derive(Clone)]
 pub struct ListenerMutexGuard {
-    rc: std::sync::Arc<()>,
+    _permit: std::sync::Arc<tokio::sync::SemaphorePermit<'static>>,
 }
 
 impl ListenerMutexGuard {
     pub async fn acquire() -> Self {
-        let token = match &mut *LISTENER_MUTEX.lock().expect("listener mutex lock failed") {
-            Some(token) => Some(token.clone()),
-            token @ None => {
-                *token = Some(tokio_util::sync::CancellationToken::new());
-                None
-            }
-        };
-        if let Some(token) = token {
-            token.cancelled().await;
-        }
         Self {
-            rc: std::sync::Arc::new(()),
-        }
-    }
-}
-
-impl Drop for ListenerMutexGuard {
-    fn drop(&mut self) {
-        if std::sync::Arc::get_mut(&mut self.rc).is_some() {
-            let opt = &mut *LISTENER_MUTEX.lock().expect("listener mutex lock failed");
-            if let Some(token) = opt {
-                token.cancel();
-            }
-            *opt = None;
+            _permit: std::sync::Arc::new(
+                LISTENER_MUTEX
+                    .acquire()
+                    .await
+                    .expect("listener mutex acquire failed"),
+            ),
         }
     }
 }

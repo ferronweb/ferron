@@ -114,10 +114,11 @@ impl Module for AdminApiModule {
             match tokio::net::TcpListener::bind(config.listen).await {
                 Ok(listener) => {
                     ferron_core::log_info!("Admin API listening on {}", config.listen);
-                    let mut server = Box::pin(async {
+                    let reload_tokenc = reload_token.clone();
+                    let mut server = Box::pin(async move {
                         loop {
                             let Ok((sock, _)) = (tokio::select! {
-                                _ = reload_token.cancelled() => {
+                                _ = reload_tokenc.cancelled() => {
                                     let _ = listener;
                                     break;
                                 }
@@ -132,7 +133,7 @@ impl Module for AdminApiModule {
 
                             let state = state.clone();
                             let config = config.clone();
-                            let reload_token = reload_token.clone();
+                            let reload_token = reload_tokenc.clone();
 
                             tokio::spawn(async move {
                                 let mut conn_fut = hyper::server::conn::http1::Builder::new()

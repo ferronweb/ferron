@@ -16,6 +16,16 @@
 
 - **Zero-result cache purge metric**: purges with zero results are now visible via a `ferron.cache.zero_purge` metric, which can help debug or monitor cache purge requests that did not match any entries.
 
+### Fixed
+
+#### Admin API
+
+- **Admin API listen fail fix**: previously, when configuration is reloaded very frequently, the admin API listener would sometimes fail to bind to the configured address due to a race condition.
+
+#### Observability
+
+- **Prometheus reload listen fail fix**: previously, when configuration is reloaded very frequently, the Prometheus listener would sometimes fail to bind to the configured address due to a race condition.
+
 ## Ferron 3.0.0-rc.7
 
 **Released in September 24, 2026**
