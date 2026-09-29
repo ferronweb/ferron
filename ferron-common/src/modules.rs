@@ -64,6 +64,10 @@ pub trait ModuleHandlers {
     Ok(response)
   }
 
+  /// Sets per-request trace context for the handlers
+  #[allow(unused_variables)]
+  async fn set_trace_context(&mut self, trace_ctx: crate::observability::TraceCtx) {}
+
   /// Sends metric data before handling the request
   #[allow(unused_variables)]
   async fn metric_data_before_handler(

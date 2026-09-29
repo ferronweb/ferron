@@ -137,6 +137,7 @@ async fn log_access(
   date_format: Option<&str>,
   log_format: Option<&str>,
   log_json_props: Option<&HashMap<String, ServerConfigurationValue>>,
+  trace_ctx: Option<ferron_common::observability::TraceCtx>,
 ) {
   let now: DateTime<Local> = Local::now();
   let formatted_time = now.format(date_format.unwrap_or("%d/%b/%Y:%H:%M:%S %z")).to_string();
@@ -150,11 +151,12 @@ async fn log_access(
     log_format,
     log_json_props,
   );
+  let mut msg = LogMessage::new(log_message_string, false);
+  if let Some(trace_ctx) = trace_ctx {
+    msg.attach_trace_ctx(trace_ctx);
+  }
   for logger in loggers {
-    logger
-      .send(LogMessage::new(log_message_string.clone(), false))
-      .await
-      .unwrap_or_default();
+    logger.send(msg.clone()).await.unwrap_or_default();
   }
 }
 
@@ -339,6 +341,7 @@ async fn finalize_response_and_log(
         date_format,
         log_format,
         log_json_props,
+        None,
       )
       .await;
     }
@@ -401,15 +404,23 @@ async fn execute_response_modifying_handlers(
   traces_enabled: bool,
   timeout_instant: std::time::Instant,
   timeout_duration: Option<std::time::Duration>,
+  mut trace_ctx: Option<&mut ferron_common::observability::TraceCtx>,
 ) -> Result<Result<Response<BoxBody<Bytes, std::io::Error>>, Response<BoxBody<Bytes, std::io::Error>>>, anyhow::Error> {
   while let Some(mut executed_handler) = executed_handlers.pop() {
     if traces_enabled {
+      if let Some(trace_ctx) = &mut trace_ctx {
+        trace_ctx.regenerate_span();
+      }
       for trace_sender in &traces_senders {
         trace_sender
-          .send(TraceSignal::StartSpan(format!(
-            "{}::response_modifying_handler",
-            executed_handler.get_name()
-          )))
+          .send(if let Some(trace_ctx) = trace_ctx.as_deref().cloned() {
+            TraceSignal::StartSpanWithCtx(
+              format!("{}::response_modifying_handler", executed_handler.get_name()),
+              trace_ctx,
+            )
+          } else {
+            TraceSignal::StartSpan(format!("{}::response_modifying_handler", executed_handler.get_name()))
+          })
           .await
           .unwrap_or_default();
       }
@@ -520,6 +531,7 @@ async fn finalize_with_modifying_handlers(
   traces_enabled: bool,
   timeout_instant: std::time::Instant,
   timeout_duration: Option<std::time::Duration>,
+  mut trace_ctx: Option<ferron_common::observability::TraceCtx>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
   let (mut response_parts, response_body) = response.into_parts();
 
@@ -555,6 +567,7 @@ async fn finalize_with_modifying_handlers(
     traces_enabled,
     timeout_instant,
     timeout_duration,
+    trace_ctx.as_mut(),
   )
   .await?
   {
@@ -570,6 +583,7 @@ async fn finalize_with_modifying_handlers(
           log_date_format,
           log_format,
           log_json_props,
+          trace_ctx,
         )
         .await;
       }
@@ -1126,6 +1140,12 @@ pub async fn request_handler(
     vec![]
   };
 
+  let mut trace_ctx = if !traces_enabled {
+    None
+  } else {
+    Some(ferron_common::observability::TraceCtx::random_no_span())
+  };
+
   // Obtain module handlers
   let mut module_handlers = Vec::with_capacity(configuration.modules.len());
   for module in &configuration.modules {
@@ -1155,22 +1175,27 @@ pub async fn request_handler(
   let mut is_error_handler = false;
   let mut handlers_iter: Box<dyn Iterator<Item = Box<dyn ModuleHandlers>>> = Box::new(module_handlers.into_iter());
   while let Some(mut handlers) = handlers_iter.next() {
+    if traces_enabled {
+      if let Some(trace_ctx) = &mut trace_ctx {
+        trace_ctx.regenerate_span();
+        error_logger.attach_trace_ctx(trace_ctx.clone());
+      }
+      for trace_sender in &traces_senders {
+        trace_sender
+          .send(if let Some(trace_ctx) = trace_ctx.clone() {
+            TraceSignal::StartSpanWithCtx(format!("{}::request_handler", handlers.get_name()), trace_ctx)
+          } else {
+            TraceSignal::StartSpan(format!("{}::request_handler", handlers.get_name()))
+          })
+          .await
+          .unwrap_or_default();
+      }
+    }
+
     if metrics_enabled {
       handlers
         .metric_data_before_handler(&request, &socket_data, &metrics_sender)
         .await;
-    }
-
-    if traces_enabled {
-      for trace_sender in &traces_senders {
-        trace_sender
-          .send(TraceSignal::StartSpan(format!(
-            "{}::request_handler",
-            handlers.get_name()
-          )))
-          .await
-          .unwrap_or_default();
-      }
     }
 
     let (response_result, is_timeout) = if let Some(timeout_duration) = &timeout_duration {
@@ -1259,6 +1284,7 @@ pub async fn request_handler(
               traces_enabled,
               timeout_instant,
               timeout_duration,
+              trace_ctx,
             )
             .await;
           }
@@ -1347,6 +1373,7 @@ pub async fn request_handler(
                 traces_enabled,
                 timeout_instant,
                 timeout_duration,
+                trace_ctx,
               )
               .await;
             }
@@ -1398,6 +1425,7 @@ pub async fn request_handler(
           traces_enabled,
           timeout_instant,
           timeout_duration,
+          trace_ctx,
         )
         .await;
 
@@ -1433,6 +1461,7 @@ pub async fn request_handler(
     traces_enabled,
     timeout_instant,
     timeout_duration,
+    trace_ctx,
   )
   .await
 }

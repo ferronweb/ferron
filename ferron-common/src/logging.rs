@@ -1,10 +1,13 @@
 use async_channel::Sender;
 
+use crate::observability::TraceCtx;
+
 /// Represents a log message with its content and error status.
 #[derive(Clone)]
 pub struct LogMessage {
   is_error: bool,
   message: String,
+  trace_ctx: Option<TraceCtx>,
 }
 
 impl LogMessage {
@@ -19,7 +22,29 @@ impl LogMessage {
   ///
   /// A `LogMessage` object containing the specified message and error status.
   pub fn new(message: String, is_error: bool) -> Self {
-    Self { is_error, message }
+    Self {
+      is_error,
+      message,
+      trace_ctx: None,
+    }
+  }
+
+  /// Attaches trace context to a metric
+  ///
+  /// # Parameters
+  ///
+  /// - `trace_ctx`: The trace context to attach to this log message.
+  pub fn attach_trace_ctx(&mut self, trace_ctx: TraceCtx) {
+    self.trace_ctx = Some(trace_ctx);
+  }
+
+  /// Obtains the `TraceCtx` containing the trace context
+  ///
+  /// # Returns
+  ///
+  /// An optional `TraceCtx` containing the trace context for a log message.
+  pub fn trace_ctx(&self) -> Option<&TraceCtx> {
+    self.trace_ctx.as_ref()
   }
 
   /// Consumes the `LogMessage` and returns its components.
@@ -37,6 +62,7 @@ impl LogMessage {
 /// Facilitates logging of error messages through a provided logger sender.
 pub struct ErrorLogger {
   loggers: Vec<Sender<LogMessage>>,
+  trace_ctx: Option<TraceCtx>,
 }
 
 impl ErrorLogger {
@@ -50,7 +76,10 @@ impl ErrorLogger {
   ///
   /// A new `ErrorLogger` instance associated with the provided logger.
   pub fn new(logger: Sender<LogMessage>) -> Self {
-    Self { loggers: vec![logger] }
+    Self {
+      loggers: vec![logger],
+      trace_ctx: None,
+    }
   }
 
   /// Creates a new `ErrorLogger` instance with multiple loggers.
@@ -63,7 +92,10 @@ impl ErrorLogger {
   ///
   /// A new `ErrorLogger` instance associated with multiple provided loggers.
   pub fn new_multiple(loggers: Vec<Sender<LogMessage>>) -> Self {
-    Self { loggers }
+    Self {
+      loggers,
+      trace_ctx: None,
+    }
   }
 
   /// Creates a new `ErrorLogger` instance without any underlying logger.
@@ -72,7 +104,10 @@ impl ErrorLogger {
   ///
   /// A new `ErrorLogger` instance not associated with any logger.
   pub fn without_logger() -> Self {
-    Self { loggers: vec![] }
+    Self {
+      loggers: vec![],
+      trace_ctx: None,
+    }
   }
 
   /// Logs an error message asynchronously.
@@ -93,12 +128,22 @@ impl ErrorLogger {
   /// # }
   /// ```
   pub async fn log(&self, message: &str) {
-    for logger in &self.loggers {
-      logger
-        .send(LogMessage::new(String::from(message), true))
-        .await
-        .unwrap_or_default();
+    let mut msg = LogMessage::new(String::from(message), true);
+    if let Some(trace_ctx) = self.trace_ctx.clone() {
+      msg.attach_trace_ctx(trace_ctx);
     }
+    for logger in &self.loggers {
+      logger.send(msg.clone()).await.unwrap_or_default();
+    }
+  }
+
+  /// Attaches trace context to an error logger
+  ///
+  /// # Parameters
+  ///
+  /// - `trace_ctx`: A trace context to attach to the log.
+  pub fn attach_trace_ctx(&mut self, trace_ctx: TraceCtx) {
+    self.trace_ctx = Some(trace_ctx)
   }
 }
 
@@ -111,6 +156,7 @@ impl Clone for ErrorLogger {
   fn clone(&self) -> Self {
     Self {
       loggers: self.loggers.clone(),
+      trace_ctx: self.trace_ctx.clone(),
     }
   }
 }

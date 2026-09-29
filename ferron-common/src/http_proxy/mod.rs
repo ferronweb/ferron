@@ -45,7 +45,7 @@ use crate::config::ServerConfiguration;
 use crate::http_proxy::send_request::SendRequestWrapper;
 use crate::logging::ErrorLogger;
 use crate::modules::{ModuleHandlers, ResponseData, SocketData};
-use crate::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
+use crate::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender, TraceCtx};
 use crate::util::{NoServerVerifier, TtlCache};
 
 pub use self::builder::ReverseProxyBuilder;
@@ -436,6 +436,7 @@ impl ReverseProxy {
       connections: self.connections.clone(),
       #[cfg(unix)]
       unix_connections: self.unix_connections.clone(),
+      trace_ctx: None,
     }
   }
 }
@@ -465,6 +466,7 @@ pub struct ReverseProxyHandler {
   connections: ConnectionPool,
   #[cfg(unix)]
   unix_connections: ConnectionPool,
+  trace_ctx: Option<TraceCtx>,
 }
 
 impl ReverseProxyHandler {
@@ -1160,6 +1162,10 @@ impl ModuleHandlers for ReverseProxyHandler {
     }
   }
 
+  async fn set_trace_context(&mut self, trace_ctx: crate::observability::TraceCtx) {
+    self.trace_ctx = Some(trace_ctx)
+  }
+
   async fn metric_data_before_handler(
     &mut self,
     _request: &Request<BoxBody<Bytes, std::io::Error>>,
@@ -1185,14 +1191,20 @@ impl ModuleHandlers for ReverseProxyHandler {
           ));
         }
         metrics_sender
-          .send(Metric::new(
-            "ferron.proxy.backends.selected",
-            attributes,
-            MetricType::Counter,
-            MetricValue::U64(1),
-            Some("{backend}"),
-            Some("Number of times a backend server was selected."),
-          ))
+          .send({
+            let mut m = Metric::new(
+              "ferron.proxy.backends.selected",
+              attributes,
+              MetricType::Counter,
+              MetricValue::U64(1),
+              Some("{backend}"),
+              Some("Number of times a backend server was selected."),
+            );
+            if let Some(ctx) = &self.trace_ctx {
+              m.attach_trace_ctx(ctx.clone());
+            }
+            m
+          })
           .await;
       }
     }
@@ -1210,29 +1222,41 @@ impl ModuleHandlers for ReverseProxyHandler {
           ));
         }
         metrics_sender
-          .send(Metric::new(
-            "ferron.proxy.backends.unhealthy",
-            attributes,
-            MetricType::Counter,
-            MetricValue::U64(1),
-            Some("{backend}"),
-            Some("Number of health check failures for a backend server."),
-          ))
+          .send({
+            let mut m = Metric::new(
+              "ferron.proxy.backends.unhealthy",
+              attributes,
+              MetricType::Counter,
+              MetricValue::U64(1),
+              Some("{backend}"),
+              Some("Number of health check failures for a backend server."),
+            );
+            if let Some(ctx) = &self.trace_ctx {
+              m.attach_trace_ctx(ctx.clone());
+            }
+            m
+          })
           .await;
       }
     }
     metrics_sender
-      .send(Metric::new(
-        "ferron.proxy.requests",
-        vec![(
-          "ferron.proxy.connection_reused",
-          MetricAttributeValue::Bool(self.connection_reused),
-        )],
-        MetricType::Counter,
-        MetricValue::U64(1),
-        Some("{request}"),
-        Some("Number of reverse proxy requests."),
-      ))
+      .send({
+        let mut m = Metric::new(
+          "ferron.proxy.requests",
+          vec![(
+            "ferron.proxy.connection_reused",
+            MetricAttributeValue::Bool(self.connection_reused),
+          )],
+          MetricType::Counter,
+          MetricValue::U64(1),
+          Some("{request}"),
+          Some("Number of reverse proxy requests."),
+        );
+        if let Some(ctx) = &self.trace_ctx {
+          m.attach_trace_ctx(ctx.clone());
+        }
+        m
+      })
       .await;
   }
 }

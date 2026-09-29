@@ -13,7 +13,9 @@ use hyper::{header, Request, Response, StatusCode, Uri};
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
-use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
+use ferron_common::observability::{
+  Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender, TraceCtx,
+};
 use ferron_common::util::{is_localhost, ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values_for_validation};
 
@@ -759,6 +761,7 @@ impl Module for CoreModule {
       request_timer: None,
       metrics_attributes: None,
       response_status: None,
+      trace_ctx: None,
     })
   }
 }
@@ -771,6 +774,7 @@ struct CoreModuleHandlers {
   request_timer: Option<std::time::Instant>,
   metrics_attributes: Option<Vec<(&'static str, MetricAttributeValue)>>,
   response_status: Option<hyper::StatusCode>,
+  trace_ctx: Option<TraceCtx>,
 }
 
 #[async_trait(?Send)]
@@ -1075,6 +1079,10 @@ impl ModuleHandlers for CoreModuleHandlers {
     Ok(response)
   }
 
+  async fn set_trace_context(&mut self, trace_ctx: ferron_common::observability::TraceCtx) {
+    self.trace_ctx = Some(trace_ctx)
+  }
+
   async fn metric_data_before_handler(
     &mut self,
     request: &Request<BoxBody<Bytes, std::io::Error>>,
@@ -1118,14 +1126,20 @@ impl ModuleHandlers for CoreModuleHandlers {
     }
 
     metrics_sender
-      .send(Metric::new(
-        "http.server.active_requests",
-        metric_attributes.clone(),
-        MetricType::UpDownCounter,
-        MetricValue::I64(1),
-        Some("{request}"),
-        Some("Number of active HTTP server requests."),
-      ))
+      .send({
+        let mut m = Metric::new(
+          "http.server.active_requests",
+          metric_attributes.clone(),
+          MetricType::UpDownCounter,
+          MetricValue::I64(1),
+          Some("{request}"),
+          Some("Number of active HTTP server requests."),
+        );
+        if let Some(ctx) = &self.trace_ctx {
+          m.attach_trace_ctx(ctx.clone());
+        }
+        m
+      })
       .await;
 
     self.metrics_attributes = Some(metric_attributes);
@@ -1151,42 +1165,60 @@ impl ModuleHandlers for CoreModuleHandlers {
 
     // One active request less
     metrics_sender
-      .send(Metric::new(
-        "http.server.active_requests",
-        metric_attributes.clone(),
-        MetricType::UpDownCounter,
-        MetricValue::I64(-1),
-        Some("{request}"),
-        Some("Number of active HTTP server requests."),
-      ))
+      .send({
+        let mut m = Metric::new(
+          "http.server.active_requests",
+          metric_attributes.clone(),
+          MetricType::UpDownCounter,
+          MetricValue::I64(-1),
+          Some("{request}"),
+          Some("Number of active HTTP server requests."),
+        );
+        if let Some(ctx) = &self.trace_ctx {
+          m.attach_trace_ctx(ctx.clone());
+        }
+        m
+      })
       .await;
 
     if let Some(request_duration) = request_duration {
       // HTTP request duration
       metrics_sender
-        .send(Metric::new(
-          "http.server.request.duration",
-          metric_attributes.clone(),
-          MetricType::Histogram(Some(vec![
-            0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
-          ])),
-          MetricValue::F64(request_duration),
-          Some("s"),
-          Some("Duration of HTTP server requests."),
-        ))
+        .send({
+          let mut m = Metric::new(
+            "http.server.request.duration",
+            metric_attributes.clone(),
+            MetricType::Histogram(Some(vec![
+              0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
+            ])),
+            MetricValue::F64(request_duration),
+            Some("s"),
+            Some("Duration of HTTP server requests."),
+          );
+          if let Some(ctx) = &self.trace_ctx {
+            m.attach_trace_ctx(ctx.clone());
+          }
+          m
+        })
         .await;
     }
 
     // Add one HTTP request
     metrics_sender
-      .send(Metric::new(
-        "ferron.http.server.request_count",
-        request_count_metric_attributes.clone(),
-        MetricType::Counter,
-        MetricValue::U64(1),
-        Some("{request}"),
-        Some("Number of HTTP server requests."),
-      ))
+      .send({
+        let mut m = Metric::new(
+          "ferron.http.server.request_count",
+          request_count_metric_attributes.clone(),
+          MetricType::Counter,
+          MetricValue::U64(1),
+          Some("{request}"),
+          Some("Number of HTTP server requests."),
+        );
+        if let Some(ctx) = &self.trace_ctx {
+          m.attach_trace_ctx(ctx.clone());
+        }
+        m
+      })
       .await;
   }
 }

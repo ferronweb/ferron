@@ -13,13 +13,16 @@ use ferron_common::{
 };
 use hashlink::LinkedHashMap;
 use hyper::header::HeaderValue;
-use opentelemetry::trace::{Tracer, TracerProvider};
-use opentelemetry::KeyValue;
 use opentelemetry::{
   logs::{LogRecord, Logger, LoggerProvider},
   Context,
 };
 use opentelemetry::{metrics::MeterProvider, trace::TraceContextExt};
+use opentelemetry::{trace::SpanContext, KeyValue};
+use opentelemetry::{
+  trace::{Tracer, TracerProvider},
+  SpanId, TraceId,
+};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use rustls::{client::WebPkiServerVerifier, ClientConfig};
@@ -188,13 +191,32 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                       return;
                   },
                 } {
+                  let trace_ctx = message.trace_ctx().cloned();
                   let (message_inner, is_error) = message.get_message();
                   if is_error {
                     let mut log_record = error_logger.create_log_record();
+                    if let Some(trace_ctx) = trace_ctx {
+                      if let Some(span_id) = trace_ctx.span_id {
+                        log_record.set_trace_context(
+                          TraceId::from_bytes(trace_ctx.trace_id),
+                          SpanId::from_bytes(span_id),
+                          None,
+                        );
+                      }
+                    }
                     log_record.set_body(message_inner.into());
                     error_logger.emit(log_record);
                   } else {
                     let mut log_record = access_logger.create_log_record();
+                    if let Some(trace_ctx) = trace_ctx {
+                      if let Some(span_id) = trace_ctx.span_id {
+                        log_record.set_trace_context(
+                          TraceId::from_bytes(trace_ctx.trace_id),
+                          SpanId::from_bytes(span_id),
+                          None,
+                        );
+                      }
+                    }
                     log_record.set_body(message_inner.into());
                     access_logger.emit(log_record);
                   }
@@ -270,6 +292,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                 }
               };
 
+              // Caveat: OTEL SDK doesn't support metric exemplars...
               let mut instrument_cache: HashMap<&'static str, CachedInstrument> = HashMap::new();
 
               if let Some(metric_provider) = metric_provider {
@@ -544,6 +567,21 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                       match signal {
                         TraceSignal::StartSpan(span) => {
                           let span_context = spans.back().map(|(_, context)| context.clone()).unwrap_or_default();
+                          let new_span = tracer.start_with_context(span.clone(), &span_context);
+                          let new_span_context = span_context.with_span(new_span);
+                          spans.insert(span, new_span_context);
+                        }
+                        TraceSignal::StartSpanWithCtx(span, ctx) => {
+                          let mut span_context = spans.back().map(|(_, context)| context.clone()).unwrap_or_default();
+                          if let Some(span_id) = ctx.span_id {
+                            span_context = span_context.with_remote_span_context(SpanContext::new(
+                              TraceId::from_bytes(ctx.trace_id),
+                              SpanId::from_bytes(span_id),
+                              opentelemetry::TraceFlags::default(),
+                              false,
+                              opentelemetry::trace::TraceState::NONE,
+                            ));
+                          }
                           let new_span = tracer.start_with_context(span.clone(), &span_context);
                           let new_span_context = span_context.with_span(new_span);
                           spans.insert(span, new_span_context);

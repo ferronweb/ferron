@@ -97,3 +97,5 @@ For OTLP logs, access logs have an `access` OTLP scope, while error logs have an
 For OTLP metrics, they have a `ferron` scope.
 
 For OTLP traces, they have a `ferron` scope.
+
+Ferron UNRELEASED and newer also supports log-to-trace correlation for OTLP.

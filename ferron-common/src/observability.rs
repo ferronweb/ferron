@@ -109,6 +109,8 @@ pub struct Metric {
   pub unit: Option<&'static str>,
   /// Optional description of the metric
   pub description: Option<&'static str>,
+  /// Optional trace context (used for metric exemplars)
+  pub trace_ctx: Option<TraceCtx>,
 }
 
 impl Metric {
@@ -128,7 +130,13 @@ impl Metric {
       value,
       unit,
       description,
+      trace_ctx: None,
     }
+  }
+
+  /// Attaches trace context to a metric
+  pub fn attach_trace_ctx(&mut self, trace_ctx: TraceCtx) {
+    self.trace_ctx = Some(trace_ctx);
   }
 }
 
@@ -248,4 +256,64 @@ pub enum TraceSignal {
   StartSpan(String),
   /// End the span with the given module name and optional error description.
   EndSpan(String, Option<String>),
+  /// Start a new span with the given module name and trace context.
+  StartSpanWithCtx(String, TraceCtx),
+}
+
+/// Represents trace context, with trace and span ID
+#[derive(Clone)]
+pub struct TraceCtx {
+  /// Trace ID
+  pub trace_id: [u8; 16],
+  /// Optional span ID
+  pub span_id: Option<[u8; 8]>,
+}
+
+impl TraceCtx {
+  /// Generates a random trace context
+  #[inline]
+  pub fn random() -> Self {
+    loop {
+      let trace_id: [u8; 16] = rand::random();
+      if trace_id == [0; 16] {
+        continue;
+      }
+      let span_id: [u8; 8] = rand::random();
+      if span_id == [0; 8] {
+        continue;
+      }
+      return Self {
+        trace_id,
+        span_id: Some(span_id),
+      };
+    }
+  }
+
+  /// Generates a random trace context without span ID
+  #[inline]
+  pub fn random_no_span() -> Self {
+    loop {
+      let trace_id: [u8; 16] = rand::random();
+      if trace_id == [0; 16] {
+        continue;
+      }
+      return Self {
+        trace_id,
+        span_id: None,
+      };
+    }
+  }
+
+  /// Regenerates a random span ID
+  #[inline]
+  pub fn regenerate_span(&mut self) {
+    loop {
+      let span_id: [u8; 8] = rand::random();
+      if span_id == [0; 8] || Some(span_id) == self.span_id {
+        continue;
+      }
+      self.span_id = Some(span_id);
+      return;
+    }
+  }
 }

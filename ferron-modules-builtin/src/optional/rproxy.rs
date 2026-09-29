@@ -578,6 +578,10 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
       .await
   }
 
+  async fn set_trace_context(&mut self, trace_ctx: ferron_common::observability::TraceCtx) {
+    self.inner.set_trace_context(trace_ctx).await
+  }
+
   async fn metric_data_before_handler(
     &mut self,
     request: &Request<BoxBody<Bytes, std::io::Error>>,

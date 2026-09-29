@@ -4,6 +4,10 @@
 
 **Not yet released**
 
+### Added
+
+- Added support for observability signal correlation (log-to-trace; metric-to-trace not supported as OpenTelemetry SDK doesn't support metric exemplars).
+
 ### Changed
 
 - Email address setting for Cloudflare DNS provider is now ineffective.

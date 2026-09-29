@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use crate::util::{Cachability, CacheControl};
 use async_trait::async_trait;
 use bytes::Bytes;
-use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue};
+use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, TraceCtx};
 use futures_util::stream::{StreamExt, TryStreamExt};
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full, StreamBody};
@@ -487,6 +487,7 @@ impl Module for CacheModule {
       metric_cache_evictions_expired: None,
       track_evictions: self.track_evictions.clone(),
       dont_register_evictions: self.dont_register_evictions.clone(),
+      trace_ctx: None,
     })
   }
 }
@@ -507,6 +508,7 @@ struct CacheModuleHandlers {
   metric_cache_evictions_expired: Option<usize>,
   track_evictions: Arc<AtomicUsize>,
   dont_register_evictions: Arc<AtomicBool>,
+  trace_ctx: Option<TraceCtx>,
 }
 
 impl CacheModuleHandlers {
@@ -800,6 +802,10 @@ impl ModuleHandlers for CacheModuleHandlers {
     }
   }
 
+  async fn set_trace_context(&mut self, trace_ctx: ferron_common::observability::TraceCtx) {
+    self.trace_ctx = Some(trace_ctx)
+  }
+
   async fn metric_data_before_handler(
     &mut self,
     _request: &Request<BoxBody<Bytes, std::io::Error>>,
@@ -813,34 +819,46 @@ impl ModuleHandlers for CacheModuleHandlers {
     if let Some(cache_hit) = self.metric_cache_hit.take() {
       // Cache lookups
       metrics_sender
-        .send(Metric::new(
-          "ferron.cache.lookups",
-          vec![(
-            "ferron.cache.result",
-            MetricAttributeValue::String(if cache_hit {
-              "hit".to_string()
-            } else {
-              "miss".to_string()
-            }),
-          )],
-          MetricType::Counter,
-          MetricValue::U64(1),
-          Some("{lookup}"),
-          Some("Number of times a cache lookup was performed."),
-        ))
+        .send({
+          let mut m = Metric::new(
+            "ferron.cache.lookups",
+            vec![(
+              "ferron.cache.result",
+              MetricAttributeValue::String(if cache_hit {
+                "hit".to_string()
+              } else {
+                "miss".to_string()
+              }),
+            )],
+            MetricType::Counter,
+            MetricValue::U64(1),
+            Some("{lookup}"),
+            Some("Number of times a cache lookup was performed."),
+          );
+          if let Some(ctx) = &self.trace_ctx {
+            m.attach_trace_ctx(ctx.clone());
+          }
+          m
+        })
         .await;
     }
 
     // Items in cache
     metrics_sender
-      .send(Metric::new(
-        "ferron.cache.items",
-        vec![],
-        MetricType::Gauge,
-        MetricValue::U64(self.cache.len() as u64),
-        Some("{item}"),
-        Some("Number of items in the cache."),
-      ))
+      .send({
+        let mut m = Metric::new(
+          "ferron.cache.items",
+          vec![],
+          MetricType::Gauge,
+          MetricValue::U64(self.cache.len() as u64),
+          Some("{item}"),
+          Some("Number of items in the cache."),
+        );
+        if let Some(ctx) = &self.trace_ctx {
+          m.attach_trace_ctx(ctx.clone());
+        }
+        m
+      })
       .await;
 
     // Cache evictions
@@ -848,34 +866,46 @@ impl ModuleHandlers for CacheModuleHandlers {
       let metric_cache_evictions_size = self.track_evictions.swap(0, Ordering::Relaxed);
       if metric_cache_evictions_size > 0 {
         metrics_sender
-          .send(Metric::new(
-            "ferron.cache.evictions",
-            vec![(
-              "ferron.cache.eviction_reason",
-              MetricAttributeValue::String("size".to_string()),
-            )],
-            MetricType::Counter,
-            MetricValue::U64(metric_cache_evictions_size as u64),
-            Some("{eviction}"),
-            Some("Number of cache evictions."),
-          ))
+          .send({
+            let mut m = Metric::new(
+              "ferron.cache.evictions",
+              vec![(
+                "ferron.cache.eviction_reason",
+                MetricAttributeValue::String("size".to_string()),
+              )],
+              MetricType::Counter,
+              MetricValue::U64(metric_cache_evictions_size as u64),
+              Some("{eviction}"),
+              Some("Number of cache evictions."),
+            );
+            if let Some(ctx) = &self.trace_ctx {
+              m.attach_trace_ctx(ctx.clone());
+            }
+            m
+          })
           .await;
       }
 
       let metric_cache_evictions_expired = *self.metric_cache_evictions_expired.as_ref().unwrap_or(&0);
       if metric_cache_evictions_expired > 0 {
         metrics_sender
-          .send(Metric::new(
-            "ferron.cache.evictions",
-            vec![(
-              "ferron.cache.eviction_reason",
-              MetricAttributeValue::String("expired".to_string()),
-            )],
-            MetricType::Counter,
-            MetricValue::U64(metric_cache_evictions_expired as u64),
-            Some("{eviction}"),
-            Some("Number of cache evictions."),
-          ))
+          .send({
+            let mut m = Metric::new(
+              "ferron.cache.evictions",
+              vec![(
+                "ferron.cache.eviction_reason",
+                MetricAttributeValue::String("expired".to_string()),
+              )],
+              MetricType::Counter,
+              MetricValue::U64(metric_cache_evictions_expired as u64),
+              Some("{eviction}"),
+              Some("Number of cache evictions."),
+            );
+            if let Some(ctx) = &self.trace_ctx {
+              m.attach_trace_ctx(ctx.clone());
+            }
+            m
+          })
           .await;
       }
     }
