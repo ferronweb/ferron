@@ -308,7 +308,7 @@ pub async fn request_handler(
         let duration_secs = request_timer.elapsed().as_secs_f64();
         let timestamp = chrono::Local::now();
 
-        let (status_code, content_length) = match &response_result {
+        let (status_code, content_length, response_headers) = match &response_result {
             Ok(r) => {
                 let status = r.status().as_u16();
                 let content_length = r
@@ -316,9 +316,19 @@ pub async fn request_handler(
                     .get(http::header::CONTENT_LENGTH)
                     .and_then(|v| v.to_str().ok())
                     .and_then(|s| s.parse().ok());
-                (status, content_length)
+                let response_headers = r
+                    .headers()
+                    .iter()
+                    .filter_map(|(name, value)| {
+                        value
+                            .to_str()
+                            .ok()
+                            .map(|v| (name.to_string(), v.to_string()))
+                    })
+                    .collect();
+                (status, content_length, response_headers)
             }
-            Err(_) => (500, None),
+            Err(_) => (500, None, vec![]),
         };
 
         let status_code_attr = (
@@ -401,6 +411,7 @@ pub async fn request_handler(
             content_length,
             duration_secs,
             request_headers,
+            response_headers,
             timestamp,
             trace_context: request_trace_context.as_ref().map(to_event_trace_context),
             custom_fields,

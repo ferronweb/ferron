@@ -23,6 +23,8 @@ enum FormatToken {
     Field(String),
     /// %{Header-Name}i - Request header
     Header(String),
+    /// %{Header-Name}o - Response header
+    ResponseHeader(String),
     /// %{format}t or %t - Timestamp
     Timestamp(Option<String>),
     /// Literal text (including escaped %%)
@@ -107,6 +109,10 @@ impl FormatPattern {
                 chars.next();
                 tokens.push(FormatToken::Header(inner));
             }
+            Some(&'o') => {
+                chars.next();
+                tokens.push(FormatToken::ResponseHeader(inner));
+            }
             Some(&'t') => {
                 chars.next();
                 tokens.push(FormatToken::Timestamp(Some(inner)));
@@ -147,6 +153,11 @@ impl FormatPattern {
             match token {
                 FormatToken::Field(name) => {
                     let value = fields.get(name.as_str()).map(|s| s.as_str()).unwrap_or("-");
+                    output.push_str(value);
+                }
+                FormatToken::ResponseHeader(name) => {
+                    let key = format!("res_header_{}", name.to_ascii_lowercase().replace("-", "_"));
+                    let value = fields.get(key.as_str()).map(|s| s.as_str()).unwrap_or("-");
                     output.push_str(value);
                 }
                 FormatToken::Header(name) => {

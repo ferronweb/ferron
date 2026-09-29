@@ -159,6 +159,7 @@ The most common access-log field remappings in modern mode are:
 | `content_length`                           | `http.response.body.size`                                          |
 | `duration_secs`                            | `http.server.request.duration`                                     |
 | `header_<name>`                            | `http.request.header.<name>`                                       |
+| `res_header_<name>`                        | `http.response.header.<name>`                                      |
 | `timestamp`, `trace_id`, `span_id`, `*_ip` | dropped (use the record timestamp and standard attributes instead) |
 | fields with `.`                            | `<field_name>`                                                     |
 | other fields                               | `ferron.custom.<field_name>`                                       |

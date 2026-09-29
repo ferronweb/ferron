@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Added
+
+#### Observability
+
+- **Response header fields in access logs**: HTTP access logs now include response header fields, allowing visibility into HTTP response headers, for example for HTTP redirects.
+
 ## Ferron 3.0.0-rc.8
 
 **Released in September 28, 2026**

@@ -67,11 +67,12 @@ Each access log entry contains the following fields:
 | `duration_secs`       | Request processing duration in seconds                                     |
 | `timestamp`           | Request timestamp in CLF format                                            |
 | `header_<name>`       | Request header values (one field per header)                               |
+| `res_header_<name>`   | Response header values (one field per header)                              |
 | `span_id`             | Optional trace span ID for the request (if W3C trace context is available) |
 | `trace_id`            | Optional trace ID for the request (if W3C trace context is available)      |
 
 > [!important]
-> Access logs do not contain sensitive fields (such as `header_cookie`, `header_authorization`). This makes sure log output does not expose sensitive data.
+> Access logs do not contain sensitive fields (such as `header_cookie`, `header_authorization`, `res_header_set_cookie`). This makes sure log output does not expose sensitive data.
 
 > [!info]
 > Pipeline modules can contribute additional access log fields when active. These fields are only present when the corresponding module handles the request. For the list of module-contributed access log fields, see the documentation for the respective module.
@@ -157,12 +158,13 @@ The `access_pattern` directive supports the following tokens:
 | ----------------- | -------------------------------------------------- | ---------------------------------- |
 | `%field_name`     | Access log field                                   | `%client_ip`, `%status`, `%method` |
 | `%{Header-Name}i` | Request header                                     | `%{Referer}i`, `%{User-Agent}i`    |
+| `%{Header-Name}o` | Response header                                    | `%{Content-Type}o`                 |
 | `%{format}t`      | Timestamp with custom format                       | `%{%Y-%m-%d %H:%M:%S}t`            |
 | `%t`              | Timestamp (uses `timestamp_format` or CLF default) | `%t`                               |
 | `%%`              | Literal `%` character                              | `%%`                               |
 | Other text        | Passed through literally                           | `"`, ``, `-`                       |
 
-You can access request headers via the `%{Header-Name}i` syntax. The header name is case-insensitive, and Ferron converts hyphens to underscores internally.
+You can access request headers via the `%{Header-Name}i` syntax. The header name is case-insensitive, and Ferron converts hyphens to underscores internally. Response headers can be accessed similarly, via the `%{Header-Name}o` syntax.
 
 ### Application log formats
 
@@ -270,27 +272,28 @@ example.com {
 
 When the server resolves an `log` filename, it uses the access log event fields as variables. All variable names are prefixed with `accesslog.`.
 
-| Variable                        | Description                                                                                |
-| ------------------------------- | ------------------------------------------------------------------------------------------ |
-| `accesslog.path`                | The request URI path (for example `/index.html`)                                           |
-| `accesslog.path_and_query`      | The request URI with path and query                                                        |
-| `accesslog.method`              | The HTTP request method (for example `GET`, `POST`)                                        |
-| `accesslog.version`             | The HTTP version (for example `HTTP/1.1`, `HTTP/2.0`)                                      |
-| `accesslog.scheme`              | The request scheme (`http` or `https`)                                                     |
-| `accesslog.client_ip`           | The client IP address                                                                      |
-| `accesslog.client_port`         | The client port number                                                                     |
-| `accesslog.client_ip_canonical` | The client IP in canonical form                                                            |
-| `accesslog.server_ip`           | The server IP address                                                                      |
-| `accesslog.server_port`         | The server port number                                                                     |
-| `accesslog.server_ip_canonical` | The server IP in canonical form                                                            |
-| `accesslog.auth_user`           | The authenticated username, or `-` if not authenticated                                    |
-| `accesslog.status`              | The HTTP response status code                                                              |
-| `accesslog.content_length`      | The response content length, or `-` if not available                                       |
-| `accesslog.duration_secs`       | Request processing duration in seconds                                                     |
-| `accesslog.timestamp`           | Request timestamp in CLF format                                                            |
-| `accesslog.header_<name>`       | Request header values (one field per header, lowercase, hyphens replaced with underscores) |
-| `accesslog.trace_id`            | Optional trace ID (if W3C trace context is available)                                      |
-| `accesslog.span_id`             | Optional trace span ID (if W3C trace context is available)                                 |
+| Variable                        | Description                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------- |
+| `accesslog.path`                | The request URI path (for example `/index.html`)                                            |
+| `accesslog.path_and_query`      | The request URI with path and query                                                         |
+| `accesslog.method`              | The HTTP request method (for example `GET`, `POST`)                                         |
+| `accesslog.version`             | The HTTP version (for example `HTTP/1.1`, `HTTP/2.0`)                                       |
+| `accesslog.scheme`              | The request scheme (`http` or `https`)                                                      |
+| `accesslog.client_ip`           | The client IP address                                                                       |
+| `accesslog.client_port`         | The client port number                                                                      |
+| `accesslog.client_ip_canonical` | The client IP in canonical form                                                             |
+| `accesslog.server_ip`           | The server IP address                                                                       |
+| `accesslog.server_port`         | The server port number                                                                      |
+| `accesslog.server_ip_canonical` | The server IP in canonical form                                                             |
+| `accesslog.auth_user`           | The authenticated username, or `-` if not authenticated                                     |
+| `accesslog.status`              | The HTTP response status code                                                               |
+| `accesslog.content_length`      | The response content length, or `-` if not available                                        |
+| `accesslog.duration_secs`       | Request processing duration in seconds                                                      |
+| `accesslog.timestamp`           | Request timestamp in CLF format                                                             |
+| `accesslog.header_<name>`       | Request header values (one field per header, lowercase, hyphens replaced with underscores)  |
+| `accesslog.res_header_<name>`   | Response header values (one field per header, lowercase, hyphens replaced with underscores) |
+| `accesslog.trace_id`            | Optional trace ID (if W3C trace context is available)                                       |
+| `accesslog.span_id`             | Optional trace span ID (if W3C trace context is available)                                  |
 
 > [!important]
 > Access log filename interpolation does not include sensitive fields (such as `header_cookie`, `header_authorization`). This makes sure log output does not expose sensitive data.

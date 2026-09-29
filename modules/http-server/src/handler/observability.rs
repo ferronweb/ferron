@@ -234,6 +234,7 @@ pub(super) struct HttpAccessLog {
     pub content_length: Option<u64>,
     pub duration_secs: f64,
     pub request_headers: Vec<(String, String)>,
+    pub response_headers: Vec<(String, String)>,
     pub timestamp: chrono::DateTime<chrono::Local>,
     pub trace_context: Option<EventTraceContext>,
     pub custom_fields: Option<FxHashMap<String, CustomAccessLogField>>,
@@ -312,6 +313,19 @@ impl AccessEvent for HttpAccessLog {
             }
             visitor.field_string(
                 &format!("header_{}", name.to_ascii_lowercase().replace("-", "_")),
+                value,
+            );
+        }
+        for (name, value) in &self.response_headers {
+            if SENSITIVE_FIELDS_REDACTED
+                .iter()
+                .any(|sfr| name.to_ascii_lowercase().contains(sfr))
+            {
+                // Don't add sensitive HTTP headers to protect the clients.
+                continue;
+            }
+            visitor.field_string(
+                &format!("res_header_{}", name.to_ascii_lowercase().replace("-", "_")),
                 value,
             );
         }

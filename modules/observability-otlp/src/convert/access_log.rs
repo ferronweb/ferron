@@ -177,6 +177,8 @@ impl AccessVisitor for OtelAccessAttributeVisitor {
             _ => {
                 if let Some(header) = name.strip_prefix("header_") {
                     self.push(format!("http.request.header.{header}"), any_string(value));
+                } else if let Some(header) = name.strip_prefix("res_header_") {
+                    self.push(format!("http.response.header.{header}"), any_string(value));
                 } else {
                     self.push(format!("ferron.custom.{name}"), any_string(value));
                 }
