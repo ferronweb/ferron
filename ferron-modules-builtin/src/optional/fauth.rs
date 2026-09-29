@@ -92,11 +92,17 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
                 )
               })
           });
+          let intercept_errors = get_value!("auth_to_intercept_errors", config)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
           let mut proxy_builder = connections.get_builder();
           if let Some((proxy_to, proxy_unix, keepalive_limit, keepalive_idle_timeout)) = proxy_to_raw {
             proxy_builder = proxy_builder.upstream(proxy_to, proxy_unix, keepalive_limit, keepalive_idle_timeout);
           }
-          let proxy = proxy_builder.rewrite_host(true).build();
+          let proxy = proxy_builder
+            .proxy_intercept_errors(intercept_errors)
+            .rewrite_host(true)
+            .build();
 
           Ok(Arc::new(ForwardedAuthenticationModule { proxy }))
         })?,
@@ -163,6 +169,20 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
         }
       }
     }
+
+    if let Some(entries) = get_entries_for_validation!("auth_to_intercept_errors", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `auth_to_intercept_errors` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() {
+          Err(anyhow::anyhow!(
+            "Invalid forwarded authentication error interception enabling option"
+          ))?
+        }
+      }
+    };
 
     if let Some(entries) = get_entries_for_validation!("auth_to_concurrent_conns", config, used_properties) {
       for entry in &entries.inner {

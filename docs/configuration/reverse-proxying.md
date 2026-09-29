@@ -123,6 +123,8 @@ api.example.com {
   - This directive specifies whether the server should not verify the TLS certificate of the backend authentication server. Default: `auth_to_no_verification #false`
 - `auth_to_copy <request_header_to_copy: string> [<request_header_to_copy: string> ...]` (_fauth_ module)
   - This directive specifies the request headers that will be copied and sent to the forwarded authentication backend server. This directive can be specified multiple times. Default: none
+- `auth_to_intercept_errors [auth_to_intercept_errors: bool]` (_fauth_ module; Ferron UNRELEASED or newer)
+  - This directive specifies whether errors from the forwarded authentication backend should be intercepted. Default: `auth_to_intercept_errors #false`
 
 **Configuration example:**
 
