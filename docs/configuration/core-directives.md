@@ -63,6 +63,8 @@ This page covers core KDL directives that control Ferron's global HTTP behavior,
   - This directive specifies the send buffer size in bytes for TCP listeners. Default: none
 - `tcp_recv_buffer <tcp_recv_buffer: integer>`
   - This directive specifies the receive buffer size in bytes for TCP listeners. Default: none
+- `multipath [enable_mptcp: bool]` (Ferron UNRELEASED or newer)
+  - This directive specifies whether MPTCP (multi-path TCP) is enabled. MPTCP allows a single TCP connection to use multiple network interfaces at the same time, improving throughput and resilience. When enabled, Ferron attempts to create an MPTCP socket. If the kernel lacks MPTCP support or MPTCP is off, Ferron falls back to standard TCP. Default: `multipath #false`
 
 **Configuration example:**
 

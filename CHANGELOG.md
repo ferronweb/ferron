@@ -7,6 +7,7 @@
 ### Added
 
 - `auth_to_intercept_errors` directive for some forwarded authentication setups ([GitHub issue](https://github.com/ferronweb/ferron/issues/896)).
+- Support for MPTCP (multi-path TCP) listeners ([GitHub issue](https://github.com/ferronweb/ferron/issues/619)).
 - Support for observability signal correlation (log-to-trace; metric-to-trace not supported as OpenTelemetry SDK doesn't support metric exemplars).
 
 ### Changed

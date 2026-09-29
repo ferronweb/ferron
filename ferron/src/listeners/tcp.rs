@@ -49,17 +49,30 @@ fn log_listening(encrypted: bool, address: SocketAddr) {
 }
 
 #[inline]
-fn build_tcp_listener(address: SocketAddr, tcp_buffer_sizes: (Option<usize>, Option<usize>)) -> ListenerResult {
+fn build_tcp_listener(
+  address: SocketAddr,
+  tcp_buffer_sizes: (Option<usize>, Option<usize>),
+  multipath: bool,
+) -> ListenerResult {
   // Create a new socket
-  let listener_socket2 = socket2::Socket::new(
-    if address.is_ipv6() {
-      socket2::Domain::IPV6
-    } else {
-      socket2::Domain::IPV4
-    },
-    socket2::Type::STREAM,
-    Some(socket2::Protocol::TCP),
-  )?;
+  let domain = if address.is_ipv6() {
+    socket2::Domain::IPV6
+  } else {
+    socket2::Domain::IPV4
+  };
+
+  #[cfg(target_os = "linux")]
+  let listener_socket2 = if multipath {
+    match socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::MPTCP)) {
+      Ok(s) => s,
+      Err(_) => socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))?,
+    }
+  } else {
+    socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))?
+  };
+
+  #[cfg(not(target_os = "linux"))]
+  let listener_socket2 = socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))?;
 
   // Set socket options
   listener_socket2.set_reuse_address(!cfg!(windows)).unwrap_or_default();
@@ -118,6 +131,7 @@ pub fn create_tcp_listener(
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
+  multipath: bool,
   io_uring_disabled: Sender<Option<std::io::Error>>,
 ) -> Result<CancellationToken, ListenerError> {
   let shutdown_tx = CancellationToken::new();
@@ -149,6 +163,7 @@ pub fn create_tcp_listener(
           logging_tx,
           first_startup,
           tcp_buffer_sizes,
+          multipath,
           shutdown_rx,
         )
         .await
@@ -175,12 +190,13 @@ async fn tcp_listener_fn(
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
+  multipath: bool,
   shutdown_rx: CancellationToken,
 ) -> Result<(), ListenerError> {
   let mut listener_result;
   let mut tries: u64 = 0;
   loop {
-    listener_result = build_tcp_listener(address, tcp_buffer_sizes);
+    listener_result = build_tcp_listener(address, tcp_buffer_sizes, multipath);
     if first_startup || listener_result.is_ok() {
       break;
     }
