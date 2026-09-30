@@ -44,7 +44,7 @@ The row every deployment reads first:
 - **Traffic rate by status class**: `sum by (http_response_status_code) (rate(ferron_http_server_request_count_total{...}))`
 - **Active requests**: `sum(http_server_active_requests)`
 - **5xx / 4xx error ratio**: error-class request rate divided by total request rate
-- **Request latency (p50/p95/p99)**: `histogram_quantile` over `http_server_request_duration_seconds`, queried twice — once for [native exponential histograms](/docs/configuration/observability/metrics#exponential-histograms) and once for classic `_bucket` series — so tail latencies stay sharp without manual bucket tuning on either export mode.
+- **Request latency (p50/p95/p99)**: `histogram_quantile` over `http_server_request_duration_seconds`, queried twice (once for [native exponential histograms](/docs/configuration/observability/metrics#exponential-histograms) and once for classic `_bucket` series), so tail latencies stay sharp without manual bucket tuning on either export mode.
 
 ### Row 2: resiliency primitives (collapsible)
 
@@ -75,7 +75,7 @@ Connection-pool and host-pressure panels, crucial for multi-tenant edges and ser
 - **Cache hit ratio**: `rate(ferron_cache_requests_total{...,result="hit"})` / total
 - **Cache entries**: `ferron_cache_entries` by zone
 - **Cache evictions /s (by reason)**: `rate(ferron_cache_evictions_total)` split by `ferron.cache.reason`
-- **Cache request outcomes /s (by reason)**: `rate(ferron_cache_requests_total)` split by zone, result, and `ferron.cache.reason` — answers why the hit ratio is low (`response-no-store`, `private-no-identity`, `zero-ttl`, bypasses)
+- **Cache request outcomes /s (by reason)**: `rate(ferron_cache_requests_total)` split by zone, result, and `ferron.cache.reason`, which answers why the hit ratio is low (`response-no-store`, `private-no-identity`, `zero-ttl`, bypasses)
 - **Egress bandwidth: static file bytes/s**: native `histogram_sum` and classic `_sum` queries side by side (static-file and PHP-accelerator egress. See the gap below)
 - **DNS cache TTL remaining**: `ferron_proxy_dns_cache_ttl_remaining_seconds` (min/avg/max via the `aggregation` label) and DNS hit ratio
 

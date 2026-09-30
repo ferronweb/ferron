@@ -145,7 +145,7 @@ Rule positions below are 1-based: the first `rewrite` directive in a block is ru
 
 | Metric                            | Type    | Attributes                                                           | Description                                                                                    |
 | --------------------------------- | ------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `ferron.rewrite.rewrites_applied` | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named) | Rewrite rule firings — one increment per matched rule, so chained rewrites count once per step |
+| `ferron.rewrite.rewrites_applied` | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named) | Rewrite rule firings (one increment per matched rule, so chained rewrites count once per step) |
 | `ferron.rewrite.invalid`          | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named) | Rewrite rules that produced an invalid path (resulting in a 400 response)                      |
 
 ### Logs

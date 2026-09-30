@@ -139,7 +139,7 @@ example.com {
 }
 ```
 
-If you need to forward the original host to a backend, use the `Host` header manipulation instead. By default Ferron already preserves the incoming `Host` header, so no override is needed. If you must set it explicitly (for example after other header rules), use the raw header variable — not `request.host`, which is Ferron's matched server name:
+If you need to forward the original host to a backend, use the `Host` header manipulation instead. By default Ferron already preserves the incoming `Host` header, so no override is needed. If you must set it explicitly (for example after other header rules), use the raw header variable, not `request.host`, which is Ferron's matched server name:
 
 ```ferron
 example.com {
@@ -156,7 +156,7 @@ example.com {
 When multiple domains share one Apache backend IP and Apache selects the vhost by `Host`:
 
 - Keep the wire `Host` header intact (default). Do not normalize it to `request.host`, or distinct domains behind a wildcard/catch-all will collapse to one vhost.
-- Isolate circuit breakers per domain: use a separate `proxy {}` block or distinct `upstream` URL per vhost. The breaker key is the upstream URL/IP, not `Host` — one bare `http://192.0.2.10/` shared by N domains trips together.
+- Isolate circuit breakers per domain: use a separate `proxy {}` block or distinct `upstream` URL per vhost. The breaker key is the upstream URL/IP, not `Host` (one bare `http://192.0.2.10/` shared by N domains trips together).
 - Tolerate graceful reloads (Apache closes idle keepalives, first reused connection returns `502` then succeeds on retry):
 
 ```ferron
