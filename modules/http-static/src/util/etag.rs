@@ -164,7 +164,7 @@ pub fn matches_if_none_match(header: &str, etag: &str) -> Option<Option<String>>
 
     for tag in split_etag_request(header) {
         if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
-            if &extracted == etag {
+            if extracted == etag {
                 // RFC 7232 mandates that clients MUST NOT use weak validators
                 // for range requests
                 //
