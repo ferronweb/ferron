@@ -38,7 +38,7 @@ use crate::util::compression::{
     PREFERRED_CONTENT_ENCODING,
 };
 use crate::util::etag::{
-    build_etag_header_map, build_last_modified_header_map, construct_etag, extract_etag_inner,
+    build_etag_header_map, build_last_modified_header_map, construct_etag, matches_if_none_match,
     split_etag_request,
 };
 use crate::util::file_stream::FileStream;
@@ -355,61 +355,50 @@ impl Stage<HttpFileContext> for StaticFileStage {
         if let Some(etag) = &etag_value {
             if let Some(if_none_match) = request.headers().get(header::IF_NONE_MATCH) {
                 if let Ok(val) = if_none_match.to_str() {
-                    for tag in split_etag_request(val) {
-                        if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
-                            if &extracted == etag {
-                                // RFC 7232 mandates that clients MUST NOT use weak validators
-                                // for range requests
-                                //
-                                // And Ferron's static file serving only emits weak ETags...
-                                if !matches!(request.method(), &Method::GET | &Method::HEAD)
-                                    || request.headers().contains_key(header::RANGE)
-                                {
-                                    let header_map = build_etag_header_map(
-                                        (!request.headers().contains_key(header::RANGE))
-                                            .then_some(etag),
-                                        vary_header,
-                                        None,
-                                        cache_control.as_deref(),
-                                    );
-                                    return respond_with_builtin(
-                                        ctx,
-                                        request,
-                                        412,
-                                        Some(header_map),
-                                        "precondition_failed",
-                                    );
-                                }
-                                let suffix = suffix_opt
-                                    .and_then(|s| COMP_SUFFIXES.contains(&s.as_str()).then_some(s));
-                                let full_etag = construct_etag(etag, suffix.as_deref(), true);
-                                let mut builder = Response::builder()
-                                    .status(StatusCode::NOT_MODIFIED)
-                                    .header(header::ETAG, &full_etag)
-                                    .header(
-                                        header::VARY,
-                                        vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
-                                    );
-                                if let Some(cc) = cache_control.as_deref() {
-                                    builder = builder.header(
-                                        header::CACHE_CONTROL,
-                                        HeaderValue::from_str(cc)
-                                            .unwrap_or_else(|_| HeaderValue::from_static("")),
-                                    );
-                                }
-                                let response = builder
-                                    .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                                    .expect("failed to build 304 response");
-                                ctx.http.req = Some(request);
-                                ctx.http.res = Some(HttpResponse::Custom(response));
-                                emit_static_response_metric(ctx, 304, "not_modified");
-                                ctx.get_span_attributes().insert(
-                                    "http.response.status_code",
-                                    TraceAttributeValue::I64(304),
-                                );
-                                return Ok(false);
-                            }
+                    if let Some(suffix_opt) = matches_if_none_match(val, etag) {
+                        if !matches!(request.method(), &Method::GET | &Method::HEAD)
+                            || request.headers().contains_key(header::RANGE)
+                        {
+                            let header_map = build_etag_header_map(
+                                (!request.headers().contains_key(header::RANGE)).then_some(etag),
+                                vary_header,
+                                None,
+                                cache_control.as_deref(),
+                            );
+                            return respond_with_builtin(
+                                ctx,
+                                request,
+                                412,
+                                Some(header_map),
+                                "precondition_failed",
+                            );
                         }
+                        let suffix = suffix_opt
+                            .and_then(|s| COMP_SUFFIXES.contains(&s.as_str()).then_some(s));
+                        let full_etag = construct_etag(etag, suffix.as_deref(), true);
+                        let mut builder = Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .header(header::ETAG, &full_etag)
+                            .header(
+                                header::VARY,
+                                vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
+                            );
+                        if let Some(cc) = cache_control.as_deref() {
+                            builder = builder.header(
+                                header::CACHE_CONTROL,
+                                HeaderValue::from_str(cc)
+                                    .unwrap_or_else(|_| HeaderValue::from_static("")),
+                            );
+                        }
+                        let response = builder
+                            .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                            .expect("failed to build 304 response");
+                        ctx.http.req = Some(request);
+                        ctx.http.res = Some(HttpResponse::Custom(response));
+                        emit_static_response_metric(ctx, 304, "not_modified");
+                        ctx.get_span_attributes()
+                            .insert("http.response.status_code", TraceAttributeValue::I64(304));
+                        return Ok(false);
                     }
                 }
             }

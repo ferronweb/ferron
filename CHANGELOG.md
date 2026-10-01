@@ -21,6 +21,10 @@
 - **Early hints header fix**: previously, when `early_hints` block was configured with multiple `Link` header values, only the last one would be sent in the response. This has been fixed to send all header values.
 - **Variable resolution fix**: previously, if Ferron cannot resolve a variable, it kept the placeholder as `name` (instead of documented `{{name}}`).
 
+#### Static file serving
+
+- **`If-None-Match` wildcard fix**: the server now responds with a 304 response when a `If-None-Match: *` request header is sent, instead of a 200 response.
+
 ## Ferron 3.0.0-rc.8
 
 **Released in September 28, 2026**

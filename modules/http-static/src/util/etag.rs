@@ -153,6 +153,31 @@ pub fn construct_etag(etag: &str, suffix: Option<&str>, weak: bool) -> String {
     }
 }
 
+/// Check if `If-None-Match` header value matches an ETag.
+///
+/// The returned value would be `None` if there was no match.
+#[inline]
+pub fn matches_if_none_match(header: &str, etag: &str) -> Option<Option<String>> {
+    if header == "*" {
+        return Some(None);
+    }
+
+    for tag in split_etag_request(header) {
+        if let Some((extracted, suffix_opt, _)) = extract_etag_inner(&tag, true) {
+            if &extracted == etag {
+                // RFC 7232 mandates that clients MUST NOT use weak validators
+                // for range requests
+                //
+                // And Ferron's static file serving only emits weak ETags...
+
+                return Some(suffix_opt);
+            }
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
