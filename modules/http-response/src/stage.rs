@@ -390,7 +390,7 @@ impl Stage<HttpContext> for EarlyHintsStage {
         let mut headers = HeaderMap::new();
         for link in &config.early_hints.links {
             if let Ok(value) = HeaderValue::from_str(link) {
-                headers.insert(http::header::LINK, value);
+                headers.append(http::header::LINK, value);
             }
         }
 

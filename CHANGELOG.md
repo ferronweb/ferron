@@ -34,6 +34,10 @@
 
 ### Fixed
 
+#### HTTP server core
+
+- **Early hints header fix**: previously, when `early_hints` block was configured with multiple `Link` header values, only the last one would be sent in the response. This has been fixed to send all header values.
+
 #### Configuration
 
 - **Spurious configuration file hot-reload fix**: previously, the server would sometimes hot-reload the configuration even when no changes were made to the configuration file (something would just read the file). This has been fixed.
