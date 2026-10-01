@@ -128,7 +128,7 @@ path = "tests/unix.rs"
 
 [dev-dependencies]
 aes = "0.9"
-brotli = "8.0.2"
+brotli = "9.0.0"
 cbc = "0.2"
 flate2 = "1.1.9"
 futures-util = "0.3.31"
