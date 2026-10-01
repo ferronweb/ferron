@@ -262,6 +262,12 @@ impl Stage<HttpContext> for DynamicCompressionStage {
             return Ok(());
         }
 
+        // 304 means HTTP response is cached, and should not be compressed either
+        if response.status() == http::StatusCode::NOT_MODIFIED {
+            ctx.res = Some(HttpResponse::Custom(response));
+            return Ok(());
+        }
+
         let content_type = response
             .headers()
             .get(header::CONTENT_TYPE)

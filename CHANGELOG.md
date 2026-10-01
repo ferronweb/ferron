@@ -25,6 +25,10 @@
 
 - **`If-None-Match` wildcard fix**: the server now responds with a 304 response when a `If-None-Match: *` request header is sent, instead of a 200 response.
 
+#### HTTP compression
+
+- **304 Not Modified fix**: HTTP dynamic content compression is no longer applicable for 304 (Not Modified) HTTP responses.
+
 ## Ferron 3.0.0-rc.8
 
 **Released in September 28, 2026**
