@@ -24,6 +24,34 @@ impl ConfigurationValidator for HttpBufferConfigurationValidator {
         validate_directive!(config, used_directives, buffer_response, optional
             args(1) => [ferron_core::config::ServerConfigurationValue::Number(_, _)], {});
 
+        for entry in config
+            .directives
+            .get("buffer_request")
+            .iter()
+            .map(|v| v.iter())
+            .chain(
+                config
+                    .directives
+                    .get("buffer_response")
+                    .iter()
+                    .map(|v| v.iter()),
+            )
+            .flatten()
+        {
+            if entry
+                .get_value()
+                .and_then(|e| e.as_number())
+                .is_some_and(|e| e.is_negative())
+            {
+                return Err(
+                    ferron_core::config::validator::ConfigurationValidationError::from(
+                        "HTTP request/response buffer sizes must not be negative",
+                    )
+                    .with_span(entry.span.clone()),
+                );
+            }
+        }
+
         Ok(())
     }
 }
