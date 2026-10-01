@@ -96,6 +96,14 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             let mut sub = std::collections::HashSet::new();
 
             validate_nested!(http, used(sub), protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
+            if let Some(protocols) = config.directives.get("protocols").and_then(|p| p.first()) {
+                if let Err(e) = crate::server::resolve_http_protocols(Some(config)) {
+                    return Err(
+                        ferron_core::config::validator::ConfigurationValidationError::from(e)
+                            .with_span(protocols.span.clone()),
+                    );
+                }
+            }
 
             // OPTIONS * allowed methods
             validate_nested!(http, used(sub), options_allowed_methods, args(1) => [

@@ -296,7 +296,7 @@ fn resolve_http_u64(
     })?))
 }
 
-fn resolve_http_protocols(
+pub(crate) fn resolve_http_protocols(
     http_config: Option<&ServerConfigurationBlock>,
 ) -> anyhow::Result<common::HttpProtocols> {
     let Some(protocols_entry) = http_config
