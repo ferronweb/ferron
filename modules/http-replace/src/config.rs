@@ -42,7 +42,7 @@ impl ReplaceConfig {
     #[cfg(test)]
     pub fn from_config(config: &LayeredConfiguration) -> Self {
         let rules = parse_replace_rules(config);
-        let preserve_last_modified = parse_replace_last_modified(config);
+        let preserve_last_modified = config.get_flag("replace_last_modified", true);
         let filter_types = parse_replace_filter_types(config);
 
         Self {
@@ -55,7 +55,7 @@ impl ReplaceConfig {
     pub fn from_http_context(ctx: &HttpContext) -> Self {
         let config = &ctx.configuration;
         let rules = parse_replace_rules(config);
-        let preserve_last_modified = parse_replace_last_modified(config);
+        let preserve_last_modified = config.get_flag("replace_last_modified", true);
         let filter_types = parse_replace_filter_types(config);
 
         Self {
@@ -88,10 +88,7 @@ fn parse_replace_rules(config: &LayeredConfiguration) -> Vec<ReplaceRule> {
         };
 
         let once = if let Some(children) = &entry.children {
-            children
-                .get_value("once")
-                .and_then(|v| v.as_boolean())
-                .unwrap_or(false)
+            children.get_flag("once")
         } else {
             false
         };
@@ -104,17 +101,6 @@ fn parse_replace_rules(config: &LayeredConfiguration) -> Vec<ReplaceRule> {
     }
 
     rules
-}
-
-/// Parse `replace_last_modified` directive.
-fn parse_replace_last_modified(config: &LayeredConfiguration) -> bool {
-    let entries = config.get_entries("replace_last_modified", true);
-    for entry in &entries {
-        if let Some(value) = entry.args.first().and_then(|v| v.as_boolean()) {
-            return value;
-        }
-    }
-    false
 }
 
 /// Parse `replace_filter_types` directive.

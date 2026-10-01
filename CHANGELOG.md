@@ -33,6 +33,14 @@
 
 - **304 Not Modified fix**: HTTP dynamic content compression is no longer applicable for 304 (Not Modified) HTTP responses.
 
+#### URL rewriting
+
+- **Bare boolean subdirective fix**: fixed bare form of `once` (and similar) boolean flags not being effective.
+
+#### Content replacement
+
+- **`replace_last_modified` flag**: fixed bare form of `replace_last_modified` flag not being effective.
+
 ## Ferron 3.0.0-rc.8
 
 **Released in September 28, 2026**

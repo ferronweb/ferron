@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferron_core::config::layer::LayeredConfiguration;
-use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
+use ferron_core::config::ServerConfigurationBlock;
 use regex::{Regex, RegexBuilder};
 
 use crate::RewriteEngine;
@@ -166,35 +166,31 @@ fn parse_rewrite_entry(
 /// Parse optional block options inside a `rewrite { ... }` block.
 fn parse_rewrite_options(block: &ServerConfigurationBlock) -> (bool, bool, bool, bool) {
     let is_directory = block
-        .get_value("directory")
-        .and_then(|v| match v {
-            ServerConfigurationValue::Boolean(b, _) => Some(*b),
-            _ => None,
-        })
+        .directives
+        .get("directory")
+        .and_then(|e| e.last())
+        .map(|e| e.get_flag())
         .unwrap_or(RewriteRule::DEFAULT_DIRECTORY);
 
     let is_file = block
-        .get_value("file")
-        .and_then(|v| match v {
-            ServerConfigurationValue::Boolean(b, _) => Some(*b),
-            _ => None,
-        })
+        .directives
+        .get("file")
+        .and_then(|e| e.last())
+        .map(|e| e.get_flag())
         .unwrap_or(RewriteRule::DEFAULT_FILE);
 
     let last = block
-        .get_value("last")
-        .and_then(|v| match v {
-            ServerConfigurationValue::Boolean(b, _) => Some(*b),
-            _ => None,
-        })
+        .directives
+        .get("last")
+        .and_then(|e| e.last())
+        .map(|e| e.get_flag())
         .unwrap_or(RewriteRule::DEFAULT_LAST);
 
     let allow_double_slashes = block
-        .get_value("allow_double_slashes")
-        .and_then(|v| match v {
-            ServerConfigurationValue::Boolean(b, _) => Some(*b),
-            _ => None,
-        })
+        .directives
+        .get("allow_double_slashes")
+        .and_then(|e| e.last())
+        .map(|e| e.get_flag())
         .unwrap_or(RewriteRule::DEFAULT_ALLOW_DOUBLE_SLASHES);
 
     (is_directory, is_file, last, allow_double_slashes)
@@ -203,11 +199,8 @@ fn parse_rewrite_options(block: &ServerConfigurationBlock) -> (bool, bool, bool,
 /// Check whether `rewrite_log` is enabled in the layered configuration.
 pub fn is_rewrite_log_enabled(config: &LayeredConfiguration) -> bool {
     config
-        .get_value("rewrite_log", true)
-        .and_then(|v| match v {
-            ServerConfigurationValue::Boolean(b, _) => Some(*b),
-            _ => None,
-        })
+        .get_entry("rewrite_log", true)
+        .map(|e| e.get_flag())
         .unwrap_or(false)
 }
 
