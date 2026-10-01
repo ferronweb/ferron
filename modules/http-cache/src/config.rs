@@ -180,7 +180,9 @@ fn parse_cache_enabled(configuration: &LayeredConfiguration) -> bool {
         }
 
         if let Some(children) = &entry.children {
-            if !children.directives.keys().all(|name| name == "max_entries") {
+            if children.directives.is_empty()
+                || !children.directives.keys().all(|name| name == "max_entries")
+            {
                 return true;
             }
         } else {
