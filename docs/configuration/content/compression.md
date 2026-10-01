@@ -37,10 +37,10 @@ The `compressed` directive (`http-static`) enables on-the-fly compression for st
 
 ### Dynamic response compression
 
-The `dynamic_compressed` directive (`http-compression`) enables on-the-fly compression for dynamic response bodies, such as reverse proxy, FastCGI, and CGI responses. It does not affect static files. Use it when backends return compressible text without their own compression. Default: `dynamic_compressed false`
+The `dynamic_compressed` directive (`http-compression`) enables on-the-fly compression for dynamic response bodies, such as reverse proxy, FastCGI, and CGI responses. Use it when backends return compressible text without their own compression. Default: `dynamic_compressed false`
 
 > [!note]
-> Ferron never compresses `101 Switching Protocols` responses. Protocol upgrades such as WebSockets pass through unchanged when `dynamic_compressed` is on.
+> Ferron never compresses `101 Switching Protocols` or `304 Not Modified` responses. Protocol upgrades such as WebSockets pass through unchanged when `dynamic_compressed` is on.
 
 ### Pre-compressed sidecar files
 
