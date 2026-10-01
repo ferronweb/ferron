@@ -273,6 +273,6 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
             .variables
             .get(n)
             .cloned()
-            .or_else(|| Some(name.to_string())),
+            .or_else(|| Some(format!("{{{{{name}}}}}"))),
     }
 }
