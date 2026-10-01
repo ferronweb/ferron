@@ -123,7 +123,7 @@ The `unix` directive also supports the subdirectives below:
 | `group`   | `<group: string\|integer>` | Group of the socket             | Process group                 |
 
 > [!note]
-> When at least one `unix` directive is present, Ferron disables all TCP and QUIC (for HTTP/3) listeners and serves HTTP only over Unix sockets. Host blocks are then served via the Unix sockets no matter what are their port assignments, meaning `Host` header and TLS SNI still select the virtual host. To serve both TCP and Unix at once, do not use `unix` (run a separate TCP terminator or reverse proxy in front of the Unix socket instead).
+> When at least one `unix` directive is present, Ferron disables all TCP and QUIC (for HTTP/3) listeners and serves HTTP only over Unix sockets. Host blocks are then served via the Unix sockets no matter what are their port assignments (excluding IP blocks, since Unix sockets do not use IP addresses), meaning `Host` header and TLS SNI still select the virtual host. To serve both TCP and Unix at once, do not use `unix` (run a separate TCP terminator or reverse proxy in front of the Unix socket instead).
 
 > [!important]
 >
