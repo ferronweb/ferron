@@ -13,7 +13,7 @@ This page documents the `map` directive. It creates variables whose values come 
 ### `map`
 
 - `map <source: string> <destination: string>`
-  - This directive specifies a source variable to match and a destination variable name to create. The nested block defines the mapping rules. Default: none
+  - This directive specifies a source variable (string without interpolations) or an interpolated string to match and a destination variable name to create. The nested block defines the mapping rules. Default: none
 
 > [!note]
 > The destination variable name can be any identifier. Ferron stores it in the request variable map. You access it via `{{name}}` interpolation.
@@ -142,6 +142,26 @@ example.com {
 ```
 
 When you define a `map` with the same destination variable at multiple levels, the innermost scope takes precedence. Ferron evaluates all maps with different destination variables.
+
+### Multi-variable mapping
+
+```ferron
+http * {
+    map "{{request.method}} {{request.uri.path}}" type {
+        default uncategorized
+        exact "GET /*" homepage
+        exact "GET /docs/*" docs
+    }
+}
+
+example.com {
+    location / {
+        proxy http://backend {
+            request_header X-Request-Type "{{type}}"
+        }
+    }
+}
+```
 
 ## Pipeline position
 

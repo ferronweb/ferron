@@ -11,8 +11,8 @@ use regex::{Regex, RegexBuilder};
 /// A compiled mapping rule from configuration.
 #[derive(Debug, Clone)]
 pub struct MapRule {
-    /// The source variable name (e.g., `request.uri.path`).
-    pub source: String,
+    /// The source string.
+    pub source: SourceString,
     /// The destination variable name (e.g., `category`).
     pub destination: String,
     /// Ordered mapping entries: evaluated in priority order at runtime.
@@ -32,6 +32,42 @@ pub enum MapEntry {
     Regex { regex: Regex, value: String },
 }
 
+/// A source string
+#[derive(Debug, Clone)]
+pub enum SourceString {
+    // A variable name (e.g., `request.uri.path`)
+    VariableName(String),
+    // An interpolated string (e.g., `"{{request.method}} {{request.uri.path}}"`)
+    Interpolated(ferron_core::config::ServerConfigurationValue),
+}
+
+impl SourceString {
+    /// Obtains the source string from a configuration value
+    #[inline]
+    pub fn from_value(value: ferron_core::config::ServerConfigurationValue) -> Option<Self> {
+        match value {
+            s @ ferron_core::config::ServerConfigurationValue::InterpolatedString(_, _) => {
+                Some(Self::Interpolated(s))
+            }
+            ferron_core::config::ServerConfigurationValue::String(s, _) => {
+                Some(Self::VariableName(s))
+            }
+            _ => None,
+        }
+    }
+
+    /// Resolves the source string
+    #[inline]
+    pub fn resolve(&self, variables: &impl Variables) -> String {
+        match self {
+            Self::VariableName(name) => variables.resolve(name).unwrap_or_default(),
+            Self::Interpolated(value) => value
+                .as_string_with_interpolations(variables)
+                .unwrap_or_default(),
+        }
+    }
+}
+
 /// Parse all `map` directives from the layered configuration and evaluate them
 /// against the given context, populating destination variables.
 ///
@@ -48,7 +84,7 @@ pub fn evaluate_map_directives(
     let mut results = Vec::new();
 
     for rule in rules {
-        let source_value: String = variables.resolve(&rule.source).unwrap_or_default();
+        let source_value: String = rule.source.resolve(variables);
 
         let result_value = evaluate_entries(&source_value, &rule.entries, &rule.default);
         results.push((rule.destination, result_value));
@@ -160,7 +196,7 @@ fn parse_map_entry(
         return None;
     }
 
-    let source = entry.args[0].as_str()?.to_string();
+    let source = SourceString::from_value(entry.args[0].clone())?;
     let destination = entry.args[1].as_str()?.to_string();
 
     let block = entry.children.as_ref()?;

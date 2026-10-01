@@ -10,6 +10,17 @@
 
 - **Response header fields in access logs**: HTTP access logs now include response header fields, allowing visibility into HTTP response headers, for example for HTTP redirects.
 
+#### HTTP server core
+
+- **Support for interpolated string sources in `map`**: added support for interpolated string sources (in addition to variable name sources) in `map` directive, allowing mapping multiple values at once into one value.
+
+### Fixed
+
+#### HTTP server core
+
+- **Early hints header fix**: previously, when `early_hints` block was configured with multiple `Link` header values, only the last one would be sent in the response. This has been fixed to send all header values.
+- **Variable resolution fix**: previously, if Ferron cannot resolve a variable, it kept the placeholder as `name` (instead of documented `{{name}}`).
+
 ## Ferron 3.0.0-rc.8
 
 **Released in September 28, 2026**
@@ -33,11 +44,6 @@
 - **Zero-result cache purge metric**: purges with zero results are now visible via a `ferron.cache.zero_purge` metric, which can help debug or monitor cache purge requests that did not match any entries.
 
 ### Fixed
-
-#### HTTP server core
-
-- **Early hints header fix**: previously, when `early_hints` block was configured with multiple `Link` header values, only the last one would be sent in the response. This has been fixed to send all header values.
-- **Variable resolution fix**: previously, if Ferron cannot resolve a variable, it kept the placeholder as `name` (instead of documented `{{name}}`).
 
 #### Configuration
 

@@ -32,7 +32,9 @@ impl ModuleLoader for HttpMapModuleLoader {
                 Directive {
                     name: "map",
                     usage: "map <source> <destination> { ... }",
-                    description: "This directive maps a source variable to a destination variable using match rules with default value support.",
+                    description: "This directive maps a source variable (string without \
+                    interpolations) or an interpolated string to a destination variable using \
+                    match rules with default value support.",
                     applicable_protocols: Some(&["http"]),
                     global_only: false,
                     subblock_link: Some(DirectiveSubblock::custom("http_map")),
