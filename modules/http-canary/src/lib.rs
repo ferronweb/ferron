@@ -512,7 +512,7 @@ fn affinity_source(affinity: &CanaryAffinity) -> &'static str {
 fn is_unresolved(value: &str, affinity: &CanaryAffinity, ctx: &HttpContext) -> bool {
     match affinity {
         CanaryAffinity::Hash(variable) => {
-            value == variable && !ctx.variables.contains_key(variable)
+            value == format!("{{{{{variable}}}}}") && !ctx.variables.contains_key(variable)
         }
         _ => false,
     }
