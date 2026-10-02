@@ -23,7 +23,7 @@
 
 #### Access control
 
-- **`bcrypt` password hash fix**: Ferron 3.0.0-rc.7 added support for `bcrypt` password hashes, however it could not be used due to configuration validation errors. The validator has been now updated too.
+- **`bcrypt` password hash fix**: Ferron 3.0.0-rc.8 added support for `bcrypt` password hashes, however it could not be used due to configuration validation errors. The validator has been now updated too.
 
 #### HTTP caching
 
