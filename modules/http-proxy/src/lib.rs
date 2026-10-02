@@ -303,6 +303,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         }
 
         self::config::MTLS_FILE_CACHE.clear();
+        self::proxy::clear_tls_client_config_cache();
 
         // Prevent load balancing state memory leaks on config reload
         if let Some(ref state) = self.state {

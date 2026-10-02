@@ -8,9 +8,11 @@ use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
 use crate::types::upstream::MtlsCredentials;
 
 #[allow(clippy::type_complexity)]
-static TLS_CLIENT_CONFIG_CACHE: LazyLock<
-    parking_lot::RwLock<HashMap<(bool, bool, bool, Option<usize>), Arc<ClientConfig>>>,
-> = LazyLock::new(|| parking_lot::RwLock::new(HashMap::new()));
+pub static TLS_CLIENT_CONFIG_CACHE: LazyLock<
+    arc_swap::ArcSwap<
+        parking_lot::RwLock<HashMap<(bool, bool, bool, Option<usize>), Arc<ClientConfig>>>,
+    >,
+> = LazyLock::new(|| arc_swap::ArcSwap::from_pointee(parking_lot::RwLock::new(HashMap::new())));
 
 #[inline]
 fn build_tls_config(
@@ -72,6 +74,7 @@ pub(super) fn cached_tls_config(
     no_verification: bool,
     mtls_credentials: Option<Arc<MtlsCredentials>>,
 ) -> Arc<ClientConfig> {
+    let tls_client_config_cache = TLS_CLIENT_CONFIG_CACHE.load();
     let cache_key = (
         http2,
         http2_only,
@@ -79,7 +82,7 @@ pub(super) fn cached_tls_config(
         mtls_credentials.as_ref().map(|c| Arc::as_ptr(c) as usize),
     );
     {
-        let cache_read = TLS_CLIENT_CONFIG_CACHE.read();
+        let cache_read = tls_client_config_cache.read();
         if let Some(config) = cache_read.get(&cache_key).cloned() {
             return config;
         }
@@ -91,8 +94,13 @@ pub(super) fn cached_tls_config(
         no_verification,
         mtls_credentials,
     ));
-    let mut cache_write = TLS_CLIENT_CONFIG_CACHE.write();
+    let mut cache_write = tls_client_config_cache.write();
     Arc::clone(cache_write.entry(cache_key).or_insert(config))
+}
+
+#[inline]
+pub(crate) fn clear_tls_client_config_cache() {
+    TLS_CLIENT_CONFIG_CACHE.swap(Arc::new(parking_lot::RwLock::new(HashMap::new())));
 }
 
 #[derive(Debug)]
