@@ -38,6 +38,7 @@
 #### HTTP caching
 
 - **Cache configuration fix**: previously, `cache { }` didn't enable caching (but `cache` and `cache { ... }` did), which could cause debugging friction.
+- **`ferron.cache.evictions{reason="expired"}` metric fix**: previously, the `ferron.cache.evictions{reason="expired"}` metric was not emitted when cache entries expired, which could cause debugging friction.
 
 #### Static file serving
 

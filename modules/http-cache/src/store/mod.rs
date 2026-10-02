@@ -628,6 +628,7 @@ impl CacheStore {
         for base_key in orphaned_base_keys {
             self.remove_orphaned_base_key(&base_key);
         }
+        self.expired_count.fetch_add(count, Ordering::Relaxed);
         count
     }
 
