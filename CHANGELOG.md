@@ -14,6 +14,16 @@
 
 - **Support for interpolated string sources in `map`**: added support for interpolated string sources (in addition to variable name sources) in `map` directive, allowing mapping multiple values at once into one value.
 
+### Changed
+
+#### Gateway interfaces
+
+- **`REMOTE_ADDR` and `SERVER_ADDR` environment variables**: `REMOTE_ADDR` and `SERVER_ADDR` environment variables are now set to the canonical IPv4/IPv6 representation of the client and server IP addresses, respectively, so that they can be used for access control and logging consistently.
+
+#### Reverse proxying
+
+- **Forwarded header client IP canonicalization**: the client IP in `X-Forwarded-For` and `Forwarded` headers is now canonicalized to the standard IPv4/IPv6 representation, so that it can be used for access control and logging consistently.
+
 ### Fixed
 
 #### HTTP server core

@@ -97,10 +97,16 @@ impl Stage<HttpContext> for ScgiStage {
             .request_uri(original_request_uri);
 
         if let Some(addr) = ctx.local_address {
-            env_builder = env_builder.server_address(addr);
+            env_builder = env_builder.server_address(std::net::SocketAddr::new(
+                addr.ip().to_canonical(),
+                addr.port(),
+            ));
         }
         if let Some(addr) = ctx.remote_address {
-            env_builder = env_builder.client_address(addr);
+            env_builder = env_builder.client_address(std::net::SocketAddr::new(
+                addr.ip().to_canonical(),
+                addr.port(),
+            ));
         }
 
         if let Some(hostname) = ctx.hostname.clone() {

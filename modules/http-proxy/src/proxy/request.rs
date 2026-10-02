@@ -122,9 +122,9 @@ pub(super) fn construct_proxy_request(
     if let (Some(client_ip), Some(local_ip)) = (client_ip, local_ip) {
         // Format IP addresses into stack-allocated buffers to avoid heap allocation
         let mut client_ip_buf = ArrayString::<45>::new();
-        let _ = write!(client_ip_buf, "{}", client_ip);
+        let _ = write!(client_ip_buf, "{}", client_ip.to_canonical());
         let mut local_ip_buf = ArrayString::<45>::new();
-        let _ = write!(local_ip_buf, "{}", local_ip);
+        let _ = write!(local_ip_buf, "{}", local_ip.to_canonical());
 
         if client_ip_from_header_enabled {
             append_x_forwarded_for(&mut parts.headers, &client_ip_buf);

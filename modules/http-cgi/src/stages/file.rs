@@ -184,10 +184,16 @@ impl Stage<HttpFileContext> for CgiStage {
             .request_uri(original_request_uri);
 
         if let Some(addr) = ctx.http.local_address {
-            env_builder = env_builder.server_address(addr);
+            env_builder = env_builder.server_address(std::net::SocketAddr::new(
+                addr.ip().to_canonical(),
+                addr.port(),
+            ));
         }
         if let Some(addr) = ctx.http.remote_address {
-            env_builder = env_builder.client_address(addr);
+            env_builder = env_builder.client_address(std::net::SocketAddr::new(
+                addr.ip().to_canonical(),
+                addr.port(),
+            ));
         }
 
         if let Some(hostname) = ctx.http.hostname.clone() {
