@@ -21,6 +21,10 @@
 - **Early hints header fix**: previously, when `early_hints` block was configured with multiple `Link` header values, only the last one would be sent in the response. This has been fixed to send all header values.
 - **Variable resolution fix**: previously, if Ferron cannot resolve a variable, it kept the placeholder as `name` (instead of documented `{{name}}`).
 
+#### Access control
+
+- **`bcrypt` password hash fix**: Ferron 3.0.0-rc.7 added support for `bcrypt` password hashes, however it could not be used due to configuration validation errors. The validator has been now updated too.
+
 #### HTTP caching
 
 - **Cache configuration fix**: previously, `cache { }` didn't enable caching (but `cache` and `cache { ... }` did), which could cause debugging friction.

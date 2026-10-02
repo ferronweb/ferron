@@ -173,7 +173,11 @@ impl BasicAuthValidator {
             || hash.starts_with("$pbkdf2-sha256$")
             || hash.starts_with("$pbkdf2-sha384$")
             || hash.starts_with("$pbkdf2-sha512$")
-            || hash.starts_with("$scrypt$");
+            || hash.starts_with("$scrypt$")
+            || hash.starts_with("$2a$")
+            || hash.starts_with("$2b$")
+            || hash.starts_with("$2x$")
+            || hash.starts_with("$2y$");
         // STUB: Intentional FIPS stub allowlist. Only FIPS-compliant PBKDF2 variants
         // are accepted under `fips`; the full allowlist is the `#[cfg(not(feature = "fips"))]`
         // variant above.
@@ -188,6 +192,7 @@ impl BasicAuthValidator {
                 "Invalid `basic_auth` — password for user '{username}' must be a hashed value. \
                  Supported formats: Argon2 ($argon2id$, $argon2i$, $argon2d$), \
                  PBKDF2 ($pbkdf2$, $pbkdf2-sha256$, $pbkdf2-sha384$, $pbkdf2-sha512$), \
+                 bcrypt ($2a$, $2b$, $2x$, $2y$), \
                  or scrypt ($scrypt$). \
                  Plaintext passwords are not allowed for security reasons."
             )));
