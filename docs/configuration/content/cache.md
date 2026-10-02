@@ -439,7 +439,7 @@ When the cache module runs, Ferron understands the following response headers fr
 
 ### Automatic vary cookies
 
-Ferron always adds request cookies with names that start with `_lscache_vary` to the cache key. The `_litespeed_vary` prefix works as an alias. No configuration is necessary. A request without these cookies uses a blank vary string. A request with `_lscache_vary=Alabama` uses a different cache entry than a request with `_lscache_vary=California`.
+When `litespeed_override_cache_control` is enabled, Ferron always adds request cookies with names that start with `_lscache_vary` to the cache key. The `_litespeed_vary` prefix works as an alias. A request without these cookies uses a blank vary string. A request with `_lscache_vary=Alabama` uses a different cache entry than a request with `_lscache_vary=California`.
 
 > [!note]
 > `X-LiteSpeed-Cache-Control: no-vary` disables this behavior. Ferron then ignores all vary cookies for that response, including the automatic ones.
