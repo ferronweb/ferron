@@ -101,7 +101,6 @@ pub(super) fn construct_proxy_request(
         }
     }
     parts.headers.remove(HeaderName::from_static("keep-alive"));
-    parts.headers.remove(http::header::TRANSFER_ENCODING);
     parts.headers.remove(http::header::TE);
     parts.headers.remove(http::header::TRAILER);
     parts.headers.remove("proxy-authorization");

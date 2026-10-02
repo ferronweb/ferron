@@ -51,6 +51,7 @@
 #### Reverse proxying
 
 - **`Connection: upgrade` header fix**: previously, when there was a request header with `Upgrade` inside the `Connection` header value (if the header wasn't exactly `Upgrade`), it would erroneously set to `upgrade`.
+- **Request body chunked encoding fix**: previously, when the request body was chunked-encoded, the server would wrongfully strip `Transfer-Encoding` header from the request before sending it to the upstream server, which could cause issues with some upstream servers that expect the header to be present.
 
 #### URL rewriting
 
