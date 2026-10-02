@@ -175,6 +175,12 @@ Reads the `Forwarded` header and extracts the first `for=` token. Ferron support
 - `url_reject_backslash [bool: boolean]`
   - This directive controls whether Ferron rejects URLs containing backslashes. When enabled (the default), Ferron responds with 400 Bad Request for requests containing literal `\` or percent-encoded backslashes (`%5C`) in the path. This prevents path interpretation issues on Windows backends where systems may treat backslashes as path separators. This directive applies only to global scope. Default: `url_reject_backslash true`
 
+- `protocol_proxy [bool]`
+  - This directive turns on PROXY protocol v1/v2 parsing for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header from HAProxy or similar load balancers before processing the HTTP request. The client and server addresses from the PROXY header replace the actual socket addresses while the connection is open. Default: `protocol_proxy false`
+
+> [!note]
+> Ferron supports both PROXY protocol v1 (text-based) and v2 (binary). If parsing fails, Ferron rejects the connection and logs an error.
+
 **Configuration example:**
 
 ```ferron

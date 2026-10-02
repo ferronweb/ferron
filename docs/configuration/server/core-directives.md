@@ -155,14 +155,6 @@ The `unix` directive also supports the subdirectives below:
 }
 ```
 
-### PROXY protocol
-
-- `protocol_proxy [bool]`
-  - This directive turns on PROXY protocol v1/v2 parsing for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header from HAProxy or similar load balancers before processing the HTTP request. The client and server addresses from the PROXY header replace the actual socket addresses while the connection is open. Default: `protocol_proxy false`
-
-> [!note]
-> Ferron supports both PROXY protocol v1 (text-based) and v2 (binary). If parsing fails, Ferron rejects the connection and logs an error.
-
 ### Reverse proxy connection limits
 
 - `concurrent_conns <limit: integer>`
