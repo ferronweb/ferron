@@ -41,6 +41,7 @@
 - **`ferron.cache.evictions{reason="expired"}` metric fix**: previously, the `ferron.cache.evictions{reason="expired"}` metric was not emitted when cache entries expired, which could cause debugging friction.
 - **Cache purge scope fix**: previously, cache purge requests with `X-LiteSpeed-Purge: *` header would purge all cache entries, even those that were not created by the current host when configured in a block with ambiguious hostname.
 - **Cache hostname fix for wildcard host blocks**: previously, cache entries created by a wildcard host block (like `*.example`) would be incorrectly stored, leaking cache entries across hosts.
+- **Cache purge host fix**: previously, `PURGE` requests could miss matching entries because the request host was read after the proxy stage consumed the request. The host is now taken from the request headers saved before proxying.
 
 #### Static file serving
 
@@ -54,6 +55,7 @@
 
 - **`Connection: upgrade` header fix**: previously, when there was a request header with `Upgrade` inside the `Connection` header value (if the header wasn't exactly `Upgrade`), it would erroneously set to `upgrade`.
 - **Request body chunked encoding fix**: previously, when the request body was chunked-encoded, the server would wrongfully strip `Transfer-Encoding` header from the request before sending it to the upstream server, which could cause issues with some upstream servers that expect the header to be present.
+- **Retry budget fix**: previously, cross-backend failovers could consume a retry token before checking whether another backend was available, and `max_retry_rate` was accepted but not enforced. The budget now charges only retries that can be attempted and enforces the configured retry-rate share.
 
 #### URL rewriting
 
