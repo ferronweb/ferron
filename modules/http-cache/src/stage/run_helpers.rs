@@ -198,7 +198,7 @@ pub(super) async fn run_forward(
                 &store,
                 &purge_ops,
                 None,
-                entry_host(&ctx.hostname, &zone_id).as_deref(),
+                entry_host(&ctx, &zone_id, false).as_deref(),
                 !is_propagated,
                 &config.purge_propagation,
             );
@@ -770,7 +770,7 @@ pub(super) async fn run_inverse_handler(
             &state.store,
             &purge_ops,
             state.private_key.as_deref(),
-            entry_host(&ctx.hostname, &state.zone_id).as_deref(),
+            entry_host(&ctx, &state.zone_id, false).as_deref(),
             true,
             &state.config.purge_propagation,
         );
@@ -901,7 +901,7 @@ pub(super) async fn run_inverse_handler(
                     private_key: None,
                     tags,
                     purge_url: state.purge_url,
-                    purge_host: entry_host(&ctx.hostname, &state.zone_id).unwrap_or_default(),
+                    purge_host: entry_host(&ctx, &state.zone_id, false).unwrap_or_default(),
                     etag,
                     last_modified,
                     stale_while_revalidate: decision.stale_while_revalidate,
