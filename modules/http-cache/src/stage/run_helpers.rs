@@ -197,9 +197,8 @@ pub(super) async fn run_forward(
                 &store,
                 &purge_ops,
                 None,
-                ctx.req
-                    .as_ref()
-                    .and_then(|req| req.headers().get(header::HOST))
+                request_headers
+                    .get(header::HOST)
                     .and_then(|host| host.to_str().ok())
                     .map(|host| host.to_owned())
                     .as_deref(),
@@ -750,6 +749,14 @@ pub(super) async fn run_inverse_handler(
         }
     }
 
+    // The proxy stage takes `ctx.req` while fetching the upstream response, so
+    // the Host value needed for purge scoping must come from the headers
+    // cloned before the upstream fetch.
+    let requesting_host = state
+        .request_headers
+        .get(header::HOST)
+        .and_then(|host| host.to_str().ok())
+        .map(|host| host.to_owned());
     let purge_ops = parse_litespeed_purge(response.headers());
     let stale_purge_ops = purge_ops.iter().filter(|op| op.stale).count();
     if stale_purge_ops > 0 {
@@ -774,12 +781,7 @@ pub(super) async fn run_inverse_handler(
             &state.store,
             &purge_ops,
             state.private_key.as_deref(),
-            ctx.req
-                .as_ref()
-                .and_then(|req| req.headers().get(header::HOST))
-                .and_then(|host| host.to_str().ok())
-                .map(|host| host.to_owned())
-                .as_deref(),
+            requesting_host.as_deref(),
             true,
             &state.config.purge_propagation,
         );
@@ -910,13 +912,7 @@ pub(super) async fn run_inverse_handler(
                     private_key: None,
                     tags,
                     purge_url: state.purge_url,
-                    purge_host: ctx
-                        .req
-                        .as_ref()
-                        .and_then(|req| req.headers().get(header::HOST))
-                        .and_then(|host| host.to_str().ok())
-                        .map(|host| host.to_owned())
-                        .unwrap_or_default(),
+                    purge_host: requesting_host.clone().unwrap_or_default(),
                     etag,
                     last_modified,
                     stale_while_revalidate: decision.stale_while_revalidate,
