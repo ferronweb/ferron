@@ -11,8 +11,8 @@ Custom error pages make failures clearer for users and reduce confusion during i
 example.com {
     root /var/www/html
 
-    error_page 404 /custom/404.html
-    error_page 500 502 503 504 /custom/50x.html
+    error_page 404 /var/www/custom/404.html
+    error_page 500 502 503 504 /var/www/custom/50x.html
 }
 ```
 
