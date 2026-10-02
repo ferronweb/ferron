@@ -27,7 +27,6 @@ example.com {
         litespeed_override_cache_control false
         vary Accept-Encoding Accept-Language
         vary_cookies lang ab_bucket
-        ignore Set-Cookie
     }
 
     location /admin {

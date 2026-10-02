@@ -51,12 +51,9 @@ example.com {
         litespeed_override_cache_control
         emit_litespeed_headers
         vary Accept-Encoding
-        ignore Set-Cookie
     }
 }
 ```
-
-The `ignore Set-Cookie` directive strips `Set-Cookie` headers from the cached representation. It keeps them in the live response. This is essential for maintaining cacheability alongside session cookies.
 
 ## Fix for LSCache plugin not detecting a supported web server
 
