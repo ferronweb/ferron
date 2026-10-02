@@ -24,6 +24,8 @@ pub struct RetryBudgetState {
     capacity: u64,
     /// Tokens added per second by steady-state traffic.
     refill_rate: f64,
+    /// Maximum retries as a share of observed successful requests.
+    max_retry_rate: f64,
     /// Last refill timestamp.
     last_refill: Mutex<Instant>,
     /// Total requests observed (for rate calculation).
@@ -37,23 +39,44 @@ impl RetryBudgetState {
     ///
     /// The bucket starts full (`tokens == capacity`).
     #[inline]
-    pub fn new(capacity: u64, refill_rate: f64) -> Self {
+    pub fn new(capacity: u64, refill_rate: f64, max_retry_rate: f64) -> Self {
         Self {
             tokens: Mutex::new(capacity as f64),
             capacity,
             refill_rate,
+            max_retry_rate: max_retry_rate.clamp(0.0, 1.0),
             last_refill: Mutex::new(Instant::now()),
             total_requests: AtomicU64::new(0),
             total_retries: AtomicU64::new(0),
         }
     }
 
+    /// Whether one more retry stays within the configured maximum retry rate.
+    ///
+    /// A budget with no observed successful requests cannot calculate a rate,
+    /// so allow the burst/token bucket to decide. This preserves startup
+    /// behavior while preventing a zero configured rate from deadlocking
+    /// recovery.
+    #[inline]
+    fn retry_rate_allows(&self) -> bool {
+        let requests = self.total_requests.load(Ordering::Relaxed);
+        if requests == 0 {
+            return true;
+        }
+        let retries = self.total_retries.load(Ordering::Relaxed);
+        (retries as f64 + 1.0) <= self.max_retry_rate * requests as f64 + f64::EPSILON
+    }
+
     /// Attempt to consume one retry token.
     ///
     /// Returns `true` if a token was consumed (retry is allowed), `false` if
-    /// the bucket is empty (retry should be refused).
+    /// the bucket is empty or the maximum retry rate has been reached.
     #[inline]
     pub fn try_consume_retry_token(&self) -> bool {
+        if !self.retry_rate_allows() {
+            return false;
+        }
+
         let mut tokens = self.tokens.lock();
         self.refill(&mut tokens);
 
@@ -149,9 +172,9 @@ pub struct SharedRetryBudget {
 impl SharedRetryBudget {
     /// Create a new shared retry budget from configuration parameters.
     #[inline]
-    pub fn new(capacity: u64, refill_rate: f64, _max_retry_rate: f64) -> Self {
+    pub fn new(capacity: u64, refill_rate: f64, max_retry_rate: f64) -> Self {
         Self {
-            inner: Arc::new(RetryBudgetState::new(capacity, refill_rate)),
+            inner: Arc::new(RetryBudgetState::new(capacity, refill_rate, max_retry_rate)),
         }
     }
 
@@ -193,13 +216,13 @@ mod tests {
 
     #[test]
     fn budget_starts_full() {
-        let budget = RetryBudgetState::new(10, 1.0);
+        let budget = RetryBudgetState::new(10, 1.0, 1.0);
         assert!(budget.available_tokens() >= 10.0);
     }
 
     #[test]
     fn consumes_retry_tokens() {
-        let budget = RetryBudgetState::new(5, 0.0);
+        let budget = RetryBudgetState::new(5, 0.0, 1.0);
         assert!(budget.try_consume_retry_token());
         assert!(budget.try_consume_retry_token());
         assert!(budget.try_consume_retry_token());
@@ -210,7 +233,7 @@ mod tests {
 
     #[test]
     fn deposits_tokens_on_success() {
-        let budget = RetryBudgetState::new(5, 0.0);
+        let budget = RetryBudgetState::new(5, 0.0, 1.0);
         // Drain the bucket
         for _ in 0..5 {
             assert!(budget.try_consume_retry_token());
@@ -224,7 +247,7 @@ mod tests {
 
     #[test]
     fn capacity_is_capped() {
-        let budget = RetryBudgetState::new(3, 1000.0);
+        let budget = RetryBudgetState::new(3, 1000.0, 1.0);
         budget.record_request();
         budget.record_request();
         budget.record_request();
@@ -234,7 +257,7 @@ mod tests {
 
     #[test]
     fn tracks_retry_rate() {
-        let budget = RetryBudgetState::new(10, 0.0);
+        let budget = RetryBudgetState::new(10, 0.0, 1.0);
         for _ in 0..10 {
             budget.record_request();
         }
@@ -245,7 +268,7 @@ mod tests {
 
     #[test]
     fn zero_rate_when_no_requests() {
-        let budget = RetryBudgetState::new(10, 0.0);
+        let budget = RetryBudgetState::new(10, 0.0, 1.0);
         assert_eq!(budget.current_retry_rate(), 0.0);
     }
 
@@ -281,14 +304,33 @@ mod tests {
     }
 
     #[test]
+    fn enforces_maximum_retry_rate() {
+        let budget = RetryBudgetState::new(1_000, 1_000.0, 0.1);
+        for _ in 0..10 {
+            budget.record_request();
+        }
+
+        assert!(budget.try_consume_retry_token());
+        budget.record_retry();
+        assert!(!budget.try_consume_retry_token());
+    }
+
+    #[test]
+    fn allows_first_retry_before_any_successful_request() {
+        let budget = RetryBudgetState::new(1, 0.0, 0.0);
+        assert!(budget.try_consume_retry_token());
+        assert!(!budget.try_consume_retry_token());
+    }
+
+    #[test]
     fn time_until_available_zero_when_full() {
-        let budget = RetryBudgetState::new(10, 1.0);
+        let budget = RetryBudgetState::new(10, 1.0, 1.0);
         assert_eq!(budget.time_until_available(1), 0.0);
     }
 
     #[test]
     fn time_until_available_positive_when_drained() {
-        let budget = RetryBudgetState::new(10, 2.0);
+        let budget = RetryBudgetState::new(10, 2.0, 1.0);
         // Drain the bucket
         for _ in 0..10 {
             budget.try_consume_retry_token();
@@ -301,7 +343,7 @@ mod tests {
 
     #[test]
     fn time_until_available_fallback_when_no_refill() {
-        let budget = RetryBudgetState::new(10, 0.0);
+        let budget = RetryBudgetState::new(10, 0.0, 1.0);
         for _ in 0..10 {
             budget.try_consume_retry_token();
         }

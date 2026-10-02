@@ -381,54 +381,57 @@ pub async fn execute_proxy(
                     }
 
                     // Same-upstream retries exhausted, try another backend if enabled.
+                    // Only charge the retry budget when a failover can actually
+                    // be attempted. Otherwise the failure turns into a 502
+                    // without consuming budget or emitting budget metrics.
                     if config.retry_connection {
-                        if let Some(budget) = retry_budget {
-                            if !budget.try_consume_retry_token() {
-                                metrics.retry_budget_exhausted = true;
-                                ctx.events.emit(Event::Log(LogEvent {
-                                    level: LogLevel::Warn,
-                                    message: format!(
-                                        "Reverse proxy: retry budget exhausted — upstream: {url}: {err}",
-                                        url = selected.upstream.proxy_to,
-                                        err = e
-                                    ),
-                                    summary: "Reverse proxy: retry budget exhausted".into(),
-                                    target: LOG_TARGET,
-                                    attributes: vec![(
-                                        "upstream.address",
-                                        LogAttributeValue::String(selected.upstream.proxy_to.clone()),
-                                    ), (
-                                        "error.message",
-                                        LogAttributeValue::String(e.to_string()),
-                                    )],
-                                    trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
-                                }));
-                                if let Some(counter) = active_unhealthy_counter {
-                                    let guard = counter.read();
-                                    metrics.active_unhealthy_backends =
-                                        guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
-                                }
-                                let retry_after_secs = budget.time_until_available(1);
-                                let retry_after_value =
-                                    retry_after_secs.ceil().clamp(1.0, 3600.0) as u64;
-                                let mut headers = http::HeaderMap::new();
-                                headers.insert(
-                                    http::header::RETRY_AFTER,
-                                    http::HeaderValue::from_str(&retry_after_value.to_string())
-                                        .expect("retry-after value should be valid"),
-                                );
-                                return Ok((
-                                    HttpResponse::BuiltinError(503, Some(headers)),
-                                    metrics,
-                                ));
-                            }
-                            budget.record_retry();
-                        }
                         let healthy_count = backend_set.available_count();
-                        if healthy_count > 0
+                        let can_failover = healthy_count > 0
                             && metrics.selected_backends.len() < upstreams.len()
-                            && ctx.req.is_some()
-                        {
+                            && ctx.req.is_some();
+                        if can_failover {
+                            if let Some(budget) = retry_budget {
+                                if !budget.try_consume_retry_token() {
+                                    metrics.retry_budget_exhausted = true;
+                                    ctx.events.emit(Event::Log(LogEvent {
+                                        level: LogLevel::Warn,
+                                        message: format!(
+                                            "Reverse proxy: retry budget exhausted — upstream: {url}: {err}",
+                                            url = selected.upstream.proxy_to,
+                                            err = e
+                                        ),
+                                        summary: "Reverse proxy: retry budget exhausted".into(),
+                                        target: LOG_TARGET,
+                                        attributes: vec![(
+                                            "upstream.address",
+                                            LogAttributeValue::String(selected.upstream.proxy_to.clone()),
+                                        ), (
+                                            "error.message",
+                                            LogAttributeValue::String(e.to_string()),
+                                        )],
+                                        trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
+                                    }));
+                                    if let Some(counter) = active_unhealthy_counter {
+                                        let guard = counter.read();
+                                        metrics.active_unhealthy_backends =
+                                            guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                                    }
+                                    let retry_after_secs = budget.time_until_available(1);
+                                    let retry_after_value =
+                                        retry_after_secs.ceil().clamp(1.0, 3600.0) as u64;
+                                    let mut headers = http::HeaderMap::new();
+                                    headers.insert(
+                                        http::header::RETRY_AFTER,
+                                        http::HeaderValue::from_str(&retry_after_value.to_string())
+                                            .expect("retry-after value should be valid"),
+                                    );
+                                    return Ok((
+                                        HttpResponse::BuiltinError(503, Some(headers)),
+                                        metrics,
+                                    ));
+                                }
+                                budget.record_retry();
+                            }
                             metrics.retry_count += 1;
                             ctx.events.emit(Event::Log(LogEvent {
                                 level: LogLevel::Warn,
