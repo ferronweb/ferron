@@ -48,6 +48,10 @@
 
 - **304 Not Modified fix**: HTTP dynamic content compression is no longer applicable for 304 (Not Modified) HTTP responses.
 
+#### Reverse proxying
+
+- **`Connection: upgrade` header fix**: previously, when there was a request header with `Upgrade` inside the `Connection` header value (if the header wasn't exactly `Upgrade`), it would erroneously set to `upgrade`.
+
 #### URL rewriting
 
 - **Bare boolean subdirective fix**: fixed bare form of `once` (and similar) boolean flags not being effective.

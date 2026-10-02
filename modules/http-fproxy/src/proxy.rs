@@ -502,7 +502,11 @@ async fn handle_http_forward(
     if let Some(c) = parts.headers.remove(http::header::CONNECTION) {
         // If the connection header contains "upgrade",
         // preserve it to avoid breaking the upgrade connection.
-        if str::from_utf8(c.as_bytes()).is_ok_and(|s| s.to_lowercase().contains("upgrade")) {
+        if str::from_utf8(c.as_bytes()).is_ok_and(|s| {
+            s.split(",")
+                .map(|s| s.trim())
+                .any(|s| s.eq_ignore_ascii_case("upgrade"))
+        }) {
             parts.headers.insert(
                 http::header::CONNECTION,
                 http::HeaderValue::from_static("upgrade"),
