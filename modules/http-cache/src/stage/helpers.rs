@@ -94,35 +94,6 @@ pub(super) fn resolve_zone_id(
     }
 }
 
-/// The host associated with a cache entry or purge request.
-///
-/// Prefers the resolved vhost. When the request is host-ambiguous, falls back
-/// to the zone's own host for per-host zones so a host guard still applies;
-/// shared named/global zones without a host resolve to an empty value, which
-/// never matches a populated host.
-pub(super) fn entry_host(
-    ctx: &ferron_http::HttpContext,
-    zone_id: &CacheZoneId,
-    apply_req_hostname: bool,
-) -> Option<String> {
-    ctx.hostname
-        .clone()
-        .or_else(|| match zone_id {
-            CacheZoneId::Host(host) => Some(host.clone()),
-            CacheZoneId::Named(_) | CacheZoneId::Global => None,
-        })
-        .or_else(|| {
-            if !apply_req_hostname {
-                return None;
-            }
-            ctx.req
-                .as_ref()
-                .and_then(|req| req.headers().get(header::HOST))
-                .and_then(|host| host.to_str().ok())
-                .map(|host| host.to_owned())
-        })
-}
-
 /// Whether a `X-Purge-Source: propagation` purge proves knowledge of the
 /// configured shared secret.
 ///

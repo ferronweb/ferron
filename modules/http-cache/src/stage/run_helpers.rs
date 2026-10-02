@@ -19,8 +19,8 @@ use crate::policy::{
 use crate::store::{merge_revalidation_headers, LookupOutcome, StoredEntry};
 
 use super::helpers::{
-    client_conditionals_indicate_not_modified, entry_host, propagation_secret_verified,
-    purge_allowed, resolve_zone_id,
+    client_conditionals_indicate_not_modified, propagation_secret_verified, purge_allowed,
+    resolve_zone_id,
 };
 use super::key::{build_base_key, build_private_cache_key, build_vary_rule, parse_cookies};
 use super::outcome::{
@@ -80,7 +80,6 @@ pub(super) async fn run_forward(
         &request_headers,
         ctx.original_uri.as_ref(),
         request.uri(),
-        ctx.hostname.as_deref(),
     );
     let private_key = build_private_cache_key(
         &request_cookies,
@@ -198,7 +197,12 @@ pub(super) async fn run_forward(
                 &store,
                 &purge_ops,
                 None,
-                entry_host(&ctx, &zone_id, false).as_deref(),
+                ctx.req
+                    .as_ref()
+                    .and_then(|req| req.headers().get(header::HOST))
+                    .and_then(|host| host.to_str().ok())
+                    .map(|host| host.to_owned())
+                    .as_deref(),
                 !is_propagated,
                 &config.purge_propagation,
             );
@@ -770,7 +774,12 @@ pub(super) async fn run_inverse_handler(
             &state.store,
             &purge_ops,
             state.private_key.as_deref(),
-            entry_host(&ctx, &state.zone_id, false).as_deref(),
+            ctx.req
+                .as_ref()
+                .and_then(|req| req.headers().get(header::HOST))
+                .and_then(|host| host.to_str().ok())
+                .map(|host| host.to_owned())
+                .as_deref(),
             true,
             &state.config.purge_propagation,
         );
@@ -901,7 +910,13 @@ pub(super) async fn run_inverse_handler(
                     private_key: None,
                     tags,
                     purge_url: state.purge_url,
-                    purge_host: entry_host(&ctx, &state.zone_id, false).unwrap_or_default(),
+                    purge_host: ctx
+                        .req
+                        .as_ref()
+                        .and_then(|req| req.headers().get(header::HOST))
+                        .and_then(|host| host.to_str().ok())
+                        .map(|host| host.to_owned())
+                        .unwrap_or_default(),
                     etag,
                     last_modified,
                     stale_while_revalidate: decision.stale_while_revalidate,

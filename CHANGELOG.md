@@ -40,6 +40,7 @@
 - **Cache configuration fix**: previously, `cache { }` didn't enable caching (but `cache` and `cache { ... }` did), which could cause debugging friction.
 - **`ferron.cache.evictions{reason="expired"}` metric fix**: previously, the `ferron.cache.evictions{reason="expired"}` metric was not emitted when cache entries expired, which could cause debugging friction.
 - **Cache purge scope fix**: previously, cache purge requests with `X-LiteSpeed-Purge: *` header would purge all cache entries, even those that were not created by the current host when configured in a block with ambiguious hostname.
+- **Cache hostname fix for wildcard host blocks**: previously, cache entries created by a wildcard host block (like `*.example`) would be incorrectly stored, leaking cache entries across hosts.
 
 #### Static file serving
 
