@@ -59,8 +59,8 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             .collect::<Vec<_>>();
 
         // Here, the configuration wouldn't be cached, because of dynamic upstream resolution...
-        let config = match crate::config::parse_proxy_config(ctx) {
-            Ok(Some(cfg)) => Arc::new(cfg),
+        let mut config = match crate::config::parse_proxy_config(ctx) {
+            Ok(Some(cfg)) => cfg,
             Ok(None) => return Ok(true),
             Err(e) => {
                 ctx.events.emit(ferron_observability::Event::Log(
@@ -127,18 +127,11 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 })
         });
 
-        let upstreams = crate::upstream::resolve_upstreams(&config.upstreams).await;
-
         let conn_manager = self.state.get_conn_manager();
-        for upstream in &upstreams {
-            if let Some(limit) = upstream.limit {
-                conn_manager.set_local_limit(upstream.clone(), limit);
-            }
-        }
 
         let result = crate::proxy::execute_proxy(
             ctx,
-            &config,
+            &mut config,
             &conn_manager,
             Arc::clone(&self.state.circuit_breaker_state),
             Arc::clone(&self.state.flapping_state),
@@ -148,7 +141,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             Some(&self.state.ewma_state),
             Some(&self.state.active_health_check_state),
             active_unhealthy_counter.as_deref(),
-            upstreams,
             retry_budget.as_ref(),
         )
         .await;

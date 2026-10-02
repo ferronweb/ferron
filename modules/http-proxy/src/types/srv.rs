@@ -2,15 +2,14 @@
 
 #[inline]
 pub async fn resolve_srv(
-    srv_data: &super::upstream::SrvUpstream,
+    srv_data: super::upstream::SrvUpstream,
 ) -> Vec<std::sync::Arc<super::upstream::ResolvedUpstream>> {
+    let priority_offset = srv_data.priority;
     let candidates = resolve_srv_inner(srv_data).await;
 
     if candidates.is_empty() {
         return Vec::new();
     }
-
-    let priority_offset = srv_data.priority;
 
     // Return all backends with their final priority.
     // Each backend's priority = DNS SRV priority + config priority offset.
@@ -34,7 +33,7 @@ pub async fn resolve_srv(
 
 #[inline]
 pub async fn resolve_srv_inner(
-    srv_data: &super::upstream::SrvUpstream,
+    srv_data: super::upstream::SrvUpstream,
 ) -> Vec<(std::sync::Arc<super::upstream::ResolvedUpstream>, u16, u16)> {
     if let Some(cached) = super::dns_cache::get_srv(&srv_data.srv_name, &srv_data.dns_servers).await
     {
@@ -49,9 +48,9 @@ pub async fn resolve_srv_inner(
         }
     };
 
-    let srv_name = srv_data.srv_name.clone();
-    let dns_servers = srv_data.dns_servers.clone();
-    let srv_inner = srv_data.inner.clone();
+    let srv_name = srv_data.srv_name;
+    let dns_servers = srv_data.dns_servers;
+    let srv_inner = srv_data.inner;
 
     // Spawn SRV lookup on the secondary Tokio runtime
     let result = handle

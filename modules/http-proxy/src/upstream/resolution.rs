@@ -17,7 +17,7 @@ use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorith
 /// For SRV upstreams, this performs DNS resolution. For static upstreams,
 /// it returns them as-is.
 #[inline]
-pub async fn resolve_upstreams(upstreams: &[Upstream]) -> Vec<Arc<ResolvedUpstream>> {
+pub async fn resolve_upstreams(upstreams: Vec<Upstream>) -> Vec<Arc<ResolvedUpstream>> {
     // Capacity of at least the number of upstreams to avoid reallocations in many cases.
     let mut resolved = Vec::with_capacity(upstreams.len());
     for upstream in upstreams {

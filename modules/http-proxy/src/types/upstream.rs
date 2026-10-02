@@ -150,7 +150,7 @@ impl Upstream {
     /// (strict DNS mode), or pass through as-is for IP literals, Unix sockets,
     /// and logical DNS mode. SRV upstreams perform an SRV DNS lookup.
     #[inline]
-    pub async fn resolve(&self) -> Vec<Arc<ResolvedUpstream>> {
+    pub async fn resolve(self) -> Vec<Arc<ResolvedUpstream>> {
         match self {
             Upstream::Static(cfg) => {
                 let needs_dns = !cfg.logical_dns
@@ -166,10 +166,10 @@ impl Upstream {
                         DnsResolutionStatus::NotApplicable
                     };
                     vec![Arc::new(ResolvedUpstream {
-                        proxy_to: cfg.url.clone(),
+                        proxy_to: cfg.url,
                         connect_to: None,
-                        proxy_unix: cfg.unix_socket.clone(),
-                        inner: cfg.inner.clone(),
+                        proxy_unix: cfg.unix_socket,
+                        inner: cfg.inner,
                         dns_status,
                     })]
                 }

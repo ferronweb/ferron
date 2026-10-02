@@ -8,7 +8,6 @@ mod response;
 mod tls;
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
@@ -23,7 +22,6 @@ use crate::types::error::ProxyError;
 use crate::types::flapping::FlappingStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::retry_budget::SharedRetryBudget;
-use crate::types::upstream::ResolvedUpstream;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::circuit::CircuitBreaker;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
@@ -81,7 +79,7 @@ pub(crate) fn categorize_http_method(method: &http::Method) -> &'static str {
 #[inline]
 pub async fn execute_proxy(
     ctx: &mut HttpContext,
-    config: &ProxyConfig,
+    config: &mut ProxyConfig,
     cm: &ConnectionManager,
     circuit_breaker_state: CircuitBreakerStateMap,
     flapping_state: FlappingStateMap,
@@ -91,9 +89,15 @@ pub async fn execute_proxy(
     ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&RwLock<HashMap<String, u64>>>,
-    upstreams: Vec<Arc<ResolvedUpstream>>,
     retry_budget: Option<&SharedRetryBudget>,
 ) -> Result<(HttpResponse, ProxyMetrics), ProxyError> {
+    let upstreams = crate::upstream::resolve_upstreams(std::mem::take(&mut config.upstreams)).await;
+    for upstream in &upstreams {
+        if let Some(limit) = upstream.limit {
+            cm.set_local_limit(upstream.clone(), limit);
+        }
+    }
+
     let mut metrics = ProxyMetrics::new();
 
     if upstreams.is_empty() {

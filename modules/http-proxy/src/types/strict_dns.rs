@@ -16,7 +16,7 @@ use crate::types::upstream::{DnsResolutionStatus, ResolvedUpstream, StaticUpstre
 ///
 /// Results are cached based on the minimum TTL from the DNS response.
 #[inline]
-pub async fn resolve_strict_dns(cfg: &StaticUpstream) -> Vec<Arc<ResolvedUpstream>> {
+pub async fn resolve_strict_dns(cfg: StaticUpstream) -> Vec<Arc<ResolvedUpstream>> {
     let (hostname, port) = match parse_host_port(&cfg.url) {
         Some(v) => v,
         None => return Vec::new(),

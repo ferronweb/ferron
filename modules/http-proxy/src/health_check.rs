@@ -619,7 +619,7 @@ pub fn spawn_health_check_task(
                     UpstreamHealthCheckType::Srv((srv_name, dns_servers, weight)) => {
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),
-                            crate::types::srv::resolve_srv_inner(&SrvUpstream {
+                            crate::types::srv::resolve_srv_inner(SrvUpstream {
                                 srv_name: srv_name.clone(),
                                 dns_servers: dns_servers.clone(),
                                 // Use default health check config (SrvUpstream is only used for resolving SRV records)
@@ -681,7 +681,7 @@ pub fn spawn_health_check_task(
                         };
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),
-                            crate::types::strict_dns::resolve_strict_dns(&temp_cfg),
+                            crate::types::strict_dns::resolve_strict_dns(temp_cfg),
                         )
                         .await;
                         if timeout_result.is_err() {
