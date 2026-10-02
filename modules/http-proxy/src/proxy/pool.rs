@@ -23,7 +23,7 @@ use crate::send_request::{
     SendRequestWrapper, TrackedBody, TruncatedTracker,
 };
 use crate::types::error::ProxyError;
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 use crate::types::ConnectionsTrackState;
 use crate::ProxyMetrics;
 use ferron_http::HttpContext;
@@ -43,7 +43,7 @@ pub async fn try_send_with_pool(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     cm: &ConnectionManager,
-    upstream: Arc<UpstreamInner>,
+    upstream: Arc<ResolvedUpstream>,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
     local_limit: Option<usize>,
@@ -248,7 +248,7 @@ async fn wait_for_ready(pending_item: &mut PooledConnection, idle_timeout: Durat
 #[inline]
 async fn wait_for_returned(
     cm: &ConnectionManager,
-    upstream: Arc<UpstreamInner>,
+    upstream: Arc<ResolvedUpstream>,
     client_ip: Option<IpAddr>,
     local_limit: Option<usize>,
     idle_timeout: Duration,
@@ -372,7 +372,7 @@ async fn connect_unix(path: &str) -> Result<zincio::net::PollUnixStream, ProxyEr
 async fn dispatch_handshake<S, G>(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
     proxy_url: &http::Uri,
     is_https: bool,
     client_ip: Option<IpAddr>,
@@ -473,7 +473,7 @@ where
 async fn establish_wrapper(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
-    upstream: Arc<UpstreamInner>,
+    upstream: Arc<ResolvedUpstream>,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
     is_https: bool,

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::types::circuit::CircuitBreakerStateMap;
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::lb::p2c_ewma::{self, EwmaStateMap, P2cEwmaParams};
 use crate::upstream::lb::LoadBalancerAlgorithmInner;
@@ -32,7 +32,7 @@ pub struct SelectionResult {
 fn slow_start_virtual_conns(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     slow_start_duration: Duration,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
 ) -> usize {
     if slow_start_duration.is_zero() {
         return 0;
@@ -72,7 +72,7 @@ fn slow_start_virtual_conns(
 pub fn select_backend_index(
     load_balancer_algorithm: &LoadBalancerAlgorithmInner,
     healthy_indices: &[usize],
-    upstreams: &[Arc<UpstreamInner>],
+    upstreams: &[Arc<ResolvedUpstream>],
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
@@ -351,7 +351,7 @@ pub fn select_backend_index(
 #[inline]
 pub fn initialize_tracker(
     conn_state: Option<&ConnectionsTrackState>,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
 ) {
     if let Some(conn_state) = conn_state {
         if !conn_state.contains_key(upstream) {
@@ -364,7 +364,7 @@ pub fn initialize_tracker(
 #[inline]
 pub fn get_tracker(
     conn_state: Option<&ConnectionsTrackState>,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
 ) -> Option<Arc<()>> {
     let conn_state = conn_state?;
     conn_state.get(upstream).as_deref().map(Arc::clone)

@@ -9,8 +9,8 @@ use super::resilience::parse_active_health_check;
 use super::types::ProxyConfig;
 use super::{DEFAULT_CONNECTION_TIMEOUT_MS, DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS, MTLS_FILE_CACHE};
 use crate::types::health::UpstreamHealthCheckConfig;
-use crate::types::upstream::SrvUpstreamData;
-use crate::types::upstream::{MtlsCredentials, Upstream, UpstreamConfig};
+use crate::types::upstream::SrvUpstream;
+use crate::types::upstream::{MtlsCredentials, StaticUpstream, Upstream};
 
 #[inline]
 pub(super) fn parse_upstream_entry(
@@ -194,19 +194,21 @@ pub(super) fn parse_upstream_entry(
     } else {
         None
     };
-    cfg.upstreams.push(Upstream::Static(UpstreamConfig {
+    cfg.upstreams.push(Upstream::Static(StaticUpstream {
         url: url.clone(),
         unix_socket,
-        limit,
         health_check_config,
-        weight,
-        mtls,
-        priority,
+        inner: crate::types::upstream::UpstreamInner {
+            limit,
+            weight,
+            mtls,
+            priority,
+            connection_timeout,
+            idle_timeout: idle_timeout
+                .unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
+        },
         logical_dns,
         dns_servers,
-        connection_timeout,
-        idle_timeout: idle_timeout
-            .unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
     }));
 
     Ok(())
@@ -230,7 +232,7 @@ pub(super) fn parse_srv_entry(
     let mut connection_timeout_disabled: bool = false;
     let mut dns_servers: Vec<IpAddr> = Vec::new();
     let mut weight: u32 = 1;
-    let mut priority: Option<u16> = None;
+    let mut priority: u16 = 0;
     let mut health_check_config = UpstreamHealthCheckConfig::default();
     let mut mtls_cert: Option<Vec<rustls::pki_types::CertificateDer<'static>>> = None;
     let mut mtls_key: Option<rustls::pki_types::PrivateKeyDer<'static>> = None;
@@ -345,7 +347,7 @@ pub(super) fn parse_srv_entry(
                         .and_then(|e| e.args.first())
                         .and_then(|v: &ServerConfigurationValue| v.as_number())
                     {
-                        priority = Some(val as u16);
+                        priority = val as u16;
                     }
                 }
                 "active_check" => {
@@ -378,17 +380,19 @@ pub(super) fn parse_srv_entry(
     } else {
         None
     };
-    cfg.upstreams.push(Upstream::Srv(SrvUpstreamData {
+    cfg.upstreams.push(Upstream::Srv(SrvUpstream {
         srv_name: srv_name.to_string(),
         dns_servers,
-        limit,
-        weight,
+        inner: crate::types::upstream::UpstreamInner {
+            limit,
+            weight,
+            mtls,
+            priority,
+            connection_timeout,
+            idle_timeout: idle_timeout
+                .unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
+        },
         health_check_config,
-        mtls,
-        priority,
-        connection_timeout,
-        idle_timeout: idle_timeout
-            .unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
     }));
 
     Ok(())

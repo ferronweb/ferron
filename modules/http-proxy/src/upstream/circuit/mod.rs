@@ -12,7 +12,7 @@ use crate::types::circuit::{
     CIRCUIT_BREAKER_STATUS_OPEN,
 };
 use crate::types::flapping::FlappingStateMap;
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 
 /// A view over the circuit-breaker state and configuration for one request.
 ///
@@ -61,7 +61,7 @@ impl<'a> CircuitBreaker<'a> {
 
     /// Whether a backend is currently available for new circuit-breaker traffic.
     #[inline]
-    pub fn is_available(&self, upstream: &Arc<UpstreamInner>) -> bool {
+    pub fn is_available(&self, upstream: &Arc<ResolvedUpstream>) -> bool {
         if !self.config.enabled {
             return true;
         }
@@ -83,7 +83,7 @@ impl<'a> CircuitBreaker<'a> {
 
     /// Whether a backend's circuit breaker is currently in the open state.
     #[inline]
-    pub fn is_open(&self, upstream: &Arc<UpstreamInner>) -> bool {
+    pub fn is_open(&self, upstream: &Arc<ResolvedUpstream>) -> bool {
         self.config
             .enabled
             .then_some(self.state)
@@ -99,7 +99,7 @@ impl<'a> CircuitBreaker<'a> {
     /// rejected without any state transitions. Otherwise the state machine
     /// advances (open -> half-open) and the acquisition is emitted.
     #[inline]
-    pub fn try_acquire(&self, upstream: &Arc<UpstreamInner>) -> bool {
+    pub fn try_acquire(&self, upstream: &Arc<ResolvedUpstream>) -> bool {
         if !self.is_available(upstream) {
             return false;
         }
@@ -234,7 +234,7 @@ pub fn record_backend_transport_failure(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
     metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
@@ -262,7 +262,7 @@ pub fn record_backend_response(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
     status: u16,
     upstream_time_secs: Option<f64>,
     metrics: &mut crate::ProxyMetrics,
@@ -308,7 +308,7 @@ pub fn record_backend_response(
 #[inline]
 fn emit_circuit_metric(
     event_sink: &ferron_observability::CompositeEventSink,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
     name: &'static str,
     metric_type: ferron_observability::MetricType,
     value: ferron_observability::MetricValue,
@@ -356,7 +356,7 @@ fn record_circuit_breaker_failure(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
     event_sink: &ferron_observability::CompositeEventSink,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
@@ -525,7 +525,7 @@ fn record_circuit_breaker_success(
     circuit_breaker_state: Option<&CircuitBreakerStateMap>,
     flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
     event_sink: &ferron_observability::CompositeEventSink,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,

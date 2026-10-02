@@ -9,7 +9,7 @@ use tokio::time::sleep;
 use crate::types::health::{
     ExpectedStatusCodes, HealthCheckMethod, HealthCheckStateMap, UpstreamHealthCheckConfig,
 };
-use crate::types::upstream::{MtlsCredentials, SrvUpstreamData, Upstream};
+use crate::types::upstream::{MtlsCredentials, SrvUpstream, Upstream};
 
 use hyper_rustls::HttpsConnectorBuilder;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -619,18 +619,20 @@ pub fn spawn_health_check_task(
                     UpstreamHealthCheckType::Srv((srv_name, dns_servers, weight)) => {
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),
-                            crate::types::srv::resolve_srv_inner(&SrvUpstreamData {
+                            crate::types::srv::resolve_srv_inner(&SrvUpstream {
                                 srv_name: srv_name.clone(),
                                 dns_servers: dns_servers.clone(),
-                                weight: *weight,
-                                limit: None,
-                                // Use default health check config (SrvUpstreamData is only used for resolving SRV records)
+                                // Use default health check config (SrvUpstream is only used for resolving SRV records)
                                 health_check_config: UpstreamHealthCheckConfig::default(),
-                                // mTLS isn't applicable for resolution only
-                                mtls: None,
-                                priority: None,
-                                connection_timeout: None,
-                                idle_timeout: Duration::from_secs(60),
+                                inner: crate::types::upstream::UpstreamInner {
+                                    weight: *weight,
+                                    limit: None,
+                                    // mTLS isn't applicable for resolution only
+                                    mtls: None,
+                                    priority: 0,
+                                    connection_timeout: None,
+                                    idle_timeout: Duration::from_secs(60),
+                                },
                             }),
                         )
                         .await;
@@ -661,19 +663,21 @@ pub fn spawn_health_check_task(
                             .collect()
                     }
                     UpstreamHealthCheckType::StrictDns((host, port, dns_servers)) => {
-                        let temp_cfg = crate::types::upstream::UpstreamConfig {
+                        let temp_cfg = crate::types::upstream::StaticUpstream {
                             url: format!("http://{}:{}", host, port),
                             unix_socket: None,
-                            limit: None,
+                            inner: crate::types::upstream::UpstreamInner {
+                                limit: None,
+                                weight: 1,
+                                mtls: None,
+                                priority: 0,
+                                connection_timeout: None,
+                                idle_timeout: Duration::from_secs(60),
+                            },
                             health_check_config:
                                 crate::types::health::UpstreamHealthCheckConfig::default(),
-                            weight: 1,
-                            mtls: None,
-                            priority: 0,
                             logical_dns: false,
                             dns_servers: dns_servers.clone(),
-                            connection_timeout: None,
-                            idle_timeout: Duration::from_secs(60),
                         };
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),

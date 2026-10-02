@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::types::affinity::AffinityType;
 use crate::types::health::{HealthCheckState, HealthCheckStateMap};
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::affinity::resolve_affinity_index;
 use crate::upstream::lb::selector::select_backend_index;
@@ -15,32 +15,36 @@ use crate::upstream::lb::{
 
 use super::*;
 
-fn make_upstream(url: &str) -> Arc<UpstreamInner> {
-    Arc::new(UpstreamInner {
+fn make_upstream(url: &str) -> Arc<ResolvedUpstream> {
+    Arc::new(ResolvedUpstream {
         proxy_to: url.to_string(),
         connect_to: None,
         proxy_unix: None,
-        weight: 1,
-        mtls: None,
-        priority: 0,
-        connection_timeout: None,
-        idle_timeout: std::time::Duration::from_secs(60),
-        limit: None,
+        inner: crate::types::upstream::UpstreamInner {
+            weight: 1,
+            mtls: None,
+            priority: 0,
+            connection_timeout: None,
+            idle_timeout: std::time::Duration::from_secs(60),
+            limit: None,
+        },
         dns_status: Default::default(),
     })
 }
 
-fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
-    Arc::new(UpstreamInner {
+fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<ResolvedUpstream> {
+    Arc::new(ResolvedUpstream {
         proxy_to: url.to_string(),
         connect_to: None,
         proxy_unix: None,
-        weight,
-        mtls: None,
-        priority: 0,
-        connection_timeout: None,
-        idle_timeout: std::time::Duration::from_secs(60),
-        limit: None,
+        inner: crate::types::upstream::UpstreamInner {
+            weight,
+            mtls: None,
+            priority: 0,
+            connection_timeout: None,
+            idle_timeout: std::time::Duration::from_secs(60),
+            limit: None,
+        },
         dns_status: Default::default(),
     })
 }
@@ -52,16 +56,17 @@ fn cb_view<'a>(
     crate::upstream::circuit::CircuitBreaker::new(None, None, config, sink, None, false)
 }
 
-/// Compatibility wrapper: accepts the old `&[(usize, Arc<UpstreamInner>)]`
+/// Compatibility wrapper: accepts the old `&[(usize, Arc<ResolvedUpstream>)]`
 /// format and converts to the new indices + upstreams signature.
 fn old_select_backend_index(
     algorithm: &LoadBalancerAlgorithmInner,
-    backends: &[(usize, Arc<UpstreamInner>)],
+    backends: &[(usize, Arc<ResolvedUpstream>)],
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
 ) -> usize {
     let healthy: Vec<usize> = backends.iter().map(|(i, _)| *i).collect();
-    let upstreams: Vec<Arc<UpstreamInner>> = backends.iter().map(|(_, u)| Arc::clone(u)).collect();
+    let upstreams: Vec<Arc<ResolvedUpstream>> =
+        backends.iter().map(|(_, u)| Arc::clone(u)).collect();
     select_backend_index(
         algorithm,
         &healthy,

@@ -23,7 +23,7 @@ use crate::types::error::ProxyError;
 use crate::types::flapping::FlappingStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::retry_budget::SharedRetryBudget;
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 use crate::types::ConnectionsTrackState;
 use crate::upstream::circuit::CircuitBreaker;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
@@ -91,7 +91,7 @@ pub async fn execute_proxy(
     ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
     active_unhealthy_counter: Option<&RwLock<HashMap<String, u64>>>,
-    upstreams: Vec<Arc<UpstreamInner>>,
+    upstreams: Vec<Arc<ResolvedUpstream>>,
     retry_budget: Option<&SharedRetryBudget>,
 ) -> Result<(HttpResponse, ProxyMetrics), ProxyError> {
     let mut metrics = ProxyMetrics::new();

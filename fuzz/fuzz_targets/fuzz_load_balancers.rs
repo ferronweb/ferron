@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use ferron_http_proxy::types::upstream::UpstreamInner;
+use ferron_http_proxy::types::upstream::ResolvedUpstream;
 use ferron_http_proxy::types::ConnectionsTrackState;
 use ferron_http_proxy::upstream::lb::p2c_ewma::{
     compute_score, get_decayed_ewma, is_warming_up, update_ewma, EwmaStateMap, P2cEwmaParams,
@@ -26,7 +26,7 @@ use rustc_hash::FxBuildHasher;
 ///       [name: name_len bytes (UTF-8)]
 ///   [extra: remaining bytes for target-specific input]
 #[allow(clippy::type_complexity)]
-fn parse_input(input: &[u8]) -> Option<(u8, Vec<Arc<UpstreamInner>>, &[u8])> {
+fn parse_input(input: &[u8]) -> Option<(u8, Vec<Arc<ResolvedUpstream>>, &[u8])> {
     if input.len() < 2 {
         return None;
     }
@@ -60,16 +60,18 @@ fn parse_input(input: &[u8]) -> Option<(u8, Vec<Arc<UpstreamInner>>, &[u8])> {
         pos += name_len;
 
         let proxy_to = String::from_utf8(name_bytes.to_vec()).ok()?;
-        backends.push(Arc::new(UpstreamInner {
+        backends.push(Arc::new(ResolvedUpstream {
             proxy_to,
             proxy_unix: None,
-            weight,
-            mtls: None,
-            priority: 0,
+            inner: ferron_http_proxy::types::upstream::UpstreamInner {
+                weight,
+                mtls: None,
+                priority: 0,
+                connection_timeout: None,
+                idle_timeout: std::time::Duration::from_secs(60),
+                limit: None,
+            },
             connect_to: None,
-            connection_timeout: None,
-            idle_timeout: std::time::Duration::from_secs(60),
-            limit: None,
             dns_status: ferron_http_proxy::types::upstream::DnsResolutionStatus::NotApplicable,
         }));
     }

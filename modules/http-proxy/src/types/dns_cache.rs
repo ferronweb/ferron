@@ -1,7 +1,7 @@
 //! Application-level DNS result cache with TTL-based expiry.
 //!
-//! Caches resolved `Vec<Arc<UpstreamInner>>` for strict DNS and
-//! `Vec<(Arc<UpstreamInner>, u16, u16)>` for SRV lookups. Each entry
+//! Caches resolved `Vec<Arc<ResolvedUpstream>>` for strict DNS and
+//! `Vec<(Arc<ResolvedUpstream>, u16, u16)>` for SRV lookups. Each entry
 //! expires based on the minimum TTL from the DNS response records.
 //!
 //! This sits on top of Hickory's internal moka cache, avoiding per-request
@@ -13,14 +13,14 @@ use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
 
-use super::upstream::UpstreamInner;
+use super::upstream::ResolvedUpstream;
 
 const MAX_CACHE_ENTRIES: usize = 10_000;
 
 type StrictDnsKey = (String, u16, Vec<IpAddr>);
-type StrictDnsValue = Vec<Arc<UpstreamInner>>;
+type StrictDnsValue = Vec<Arc<ResolvedUpstream>>;
 type SrvKey = (String, Vec<IpAddr>);
-type SrvValue = Vec<(Arc<UpstreamInner>, u16, u16)>;
+type SrvValue = Vec<(Arc<ResolvedUpstream>, u16, u16)>;
 
 /// Metrics counters for cache hits and misses.
 pub(crate) static DNS_CACHE_HITS: std::sync::atomic::AtomicU64 =
@@ -255,7 +255,7 @@ pub(crate) async fn get_strict_dns(
     hostname: &str,
     port: u16,
     dns_servers: &[IpAddr],
-) -> Option<Vec<Arc<UpstreamInner>>> {
+) -> Option<Vec<Arc<ResolvedUpstream>>> {
     let key = (hostname.to_string(), port, dns_servers.to_vec());
     let result = cache().strict_dns.get(&key).await;
     if result.is_some() {
@@ -272,7 +272,7 @@ pub(crate) fn insert_strict_dns(
     hostname: &str,
     port: u16,
     dns_servers: &[IpAddr],
-    value: Vec<Arc<UpstreamInner>>,
+    value: Vec<Arc<ResolvedUpstream>>,
     ttl: Duration,
 ) {
     let key = (hostname.to_string(), port, dns_servers.to_vec());
@@ -286,7 +286,7 @@ pub(crate) fn insert_strict_dns(
 pub(crate) async fn get_srv(
     srv_name: &str,
     dns_servers: &[IpAddr],
-) -> Option<Vec<(Arc<UpstreamInner>, u16, u16)>> {
+) -> Option<Vec<(Arc<ResolvedUpstream>, u16, u16)>> {
     let key = (srv_name.to_string(), dns_servers.to_vec());
     let result = cache().srv.get(&key).await;
     if result.is_some() {
@@ -302,7 +302,7 @@ pub(crate) async fn get_srv(
 pub(crate) fn insert_srv(
     srv_name: &str,
     dns_servers: &[IpAddr],
-    value: Vec<(Arc<UpstreamInner>, u16, u16)>,
+    value: Vec<(Arc<ResolvedUpstream>, u16, u16)>,
     ttl: Duration,
 ) {
     let key = (srv_name.to_string(), dns_servers.to_vec());

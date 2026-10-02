@@ -13,7 +13,7 @@ use zincio_hyper::ZincioIo;
 
 use crate::connections::{PoolKey, PooledConnection};
 use crate::types::error::ProxyError;
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 
 /// Body type used for proxied requests.
 pub struct ProxyBodyInner {
@@ -269,7 +269,7 @@ pub struct PoolReturnInfo {
     /// The connection wrapper to return.
     wrapper: Option<SendRequestWrapper>,
     /// Local limit key, if one was applied.
-    local_limit_key: Option<Arc<UpstreamInner>>,
+    local_limit_key: Option<Arc<ResolvedUpstream>>,
     /// Whether this is a Unix pool connection.
     is_unix: bool,
 }

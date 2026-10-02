@@ -7,17 +7,17 @@ use rustc_hash::FxHashSet;
 
 use crate::config::AffinityType;
 use crate::types::health::HealthCheckStateMap;
-use crate::types::upstream::{Upstream, UpstreamInner};
+use crate::types::upstream::{ResolvedUpstream, Upstream};
 use crate::types::ConnectionsTrackState;
 use crate::upstream::circuit::CircuitBreaker;
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
 
-/// Resolve all upstreams to a flat list of `Arc<UpstreamInner>` entries.
+/// Resolve all upstreams to a flat list of `Arc<ResolvedUpstream>` entries.
 ///
 /// For SRV upstreams, this performs DNS resolution. For static upstreams,
 /// it returns them as-is.
 #[inline]
-pub async fn resolve_upstreams(upstreams: &[Upstream]) -> Vec<Arc<UpstreamInner>> {
+pub async fn resolve_upstreams(upstreams: &[Upstream]) -> Vec<Arc<ResolvedUpstream>> {
     // Capacity of at least the number of upstreams to avoid reallocations in many cases.
     let mut resolved = Vec::with_capacity(upstreams.len());
     for upstream in upstreams {
@@ -30,11 +30,11 @@ pub async fn resolve_upstreams(upstreams: &[Upstream]) -> Vec<Arc<UpstreamInner>
 #[derive(Default)]
 pub struct SelectionExclusions {
     /// Backends already tried by this request's retry loop.
-    pub already_tried: Vec<Arc<UpstreamInner>>,
+    pub already_tried: Vec<Arc<ResolvedUpstream>>,
     /// Backends skipped because their circuit breaker is open.
-    pub circuit_open: Vec<Arc<UpstreamInner>>,
+    pub circuit_open: Vec<Arc<ResolvedUpstream>>,
     /// Backends skipped because they are overloaded (half-open slot busy).
-    pub overloaded: Vec<Arc<UpstreamInner>>,
+    pub overloaded: Vec<Arc<ResolvedUpstream>>,
 }
 
 /// The result of one backend selection round: the selected backend, its
@@ -42,7 +42,7 @@ pub struct SelectionExclusions {
 /// algorithm, and the backends skipped along the way.
 pub struct SelectionOutcome {
     /// The selected upstream.
-    pub upstream: Arc<UpstreamInner>,
+    pub upstream: Arc<ResolvedUpstream>,
     /// Connection tracker for LeastConnections/TwoRandomChoices.
     /// `None` for Random/RoundRobin algorithms.
     pub tracker: Option<Arc<()>>,
@@ -64,7 +64,7 @@ pub struct SelectionOutcome {
 /// value = higher priority); the highest-priority tier is tried first and
 /// the next tier is used as a fallback once a tier is exhausted.
 pub struct BackendSet<'a> {
-    upstreams: &'a [Arc<UpstreamInner>],
+    upstreams: &'a [Arc<ResolvedUpstream>],
     algorithm: &'a LoadBalancerAlgorithmInner,
     conn_state: Option<&'a ConnectionsTrackState>,
     ewma_state: Option<&'a EwmaStateMap>,
@@ -73,7 +73,7 @@ pub struct BackendSet<'a> {
     affinity_type: Option<&'a AffinityType>,
     affinity_key: Option<&'a [u8]>,
     ring: &'a parking_lot::RwLock<ConsistentHashRing>,
-    tried: FxHashSet<Arc<UpstreamInner>>,
+    tried: FxHashSet<Arc<ResolvedUpstream>>,
     exclusions: SelectionExclusions,
 }
 
@@ -82,7 +82,7 @@ impl<'a> BackendSet<'a> {
     #[allow(clippy::too_many_arguments)]
     #[inline]
     pub fn new(
-        upstreams: &'a [Arc<UpstreamInner>],
+        upstreams: &'a [Arc<ResolvedUpstream>],
         algorithm: &'a LoadBalancerAlgorithmInner,
         conn_state: Option<&'a ConnectionsTrackState>,
         ewma_state: Option<&'a EwmaStateMap>,

@@ -35,25 +35,8 @@ impl DnsResolutionStatus {
     }
 }
 
-/// Upstream connection key.
-///
-/// This uniquely identifies a backend server for connection pooling and health tracking.
-/// It combines the target URL and optional Unix socket path.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct UpstreamInner {
-    /// Target URL (e.g. `http://localhost:8080/path`).
-    pub proxy_to: String,
-    /// Pre-resolved IP address for TCP connection (e.g. `1.2.3.4:8080`).
-    ///
-    /// When set, the connection layer uses this address for the TCP connect
-    /// instead of resolving the hostname from `proxy_to`. The original hostname
-    /// in `proxy_to` is still used for TLS SNI and the HTTP request URI.
-    ///
-    /// Set by strict DNS resolution (A/AAAA records). `None` for static URLs,
-    /// IP literals, Unix sockets, and logical DNS mode.
-    pub connect_to: Option<SocketAddr>,
-    /// Optional Unix socket path for local backends.
-    pub proxy_unix: Option<String>,
     /// Weight for weighted load balancing algorithms (default 1).
     pub weight: u32,
     /// mTLS credentials for an upstream
@@ -67,8 +50,6 @@ pub struct UpstreamInner {
     pub connection_timeout: Option<std::time::Duration>,
     /// Idle timeout for keepalive connections to this upstream.
     pub idle_timeout: std::time::Duration,
-    /// DNS resolution status, used for metric labeling.
-    pub dns_status: DnsResolutionStatus,
     /// Per-upstream connection limit.
     pub limit: Option<usize>,
 }
@@ -76,14 +57,35 @@ pub struct UpstreamInner {
 impl std::hash::Hash for UpstreamInner {
     #[inline]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        (
-            &self.proxy_to,
-            &self.connect_to,
-            &self.proxy_unix,
-            &self.mtls,
-        )
-            .hash(state);
+        (&self.mtls,).hash(state);
     }
+}
+
+/// A representation of a resolved upstream backend, including the target URL,
+///
+/// This uniquely identifies a backend server for connection pooling and health tracking.
+/// It combines the target URL and optional Unix socket path.
+///
+/// This also contains data for connection pooling, mTLS credentials, and DNS resolution status.
+#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+pub struct ResolvedUpstream {
+    /// Target URL (e.g. `http://localhost:8080/path`).
+    pub proxy_to: String,
+    /// Pre-resolved IP address for TCP connection (e.g. `1.2.3.4:8080`).
+    ///
+    /// When set, the connection layer uses this address for the TCP connect
+    /// instead of resolving the hostname from `proxy_to`. The original hostname
+    /// in `proxy_to` is still used for TLS SNI and the HTTP request URI.
+    ///
+    /// Set by strict DNS resolution (A/AAAA records). `None` for static URLs,
+    /// IP literals, Unix sockets, and logical DNS mode.
+    pub connect_to: Option<SocketAddr>,
+    /// Optional Unix socket path for local backends.
+    pub proxy_unix: Option<String>,
+    /// Inner upstream data
+    pub inner: UpstreamInner,
+    /// DNS resolution status, used for metric labeling.
+    pub dns_status: DnsResolutionStatus,
 }
 
 /// Proxy protocol version to send to backends.
@@ -97,22 +99,13 @@ pub enum ProxyHeader {
 
 /// Configured upstream backend.
 #[derive(Clone, Debug)]
-pub struct UpstreamConfig {
+pub struct StaticUpstream {
     /// Target URL.
     pub url: String,
     /// Optional Unix socket path.
     pub unix_socket: Option<String>,
-    /// Per-upstream connection limit.
-    pub limit: Option<usize>,
     /// Active health check configuration for this upstream.
     pub health_check_config: crate::types::health::UpstreamHealthCheckConfig,
-    /// Weight for weighted load balancing algorithms (default 1).
-    pub weight: u32,
-    /// Optional mTLS credentials for this upstream.
-    pub mtls: Option<Arc<MtlsCredentials>>,
-    /// Priority for tiered failover. Lower values = higher priority.
-    /// Default: 0 (highest priority).
-    pub priority: u16,
     /// Use logical DNS mode (ToSocketAddrs at connect time, one backend).
     ///
     /// When false (default) and the URL contains a hostname, A/AAAA records
@@ -121,10 +114,8 @@ pub struct UpstreamConfig {
     pub logical_dns: bool,
     /// Custom DNS servers for strict DNS resolution (empty = system resolver).
     pub dns_servers: Vec<std::net::IpAddr>,
-    /// Optional connection timeout
-    pub connection_timeout: Option<std::time::Duration>,
-    /// Idle timeout for keepalive connections to this upstream.
-    pub idle_timeout: std::time::Duration,
+    /// Inner upstream data
+    pub inner: UpstreamInner,
 }
 
 /// Data for an SRV-based upstream.
@@ -132,46 +123,34 @@ pub struct UpstreamConfig {
 /// The DNS resolver and runtime handle are obtained lazily at resolution time
 /// from the globally-captured secondary runtime handle.
 #[derive(Clone)]
-pub struct SrvUpstreamData {
+pub struct SrvUpstream {
     /// SRV record name (e.g. `_http._tcp.example.com`).
     pub srv_name: String,
     /// Custom DNS servers (empty = use system resolver).
     pub dns_servers: Vec<std::net::IpAddr>,
-    /// Per-upstream connection limit.
-    pub limit: Option<usize>,
     /// Active health check configuration for this upstream.
     pub health_check_config: crate::types::health::UpstreamHealthCheckConfig,
-    /// Weight for weighted load balancing algorithms (default 1).
-    pub weight: u32,
-    /// Optional mTLS credentials for the upstreams.
-    pub mtls: Option<Arc<MtlsCredentials>>,
-    /// Optional priority offset. When set, added to each DNS SRV priority
-    /// to shift the entire block's priority tier. When None, DNS SRV
-    /// priorities are used as-is.
-    pub priority: Option<u16>,
-    /// Optional connection timeout
-    pub connection_timeout: Option<std::time::Duration>,
-    /// Idle timeout for keepalive connections to this upstream.
-    pub idle_timeout: std::time::Duration,
+    /// Inner upstream data
+    pub inner: UpstreamInner,
 }
 
 /// An upstream backend, either a static URL or an SRV record.
 #[derive(Clone)]
 pub enum Upstream {
     /// Static upstream with a fixed URL and configuration.
-    Static(UpstreamConfig),
+    Static(StaticUpstream),
     /// SRV-based upstream resolved via DNS.
-    Srv(SrvUpstreamData),
+    Srv(SrvUpstream),
 }
 
 impl Upstream {
-    /// Resolve this upstream to a list of concrete `UpstreamInner` entries.
+    /// Resolve this upstream to a list of concrete `ResolvedUpstream` entries.
     ///
     /// Static upstreams resolve A/AAAA records via Hickory for hostnames
     /// (strict DNS mode), or pass through as-is for IP literals, Unix sockets,
     /// and logical DNS mode. SRV upstreams perform an SRV DNS lookup.
     #[inline]
-    pub async fn resolve(&self) -> Vec<Arc<UpstreamInner>> {
+    pub async fn resolve(&self) -> Vec<Arc<ResolvedUpstream>> {
         match self {
             Upstream::Static(cfg) => {
                 let needs_dns = !cfg.logical_dns
@@ -186,16 +165,11 @@ impl Upstream {
                     } else {
                         DnsResolutionStatus::NotApplicable
                     };
-                    vec![Arc::new(UpstreamInner {
+                    vec![Arc::new(ResolvedUpstream {
                         proxy_to: cfg.url.clone(),
                         connect_to: None,
                         proxy_unix: cfg.unix_socket.clone(),
-                        weight: cfg.weight,
-                        mtls: cfg.mtls.clone(),
-                        priority: cfg.priority,
-                        connection_timeout: cfg.connection_timeout,
-                        idle_timeout: cfg.idle_timeout,
-                        limit: cfg.limit,
+                        inner: cfg.inner.clone(),
                         dns_status,
                     })]
                 }
@@ -248,3 +222,19 @@ impl std::hash::Hash for MtlsCredentials {
         self.certs.hash(state);
     }
 }
+
+macro_rules! deref_upstreaminner {
+    ($($t:ty),+) => {
+        $(
+            impl std::ops::Deref for $t {
+                type Target = UpstreamInner;
+                #[inline]
+                fn deref(&self) -> &Self::Target {
+                    &self.inner
+                }
+            }
+        )+
+    };
+}
+
+deref_upstreaminner!(StaticUpstream, SrvUpstream, ResolvedUpstream);

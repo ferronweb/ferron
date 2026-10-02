@@ -21,14 +21,14 @@ mod pool;
 
 use self::pool::SingleThreadPool;
 use crate::send_request::SendRequestWrapper;
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 
 /// Connection pool key type: (upstream via Arc for cheap cloning, optional client IP for PROXY protocol).
-pub type PoolKey = (Arc<UpstreamInner>, Option<IpAddr>);
+pub type PoolKey = (Arc<ResolvedUpstream>, Option<IpAddr>);
 
 /// Concrete pool item type used throughout the proxy.
 pub(crate) type PooledConnection =
-    self::pool::PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>;
+    self::pool::PoolItem<PoolKey, Arc<ResolvedUpstream>, SendRequestWrapper>;
 
 /// Thread-local pool storage.
 ///
@@ -36,10 +36,10 @@ pub(crate) type PooledConnection =
 /// The pools are stored in `UnsafeCell` for interior mutability within the thread.
 struct ThreadLocalPools {
     /// TCP connection pool.
-    tcp_pool: Rc<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
+    tcp_pool: Rc<SingleThreadPool<PoolKey, Arc<ResolvedUpstream>, SendRequestWrapper>>,
     /// Unix socket pool (unbounded, separate from TCP pools).
     #[cfg(unix)]
-    unix_pool: Rc<SingleThreadPool<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
+    unix_pool: Rc<SingleThreadPool<PoolKey, Arc<ResolvedUpstream>, SendRequestWrapper>>,
     /// Last per-thread TCP capacity that was synced into this TLS pool.
     last_global_limit: usize,
     /// Cached thread ID for this thread, computed once at pool initialization.
@@ -53,7 +53,9 @@ thread_local! {
 
 #[allow(clippy::type_complexity)]
 static PENDING_PULLS: LazyLock<
-    parking_lot::RwLock<FxHashMap<(Option<Arc<UpstreamInner>>, bool), SegQueue<CancellationToken>>>,
+    parking_lot::RwLock<
+        FxHashMap<(Option<Arc<ResolvedUpstream>>, bool), SegQueue<CancellationToken>>,
+    >,
 > = LazyLock::new(|| parking_lot::RwLock::new(FxHashMap::default()));
 
 /// Fast-path flag for PENDING_PULLS: when zero, no thread is waiting for a
@@ -70,11 +72,11 @@ pub struct PoolStatsCollector {
     // AtomicUsize #1 - idle connections
     // AtomicUsize #2 - outstanding connections
     inner: DashMap<
-        (std::thread::ThreadId, Arc<UpstreamInner>),
+        (std::thread::ThreadId, Arc<ResolvedUpstream>),
         (AtomicUsize, AtomicUsize),
         FxBuildHasher,
     >,
-    local_limits: DashMap<Arc<UpstreamInner>, AtomicUsize, FxBuildHasher>,
+    local_limits: DashMap<Arc<ResolvedUpstream>, AtomicUsize, FxBuildHasher>,
 }
 
 impl PoolStatsCollector {
@@ -87,7 +89,12 @@ impl PoolStatsCollector {
     }
 
     #[inline]
-    pub fn record_pull(&self, thread_id: ThreadId, upstream: &Arc<UpstreamInner>, had_idle: bool) {
+    pub fn record_pull(
+        &self,
+        thread_id: ThreadId,
+        upstream: &Arc<ResolvedUpstream>,
+        had_idle: bool,
+    ) {
         let key = (thread_id, upstream.clone());
         let entry = if let Some(entry) = self.inner.get(&key) {
             entry
@@ -104,7 +111,12 @@ impl PoolStatsCollector {
     }
 
     #[inline]
-    pub fn record_return(&self, thread_id: ThreadId, upstream: &Arc<UpstreamInner>, stored: bool) {
+    pub fn record_return(
+        &self,
+        thread_id: ThreadId,
+        upstream: &Arc<ResolvedUpstream>,
+        stored: bool,
+    ) {
         let key = (thread_id, upstream.clone());
         let entry = if let Some(entry) = self.inner.get(&key) {
             entry
@@ -121,7 +133,7 @@ impl PoolStatsCollector {
     }
 
     #[inline]
-    pub fn record_local_limit(&self, upstream: &Arc<UpstreamInner>, local_limit: usize) {
+    pub fn record_local_limit(&self, upstream: &Arc<ResolvedUpstream>, local_limit: usize) {
         let entry = if let Some(entry) = self.local_limits.get(upstream) {
             entry
         } else {
@@ -135,7 +147,12 @@ impl PoolStatsCollector {
 
     #[allow(clippy::type_complexity)]
     #[inline]
-    pub fn snapshot(&self) -> Vec<((std::thread::ThreadId, Arc<UpstreamInner>), (usize, usize))> {
+    pub fn snapshot(
+        &self,
+    ) -> Vec<(
+        (std::thread::ThreadId, Arc<ResolvedUpstream>),
+        (usize, usize),
+    )> {
         self.inner
             .iter()
             .map(|entry| {
@@ -149,7 +166,7 @@ impl PoolStatsCollector {
 
     #[allow(clippy::type_complexity)]
     #[inline]
-    pub fn snapshot_local_limits(&self) -> Vec<(Arc<UpstreamInner>, usize)> {
+    pub fn snapshot_local_limits(&self) -> Vec<(Arc<ResolvedUpstream>, usize)> {
         self.local_limits
             .iter()
             .filter_map(|entry| {
@@ -169,7 +186,7 @@ pub struct ConnectionManager {
     /// Pre-thread global limit. Uses `AtomicUsize` for thread-safe interior mutability.
     global_limit_per_thread: AtomicUsize,
     /// Per-upstream local limits, already scaled to the per-thread capacity.
-    local_limits: RwLock<FxHashMap<Arc<UpstreamInner>, usize>>,
+    local_limits: RwLock<FxHashMap<Arc<ResolvedUpstream>, usize>>,
     /// Available parallelism for thread-local pool sizing.
     available_parallelism: usize,
 }
@@ -196,7 +213,7 @@ impl ConnectionManager {
 
     /// Set or update a per-upstream local connection limit.
     #[inline]
-    pub fn set_local_limit(&self, upstream: Arc<UpstreamInner>, limit: usize) -> usize {
+    pub fn set_local_limit(&self, upstream: Arc<ResolvedUpstream>, limit: usize) -> usize {
         let mut limits = self
             .local_limits
             .write()
@@ -209,7 +226,7 @@ impl ConnectionManager {
 
     /// Get the local limit value for an upstream.
     #[inline]
-    pub fn get_local_limit(&self, upstream: Arc<UpstreamInner>) -> Option<usize> {
+    pub fn get_local_limit(&self, upstream: Arc<ResolvedUpstream>) -> Option<usize> {
         self.local_limits
             .read()
             .expect("local_limits lock poisoned")
@@ -234,7 +251,11 @@ impl ConnectionManager {
     }
 
     #[inline]
-    async fn wait_until_available(&self, upstream: Arc<UpstreamInner>, local_limit: Option<usize>) {
+    async fn wait_until_available(
+        &self,
+        upstream: Arc<ResolvedUpstream>,
+        local_limit: Option<usize>,
+    ) {
         // Check if local limit is exceeded
         let at_local_limit = if let Some(ll) = local_limit {
             TLS_POOLS.with(|c| {
@@ -292,7 +313,7 @@ impl ConnectionManager {
     #[inline]
     pub async fn pull(
         &self,
-        upstream: Arc<UpstreamInner>,
+        upstream: Arc<ResolvedUpstream>,
         client_ip: Option<IpAddr>,
         idle_timeout: Duration,
     ) -> PooledConnection {
@@ -313,7 +334,7 @@ impl ConnectionManager {
     #[inline]
     pub async fn pull_with_local_limit(
         &self,
-        upstream: Arc<UpstreamInner>,
+        upstream: Arc<ResolvedUpstream>,
         client_ip: Option<IpAddr>,
         local_limit: Option<usize>,
         idle_timeout: Duration,
@@ -338,7 +359,7 @@ impl ConnectionManager {
     #[inline]
     pub async fn pull_existing(
         &self,
-        upstream: Arc<UpstreamInner>,
+        upstream: Arc<ResolvedUpstream>,
         client_ip: Option<IpAddr>,
         idle_timeout: Duration,
     ) -> PooledConnection {
@@ -362,7 +383,7 @@ impl ConnectionManager {
     #[inline]
     pub async fn pull_existing_with_local_limit(
         &self,
-        upstream: Arc<UpstreamInner>,
+        upstream: Arc<ResolvedUpstream>,
         client_ip: Option<IpAddr>,
         local_limit: Option<usize>,
         idle_timeout: Duration,
@@ -387,7 +408,7 @@ impl ConnectionManager {
     #[inline]
     pub fn try_pull(
         &self,
-        upstream: Arc<UpstreamInner>,
+        upstream: Arc<ResolvedUpstream>,
         client_ip: Option<IpAddr>,
         idle_timeout: Duration,
     ) -> Option<PooledConnection> {
@@ -457,7 +478,7 @@ impl ConnectionManager {
     #[inline]
     pub fn try_pull_with_local_limit(
         &self,
-        upstream: Arc<UpstreamInner>,
+        upstream: Arc<ResolvedUpstream>,
         client_ip: Option<IpAddr>,
         local_limit: Option<usize>,
         idle_timeout: Duration,
@@ -533,7 +554,7 @@ impl ConnectionManager {
 pub fn return_connection_to_pool(
     key: &PoolKey,
     wrapper: SendRequestWrapper,
-    local_limit_key: Option<Arc<UpstreamInner>>,
+    local_limit_key: Option<Arc<ResolvedUpstream>>,
     is_unix: bool,
 ) {
     let stored = TLS_POOLS.with(|tls| {
@@ -582,7 +603,7 @@ pub fn return_connection_to_pool(
 #[inline]
 pub fn discard_connection_to_pool(
     key: &PoolKey,
-    local_limit_key: Option<Arc<UpstreamInner>>,
+    local_limit_key: Option<Arc<ResolvedUpstream>>,
     is_unix: bool,
 ) {
     TLS_POOLS.with(|tls| {
@@ -614,7 +635,7 @@ pub fn discard_connection_to_pool(
 ///
 /// Shared by the return and discard paths: both release an outstanding slot.
 #[inline]
-fn wake_pending_pull(local_limit_key: &Option<Arc<UpstreamInner>>, is_unix: bool) {
+fn wake_pending_pull(local_limit_key: &Option<Arc<ResolvedUpstream>>, is_unix: bool) {
     // Fast path: if no thread is waiting for a connection, skip the
     // PENDING_PULLS lock entirely. This avoids RwLock contention on the
     // hot path when the pool is not exhausted.
@@ -663,16 +684,18 @@ mod tests {
     #[test]
     fn test_pool_stats_collector() {
         let collector = PoolStatsCollector::new();
-        let upstream = Arc::new(UpstreamInner {
+        let upstream = Arc::new(ResolvedUpstream {
             proxy_to: "http://backend".to_string(),
             connect_to: None,
             proxy_unix: None,
-            weight: 1,
-            mtls: None,
-            priority: 0,
-            connection_timeout: None,
-            idle_timeout: std::time::Duration::from_secs(60),
-            limit: None,
+            inner: crate::types::upstream::UpstreamInner {
+                weight: 1,
+                mtls: None,
+                priority: 0,
+                connection_timeout: None,
+                idle_timeout: std::time::Duration::from_secs(60),
+                limit: None,
+            },
             dns_status: Default::default(),
         });
 

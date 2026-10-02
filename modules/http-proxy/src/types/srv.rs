@@ -2,15 +2,15 @@
 
 #[inline]
 pub async fn resolve_srv(
-    srv_data: &super::upstream::SrvUpstreamData,
-) -> Vec<std::sync::Arc<super::upstream::UpstreamInner>> {
+    srv_data: &super::upstream::SrvUpstream,
+) -> Vec<std::sync::Arc<super::upstream::ResolvedUpstream>> {
     let candidates = resolve_srv_inner(srv_data).await;
 
     if candidates.is_empty() {
         return Vec::new();
     }
 
-    let priority_offset = srv_data.priority.unwrap_or(0);
+    let priority_offset = srv_data.priority;
 
     // Return all backends with their final priority.
     // Each backend's priority = DNS SRV priority + config priority offset.
@@ -18,18 +18,14 @@ pub async fn resolve_srv(
     candidates
         .into_iter()
         .map(|(upstream, dns_priority, dns_weight)| {
-            let priority = dns_priority.saturating_add(priority_offset);
-            let weight = (dns_weight as u32).saturating_mul(upstream.weight);
-            std::sync::Arc::new(super::upstream::UpstreamInner {
+            let mut new_inner = upstream.inner.clone();
+            new_inner.priority = dns_priority.saturating_add(priority_offset);
+            new_inner.weight = (dns_weight as u32).saturating_mul(upstream.weight);
+            std::sync::Arc::new(super::upstream::ResolvedUpstream {
                 proxy_to: upstream.proxy_to.clone(),
                 connect_to: None,
                 proxy_unix: upstream.proxy_unix.clone(),
-                weight,
-                mtls: upstream.mtls.clone(),
-                priority,
-                connection_timeout: upstream.connection_timeout,
-                idle_timeout: upstream.idle_timeout,
-                limit: upstream.limit,
+                inner: new_inner,
                 dns_status: super::upstream::DnsResolutionStatus::Resolved,
             })
         })
@@ -38,8 +34,8 @@ pub async fn resolve_srv(
 
 #[inline]
 pub async fn resolve_srv_inner(
-    srv_data: &super::upstream::SrvUpstreamData,
-) -> Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> {
+    srv_data: &super::upstream::SrvUpstream,
+) -> Vec<(std::sync::Arc<super::upstream::ResolvedUpstream>, u16, u16)> {
     if let Some(cached) = super::dns_cache::get_srv(&srv_data.srv_name, &srv_data.dns_servers).await
     {
         return cached;
@@ -55,11 +51,7 @@ pub async fn resolve_srv_inner(
 
     let srv_name = srv_data.srv_name.clone();
     let dns_servers = srv_data.dns_servers.clone();
-    let weight = srv_data.weight;
-    let mtls = srv_data.mtls.clone();
-    let connection_timeout = srv_data.connection_timeout;
-    let idle_timeout = srv_data.idle_timeout;
-    let limit = srv_data.limit;
+    let srv_inner = srv_data.inner.clone();
 
     // Spawn SRV lookup on the secondary Tokio runtime
     let result = handle
@@ -115,7 +107,7 @@ pub async fn resolve_srv_inner(
                 .valid_until()
                 .saturating_duration_since(std::time::Instant::now());
 
-            let mut candidates: Vec<(std::sync::Arc<super::upstream::UpstreamInner>, u16, u16)> =
+            let mut candidates: Vec<(std::sync::Arc<super::upstream::ResolvedUpstream>, u16, u16)> =
                 srv_records
                     .answers()
                     .iter()
@@ -129,21 +121,15 @@ pub async fn resolve_srv_inner(
                         let port = srv.port;
 
                         let proxy_to = format!("http://{}:{}", target.trim_end_matches('.'), port);
-                        let upstream = std::sync::Arc::new(super::upstream::UpstreamInner {
+                        let upstream = std::sync::Arc::new(super::upstream::ResolvedUpstream {
                             proxy_to,
                             connect_to: None,
                             proxy_unix: None,
-                            weight,
-                            mtls: mtls.clone(),
-                            priority: 0,
-                            connection_timeout,
-                            idle_timeout,
-                            limit,
+                            inner: srv_inner.clone(),
                             dns_status: super::upstream::DnsResolutionStatus::Resolved,
                         });
-                        let priority = srv.priority;
 
-                        Some((upstream, priority, srv.weight))
+                        Some((upstream, srv_inner.priority, srv.weight))
                     })
                     .collect();
 

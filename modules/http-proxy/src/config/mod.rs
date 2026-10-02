@@ -46,18 +46,22 @@ pub fn parse_proxy_config(
     for arg in &entry.args {
         if let Some(url) = arg.as_string_with_interpolations(ctx) {
             cfg.upstreams.push(crate::types::upstream::Upstream::Static(
-                crate::types::upstream::UpstreamConfig {
+                crate::types::upstream::StaticUpstream {
                     url: url.clone(),
                     unix_socket: None,
-                    limit: None,
                     health_check_config: crate::types::health::UpstreamHealthCheckConfig::default(),
-                    weight: 1,
-                    mtls: None,
-                    priority: 0,
+                    inner: crate::types::upstream::UpstreamInner {
+                        limit: None,
+                        weight: 1,
+                        mtls: None,
+                        priority: 0,
+                        connection_timeout: Some(Duration::from_millis(
+                            DEFAULT_CONNECTION_TIMEOUT_MS,
+                        )),
+                        idle_timeout: default_timeout,
+                    },
                     logical_dns: false,
                     dns_servers: Vec::new(),
-                    connection_timeout: Some(Duration::from_millis(DEFAULT_CONNECTION_TIMEOUT_MS)),
-                    idle_timeout: default_timeout,
                 },
             ));
         }

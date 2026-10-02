@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashSet;
 
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 
 /// Ketama-style consistent hash ring for backend selection.
 #[derive(Clone, Debug)]
@@ -25,7 +25,7 @@ impl ConsistentHashRing {
     const VNODES_PER_BACKEND: usize = 160;
 
     #[inline]
-    pub fn new(backends: &[Arc<UpstreamInner>]) -> Self {
+    pub fn new(backends: &[Arc<ResolvedUpstream>]) -> Self {
         let (nodes, weights_hash) = Self::build_nodes(backends);
         Self {
             nodes,
@@ -40,7 +40,7 @@ impl ConsistentHashRing {
     }
 
     #[inline]
-    fn build_nodes(backends: &[Arc<UpstreamInner>]) -> (Vec<(u64, usize)>, u64) {
+    fn build_nodes(backends: &[Arc<ResolvedUpstream>]) -> (Vec<(u64, usize)>, u64) {
         let total_vnodes: usize = backends
             .iter()
             .map(|b| Self::effective_weight(b.weight))
@@ -94,7 +94,7 @@ impl ConsistentHashRing {
     }
 
     #[inline]
-    pub fn needs_rebuild(&self, backends: &[Arc<UpstreamInner>]) -> bool {
+    pub fn needs_rebuild(&self, backends: &[Arc<ResolvedUpstream>]) -> bool {
         if self.backend_count != backends.len() {
             return true;
         }
@@ -105,7 +105,7 @@ impl ConsistentHashRing {
     }
 
     #[inline]
-    pub fn rebuild(&mut self, backends: &[Arc<UpstreamInner>]) {
+    pub fn rebuild(&mut self, backends: &[Arc<ResolvedUpstream>]) {
         let (nodes, weights_hash) = Self::build_nodes(backends);
         self.nodes = nodes;
         self.backend_count = backends.len();
@@ -126,33 +126,37 @@ mod tests {
     use super::*;
 
     #[inline]
-    fn make_upstream(url: &str) -> Arc<UpstreamInner> {
-        Arc::new(UpstreamInner {
+    fn make_upstream(url: &str) -> Arc<ResolvedUpstream> {
+        Arc::new(ResolvedUpstream {
             proxy_to: url.to_string(),
             connect_to: None,
             proxy_unix: None,
-            weight: 1,
-            mtls: None,
-            priority: 0,
-            connection_timeout: None,
-            idle_timeout: std::time::Duration::from_secs(60),
-            limit: None,
+            inner: crate::types::upstream::UpstreamInner {
+                weight: 1,
+                mtls: None,
+                priority: 0,
+                connection_timeout: None,
+                idle_timeout: std::time::Duration::from_secs(60),
+                limit: None,
+            },
             dns_status: Default::default(),
         })
     }
 
     #[inline]
-    fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<UpstreamInner> {
-        Arc::new(UpstreamInner {
+    fn make_upstream_with_weight(url: &str, weight: u32) -> Arc<ResolvedUpstream> {
+        Arc::new(ResolvedUpstream {
             proxy_to: url.to_string(),
             connect_to: None,
             proxy_unix: None,
-            weight,
-            mtls: None,
-            priority: 0,
-            connection_timeout: None,
-            idle_timeout: std::time::Duration::from_secs(60),
-            limit: None,
+            inner: crate::types::upstream::UpstreamInner {
+                weight,
+                mtls: None,
+                priority: 0,
+                connection_timeout: None,
+                idle_timeout: std::time::Duration::from_secs(60),
+                limit: None,
+            },
             dns_status: Default::default(),
         })
     }
@@ -206,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_consistent_hash_ring_empty() {
-        let backends: Vec<Arc<UpstreamInner>> = vec![];
+        let backends: Vec<Arc<ResolvedUpstream>> = vec![];
         let ring = ConsistentHashRing::new(&backends);
         assert!(ring.get(b"test", &FxHashSet::default()).is_none());
     }

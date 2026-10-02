@@ -15,9 +15,9 @@ pub(crate) static PROXY_POOL_BUCKETS: &[f64] = &[0.001, 0.005, 0.01, 0.05, 0.1, 
 pub(crate) static PROXY_TLS_BUCKETS: &[f64] = &[0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0];
 
 pub struct ProxyMetrics {
-    pub selected_backends: rustc_hash::FxHashSet<Arc<types::upstream::UpstreamInner>>,
-    pub final_selected_backend: Option<Arc<types::upstream::UpstreamInner>>,
-    pub circuit_breaker_unhealthy_backends: Vec<Arc<types::upstream::UpstreamInner>>,
+    pub selected_backends: rustc_hash::FxHashSet<Arc<types::upstream::ResolvedUpstream>>,
+    pub final_selected_backend: Option<Arc<types::upstream::ResolvedUpstream>>,
+    pub circuit_breaker_unhealthy_backends: Vec<Arc<types::upstream::ResolvedUpstream>>,
     pub active_unhealthy_backends: Vec<(String, u64)>,
     pub connection_reused: bool,
     pub tls_handshake_failures: u64,
@@ -26,9 +26,9 @@ pub struct ProxyMetrics {
     pub pool_wait_time_secs: f64,
     pub upstream_time_secs: f64,
     pub status_code: Option<u16>,
-    pub excluded_circuit_open: Vec<Arc<types::upstream::UpstreamInner>>,
-    pub excluded_already_tried: Vec<Arc<types::upstream::UpstreamInner>>,
-    pub excluded_overloaded: Vec<Arc<types::upstream::UpstreamInner>>,
+    pub excluded_circuit_open: Vec<Arc<types::upstream::ResolvedUpstream>>,
+    pub excluded_already_tried: Vec<Arc<types::upstream::ResolvedUpstream>>,
+    pub excluded_overloaded: Vec<Arc<types::upstream::ResolvedUpstream>>,
     pub retry_count: u64,
     pub same_upstream_retry_count: u64,
     pub retry_budget_exhausted: bool,
@@ -127,7 +127,7 @@ pub(crate) fn emit_proxy_failure_metric(
 #[inline]
 pub(crate) fn inject_upstream_state_span_attributes(
     ctx: &mut HttpContext,
-    backend: &Arc<types::upstream::UpstreamInner>,
+    backend: &Arc<types::upstream::ResolvedUpstream>,
     circuit_breaker_state: &types::circuit::CircuitBreakerStateMap,
     flapping_state: &types::flapping::FlappingStateMap,
     health_check_state: &types::health::HealthCheckStateMap,
@@ -198,7 +198,7 @@ pub(crate) fn inject_upstream_state_span_attributes(
 #[inline]
 pub(crate) fn resolved_ip_attrs(
     metrics_resolved_ip: bool,
-    backend: &Arc<types::upstream::UpstreamInner>,
+    backend: &Arc<types::upstream::ResolvedUpstream>,
 ) -> Vec<(&'static str, ferron_observability::MetricAttributeValue)> {
     use ferron_observability::MetricAttributeValue;
     let mut attrs = Vec::with_capacity(2);
@@ -220,7 +220,7 @@ pub(crate) fn resolved_ip_attrs(
 #[inline]
 pub(crate) fn emit_backend_excluded(
     events: &ferron_observability::CompositeEventSink,
-    backend: &Arc<types::upstream::UpstreamInner>,
+    backend: &Arc<types::upstream::ResolvedUpstream>,
     reason: &'static str,
     trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
@@ -267,7 +267,7 @@ pub(crate) fn emit_backend_excluded(
 #[inline]
 pub(crate) fn inject_selected_backend_span_attributes(
     ctx: &mut HttpContext,
-    backend: &Arc<types::upstream::UpstreamInner>,
+    backend: &Arc<types::upstream::ResolvedUpstream>,
 ) {
     let sa = ctx.get_span_attributes();
     sa.insert(
@@ -330,7 +330,7 @@ pub(crate) async fn cleanup_dns_cache_task() {
 /// Attributes describing a backend: the upstream URL and, when present, the
 /// unix socket path.
 fn backend_attrs(
-    upstream: &Arc<crate::types::upstream::UpstreamInner>,
+    upstream: &Arc<crate::types::upstream::ResolvedUpstream>,
 ) -> Vec<(&'static str, MetricAttributeValue)> {
     let mut attrs = Vec::with_capacity(2);
     attrs.push((
@@ -497,18 +497,20 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    fn test_upstream() -> Arc<types::upstream::UpstreamInner> {
-        Arc::new(types::upstream::UpstreamInner {
+    fn test_upstream() -> Arc<types::upstream::ResolvedUpstream> {
+        Arc::new(types::upstream::ResolvedUpstream {
             proxy_to: "http://backend:8080".to_string(),
             connect_to: Some("127.0.0.1:8080".parse().unwrap()),
             proxy_unix: None,
-            weight: 1,
-            mtls: None,
-            priority: 0,
-            connection_timeout: Some(Duration::from_secs(5)),
-            idle_timeout: Duration::from_secs(60),
             dns_status: Default::default(),
-            limit: None,
+            inner: crate::types::upstream::UpstreamInner {
+                weight: 1,
+                mtls: None,
+                priority: 0,
+                connection_timeout: Some(Duration::from_secs(5)),
+                idle_timeout: Duration::from_secs(60),
+                limit: None,
+            },
         })
     }
 

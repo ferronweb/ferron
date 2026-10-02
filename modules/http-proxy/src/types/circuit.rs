@@ -24,7 +24,7 @@ pub fn circuit_breaker_state_label(status: u8) -> &'static str {
 
 /// Circuit breaker state for tracking failures per upstream.
 ///
-/// This state is stored in a [`DashMap`] keyed by [`UpstreamInner`].
+/// This state is stored in a [`DashMap`] keyed by [`ResolvedUpstream`].
 #[derive(Clone, Debug)]
 pub struct CircuitBreakerState {
     /// Queue of failure timestamps within the configured window.
@@ -66,7 +66,7 @@ impl Default for CircuitBreakerState {
 
 pub type CircuitBreakerStateMap = Arc<
     dashmap::DashMap<
-        Arc<super::upstream::UpstreamInner>,
+        Arc<super::upstream::ResolvedUpstream>,
         CircuitBreakerState,
         rustc_hash::FxBuildHasher,
     >,

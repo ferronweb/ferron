@@ -7,16 +7,16 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::types::upstream::{DnsResolutionStatus, UpstreamConfig, UpstreamInner};
+use crate::types::upstream::{DnsResolutionStatus, ResolvedUpstream, StaticUpstream};
 
-/// Resolve A/AAAA records for the hostname in `UpstreamConfig`.
+/// Resolve A/AAAA records for the hostname in `StaticUpstream`.
 ///
-/// Returns one `UpstreamInner` per resolved IP address. The hostname and
+/// Returns one `ResolvedUpstream` per resolved IP address. The hostname and
 /// port are extracted from `cfg.url`.
 ///
 /// Results are cached based on the minimum TTL from the DNS response.
 #[inline]
-pub async fn resolve_strict_dns(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>> {
+pub async fn resolve_strict_dns(cfg: &StaticUpstream) -> Vec<Arc<ResolvedUpstream>> {
     let (hostname, port) = match parse_host_port(&cfg.url) {
         Some(v) => v,
         None => return Vec::new(),
@@ -58,13 +58,8 @@ pub async fn resolve_strict_dns(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>>
     };
 
     let url = cfg.url.clone();
-    let weight = cfg.weight;
-    let mtls = cfg.mtls.clone();
-    let priority = cfg.priority;
     let dns_servers = cfg.dns_servers.clone();
-    let connection_timeout = cfg.connection_timeout;
-    let idle_timeout = cfg.idle_timeout;
-    let limit = cfg.limit;
+    let inner = cfg.inner.clone();
 
     let result = handle
         .spawn(async move {
@@ -100,16 +95,11 @@ pub async fn resolve_strict_dns(cfg: &UpstreamConfig) -> Vec<Arc<UpstreamInner>>
                             "http"
                         };
                         let proxy_to = format!("{}://{}:{}", scheme, hostname, port);
-                        upstreams.push(Arc::new(UpstreamInner {
+                        upstreams.push(Arc::new(ResolvedUpstream {
                             proxy_to,
                             connect_to: Some(SocketAddr::new(ip, port)),
                             proxy_unix: None,
-                            weight,
-                            mtls: mtls.clone(),
-                            priority,
-                            connection_timeout,
-                            idle_timeout,
-                            limit,
+                            inner: inner.clone(),
                             dns_status: DnsResolutionStatus::Resolved,
                         }));
                     }

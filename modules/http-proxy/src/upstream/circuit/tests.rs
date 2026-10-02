@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use rustc_hash::FxBuildHasher;
 
 use crate::types::circuit::CircuitBreakerState;
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 use crate::upstream::lb::{
     ConsistentHashRing, LoadBalancerAlgorithmInner, WeightedRoundRobinState,
 };
@@ -18,17 +18,19 @@ use crate::upstream::BackendSet;
 use super::*;
 
 #[inline]
-fn make_upstream(url: &str) -> Arc<UpstreamInner> {
-    Arc::new(UpstreamInner {
+fn make_upstream(url: &str) -> Arc<ResolvedUpstream> {
+    Arc::new(ResolvedUpstream {
         proxy_to: url.to_string(),
         connect_to: None,
         proxy_unix: None,
-        weight: 1,
-        mtls: None,
-        priority: 0,
-        connection_timeout: None,
-        idle_timeout: std::time::Duration::from_secs(60),
-        limit: None,
+        inner: crate::types::upstream::UpstreamInner {
+            weight: 1,
+            mtls: None,
+            priority: 0,
+            connection_timeout: None,
+            idle_timeout: std::time::Duration::from_secs(60),
+            limit: None,
+        },
         dns_status: Default::default(),
     })
 }

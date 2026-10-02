@@ -18,7 +18,7 @@ use std::time::Instant;
 use dashmap::DashMap;
 use rustc_hash::FxBuildHasher;
 
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 
 /// Number of initial samples taken with a simple running average before
 /// switching to EWMA smoothing.
@@ -35,7 +35,7 @@ pub struct EwmaData {
 }
 
 /// Shared map from upstream to its EWMA data.
-pub type EwmaStateMap = Arc<DashMap<Arc<UpstreamInner>, EwmaData, FxBuildHasher>>;
+pub type EwmaStateMap = Arc<DashMap<Arc<ResolvedUpstream>, EwmaData, FxBuildHasher>>;
 
 /// Tunable parameters for the P2C+EWMA algorithm.
 ///
@@ -81,7 +81,7 @@ impl Default for P2cEwmaParams {
 #[inline]
 pub fn update_ewma(
     state_map: &EwmaStateMap,
-    upstream: &Arc<UpstreamInner>,
+    upstream: &Arc<ResolvedUpstream>,
     latency_secs: f64,
     params: &P2cEwmaParams,
 ) {
@@ -116,7 +116,7 @@ pub fn update_ewma(
 #[inline]
 pub fn get_decayed_ewma(
     state_map: &EwmaStateMap,
-    upstream: &UpstreamInner,
+    upstream: &ResolvedUpstream,
     params: &P2cEwmaParams,
 ) -> f64 {
     state_map.get(upstream).map_or(params.default_ewma, |d| {
@@ -142,7 +142,7 @@ pub fn compute_score(ewma: f64, active_connections: usize, params: &P2cEwmaParam
 
 /// Returns `true` while the backend is still in the linear warm-up phase.
 #[inline]
-pub fn is_warming_up(state_map: &EwmaStateMap, upstream: &Arc<UpstreamInner>) -> bool {
+pub fn is_warming_up(state_map: &EwmaStateMap, upstream: &Arc<ResolvedUpstream>) -> bool {
     state_map
         .get(upstream)
         .is_none_or(|d| d.sample_count < WARMUP_SAMPLES)

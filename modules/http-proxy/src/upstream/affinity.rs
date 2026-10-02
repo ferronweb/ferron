@@ -5,7 +5,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
 
-use crate::types::upstream::UpstreamInner;
+use crate::types::upstream::ResolvedUpstream;
 use crate::upstream::lb::ConsistentHashRing;
 
 /// Resolve an affinity key to a backend index.
@@ -17,7 +17,7 @@ use crate::upstream::lb::ConsistentHashRing;
 pub fn resolve_affinity_index(
     affinity_type: &crate::types::affinity::AffinityType,
     affinity_key: &[u8],
-    backends: &[Arc<UpstreamInner>],
+    backends: &[Arc<ResolvedUpstream>],
     excluded_backend_indexes: &FxHashSet<usize>,
     ring: &RwLock<ConsistentHashRing>,
 ) -> Option<usize> {
