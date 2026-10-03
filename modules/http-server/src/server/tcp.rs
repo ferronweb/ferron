@@ -174,13 +174,11 @@ impl TcpListenerHandle {
                     zincio::spawn_detached(async move {
                         let _conn_guard = ConnectionCountGuard::new();
 
-                        // Read PROXY protocol header
-                        // Use root HttpConnectionOptions to determine if PROXY protocol is enabled
-                        let proxy_protocol_enabled = server_config
-                            .http_connection_options_resolver
-                            .root_data()
-                            .map(|opts| opts.proxy_protocol_enabled)
-                            .unwrap_or(false);
+                        // Read PROXY protocol header.
+                        // The PROXY header arrives before the request, so this
+                        // comes from the global `http` block or the host block
+                        // without a hostname for this port.
+                        let proxy_protocol_enabled = server_config.proxy_protocol_enabled;
                         let (socket, proxy_client_addr, proxy_server_addr) = if proxy_protocol_enabled {
                             // Use tokio's TcpStream to read PROXY header asynchronously
                             match read_proxy_header(socket).await {
@@ -426,6 +424,7 @@ impl TcpListenerHandle {
                                             server_config.https_port,
                                             connection_options,
                                             server_config.observability_resolver.clone(),
+                                            server_config.trace_settings_resolver.clone(),
                                             tls_observability.clone(),
                                             (*connection_cancel_token).clone(),
                                             server_config.reload_token.clone(),
@@ -447,6 +446,7 @@ impl TcpListenerHandle {
                                             server_config.https_port,
                                             connection_options,
                                             server_config.observability_resolver.clone(),
+                                            server_config.trace_settings_resolver.clone(),
                                             tls_observability.clone(),
                                             (*connection_cancel_token).clone(),
                                             server_config.reload_token.clone(),
@@ -532,6 +532,7 @@ impl TcpListenerHandle {
                                 server_config.https_port,
                                 connection_options,
                                 server_config.observability_resolver.clone(),
+                                server_config.trace_settings_resolver.clone(),
                                 ip_observability,
                                 (*connection_cancel_token).clone(),
                                 server_config.reload_token.clone(),
@@ -553,6 +554,7 @@ impl TcpListenerHandle {
                                 server_config.https_port,
                                 connection_options,
                                 server_config.observability_resolver.clone(),
+                                server_config.trace_settings_resolver.clone(),
                                 ip_observability,
                                 (*connection_cancel_token).clone(),
                                 server_config.reload_token.clone(),

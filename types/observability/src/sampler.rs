@@ -6,7 +6,7 @@ use ferron_core::config::{
 use crate::{Parent, TraceAttributeValue};
 
 /// Sampling mode for traces.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TraceSamplingMode {
     /// Sample every trace.
     AlwaysOn,
@@ -34,7 +34,7 @@ pub enum TraceSamplingMode {
 }
 
 /// A rule for attribute-based sampling.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AttributeSamplingRule {
     /// The attribute key to match against.
     pub attribute: String,
@@ -43,7 +43,7 @@ pub struct AttributeSamplingRule {
 }
 
 /// Matcher for attribute-based sampling rules.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AttributeMatcher {
     /// Exact string match.
     Exact(String),
@@ -64,7 +64,7 @@ pub enum AttributeBasedDefaultAction {
 }
 
 /// Trace sampling configuration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TraceSamplingConfig {
     /// The sampling mode to use.
     pub mode: TraceSamplingMode,
@@ -80,7 +80,7 @@ impl Default for TraceSamplingConfig {
 }
 
 /// Trace sampler that evaluates sampling decisions without OTel SDK dependencies.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TraceSampler {
     mode: TraceSamplingMode,
 }

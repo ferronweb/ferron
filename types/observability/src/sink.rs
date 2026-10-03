@@ -98,6 +98,20 @@ impl CompositeEventSink {
         self.sinks.push(sink);
     }
 
+    /// Return a copy of this sink that uses `sampler` for trace sampling.
+    ///
+    /// Lets callers reuse an already-resolved sink while swapping in
+    /// host-specific sampling. Passing `None` disables sampling.
+    #[inline]
+    pub fn with_trace_sampler(&self, sampler: Option<TraceSampler>) -> Self {
+        Self {
+            sinks: self.sinks.clone(),
+            has_trace_sinks: self.has_trace_sinks,
+            has_access_sinks: self.has_access_sinks,
+            trace_sampler: sampler,
+        }
+    }
+
     /// Returns `true` if at least one sink processes trace events.
     /// When `false`, callers can skip expensive trace event construction.
     #[inline]

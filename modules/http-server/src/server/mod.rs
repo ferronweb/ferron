@@ -42,7 +42,9 @@ use ferron_tls::{TlsContext, TlsResolver};
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::{prepare_host_config, ThreeStageResolver};
+use crate::config::{
+    prepare_host_config, resolve_trace_settings, HttpTraceSettings, ThreeStageResolver,
+};
 use crate::server::quic::{QuicTlsResolver, QuicTlsSniResolvers};
 use crate::server::sni::CustomSniResolver;
 use crate::server::tls_resolve::{RadixTree, TlsResolverRadixTree};
@@ -76,8 +78,25 @@ pub struct HttpServerConfig {
     pub http_connection_options_resolver:
         Arc<self::tls_resolve::RadixTree<common::HttpConnectionOptions>>,
     pub observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<ObservabilityProviderEntry>>>,
-    /// Parsed trace sampling configuration from `http { trace_sampling ... }`.
+    /// Per-host `http { trace { generate, trust_request }, trace_sampling }` settings.
+    ///
+    /// Looked up per request because the request span and the propagated trace
+    /// context are created before location resolution.
+    pub trace_settings_resolver: Arc<self::tls_resolve::RadixTree<Arc<HttpTraceSettings>>>,
+    /// Parsed trace sampling configuration from the *global*
+    /// `http { trace_sampling ... }` block.
+    ///
+    /// Used for sinks that are resolved before a request (and therefore a host)
+    /// is known: listener, TLS handshake, and connection errors. Per-request
+    /// sinks use `trace_settings_resolver` instead.
     pub trace_sampling: ferron_observability::sampler::TraceSamplingConfig,
+    /// Whether PROXY protocol v1/v2 parsing is enabled for this listener.
+    ///
+    /// The PROXY header is read while accepting the connection, before the
+    /// request (and therefore the host) exists. Ferron reads the setting from
+    /// the global `http` block or from the host block without a hostname for
+    /// this port. A named host block cannot enable it.
+    pub proxy_protocol_enabled: bool,
     /// Token that is cancelled when configuration is reloaded to gracefully shut down existing connections.
     pub reload_token: CancellationToken,
     /// The canonical HTTPS port for this server (default: 443).
@@ -462,7 +481,22 @@ impl BasicHttpModule {
         let mut enable_tls = false;
         let mut http_connection_options_resolver = RadixTree::new();
         let mut observability_resolver = RadixTree::new();
+        let mut trace_settings_resolver: RadixTree<Arc<HttpTraceSettings>> = RadixTree::new();
         let mut tls_resolver = TlsResolverRadixTree::new();
+
+        // Global trace settings act as the fallback for every host. Each host
+        // below re-resolves the settings with its own block layered on top, so
+        // this root entry only serves requests that match no host block at all.
+        trace_settings_resolver.set_root_data(Arc::new(resolve_trace_settings(
+            Some(global_config.as_ref()),
+            None,
+        )));
+
+        // The PROXY protocol header arrives before the request, so it cannot be
+        // enabled per named host. Read it from the global `http` block and let
+        // the host block without a hostname override it below.
+        let mut proxy_protocol_enabled =
+            http_config(&global_config).is_some_and(|config| config.get_flag("protocol_proxy"));
 
         // Process global observability configuration (applies to all hosts)
         let global_observability_extractor = ObservabilityConfigExtractor::new(&global_config);
@@ -539,6 +573,33 @@ impl BasicHttpModule {
                 }
                 (None, None) => {
                     http_connection_options_resolver.set_root_data(http_connection_options.clone());
+                    proxy_protocol_enabled = http_connection_options.proxy_protocol_enabled;
+                }
+            }
+
+            // Trace settings are resolved per host because the request span is
+            // created before location resolution. Layer the host block over the
+            // global block exactly like `resolve_http_connection_options` does.
+            let trace_settings = Arc::new(resolve_trace_settings(
+                Some(global_config.as_ref()),
+                Some(&host_config.1),
+            ));
+            match (&host_config.0.host, host_config.0.ip) {
+                (Some(host), Some(ip)) => {
+                    trace_settings_resolver.insert_ip_and_hostname(
+                        ip,
+                        host,
+                        Arc::clone(&trace_settings),
+                    );
+                }
+                (Some(host), None) => {
+                    trace_settings_resolver.insert_hostname(host, trace_settings);
+                }
+                (None, Some(ip)) => {
+                    trace_settings_resolver.insert_ip(ip, trace_settings);
+                }
+                (None, None) => {
+                    trace_settings_resolver.set_root_data(trace_settings);
                 }
             }
 
@@ -789,6 +850,7 @@ impl BasicHttpModule {
             },
             http_connection_options_resolver: Arc::new(http_connection_options_resolver),
             observability_resolver: Arc::new(observability_resolver),
+            trace_settings_resolver: Arc::new(trace_settings_resolver),
             trace_sampling: global_config
                 .directives
                 .get("http")
@@ -800,6 +862,7 @@ impl BasicHttpModule {
                     TraceSamplingConfig::default(),
                     ferron_observability::sampler::parse_trace_sampling_config,
                 ),
+            proxy_protocol_enabled,
             reload_token: CancellationToken::new(),
             https_port,
         })

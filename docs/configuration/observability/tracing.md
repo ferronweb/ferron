@@ -32,6 +32,11 @@ These directives go inside the `http` block.
 | `generate`      | boolean   | Chooses whether to generate a new trace context when none exists, either from trust or from generation.                                                                                                                  | `true`  |
 | `trust_request` | boolean   | When enabled, Ferron uses the incoming `traceparent`, `tracestate`, and `baggage` headers as the parent trace context. When disabled (the default), Ferron discards incoming trace headers and generates a new trace ID. | `false` |
 
+Ferron reads these directives before it routes the request, so you can set them per host. A host block that does not set a directive inherits it from the global `http` block.
+
+> [!note]
+> These directives apply to the matched host block only. They do not apply to a `location` or `if` / `if_not` block. Put them in the host block or in the global `http` block.
+
 ### W3C Baggage
 
 Ferron 3 propagates the W3C Baggage header (`baggage`) alongside trace context headers. Baggage carries application-defined key-value pairs (for example, tenant ID, user segment, request flags) across service boundaries with no explicit configuration.
@@ -111,7 +116,7 @@ example.com {
 With `trust_request` enabled, Ferron reads the incoming `traceparent`, `tracestate`, and `baggage` headers. It stores baggage in the request trace context and passes the trace headers to upstream services. With the OTLP provider, Ferron attaches the baggage to the span context, and the observability backend sees it.
 
 > [!tip]
-> The reverse proxy, CGI, FastCGI, and SCGI modules inject trace context headers into outgoing requests when a trace context exists. The headers are `traceparent`, `tracestate`, and `baggage`, and they need no per-module configuration. The `trace` block with `generate` and `trust_request` controls this injection globally, and a configured trace sink also matters.
+> The reverse proxy, CGI, FastCGI, and SCGI modules inject trace context headers into outgoing requests when a trace context exists. The headers are `traceparent`, `tracestate`, and `baggage`, and they need no per-module configuration. The `trace` block with `generate` and `trust_request` controls this injection, and a configured trace sink also matters. Ferron reads both before it routes the request, so a host block sets them for its own requests.
 >
 > For CGI, FastCGI, and SCGI backends, the modules map these headers to standard CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). Application code can then read the variables without special header parsing.
 
@@ -235,6 +240,8 @@ Observability backends that support tracing (for example, OTLP) consume the trac
 ## Trace sampling
 
 The `trace_sampling` directive (in the `http` block) controls which traces Ferron samples and exports. Sampling reduces the volume of trace data that Ferron sends to the collector while keeping representative coverage.
+
+You can set `trace_sampling` per host. Ferron reads it before it routes the request, so a host block sets the sampling mode for its own requests. A host block that does not set it inherits the global value.
 
 | Mode                       | Description                                                                                               |
 | -------------------------- | --------------------------------------------------------------------------------------------------------- |

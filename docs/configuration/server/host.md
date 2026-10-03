@@ -94,8 +94,8 @@ example.com {
 
 ### Client IP from forwarded headers
 
-- `client_ip_from_header <header: string> { ... }` (global scope)
-  - This directive specifies the header to read the client IP from. Supported values: `x-forwarded-for`, `forwarded`. Host isolation: a named host does not inherit `client_ip_from_header` from the wildcard `*` host, but it still inherits the global one. Default: disabled
+- `client_ip_from_header <header: string> { ... }`
+  - This directive specifies the header to read the client IP from. Supported values: `x-forwarded-for`, `forwarded`. You can set it per host. Host isolation: a named host does not inherit `client_ip_from_header` from the wildcard `*` host, but it still inherits the global one. Default: disabled
 
 | Nested directive | Arguments                 | Description                                                                            | Default |
 | ---------------- | ------------------------- | -------------------------------------------------------------------------------------- | ------- |
@@ -130,17 +130,28 @@ Reads the `Forwarded` header and extracts the first `for=` token. Ferron support
 
 ### HTTP protocol settings
 
+These directives belong to the `http` block. Ferron reads them at different points in request handling, so their scope differs:
+
+| Read when                   | Directives                                                                                                                                                            | Scope                                                                                              |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| While accepting a connection | `protocol_proxy`                                                                                                                                                    | Global, or a host block without a hostname                                                        |
+| When the connection starts  | `protocols`, `timeout`, `h1_enable_early_hints`, `h2_*`, `h3_*`                                                                                                   | Global, with a per-host override                                                                  |
+| Before routing a request    | `url_sanitize`, `url_reject_backslash`, `trace`, `trace_sampling`                                                                                                   | Global only for `url_sanitize` and `url_reject_backslash`. Global with a per-host override for `trace` and `trace_sampling` |
+| After routing a request     | `options_allowed_methods`                                                                                                                                            | Global, with a per-host override                                                                  |
+
+A per-host override applies to requests whose host matches the host block. A host block that does not set a directive inherits it from the global `http` block. Ferron reads global-only directives from the top-level `http` block only. Placing them in a host block has no effect for `url_sanitize` and `url_reject_backslash`.
+
 - `protocols <protocols: string>...`
   - This directive specifies the enabled HTTP protocols. Supported values are `h1` (HTTP/1.1), `h2` (HTTP/2), `h2c` (HTTP/2 over cleartext with prior knowledge), and `h3` (HTTP/3). Default: `protocols h1 h2 h3`
 
 - `options_allowed_methods <methods: string>`
-  - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). Ferron returns the methods as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
+  - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests. Ferron returns the methods as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not to `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
 
 - `timeout <duration>`
   - This directive specifies the pipeline execution timeout. Accepts a duration string (for example, `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout "5m"` (5 minutes)
 
 - `h1_enable_early_hints <bool>`
-  - This directive enables or disables HTTP/1.1 early hints support. Default: `h1_enable_early_hints false`
+  - This directive enables or disables HTTP/1.1 early hints support. For the `early_hints` block that sets the links, see [Response control](/docs/configuration/routing/response). Default: `h1_enable_early_hints false`
 
 - `h2_initial_window_size <size: integer>`
   - This directive specifies the HTTP/2 initial flow-control window size. Default: unset
@@ -152,7 +163,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Ferron support
   - This directive specifies the HTTP/2 maximum concurrent streams. Default: unset
 
 - `h2_max_header_list_size <size: integer>`
-  - This directive specifies the HTTP/2 maximum header list size. It is not recommended to set the value high, as this leads to HPACK memory exhaustion vulnerabilities. Default: unset
+  - This directive specifies the HTTP/2 maximum header list size. Do not set the value high, because this leads to HPACK memory exhaustion vulnerabilities. Default: unset
 
 - `h2_enable_connect_protocol [bool: boolean]`
   - This directive enables or disables the HTTP/2 extended CONNECT protocol setting. Default: `h2_enable_connect_protocol false`
@@ -164,7 +175,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Ferron support
   - This directive specifies the number of blocked streams for HTTP/3. Default: unset
 
 - `h3_max_field_section_size <size: integer>`
-  - This directive specifies the maximum field section size for HTTP/3. It is not recommended to set the value high, as this leads to QPACK memory exhaustion vulnerabilities. Default: unset
+  - This directive specifies the maximum field section size for HTTP/3. Do not set the value high, because this leads to QPACK memory exhaustion vulnerabilities. Default: unset
 
 - `h3_enable_connect_protocol [bool: boolean]`
   - This directive enables or disables the HTTP/3 extended CONNECT protocol setting. Default: `h3_enable_connect_protocol false`
@@ -176,15 +187,17 @@ Reads the `Forwarded` header and extracts the first `for=` token. Ferron support
   - This directive controls whether Ferron rejects URLs containing backslashes. When enabled (the default), Ferron responds with 400 Bad Request for requests containing literal `\` or percent-encoded backslashes (`%5C`) in the path. This prevents path interpretation issues on Windows backends where systems may treat backslashes as path separators. This directive applies only to global scope. Default: `url_reject_backslash true`
 
 - `protocol_proxy [bool]`
-  - This directive turns on PROXY protocol v1/v2 parsing for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header from HAProxy or similar load balancers before processing the HTTP request. The client and server addresses from the PROXY header replace the actual socket addresses while the connection is open. Default: `protocol_proxy false`
+  - This directive turns on PROXY protocol v1/v2 parsing for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header from HAProxy or similar load balancers before processing the HTTP request. The client and server addresses from the PROXY header replace the actual socket addresses while the connection is open. Ferron reads this directive from the global `http` block or from the host block without a hostname, because it parses the header before it reads the request. A named host block cannot enable it. Default: `protocol_proxy false`
 
 > [!note]
-> Ferron supports both PROXY protocol v1 (text-based) and v2 (binary). If parsing fails, Ferron rejects the connection and logs an error.
+>
+> - Ferron supports both PROXY protocol v1 (text-based) and v2 (binary). If parsing fails, Ferron rejects the connection and logs an error.
+> - Each listener has its own setting. To enable the PROXY protocol on both the HTTP and the HTTPS listener, set it in the global `http` block or in both `*:80` and `*:443`.
 
 **Configuration example:**
 
 ```ferron
-example.com {
+{
     http {
         protocols h1 h2 h3
         options_allowed_methods "GET, HEAD, POST, PUT, DELETE, OPTIONS"
@@ -192,17 +205,28 @@ example.com {
         h1_enable_early_hints false
     }
 }
+
+api.example.com {
+    root /var/www/api
+    http {
+        protocols h2 h3
+        timeout "10s"
+    }
+}
+
+static.example.com {
+    root /var/www/static
+    http {
+        options_allowed_methods "GET, HEAD, OPTIONS"
+    }
+}
 ```
 
 > [!note]
 >
 > - `protocols` must leave at least one supported protocol enabled.
-> - When you enable HTTP/3, Ferron starts an additional QUIC listener on the same port for HTTP/3 traffic.
-
-> [!note]
->
 > - The default `options_allowed_methods` value (`GET, HEAD, POST, OPTIONS`) intentionally excludes methods like `PUT`, `DELETE`, `PATCH`, `CONNECT`, and `TRACE`. This reduces the attack surface reported by security scanners. You can customize this list based on the requirements of your server.
-> - When you enable HTTP/3, the server automatically adds an `Alt-Svc` header to responses to advertise HTTP/3 support to clients.
+> - When you enable HTTP/3, Ferron starts an additional QUIC listener on the same port for HTTP/3 traffic. The server automatically adds an `Alt-Svc` header to responses to advertise HTTP/3 support to clients.
 
 > [!note] Notes for "url_sanitize"
 >
@@ -225,6 +249,33 @@ example.com {
 
 > [!warning]
 > Disabling the `url_reject_backslash` directive may be necessary if you have Windows backends that legitimately use backslashes in URLs. However, this can expose backends to path interpretation vulnerabilities.
+
+#### Trace context and sampling
+
+The `http` block also accepts `trace { generate, trust_request }` and `trace_sampling`. Ferron reads both before it routes the request, so a host block can set them for one host and the global block can set the defaults for the rest.
+
+```ferron
+{
+    http {
+        trace {
+            trust_request
+        }
+        trace_sampling parentbased_traceidratio {
+            ratio 0.1
+        }
+    }
+}
+
+noisy.example.com {
+    root /var/www/noisy
+    http {
+        trace_sampling always_off
+    }
+}
+```
+
+> [!info]
+> For trace ID response headers, see [`trace_id_header`](/docs/configuration/observability/tracing#trace_id_header). For all trace directives, see [Tracing](/docs/configuration/observability/tracing).
 
 ### TLS
 

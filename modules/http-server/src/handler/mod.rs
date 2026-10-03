@@ -75,6 +75,7 @@ pub async fn request_handler(
     host_control_plane_span_links: Option<
         Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>,
     >,
+    trace_settings: Arc<crate::config::HttpTraceSettings>,
 ) -> Result<Response<ResponseBody>, io::Error> {
     // Normalize HTTP/2 and HTTP/3 requests
     if matches!(
@@ -111,57 +112,15 @@ pub async fn request_handler(
         .then(|| remote_address.map(|a| canonicalize_ip(a.ip())))
         .flatten();
 
-    let (mut request_trace_context, external_parent) = {
-        let global_config = config_resolver.global();
-
-        // Read trace { generate } toggle
-        let trace_config_node = global_config.as_ref().and_then(|g| {
-            g.directives
-                .get("http")
-                .and_then(|entries| entries.first())
-                .and_then(|e| e.children.as_ref())
-                .and_then(|c| c.directives.get("trace"))
-                .and_then(|entries| entries.first())
-                .and_then(|e| e.children.as_ref())
-        });
-
-        let generate_enabled = trace_config_node
-            .and_then(|c| c.directives.get("generate"))
-            .and_then(|e| e.first())
-            .is_none_or(|e| e.get_flag());
-        let trust_request_enabled = trace_config_node
-            .and_then(|c| c.directives.get("trust_request"))
-            .and_then(|e| e.first())
-            .is_some_and(|e| e.get_flag());
-
-        // Read trace_sampling config and derive default_sampled
-        let default_sampled = global_config
-            .as_ref()
-            .and_then(|g| {
-                g.directives
-                    .get("http")
-                    .and_then(|entries| entries.first())
-                    .and_then(|e| e.children.as_ref())
-                    .and_then(|c| c.directives.get("trace_sampling"))
-                    .and_then(|entries| entries.first())
-            })
-            .map(|entry| {
-                let config = ferron_observability::sampler::parse_trace_sampling_config(entry);
-                !matches!(
-                    config.mode,
-                    ferron_observability::sampler::TraceSamplingMode::AlwaysOff
-                )
-            })
-            .unwrap_or(true);
-
-        resolve_request_trace_context(
-            &request,
-            generate_enabled,
-            default_sampled,
-            trust_request_enabled,
-            has_traces,
-        )
-    };
+    // `trace` and `trace_sampling` are resolved from the global block plus the
+    // matched host block before routing, so per-host settings apply here.
+    let (mut request_trace_context, external_parent) = resolve_request_trace_context(
+        &request,
+        trace_settings.generate,
+        trace_settings.default_sampled(),
+        trace_settings.trust_request,
+        has_traces,
+    );
     let request_span_key =
         if let Some(request_span_key) = has_traces.then(|| next_span_key("request")) {
             let method = method

@@ -15,7 +15,7 @@ use quinn::Incoming;
 use tokio_util::sync::CancellationToken;
 use zincio_http::{Http3, Http3Options, HttpProtocol};
 
-use crate::config::ThreeStageResolver;
+use crate::config::{HttpTraceSettings, ThreeStageResolver};
 use crate::server::common::{
     build_request_handler, emit_error, normalize_host_for_lookup, resolve_http_connection_options,
     resolve_observability_sink, ConfigArcSwap, ConnectionCountGuard, HttpConnectionOptions,
@@ -373,6 +373,7 @@ async fn run_endpoint(
                 tls_config.is_some(),
                 server_config.https_port,
                 server_config.observability_resolver.clone(),
+                server_config.trace_settings_resolver.clone(),
                 tls_observability,
                 (*connection_cancel_token).clone(),
                 server_config.reload_token.clone(),
@@ -453,6 +454,7 @@ async fn handle_http3_connection(
     encrypted: bool,
     https_port: Option<u16>,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    trace_settings_resolver: Arc<RadixTree<Arc<HttpTraceSettings>>>,
     connection_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
@@ -470,6 +472,7 @@ async fn handle_http3_connection(
         Some(local_address.ip()),
         hinted_hostname.as_deref(),
     );
+    let connection_trace_sampler = connection_observability.trace_sampler().cloned();
     let handler_state = Arc::new(RequestHandlerState {
         pipeline,
         file_pipeline,
@@ -477,6 +480,8 @@ async fn handle_http3_connection(
         config_resolver,
         connection_observability,
         observability_resolver,
+        trace_settings_resolver,
+        connection_trace_sampler,
         local_address: Some(local_address),
         remote_address: Some(remote_address),
         unix_socket_path: None,

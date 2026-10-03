@@ -17,7 +17,7 @@ use http::Request;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::BodyExt;
 
-use crate::config::ThreeStageResolver;
+use crate::config::{HttpTraceSettings, ThreeStageResolver};
 use crate::handler::request_handler;
 use crate::server::tls_resolve::RadixTree;
 use crate::server::HttpServerConfig;
@@ -45,6 +45,16 @@ pub struct RequestHandlerState {
     pub connection_observability: CompositeEventSink,
     /// Kept for virtual-hosting lookups when request Host header differs from SNI.
     pub observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    /// Per-host `http { trace { generate, trust_request }, trace_sampling }` settings.
+    ///
+    /// Looked up per request (not cached per connection) because virtual hosts
+    /// can share one connection.
+    pub trace_settings_resolver: Arc<RadixTree<Arc<HttpTraceSettings>>>,
+    /// Trace sampler already attached to `connection_observability`.
+    ///
+    /// Compared against the per-host sampler so that requests for the
+    /// connection's own host reuse the sink instead of rebuilding it.
+    pub connection_trace_sampler: Option<ferron_observability::sampler::TraceSampler>,
     pub local_address: Option<SocketAddr>,
     pub remote_address: Option<SocketAddr>,
     pub unix_socket_path: Option<PathBuf>,
@@ -167,6 +177,28 @@ pub fn resolve_root_observability_sink(
         .map(|e| initialize_sinks_from_providers(&e))
         .unwrap_or_default();
     CompositeEventSink::with_sampler(sinks, trace_sampler.cloned())
+}
+
+/// Resolve host-level trace settings from the trace settings resolver.
+///
+/// Uses the same lookup order as [`resolve_observability_sink`]: IP plus
+/// hostname, then IP only, then hostname only (which includes the global
+/// fallback stored as root data).
+#[inline]
+pub fn resolve_host_trace_settings(
+    trace_settings_resolver: &RadixTree<Arc<HttpTraceSettings>>,
+    ip: Option<IpAddr>,
+    hostname: Option<&str>,
+) -> Arc<HttpTraceSettings> {
+    let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
+    let settings = match (ip, normalized_hostname.as_deref()) {
+        (Some(ip), Some(hostname)) => trace_settings_resolver.lookup_ip_and_hostname(ip, hostname),
+        (Some(ip), None) => trace_settings_resolver.lookup_ip(ip),
+        (None, Some(hostname)) => trace_settings_resolver.lookup_hostname(hostname),
+        (None, None) => trace_settings_resolver.root_data(),
+    };
+
+    settings.unwrap_or_else(|| Arc::new(HttpTraceSettings::default()))
 }
 
 /// Resolve host-level control plane metadata from the observability resolver.
@@ -354,6 +386,21 @@ pub fn build_request_handler(
                 }
                 _ => state.connection_observability.clone(),
             };
+            // Trace context and the request span are created before routing, so
+            // sampling and trace-header trust are looked up per request instead
+            // of per connection.
+            let trace_settings = resolve_host_trace_settings(
+                &state.trace_settings_resolver,
+                state.local_address.map(|addr| addr.ip()),
+                hostname.as_deref(),
+            );
+            let sampler = trace_settings.sampler();
+            let request_observability = if state.connection_trace_sampler.as_ref() == Some(&sampler)
+            {
+                request_observability
+            } else {
+                request_observability.with_trace_sampler(Some(sampler))
+            };
             let (parts, body) = request.into_parts();
             let request = Request::from_parts(parts, body.boxed_unsync());
             request_handler(
@@ -375,6 +422,7 @@ pub fn build_request_handler(
                 state.tls_params.clone(),
                 state.host_control_plane_metadata.clone(),
                 state.host_control_plane_span_links.clone(),
+                trace_settings,
             )
             .await
         })

@@ -353,3 +353,88 @@ async fn test_trace_id_unique_per_request() {
 
     container.stop().await.unwrap();
 }
+
+/// Test that `trace { trust_request }` applies per host.
+///
+/// Verifies that a host block with `trust_request` reuses the incoming
+/// `traceparent` trace ID, while another host on the same listener keeps the
+/// default behavior of generating a fresh trace ID.
+///
+/// See: modules/http-server/src/config/trace.rs
+#[tokio::test]
+async fn test_per_host_trace_trust_request() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let webroot_dir = common::create_temp_dir();
+    let mut config_file = common::create_temp_file();
+
+    common::write_file(webroot_dir.path().join("test.txt"), b"hello").unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+trusted.example.com:80 {
+    root "/var/www/ferron"
+    trace_id_header
+    http {
+        trace {
+            trust_request
+        }
+    }
+}
+
+untrusted.example.com:80 {
+    root "/var/www/ferron"
+    trace_id_header
+}
+"#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .unwrap();
+
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(80))
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::new();
+    let incoming_traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+    let trace_id_for = |host: &'static str| {
+        let url = format!("http://localhost:{}/test.txt", port);
+        let client = client.clone();
+        async move {
+            client
+                .get(url)
+                .header("Host", host)
+                .header("traceparent", incoming_traceparent)
+                .send()
+                .await
+                .unwrap()
+                .headers()
+                .get("x-ferron-trace-id")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or_default()
+                .to_string()
+        }
+    };
+
+    let trusted_trace_id = trace_id_for("trusted.example.com").await;
+    let untrusted_trace_id = trace_id_for("untrusted.example.com").await;
+
+    assert_eq!(
+        trusted_trace_id, "4bf92f3577b34da6a3ce929d0e0e4736",
+        "expected the host with `trust_request` to reuse the incoming trace ID"
+    );
+    assert_ne!(
+        untrusted_trace_id, "4bf92f3577b34da6a3ce929d0e0e4736",
+        "expected the host without `trust_request` to generate a new trace ID"
+    );
+
+    container.stop().await.unwrap();
+}

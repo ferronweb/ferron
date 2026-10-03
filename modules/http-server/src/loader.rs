@@ -547,8 +547,8 @@ fn register_http_server_http_protocol_directives(registry: &mut DirectiveRegistr
     reg(
         registry,
         "h3_qpack_blocked_streams",
-        "h3_qpack_blocked_streams [bool]",
-        "This directive specifies whether blocked streams are enabled in HTTP/3.",
+        "h3_qpack_blocked_streams <count>",
+        "This directive specifies the number of blocked streams for HTTP/3.",
         false,
         None,
         http,
@@ -563,7 +563,7 @@ fn register_http_server_http_protocol_directives(registry: &mut DirectiveRegistr
         http,
     );
     reg(registry, "h3_enable_connect_protocol", "h3_enable_connect_protocol [bool]", "This directive specifies whether the HTTP/3 extended CONNECT protocol is enabled. Default: disabled", false, None, http);
-    reg(registry, "protocol_proxy", "protocol_proxy [bool]", "This directive specifies whether PROXY protocol v1/v2 parsing is enabled for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header before processing the HTTP request. Default: disabled", false, None, http);
+    reg(registry, "protocol_proxy", "protocol_proxy [bool]", "This directive specifies whether PROXY protocol v1/v2 parsing is enabled for incoming TCP connections. When enabled, Ferron reads the PROXY protocol header before processing the HTTP request. Read from the global `http` block or from a host block without a hostname. Default: disabled", false, None, http);
     reg(registry, "trusted_proxy", "trusted_proxy <ip-or-cidr>...", "This directive specifies trusted reverse-proxy IPs or CIDR ranges allowed to supply forwarded client IP headers. Repeatable — each occurrence adds one entry.", false, None, DirectiveSubblock::custom("client_ip"));
 }
 

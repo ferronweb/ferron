@@ -34,6 +34,10 @@
 
 - **Early hints header fix**: previously, when `early_hints` block was configured with multiple `Link` header values, only the last one would be sent in the response. This has been fixed to send all header values.
 - **Variable resolution fix**: previously, if Ferron cannot resolve a variable, it kept the placeholder as `name` (instead of documented `{{name}}`).
+- **Per-host `trace` and `trace_sampling` fix**: previously, `http { trace { generate, trust_request } }` and `http { trace_sampling ... }` were silently ignored in host blocks and were only read from the global block, so per-host trace-header trust and per-host sampling did not work. Ferron now resolves both from the matched host block, falling back to the global block.
+- **`protocol_proxy` fix**: previously, `http { protocol_proxy true }` in the global configuration block had no effect unless the configuration also had a host block without a hostname, and the `ferron doctor` check for it never ran. Ferron now reads the setting from the global `http` block or from the host block without a hostname, and reports the best-practice violation.
+- **`protocols` validation fix**: `ferron validate` did not check `http { protocols }` values because it looked for the directive in the enclosing block instead of the `http` block. Invalid values such as `h4` are now reported as a configuration error.
+- **`h3_qpack_blocked_streams` usage fix**: the directive takes a stream count, but `ferron directives` reported it as a boolean flag.
 
 #### Observability
 

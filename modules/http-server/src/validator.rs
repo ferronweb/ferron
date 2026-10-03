@@ -96,8 +96,8 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             let mut sub = std::collections::HashSet::new();
 
             validate_nested!(http, used(sub), protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
-            if let Some(protocols) = config.directives.get("protocols").and_then(|p| p.first()) {
-                if let Err(e) = crate::server::resolve_http_protocols(Some(config)) {
+            if let Some(protocols) = http.directives.get("protocols").and_then(|p| p.first()) {
+                if let Err(e) = crate::server::resolve_http_protocols(Some(http)) {
                     return Err(
                         ferron_core::config::validator::ConfigurationValidationError::from(e)
                             .with_span(protocols.span.clone()),
@@ -168,16 +168,18 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                 }
             });
 
-            // PROXY protocol
+            // PROXY protocol. The PROXY header is parsed before the request, so
+            // this setting only applies from the global `http` block or from the
+            // host block without a hostname.
             validate_nested!(http, used(sub), protocol_proxy, optional args(1) => [
                 ServerConfigurationValue::Boolean(_, _)
             ] | args(0) => [
                 ServerConfigurationValue::Boolean(_, _)
             ]);
-            if first_flag(config, "protocol_proxy") == Some(true) {
+            if first_flag(http, "protocol_proxy") == Some(true) {
                 ctx.add_best_practice_violation(
                     "`protocol_proxy` trusts client-provided PROXY protocol addresses; enable it only on listeners reachable exclusively by trusted load balancers",
-                    first_entry_span(config, "protocol_proxy"),
+                    first_entry_span(http, "protocol_proxy"),
                 );
             }
 

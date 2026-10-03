@@ -351,3 +351,71 @@ async fn test_proxy_protocol_malformed_rejected() {
         }
     }
 }
+
+/// Verify that a global `http { protocol_proxy true }` works without a host
+/// block that has no hostname.
+///
+/// Previously Ferron read this setting from the default host of the port only,
+/// so the global block had no effect unless the configuration also declared a
+/// wildcard or bare host block.
+#[tokio::test]
+async fn test_proxy_protocol_global_block_without_wildcard_host() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    #[cfg(unix)]
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+
+    #[cfg(unix)]
+    let webroot_dir = common::create_temp_dir();
+    #[cfg(not(unix))]
+    let webroot_dir = tempfile::tempdir().unwrap();
+
+    std::fs::write(webroot_dir.path().join("index.html"), b"hello proxy").unwrap();
+
+    #[cfg(unix)]
+    let mut config_file = common::create_temp_file();
+    #[cfg(not(unix))]
+    let mut config_file = tempfile::NamedTempFile::new().unwrap();
+
+    config_file
+        .as_file_mut()
+        .write_all(
+            br#"{
+    http {
+        protocol_proxy true
+    }
+}
+
+named.example.com:80 {
+    root "/var/www/ferron"
+}
+"#,
+        )
+        .unwrap();
+    config_file.flush().unwrap();
+
+    let container = create_ferron_container(webroot_dir.path(), config_file.path())
+        .await
+        .expect("Failed to create container");
+
+    let ferron_port = container
+        .get_host_port_ipv4(80)
+        .await
+        .expect("Failed to get host port");
+
+    let proxy_header = make_v1_header("TCP4", "10.0.0.1", "10.0.0.2", 54321, 80);
+    let http_request =
+        b"GET /index.html HTTP/1.1\r\nHost: named.example.com\r\nConnection: close\r\n\r\n";
+    let response = send_proxy_then_http(ferron_port, &proxy_header, http_request)
+        .await
+        .expect("send failed");
+
+    assert_eq!(
+        parse_status_code(&response),
+        200,
+        "expected the global `protocol_proxy` to be honored, got: {}",
+        String::from_utf8_lossy(&response)
+    );
+
+    container.stop().await.unwrap();
+}

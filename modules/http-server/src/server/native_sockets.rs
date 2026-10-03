@@ -12,7 +12,7 @@ use ferron_tls::TlsConnectionParams;
 use tokio_util::sync::CancellationToken;
 use zincio_http::{Http1, Http1Options, Http2, Http2Options, HttpProtocol};
 
-use crate::config::ThreeStageResolver;
+use crate::config::{HttpTraceSettings, ThreeStageResolver};
 use crate::server::tls_resolve::RadixTree;
 
 use super::common::*;
@@ -146,6 +146,7 @@ pub(crate) fn build_request_handler_state(
     config_resolver: Arc<ThreeStageResolver>,
     connection_observability: CompositeEventSink,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    trace_settings_resolver: Arc<RadixTree<Arc<HttpTraceSettings>>>,
     hinted_hostname: Option<String>,
     encrypted: bool,
     https_port: Option<u16>,
@@ -171,6 +172,7 @@ pub(crate) fn build_request_handler_state(
         conn_addr.local_ip(),
         hinted_hostname.as_deref(),
     );
+    let connection_trace_sampler = connection_observability.trace_sampler().cloned();
     Arc::new(RequestHandlerState {
         pipeline,
         file_pipeline,
@@ -178,6 +180,8 @@ pub(crate) fn build_request_handler_state(
         config_resolver,
         connection_observability,
         observability_resolver,
+        trace_settings_resolver,
+        connection_trace_sampler,
         local_address,
         remote_address,
         unix_socket_path,
@@ -252,6 +256,7 @@ pub(crate) async fn handle_http1_connection<S>(
     https_port: Option<u16>,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    trace_settings_resolver: Arc<RadixTree<Arc<HttpTraceSettings>>>,
     connection_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
@@ -270,6 +275,7 @@ pub(crate) async fn handle_http1_connection<S>(
         config_resolver,
         connection_observability,
         observability_resolver,
+        trace_settings_resolver,
         hinted_hostname,
         encrypted,
         https_port,
@@ -337,6 +343,7 @@ pub(crate) async fn handle_http1_connection_zerocopy<S>(
     https_port: Option<u16>,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    trace_settings_resolver: Arc<RadixTree<Arc<HttpTraceSettings>>>,
     connection_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
@@ -357,6 +364,7 @@ pub(crate) async fn handle_http1_connection_zerocopy<S>(
         https_port,
         connection_options,
         observability_resolver,
+        trace_settings_resolver,
         connection_observability,
         shutdown_token,
         reload_token,
@@ -382,6 +390,7 @@ pub(crate) async fn handle_http1_connection_zerocopy<S>(
     https_port: Option<u16>,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    trace_settings_resolver: Arc<RadixTree<Arc<HttpTraceSettings>>>,
     connection_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
@@ -403,6 +412,7 @@ pub(crate) async fn handle_http1_connection_zerocopy<S>(
         config_resolver,
         connection_observability,
         observability_resolver,
+        trace_settings_resolver,
         hinted_hostname,
         encrypted,
         https_port,
@@ -470,6 +480,7 @@ pub(crate) async fn handle_http2_connection<S>(
     https_port: Option<u16>,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    trace_settings_resolver: Arc<RadixTree<Arc<HttpTraceSettings>>>,
     connection_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
@@ -488,6 +499,7 @@ pub(crate) async fn handle_http2_connection<S>(
         config_resolver,
         connection_observability,
         observability_resolver,
+        trace_settings_resolver,
         hinted_hostname,
         encrypted,
         https_port,
