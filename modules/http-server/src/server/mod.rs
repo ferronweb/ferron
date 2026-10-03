@@ -636,7 +636,7 @@ impl BasicHttpModule {
                     }
                     observability_entries_map
                         .entry((host_config.0.host.clone(), host_config.0.ip))
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(entry);
                 }
             }
