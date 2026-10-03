@@ -224,7 +224,15 @@ async fn test_statsd_baggage_promotion() {
         .config
         .as_file_mut()
         .write_all(
-            r#"*:80 {
+            r#"{
+  http {
+    trace {
+      trust_request
+    }
+  }
+}
+
+*:80 {
   root "/var/www/ferron"
   observability {
     provider statsd
