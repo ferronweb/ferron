@@ -42,6 +42,10 @@ use self::request_utils::*;
 
 const LOG_TARGET: &str = "ferron-http-server";
 
+/// Methods advertised in the `Allow` header for `OPTIONS *` when
+/// `http { options_allowed_methods }` is not set.
+const DEFAULT_OPTIONS_ALLOWED_METHODS: &str = "GET, HEAD, POST, OPTIONS";
+
 static REQUEST_DURATION_BUCKETS: &[f64] = &[
     0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
 ];
@@ -794,14 +798,17 @@ async fn request_handler_inner(
         ferron_observability::control_plane::ControlPlaneConfig::from_layered(&ctx.configuration)
             .map(|cp| cp.metadata);
 
-    // Handle OPTIONS * requests (RFC 2616 Section 9.2)
+    // Handle OPTIONS * requests (asterisk-form request target)
     // Early response before pipeline execution
     if is_options_star_request(ctx.req.as_ref().expect("invalid HTTP context state")) {
+        // `options_allowed_methods` lives inside the `http` block, so it needs the
+        // nested lookup; a flat lookup would always miss it and silently fall back
+        // to the default list.
         let allow_header = resolution
             .configuration
-            .get_value("options_allowed_methods", false)
+            .get_nested_value("http", "options_allowed_methods", false)
             .and_then(|v| v.as_string_with_interpolations(&ctx))
-            .unwrap_or_else(|| "GET, HEAD, POST, OPTIONS".to_string());
+            .unwrap_or_else(|| DEFAULT_OPTIONS_ALLOWED_METHODS.to_string());
 
         let response = Response::builder()
             .status(200)

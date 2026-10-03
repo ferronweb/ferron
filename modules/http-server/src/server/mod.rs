@@ -285,6 +285,20 @@ fn resolve_http_u32(
     http_config: Option<&ServerConfigurationBlock>,
     directive: &str,
 ) -> anyhow::Result<Option<u32>> {
+    resolve_http_u32_in_range(http_config, directive, None)
+}
+
+/// Protocol-mandated bounds for `h2_initial_window_size`.
+const H2_INITIAL_WINDOW_SIZE_RANGE: std::ops::RangeInclusive<u32> = 0..=(1 << 31) - 1;
+
+/// Protocol-mandated bounds for `h2_max_frame_size`.
+const H2_MAX_FRAME_SIZE_RANGE: std::ops::RangeInclusive<u32> = 16_384..=16_777_215;
+
+fn resolve_http_u32_in_range(
+    http_config: Option<&ServerConfigurationBlock>,
+    directive: &str,
+    valid_range: Option<std::ops::RangeInclusive<u32>>,
+) -> anyhow::Result<Option<u32>> {
     let Some(value) = http_config.and_then(|config| config.get_value(directive)) else {
         return Ok(None);
     };
@@ -293,9 +307,20 @@ fn resolve_http_u32(
         anyhow::bail!("http.{directive} must be a number");
     };
 
-    Ok(Some(u32::try_from(size).map_err(|_| {
-        anyhow::anyhow!("http.{directive} must be a non-negative integer")
-    })?))
+    let parsed = u32::try_from(size)
+        .map_err(|_| anyhow::anyhow!("http.{directive} must be a non-negative integer"))?;
+
+    if let Some(range) = valid_range {
+        if !range.contains(&parsed) {
+            anyhow::bail!(
+                "http.{directive} must be between {} and {}",
+                range.start(),
+                range.end()
+            );
+        }
+    }
+
+    Ok(Some(parsed))
 }
 
 fn resolve_http_u64(
@@ -313,6 +338,59 @@ fn resolve_http_u64(
     Ok(Some(u64::try_from(size).map_err(|_| {
         anyhow::anyhow!("http.{directive} must be a non-negative integer")
     })?))
+}
+
+/// Check the `http` block settings that have protocol-mandated value ranges.
+///
+/// Called from the configuration validator so that `ferron validate` reports
+/// out-of-range values instead of leaving them to fail at server start.
+pub(crate) fn validate_http_settings(
+    http_config: Option<&ServerConfigurationBlock>,
+) -> anyhow::Result<()> {
+    resolve_http_u32_in_range(
+        http_config,
+        "h2_initial_window_size",
+        Some(H2_INITIAL_WINDOW_SIZE_RANGE),
+    )?;
+    resolve_http_u32_in_range(
+        http_config,
+        "h2_max_frame_size",
+        Some(H2_MAX_FRAME_SIZE_RANGE),
+    )?;
+    Ok(())
+}
+
+/// Merge the global `http` block with a host block's `http` block.
+///
+/// Connection options are read from host scope before routing, so the two
+/// `http` blocks are layered per directive here. A directive the host block
+/// does not set keeps the global value, which matches how directives in every
+/// other Ferron block inherit. Replacing the whole block would silently drop
+/// the global settings for directives the host did not mention.
+fn effective_http_config(
+    global_config: &ServerConfigurationBlock,
+    config: &ServerConfigurationBlock,
+) -> Option<ServerConfigurationBlock> {
+    let global_http = http_config(global_config);
+    let host_http = http_config(config);
+
+    let Some(host_http) = host_http else {
+        return global_http.cloned();
+    };
+
+    let mut directives: rustc_hash::FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>> =
+        global_http.map_or_else(rustc_hash::FxHashMap::default, |block| {
+            (*block.directives).clone()
+        });
+    for (directive, entries) in host_http.directives.iter() {
+        directives.insert(directive.clone(), entries.clone());
+    }
+
+    Some(ServerConfigurationBlock {
+        directives: Arc::new(directives),
+        matchers: rustc_hash::FxHashMap::default(),
+        span: None,
+    })
 }
 
 pub(crate) fn resolve_http_protocols(
@@ -352,7 +430,8 @@ fn resolve_http_connection_options(
     global_config: &ServerConfigurationBlock,
     config: &ServerConfigurationBlock,
 ) -> anyhow::Result<common::HttpConnectionOptions> {
-    let http_config = http_config(config).or_else(|| http_config(global_config));
+    let effective_http = effective_http_config(global_config, config);
+    let http_config = effective_http.as_ref();
     Ok(common::HttpConnectionOptions {
         timeout: http_config
             .and_then(|config| config.get_value("timeout"))
@@ -371,8 +450,19 @@ fn resolve_http_connection_options(
         h1_enable_early_hints: http_config
             .is_some_and(|config| config.get_flag("h1_enable_early_hints")),
         h2: common::Http2Settings {
-            initial_window_size: resolve_http_u32(http_config, "h2_initial_window_size")?,
-            max_frame_size: resolve_http_u32(http_config, "h2_max_frame_size")?,
+            // SETTINGS_MAX_FRAME_SIZE and SETTINGS_INITIAL_WINDOW_SIZE have
+            // protocol-mandated bounds. Advertising a value outside them makes
+            // conforming clients treat the connection as malformed.
+            initial_window_size: resolve_http_u32_in_range(
+                http_config,
+                "h2_initial_window_size",
+                Some(H2_INITIAL_WINDOW_SIZE_RANGE),
+            )?,
+            max_frame_size: resolve_http_u32_in_range(
+                http_config,
+                "h2_max_frame_size",
+                Some(H2_MAX_FRAME_SIZE_RANGE),
+            )?,
             max_concurrent_streams: resolve_http_u32(http_config, "h2_max_concurrent_streams")?,
             max_header_list_size: resolve_http_u32(http_config, "h2_max_header_list_size")?,
             enable_connect_protocol: http_config
@@ -1223,5 +1313,153 @@ impl Drop for UnixHttpModule {
         for ul in &*self.listeners.lock() {
             ul.cancel();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferron_core::config::ServerConfigurationValue;
+    use rustc_hash::FxHashMap;
+
+    fn entry(
+        args: Vec<ServerConfigurationValue>,
+        children: Option<ServerConfigurationBlock>,
+    ) -> Vec<ServerConfigurationDirectiveEntry> {
+        vec![ServerConfigurationDirectiveEntry {
+            args,
+            children,
+            span: None,
+        }]
+    }
+
+    fn block(
+        directives: Vec<(&str, Vec<ServerConfigurationDirectiveEntry>)>,
+    ) -> ServerConfigurationBlock {
+        ServerConfigurationBlock {
+            directives: Arc::new(
+                directives
+                    .into_iter()
+                    .map(|(name, entries)| (name.to_string(), entries))
+                    .collect::<FxHashMap<String, Vec<ServerConfigurationDirectiveEntry>>>(),
+            ),
+            matchers: FxHashMap::default(),
+            span: None,
+        }
+    }
+
+    fn http_block(
+        directives: Vec<(&str, Vec<ServerConfigurationDirectiveEntry>)>,
+    ) -> ServerConfigurationBlock {
+        block(vec![("http", entry(Vec::new(), Some(block(directives))))])
+    }
+
+    fn str_value(value: &str) -> ServerConfigurationValue {
+        ServerConfigurationValue::String(value.to_string(), None)
+    }
+
+    fn num(value: i64) -> ServerConfigurationValue {
+        ServerConfigurationValue::Number(value, None)
+    }
+
+    #[test]
+    fn host_http_block_inherits_unset_directives_from_global_block() {
+        let global = http_block(vec![
+            ("timeout", entry(vec![str_value("42s")], None)),
+            ("h2_max_concurrent_streams", entry(vec![num(7)], None)),
+        ]);
+        let host = http_block(vec![("protocols", entry(vec![str_value("h1")], None))]);
+
+        let options = resolve_http_connection_options(&global, &host).unwrap();
+
+        assert_eq!(
+            options.timeout,
+            Some(std::time::Duration::from_secs(42)),
+            "host block must inherit `timeout` from the global block"
+        );
+        assert_eq!(
+            options.h2.max_concurrent_streams,
+            Some(7),
+            "host block must inherit `h2_max_concurrent_streams` from the global block"
+        );
+        assert!(
+            options.protocols.http1 && !options.protocols.http2,
+            "host block must override `protocols`, got {:?}",
+            options.protocols
+        );
+    }
+
+    #[test]
+    fn host_http_block_overrides_directives_it_sets() {
+        let global = http_block(vec![("timeout", entry(vec![str_value("42s")], None))]);
+        let host = http_block(vec![("timeout", entry(vec![str_value("5s")], None))]);
+
+        let options = resolve_http_connection_options(&global, &host).unwrap();
+
+        assert_eq!(options.timeout, Some(std::time::Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn host_without_http_block_uses_global_block() {
+        let global = http_block(vec![("protocols", entry(vec![str_value("h2")], None))]);
+        let host = block(vec![("root", entry(vec![str_value("/srv")], None))]);
+
+        let options = resolve_http_connection_options(&global, &host).unwrap();
+
+        assert!(
+            options.protocols.http2 && !options.protocols.http1,
+            "expected the global `protocols` to apply, got {:?}",
+            options.protocols
+        );
+    }
+
+    #[test]
+    fn h2_max_frame_size_outside_protocol_range_is_rejected() {
+        for size in ["1", "16383", "16777216"] {
+            let block = http_block(vec![(
+                "h2_max_frame_size",
+                entry(vec![num(size.parse().unwrap())], None),
+            )]);
+            let err = resolve_http_connection_options(&block, &block).unwrap_err();
+            assert!(
+                err.to_string().contains("between 16384 and 16777215"),
+                "unexpected error for h2_max_frame_size {size}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn h2_max_frame_size_inside_protocol_range_is_accepted() {
+        for size in ["16384", "65536", "16777215"] {
+            let block = http_block(vec![(
+                "h2_max_frame_size",
+                entry(vec![num(size.parse().unwrap())], None),
+            )]);
+            let options = resolve_http_connection_options(&block, &block).unwrap();
+            assert_eq!(options.h2.max_frame_size, Some(size.parse().unwrap()));
+        }
+    }
+
+    #[test]
+    fn h2_initial_window_size_above_protocol_maximum_is_rejected() {
+        let block = http_block(vec![(
+            "h2_initial_window_size",
+            entry(vec![num(1_i64 << 31)], None),
+        )]);
+        let err = resolve_http_connection_options(&block, &block).unwrap_err();
+        assert!(
+            err.to_string().contains("between 0 and 2147483647"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn connection_options_without_any_http_block_use_defaults() {
+        let host = block(vec![("root", entry(vec![str_value("/srv")], None))]);
+
+        let options = resolve_http_connection_options(&host, &host).unwrap();
+
+        assert_eq!(options.timeout, Some(std::time::Duration::from_secs(300)));
+        assert!(options.protocols.http1 && options.protocols.http2);
     }
 }

@@ -16,6 +16,10 @@
 
 ### Changed
 
+#### HTTP server core
+
+- **`http` block inheritance**: a host block now inherits each global `http` directive that it does not set itself. Configurations that relied on a host block replacing the global `http` block see the global values apply again for directives the host omits.
+
 #### Gateway interfaces
 
 - **`REMOTE_ADDR` and `SERVER_ADDR` environment variables**: `REMOTE_ADDR` and `SERVER_ADDR` environment variables are now set to the canonical IPv4/IPv6 representation of the client and server IP addresses, respectively, so that they can be used for access control and logging consistently.
@@ -37,6 +41,9 @@
 - **Per-host `trace` and `trace_sampling` fix**: previously, `http { trace { generate, trust_request } }` and `http { trace_sampling ... }` were silently ignored in host blocks and were only read from the global block, so per-host trace-header trust and per-host sampling did not work. Ferron now resolves both from the matched host block, falling back to the global block.
 - **`protocol_proxy` fix**: previously, `http { protocol_proxy true }` in the global configuration block had no effect unless the configuration also had a host block without a hostname, and the `ferron doctor` check for it never ran. Ferron now reads the setting from the global `http` block or from the host block without a hostname, and reports the best-practice violation.
 - **`protocols` validation fix**: `ferron validate` did not check `http { protocols }` values because it looked for the directive in the enclosing block instead of the `http` block. Invalid values such as `h4` are now reported as a configuration error.
+- **`options_allowed_methods` fix**: the directive never reached the response. It lives inside the `http` block, but Ferron read it as a top-level directive of the resolved configuration, so every `OPTIONS *` response used the built-in default `Allow` list. `ferron validate` and `ferron doctor` accepted the directive, which made the failure silent.
+- **`http` block inheritance fix**: a host block that set any `http` directive replaced the whole global `http` block, so every global setting the host did not repeat was dropped. For example, a host that only set `timeout` lost the global `protocols`, `h1_enable_early_hints`, and HTTP/2 and HTTP/3 settings. Ferron now layers the two blocks per directive, matching how directives in every other block inherit.
+- **HTTP/2 setting range validation**: `h2_max_frame_size` and `h2_initial_window_size` accepted values outside the ranges that HTTP/2 requires, so Ferron could advertise a `SETTINGS` frame that conforming clients reject. `ferron validate` now reports these values.
 - **`h3_qpack_blocked_streams` usage fix**: the directive takes a stream count, but `ferron directives` reported it as a boolean flag.
 
 #### Observability

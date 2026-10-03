@@ -145,7 +145,7 @@ A per-host override applies to requests whose host matches the host block. A hos
   - This directive specifies the enabled HTTP protocols. Supported values are `h1` (HTTP/1.1), `h2` (HTTP/2), `h2c` (HTTP/2 over cleartext with prior knowledge), and `h3` (HTTP/3). Default: `protocols h1 h2 h3`
 
 - `options_allowed_methods <methods: string>`
-  - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests. Ferron returns the methods as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not to `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
+  - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests. Ferron returns the methods as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not to `OPTIONS /path` requests. The value supports [interpolated strings](/docs/configuration/fundamentals/conditionals). Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
 
 - `timeout <duration>`
   - This directive specifies the pipeline execution timeout. Accepts a duration string (for example, `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout "5m"` (5 minutes)
@@ -154,10 +154,10 @@ A per-host override applies to requests whose host matches the host block. A hos
   - This directive enables or disables HTTP/1.1 early hints support. For the `early_hints` block that sets the links, see [Response control](/docs/configuration/routing/response). Default: `h1_enable_early_hints false`
 
 - `h2_initial_window_size <size: integer>`
-  - This directive specifies the HTTP/2 initial flow-control window size. Default: unset
+  - This directive specifies the HTTP/2 initial flow-control window size. The value must be between `0` and `2147483647`. Default: unset
 
 - `h2_max_frame_size <size: integer>`
-  - This directive specifies the HTTP/2 maximum frame size. Default: unset
+  - This directive specifies the HTTP/2 maximum frame size. The value must be between `16384` and `16777215`. Default: unset
 
 - `h2_max_concurrent_streams <count: integer>`
   - This directive specifies the HTTP/2 maximum concurrent streams. Default: unset

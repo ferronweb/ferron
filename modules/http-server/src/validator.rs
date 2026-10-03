@@ -137,6 +137,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(http, used(sub), h2_max_concurrent_streams, args(1) => [ServerConfigurationValue::Number(_, _)]);
             validate_nested!(http, used(sub), h2_max_header_list_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
             validate_nested!(http, used(sub), h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            if let Err(e) = crate::server::validate_http_settings(Some(http)) {
+                return Err(
+                    ferron_core::config::validator::ConfigurationValidationError::from(e)
+                        .with_span(http.span.clone()),
+                );
+            }
 
             // HTTP/3 settings
             validate_nested!(http, used(sub), h3_qpack_max_table_capacity, args(1) => [ServerConfigurationValue::Number(_, _)]);

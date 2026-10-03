@@ -256,6 +256,55 @@ impl LayeredConfiguration {
         None
     }
 
+    /// Get the first value for a directive nested inside a named sub-block.
+    ///
+    /// Each layer stores its directives as a flat map, so a directive written
+    /// inside a block (for example `http { options_allowed_methods }`) is not
+    /// visible to [`get_value`](Self::get_value). This helper looks inside
+    /// `sub_block` while keeping the same layer precedence and inheritance
+    /// rules as `get_value`.
+    ///
+    /// # Arguments
+    ///
+    /// * `sub_block` -- Name of the block that holds the directive, for example `http`.
+    /// * `directive` -- The directive name to search for inside that block.
+    /// * `inherit` -- Same meaning as in [`get_value`](Self::get_value).
+    #[inline]
+    pub fn get_nested_value(
+        &self,
+        sub_block: &str,
+        directive: &str,
+        inherit: bool,
+    ) -> Option<&crate::config::ServerConfigurationValue> {
+        fn nested<'a>(
+            layer: &'a Arc<crate::config::ServerConfigurationBlock>,
+            sub_block: &str,
+            directive: &str,
+        ) -> Option<&'a crate::config::ServerConfigurationValue> {
+            layer
+                .directives
+                .get(sub_block)
+                .and_then(|entries| entries.last())
+                .and_then(|entry| entry.children.as_ref())
+                .and_then(|children| children.directives.get(directive))
+                .and_then(|entries| entries.last())
+                .and_then(|entry| entry.args.first())
+        }
+
+        for (i, layer) in self.layers.iter().enumerate().rev() {
+            if let Some(value) = nested(layer, sub_block, directive) {
+                return Some(value);
+            }
+            if !inherit && i < self.skip_noinherit_from {
+                return self.layers[..self.global_layer_count]
+                    .iter()
+                    .rev()
+                    .find_map(|layer| nested(layer, sub_block, directive));
+            }
+        }
+        None
+    }
+
     /// Value from global-scope layers only.
     #[inline]
     fn global_fallback_value(
@@ -355,6 +404,93 @@ mod tests {
             matchers: FxHashMap::default(),
             span: None,
         }
+    }
+
+    fn make_nested_block(
+        sub_block: &str,
+        directives: Vec<(&str, &str)>,
+    ) -> ServerConfigurationBlock {
+        let children = make_block(
+            directives
+                .into_iter()
+                .map(|(name, value)| (name, vec![value]))
+                .collect(),
+        );
+        let entry = ServerConfigurationDirectiveEntry {
+            args: Vec::new(),
+            children: Some(children),
+            span: None,
+        };
+        let mut map = FxHashMap::default();
+        map.insert(sub_block.to_string(), vec![entry]);
+        ServerConfigurationBlock {
+            directives: Arc::new(map),
+            matchers: FxHashMap::default(),
+            span: None,
+        }
+    }
+
+    #[test]
+    fn get_nested_value_finds_directive_inside_sub_block() {
+        let block = make_nested_block("http", vec![("timeout", "42s")]);
+
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(Arc::new(block));
+
+        assert_eq!(
+            layered
+                .get_nested_value("http", "timeout", true)
+                .and_then(|value| value.as_str()),
+            Some("42s")
+        );
+        // A flat lookup cannot see nested directives.
+        assert!(layered.get_value("timeout", true).is_none());
+    }
+
+    #[test]
+    fn get_nested_value_prefers_highest_priority_layer() {
+        let global = make_nested_block("http", vec![("timeout", "42s")]);
+        let host = make_nested_block("http", vec![("protocols", "h1")]);
+
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(Arc::new(global));
+        layered.mark_end_of_global_layers();
+        layered.add_layer(Arc::new(host));
+        layered.mark_current_skip_noinherit();
+
+        // The host does not set `timeout`, so the global value applies.
+        assert_eq!(
+            layered
+                .get_nested_value("http", "timeout", false)
+                .and_then(|value| value.as_str()),
+            Some("42s")
+        );
+        assert_eq!(
+            layered
+                .get_nested_value("http", "protocols", false)
+                .and_then(|value| value.as_str()),
+            Some("h1")
+        );
+        assert!(layered.get_nested_value("http", "missing", false).is_none());
+    }
+
+    #[test]
+    fn get_nested_value_higher_priority_layer_overrides() {
+        let global = make_nested_block("http", vec![("timeout", "42s")]);
+        let host = make_nested_block("http", vec![("timeout", "5s")]);
+
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(Arc::new(global));
+        layered.mark_end_of_global_layers();
+        layered.add_layer(Arc::new(host));
+        layered.mark_current_skip_noinherit();
+
+        assert_eq!(
+            layered
+                .get_nested_value("http", "timeout", false)
+                .and_then(|value| value.as_str()),
+            Some("5s")
+        );
     }
 
     #[test]
