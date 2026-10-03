@@ -4,6 +4,7 @@ mod common;
 mod admin;
 mod cross_plane;
 mod metrics;
+mod multi_sink;
 mod otlp_exemplars;
 mod otlp_grpc;
 mod otlp_http_json;

@@ -34,6 +34,7 @@
 #### Observability
 
 - **Baggage with `trust_request false` fix**: previously, when `trust_request false` was set, the server would still propagate baggage from incoming requests to outgoing requests. Now, baggage is not propagated when `trust_request false` is set.
+- **Host `observability` block fix**: previously, when specifying multiple `observability` blocks inside a host block with IP address or hostname, only the last one was effective. This has been fixed to use all `observability` blocks, just like with wildcard host blocks.
 
 #### Access control
 

@@ -575,6 +575,10 @@ impl BasicHttpModule {
 
             // Process observability using the config extractor (handles both explicit blocks and aliases)
             let observability_extractor = ObservabilityConfigExtractor::new(&host_config.1);
+            let mut observability_entries_map: rustc_hash::FxHashMap<
+                (Option<String>, Option<IpAddr>),
+                Vec<ObservabilityProviderEntry>,
+            > = Default::default();
             for observability_block in observability_extractor.extract_observability_blocks()? {
                 let observability_provider_name = observability_block
                     .get_value("provider")
@@ -616,7 +620,6 @@ impl BasicHttpModule {
                     let cp_metadata = cp_config.as_ref().map(|c| c.metadata.clone());
                     let cp_span_links = cp_config.as_ref().map(|c| c.span_links.clone());
 
-                    // Insert provider + config tuple into the resolver (sink initialization deferred)
                     let entry: ObservabilityProviderEntry = (
                         observability_provider,
                         observability_block_arc.clone(),
@@ -631,23 +634,25 @@ impl BasicHttpModule {
                         };
                         let _ = entry.0.execute(&mut context);
                     }
-                    match (&host_config.0.host, host_config.0.ip) {
-                        (Some(host), Some(ip)) => {
-                            observability_resolver.insert_ip_and_hostname(ip, host, vec![entry]);
-                        }
-                        (Some(host), None) => {
-                            observability_resolver.insert_hostname(host, vec![entry]);
-                        }
-                        (None, Some(ip)) => {
-                            observability_resolver.insert_ip(ip, vec![entry]);
-                        }
-                        (None, None) => {
-                            // Merge with global observability entries if they exist
-                            let existing_root = observability_resolver.root_data();
-                            let mut merged_entries = existing_root.unwrap_or_default();
-                            merged_entries.push(entry);
-                            observability_resolver.set_root_data(merged_entries);
-                        }
+                    observability_entries_map
+                        .entry((host_config.0.host.clone(), host_config.0.ip))
+                        .or_insert_with(|| Vec::new())
+                        .push(entry);
+                }
+            }
+            for (key, entry) in observability_entries_map {
+                match key {
+                    (Some(host), Some(ip)) => {
+                        observability_resolver.insert_ip_and_hostname(ip, &host, entry);
+                    }
+                    (Some(host), None) => {
+                        observability_resolver.insert_hostname(&host, entry);
+                    }
+                    (None, Some(ip)) => {
+                        observability_resolver.insert_ip(ip, entry);
+                    }
+                    (None, None) => {
+                        observability_resolver.set_root_data(entry);
                     }
                 }
             }
