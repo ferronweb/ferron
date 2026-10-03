@@ -414,11 +414,13 @@ pub fn resolve_request_trace_context(
 
     if generate_enabled {
         let mut context = trace_context::generate_traceparent(default_sampled);
-        context.baggage = request
-            .headers()
-            .get("baggage")
-            .and_then(|value| value.to_str().ok())
-            .map(str::to_owned);
+        if trust_request {
+            context.baggage = request
+                .headers()
+                .get("baggage")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned);
+        }
         return (Some(context), None);
     }
 

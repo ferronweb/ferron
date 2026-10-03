@@ -31,6 +31,10 @@
 - **Early hints header fix**: previously, when `early_hints` block was configured with multiple `Link` header values, only the last one would be sent in the response. This has been fixed to send all header values.
 - **Variable resolution fix**: previously, if Ferron cannot resolve a variable, it kept the placeholder as `name` (instead of documented `{{name}}`).
 
+#### Observability
+
+- **Baggage with `trust_request false` fix**: previously, when `trust_request false` was set, the server would still propagate baggage from incoming requests to outgoing requests. Now, baggage is not propagated when `trust_request false` is set.
+
 #### Access control
 
 - **`bcrypt` password hash fix**: Ferron 3.0.0-rc.8 added support for `bcrypt` password hashes, however it could not be used due to configuration validation errors. The validator has been now updated too.
