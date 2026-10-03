@@ -32,7 +32,7 @@ Configure access logs with `log` blocks inside host or global scopes:
 
 ```ferron
 example.com {
-    log access {
+    log access.log {
         format json
         fields method path status duration_secs
     }
@@ -85,7 +85,7 @@ The JSON formatter serializes each access log entry as a single-line JSON object
 
 ```ferron
 example.com {
-    log access {
+    log access.log {
         format json
     }
 }
@@ -116,7 +116,7 @@ By default, it uses the Enhanced Combined Log Format (ECLF). Ferron extends CLF 
 
 ```ferron
 example.com {
-    log access {
+    log access.log {
         format text
     }
 }
