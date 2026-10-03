@@ -425,15 +425,6 @@ In OTLP `log_style modern`, the `summary` field acts as the log body and Ferron 
 | `ferron.acme.lock_breaks_total`         | Counter | `ferron.acme.domains`, `ferron.acme.lock_key`                                     | Stale locks broken (crashed holder)          |
 | `ferron.tls.certificate_not_after`      | Gauge   | `ferron.host`, `ferron.tls.provider` (`acme`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
-### Trace spans
-
-The ACME HTTP-01 challenge stage sets the following attributes on its `ferron.stage.acme_http01` span:
-
-| Attribute                    | Type   | Description                       |
-| ---------------------------- | ------ | --------------------------------- |
-| `ferron.acme.domain`         | string | The domain that Ferron validates. |
-| `ferron.acme.challenge_type` | string | Challenge type (`http-01`).       |
-
 ## See also
 
 - [DNS providers](/docs/configuration/security/dns-providers): all supported DNS-01 provider backends and their configuration

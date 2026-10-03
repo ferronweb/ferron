@@ -24,6 +24,10 @@
 
 - **Forwarded header client IP canonicalization**: the client IP in `X-Forwarded-For` and `Forwarded` headers is now canonicalized to the standard IPv4/IPv6 representation, so that it can be used for access control and logging consistently.
 
+#### Automatic TLS
+
+- **Reduced span attribute noise**: request spans related to HTTP-01 challenge no longer include attributes that are not useful for observability, reducing noise in observability pipelines.
+
 ### Fixed
 
 #### HTTP server core
