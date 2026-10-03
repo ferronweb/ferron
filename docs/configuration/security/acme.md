@@ -122,7 +122,7 @@ Eager mode gets certificates at server startup, before any client traffic arrive
 
 ## On-demand mode
 
-On-demand mode defers certificate issuance until the first TLS handshake for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when you do not know the domains at startup.
+On-demand mode defers certificate issuance when doing the first TLS handshake for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when you do not know the domains at startup.
 
 ```ferron
 *.example.com {

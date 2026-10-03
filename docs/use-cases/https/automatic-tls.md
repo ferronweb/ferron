@@ -81,7 +81,7 @@ If you give only one path for `save`, the key path defaults to the certificate p
 
 ## Automatic TLS on demand
 
-Ferron can also get certificates on demand when a client accesses a hostname for the first time (`on_demand`). This helps multi-tenant setups where hostnames are not fully known in advance.
+Ferron can also get certificates on demand after a client accesses a hostname for the first time (`on_demand`). This helps multi-tenant setups where hostnames are not fully known in advance.
 
 When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferron calls the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
 
