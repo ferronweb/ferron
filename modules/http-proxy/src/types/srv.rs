@@ -128,7 +128,7 @@ pub async fn resolve_srv_inner(
                             dns_status: super::upstream::DnsResolutionStatus::Resolved,
                         });
 
-                        Some((upstream, srv_inner.priority, srv.weight))
+                        Some((upstream, srv.priority, srv.weight))
                     })
                     .collect();
 
