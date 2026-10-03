@@ -124,6 +124,7 @@ fuzz_target!(|input: &[u8]| {
             None, // tls_params
             None, // host_control_plane_metadata
             None, // host_control_plane_span_links
+            Arc::new(ferron_http_server::config::HttpTraceSettings::default()),
         )
         .await;
 
