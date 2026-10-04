@@ -2,16 +2,6 @@
 
 use ferron_core::config::layer::LayeredConfiguration;
 
-/// Returns `true` when `value` can be sent as an HTTP header value.
-///
-/// The result of this check is used as a response header value and as a
-/// `content-type` line inside a `multipart/byteranges` body, so a value that
-/// cannot survive header serialization must never reach either place.
-#[inline]
-pub fn is_valid_header_value(value: &str) -> bool {
-    http::HeaderValue::from_str(value).is_ok()
-}
-
 /// Get content type for a file path, respecting custom MIME type overrides.
 ///
 /// A `mime_type` mapping whose value cannot be serialized as an HTTP header is
@@ -30,7 +20,7 @@ pub fn get_content_type(path: &std::path::Path, config: &LayeredConfiguration) -
                     .map(|s| s.to_string())
                     .unwrap_or_default();
                 if key == ext_match || key == format!(".{ext_match}") {
-                    if is_valid_header_value(val) {
+                    if http::HeaderValue::from_str(val).is_ok() {
                         return Some(val.to_string());
                     }
                     ferron_core::log_warn!(
@@ -49,30 +39,4 @@ pub fn get_content_type(path: &std::path::Path, config: &LayeredConfiguration) -
         .map(|s| s.to_string())
         .unwrap_or_default();
     multi_mime_guess::lookup(&ext).map(|mime| mime.to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::is_valid_header_value;
-
-    #[test]
-    fn accepts_ordinary_media_types() {
-        assert!(is_valid_header_value("text/plain"));
-        assert!(is_valid_header_value("application/wasm"));
-        assert!(is_valid_header_value("text/plain; charset=utf-8"));
-    }
-
-    #[test]
-    fn rejects_header_injection() {
-        assert!(!is_valid_header_value("text/plain\r\nX-Injected: yes"));
-        assert!(!is_valid_header_value("text/plain\nX-Injected: yes"));
-        assert!(!is_valid_header_value("text/plain\r"));
-    }
-
-    #[test]
-    fn rejects_control_bytes() {
-        assert!(!is_valid_header_value("text/plain\u{1}"));
-        assert!(!is_valid_header_value("text/plain\u{7f}"));
-        assert!(!is_valid_header_value("text/plain\u{0}"));
-    }
 }

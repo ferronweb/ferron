@@ -85,7 +85,7 @@ impl Body for MultipartByterangeBody {
             if let Some(content_type) = self
                 .content_type
                 .as_deref()
-                .filter(|ct| crate::util::mime::is_valid_header_value(ct))
+                .filter(|ct| http::HeaderValue::from_str(ct).is_ok())
             {
                 multipart_head.push_str(&format!("content-type: {content_type}\r\n"));
             }

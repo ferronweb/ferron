@@ -6,32 +6,6 @@ use http::header::{self, HeaderValue};
 
 use crate::util::compression::COMP_SUFFIXES;
 
-/// Insert a header whose value comes from the configuration.
-///
-/// The value is operator supplied, so it can be unusable as a header even
-/// though the configuration validator reports it at load time. Skip it instead
-/// of asserting, because these maps are built while answering a request.
-#[inline]
-fn insert_configured(
-    header_map: &mut http::HeaderMap,
-    name: header::HeaderName,
-    value: Option<&str>,
-) {
-    let Some(value) = value else {
-        return;
-    };
-    match HeaderValue::from_str(value) {
-        Ok(parsed) => {
-            header_map.insert(name, parsed);
-        }
-        Err(_) => {
-            ferron_core::log_warn!(
-                "Omitting the `{name}` response header: the configured value is not a valid header value"
-            );
-        }
-    }
-}
-
 /// Build a header map with ETag and Vary headers.
 pub fn build_etag_header_map(
     etag: Option<&str>,
@@ -49,8 +23,12 @@ pub fn build_etag_header_map(
     if let Some(v) = vary {
         header_map.insert(header::VARY, v);
     }
-    insert_configured(&mut header_map, header::CONTENT_TYPE, content_type);
-    insert_configured(&mut header_map, header::CACHE_CONTROL, cache_control);
+    if let Some(content_type) = content_type.and_then(|ct| HeaderValue::from_str(ct).ok()) {
+        header_map.insert(header::CONTENT_TYPE, content_type);
+    }
+    if let Some(cache_control) = cache_control.and_then(|cc| HeaderValue::from_str(cc).ok()) {
+        header_map.insert(header::CACHE_CONTROL, cache_control);
+    }
     header_map
 }
 
@@ -71,8 +49,12 @@ pub fn build_last_modified_header_map(
     if let Some(v) = vary {
         header_map.insert(header::VARY, v);
     }
-    insert_configured(&mut header_map, header::CONTENT_TYPE, content_type);
-    insert_configured(&mut header_map, header::CACHE_CONTROL, cache_control);
+    if let Some(content_type) = content_type.and_then(|ct| HeaderValue::from_str(ct).ok()) {
+        header_map.insert(header::CONTENT_TYPE, content_type);
+    }
+    if let Some(cache_control) = cache_control.and_then(|cc| HeaderValue::from_str(cc).ok()) {
+        header_map.insert(header::CACHE_CONTROL, cache_control);
+    }
     header_map
 }
 

@@ -813,13 +813,7 @@ async fn request_handler_inner(
             .get_nested_value("http", "options_allowed_methods", false)
             .and_then(|v| v.as_string_with_interpolations(&ctx))
             .filter(|value| http::HeaderValue::from_str(value).is_ok())
-            .unwrap_or_else(|| {
-                ferron_core::log_warn!(
-                    "Ignoring `options_allowed_methods`: the resolved value is not a valid \
-                     `Allow` header value"
-                );
-                DEFAULT_OPTIONS_ALLOWED_METHODS.to_string()
-            });
+            .unwrap_or_else(|| DEFAULT_OPTIONS_ALLOWED_METHODS.to_owned());
 
         let response = Response::builder()
             .status(200)

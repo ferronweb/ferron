@@ -186,7 +186,7 @@ fn validate_control_plane_directives(
                         if let Some(sampled_entry) = sampled_entries.first() {
                             if !matches!(
                                 sampled_entry.args.first(),
-                                Some(ServerConfigurationValue::Boolean(_, _))
+                                Some(ServerConfigurationValue::Boolean(_, _)) | None
                             ) {
                                 ctx.diagnostics.push(ctx.create_diagnostic(
                                     crate::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,

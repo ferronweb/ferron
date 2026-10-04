@@ -103,30 +103,6 @@ fn respond_with_httpresponse(
     Ok(false)
 }
 
-/// Complete a response builder whose headers may carry configuration values.
-///
-/// Returns `None` when a header value that the HTTP crate rejects makes the
-/// response unbuildable. Configuration values are validated when Ferron loads
-/// the configuration, and header values derived from them are validated where
-/// they are produced, so this is a last-resort path. Report it as a server
-/// error rather than panicking the request and dropping the connection.
-#[inline]
-fn finish_response(
-    builder: http::response::Builder,
-    body: UnsyncBoxBody<Bytes, io::Error>,
-) -> Option<Response<UnsyncBoxBody<Bytes, io::Error>>> {
-    match builder.body(body) {
-        Ok(response) => Some(response),
-        Err(error) => {
-            ferron_core::log_error!(
-                "Static file response rejected a header value: {error}. Check the configured \
-                 `mime_type` and `file_cache_control` values."
-            );
-            None
-        }
-    }
-}
-
 /// Answer a request whose static file response could not be built.
 #[inline]
 fn respond_with_build_failure(
@@ -412,10 +388,9 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     .unwrap_or_else(|_| HeaderValue::from_static("")),
                             );
                         }
-                        let Some(response) = finish_response(
-                            builder,
-                            Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
-                        ) else {
+                        let Ok(response) =
+                            builder.body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                        else {
                             return respond_with_build_failure(ctx, request);
                         };
                         ctx.http.req = Some(request);
@@ -457,10 +432,9 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     .unwrap_or_else(|_| HeaderValue::from_static("")),
                             );
                         }
-                        let Some(response) = finish_response(
-                            builder,
-                            Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
-                        ) else {
+                        let Ok(response) =
+                            builder.body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                        else {
                             return respond_with_build_failure(ctx, request);
                         };
                         ctx.http.req = Some(request);
@@ -646,8 +620,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 builder = builder.header(header::VARY, vary);
 
                                 if method == Method::HEAD {
-                                    let Some(response) = finish_response(
-                                        builder,
+                                    let Ok(response) = builder.body(
                                         Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
                                     ) else {
                                         return respond_with_build_failure(ctx, request);
@@ -668,7 +641,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         FileStream::new(file, 0, Some(file_length)),
                                     )
                                     .boxed_unsync();
-                                    let Some(response) = finish_response(builder, body) else {
+                                    let Ok(response) = builder.body(body) else {
                                         return respond_with_build_failure(ctx, request);
                                     };
                                     return respond_with_httpresponse(
@@ -713,8 +686,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 builder = builder.header(header::VARY, vary);
 
                                 if method == Method::HEAD {
-                                    let Some(response) = finish_response(
-                                        builder,
+                                    let Ok(response) = builder.body(
                                         Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
                                     ) else {
                                         return respond_with_build_failure(ctx, request);
@@ -732,7 +704,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                             .map_ok(Frame::data),
                                     )
                                     .boxed_unsync();
-                                    let Some(response) = finish_response(builder, body) else {
+                                    let Ok(response) = builder.body(body) else {
                                         return respond_with_build_failure(ctx, request);
                                     };
                                     return respond_with_httpresponse(
@@ -890,10 +862,9 @@ impl Stage<HttpFileContext> for StaticFileStage {
         }
 
         if method == Method::HEAD {
-            let Some(response) = finish_response(
-                builder,
-                Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
-            ) else {
+            let Ok(response) =
+                builder.body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+            else {
                 return respond_with_build_failure(ctx, request);
             };
             ctx.http.req = Some(request);
@@ -947,7 +918,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         };
 
-        let Some(mut response) = finish_response(builder, body) else {
+        let Ok(mut response) = builder.body(body) else {
             return respond_with_build_failure(ctx, request);
         };
 

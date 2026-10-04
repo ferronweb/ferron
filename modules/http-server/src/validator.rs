@@ -121,11 +121,9 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                     _ => None,
                 }) {
                     if http::HeaderValue::from_str(value).is_err() {
-                        ctx.diagnostics.push(ctx.create_diagnostic(
-                            ferron_core::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                        return Err(ferron_core::config::validator::ConfigurationValidationError::from(
                             "`options_allowed_methods` value is not a valid `Allow` header value; it must not contain control bytes or line breaks",
-                            span.clone(),
-                        ));
+                        ).with_span(span.clone()));
                     }
                 }
             }

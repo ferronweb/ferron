@@ -135,10 +135,9 @@ impl ControlPlaneConfig {
                 .unwrap_or("")
                 .to_string();
 
-            let sampled = children
-                .get_value("sampled")
-                .and_then(|v| v.as_boolean())
-                .unwrap_or(false);
+            // `sampled` is a boolean flag, so the bare directive form means
+            // `true`, the same as every other boolean directive.
+            let sampled = children.get_flag("sampled");
 
             let mut attributes = BTreeMap::new();
             if let Some(attrs_entries) = children.directives.get("attributes") {

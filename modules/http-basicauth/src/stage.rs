@@ -112,11 +112,7 @@ impl BasicAuthStage {
                 headers.insert(header_name, value);
             }
             Err(_) => {
-                ferron_core::log_error!(
-                    "Omitting the `{}` response header: the configured `realm` makes the \
-                     authentication challenge invalid",
-                    header_name
-                );
+                // The configured `realm` makes the authentication challenge invalid.
             }
         }
 
