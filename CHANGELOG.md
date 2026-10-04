@@ -60,6 +60,7 @@
 - **Baggage with `trust_request false` fix**: previously, when `trust_request false` was set, the server would still propagate baggage from incoming requests to outgoing requests. Now, baggage is not propagated when `trust_request false` is set.
 - **Host `observability` block fix**: previously, when specifying multiple `observability` blocks inside a host block with IP address or hostname, only the last one was effective. This has been fixed to use all `observability` blocks, just like with wildcard host blocks.
 - **Prometheus scrape metrics fix**: the `ferron_prometheus_scrape_total` and `ferron_prometheus_scrape_errors_total` metrics have been renamed to `ferron_prometheus_scrape` and `ferron_prometheus_scrape_errors`, respectively (previous behavior would involve `_total_total` suffix).
+- **Circuit breaker metric types fix**: `ferron.proxy.circuit.open_total` and `ferron.proxy.circuit.half_open_timeouts` were reported with a signed value on a counter metric. No observability backend supports that combination, so both metrics were silently dropped and never reached Prometheus or OTLP. `open_total` now reports as a gauge that rises when a circuit opens and falls when it closes or moves to HalfOpen, and `half_open_timeouts` reports as an unsigned counter.
 - **Prometheus exporter histogram buckets fix**: previously, metric-specific histogram buckets were ignored, leading to default histogram buckets being used instead and possible incorrect bucket values being reported.
 
 #### Access control
