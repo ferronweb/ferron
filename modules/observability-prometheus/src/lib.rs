@@ -315,14 +315,14 @@ fn init_provider(
 
     let scrape_total = Counter::default();
     registry.register(
-        "ferron_prometheus_scrape_total",
+        "ferron_prometheus_scrape",
         "Total number of Prometheus scrape requests",
         scrape_total.clone(),
     );
 
     let scrape_errors = Counter::default();
     registry.register(
-        "ferron_prometheus_scrape_errors_total",
+        "ferron_prometheus_scrape_errors",
         "Total number of failed Prometheus scrape requests",
         scrape_errors.clone(),
     );
