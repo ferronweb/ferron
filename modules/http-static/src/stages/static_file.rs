@@ -521,60 +521,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         let mut file_path = ctx.file_path.clone();
         let mut file_length = metadata.len();
-        let mut is_precompressed_file = false;
-
-        if precompressed {
-            for ext in precompressed_exts {
-                if !ext.is_empty() {
-                    let mut precomp_path = ctx.file_path.clone();
-                    if let Some(orig_ext) = ctx.file_path.extension() {
-                        let orig_ext_str = orig_ext.to_string_lossy();
-                        let new_ext = format!("{}.{}", orig_ext_str, ext);
-                        precomp_path.set_extension(new_ext);
-                    } else {
-                        precomp_path.set_extension(ext);
-                    }
-
-                    if let Ok(file) = ReusedFile::open_with_symlink_mode(
-                        &precomp_path,
-                        &ctx.file_root,
-                        file.symlink_mode(),
-                    )
-                    .await
-                    {
-                        if let Ok(meta) = file.metadata() {
-                            if meta.is_file() {
-                                ctx.get_span_attributes().insert(
-                                    "ferron.static.file_path_precompressed",
-                                    TraceAttributeValue::String(
-                                        precomp_path.to_string_lossy().to_string(),
-                                    ),
-                                );
-                                custom_access_log_fields(&mut ctx.http).insert(
-                                    "ferron.static.file_path_precompressed".into(),
-                                    CustomAccessLogField::String(
-                                        precomp_path.to_string_lossy().to_string(),
-                                    ),
-                                );
-                                file_path = precomp_path;
-                                file_length = meta.len();
-                                is_precompressed_file = true;
-                                used_compression = Compression::from_precompressed_ext(ext);
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    used_compression = Compression::Identity;
-                    break;
-                }
-            }
-        }
-
-        ctx.get_span_attributes().insert(
-            "ferron.static.precompressed",
-            TraceAttributeValue::Bool(is_precompressed_file),
-        );
 
         // Handle If-Range (RFC 7233 section 3.2)
         // If-Range is ignored when If-Match or If-Unmodified-Since is present
@@ -811,6 +757,61 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 }
             }
         }
+
+        let mut is_precompressed_file = false;
+
+        if precompressed {
+            for ext in precompressed_exts {
+                if !ext.is_empty() {
+                    let mut precomp_path = ctx.file_path.clone();
+                    if let Some(orig_ext) = ctx.file_path.extension() {
+                        let orig_ext_str = orig_ext.to_string_lossy();
+                        let new_ext = format!("{}.{}", orig_ext_str, ext);
+                        precomp_path.set_extension(new_ext);
+                    } else {
+                        precomp_path.set_extension(ext);
+                    }
+
+                    if let Ok(file) = ReusedFile::open_with_symlink_mode(
+                        &precomp_path,
+                        &ctx.file_root,
+                        file.symlink_mode(),
+                    )
+                    .await
+                    {
+                        if let Ok(meta) = file.metadata() {
+                            if meta.is_file() {
+                                ctx.get_span_attributes().insert(
+                                    "ferron.static.file_path_precompressed",
+                                    TraceAttributeValue::String(
+                                        precomp_path.to_string_lossy().to_string(),
+                                    ),
+                                );
+                                custom_access_log_fields(&mut ctx.http).insert(
+                                    "ferron.static.file_path_precompressed".into(),
+                                    CustomAccessLogField::String(
+                                        precomp_path.to_string_lossy().to_string(),
+                                    ),
+                                );
+                                file_path = precomp_path;
+                                file_length = meta.len();
+                                is_precompressed_file = true;
+                                used_compression = Compression::from_precompressed_ext(ext);
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    used_compression = Compression::Identity;
+                    break;
+                }
+            }
+        }
+
+        ctx.get_span_attributes().insert(
+            "ferron.static.precompressed",
+            TraceAttributeValue::Bool(is_precompressed_file),
+        );
 
         let mut builder = Response::builder()
             .status(StatusCode::OK)
