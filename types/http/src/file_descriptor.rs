@@ -262,7 +262,46 @@ impl ReusedFile {
         mode: SymlinkMode,
     ) -> io::Result<zincio::fs::File> {
         check_symlinks_in_path(path, root, mode).await?;
-        zincio::fs::File::open(path).await
+
+        #[allow(unused_mut)]
+        let mut file_result = zincio::fs::File::open(path).await;
+
+        #[cfg(windows)]
+        if file_result
+            .as_ref()
+            .is_err_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied)
+        {
+            // On Windows, zincio::fs::File::open is basically equivalent to std::fs::File::open
+            // The reason why there's custom logic is that zincio::fs::File would be permission
+            // denied when done on a directory.
+
+            let filename_hstring = windows::core::HSTRING::from(path);
+            // SAFETY: correct parameters (?) for opening a directory with CreateFileW
+            let h_dir_result = unsafe {
+                windows::Win32::Storage::FileSystem::CreateFileW(
+                    &filename_hstring,
+                    windows::Win32::Storage::FileSystem::FILE_LIST_DIRECTORY.0,
+                    windows::Win32::Storage::FileSystem::FILE_SHARE_READ
+                        | windows::Win32::Storage::FileSystem::FILE_SHARE_WRITE
+                        | windows::Win32::Storage::FileSystem::FILE_SHARE_DELETE,
+                    None,
+                    windows::Win32::Storage::FileSystem::OPEN_EXISTING,
+                    windows::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS,
+                    None,
+                )
+            };
+            if let Ok(h_dir) = h_dir_result {
+                use std::os::windows::io::FromRawHandle;
+
+                // SAFETY: h_dir.0 is a valid just-opened handle.
+                let std_file = unsafe { std::fs::File::from_raw_handle(h_dir.0) };
+                // Directory handles can be used with IOCP
+                // (and zincio::fs::File on Windows would use IOCP as well)
+                file_result = zincio::fs::File::from_std(std_file);
+            }
+        }
+
+        file_result
     }
 
     #[inline]

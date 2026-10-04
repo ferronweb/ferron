@@ -21,6 +21,11 @@ urlencoding = "2.1.3"
 ferron-observability = { path = "../../types/observability" }
 ferron-core = { path = "../../core" }
 
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+  "Win32_Storage_FileSystem"
+]}
+
 [features]
 util = []
 abuse = []

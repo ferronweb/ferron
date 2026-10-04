@@ -88,6 +88,7 @@
 - **`If-Modified-Since` and `If-Unmodified-Since` malformed date fix**: the server now ignores malformed date values in `If-Modified-Since` and `If-Unmodified-Since` request headers instead of responding with a 400 (Bad Request) error.
 - **HTTP range `bytes=-0` fix**: the server now correctly handles `bytes=-0` range requests, treating them as unsatisfiable (416) instead of invalid syntax (ignored).
 - **ETag + Date conditional request precedence fix**: previously, `If-Modified-Since` was evaluated even if `If-None-Match` was present, which could lead to incorrect behavior. Similar happened with `If-Unmodified-Since` and `If-Match`.
+- **Windows directory listing fix**: previously, the server would respond with a 403 Forbidden response when trying to access a directory from HTTP client when the server is running on Windows, even when the directory listings are enabled. ([GitHub issue](https://github.com/ferronweb/ferron/issues/962))
 
 #### HTTP compression
 

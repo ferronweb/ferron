@@ -1379,6 +1379,7 @@ dependencies = [
  "rustls-pki-types",
  "typemap_rev",
  "urlencoding",
+ "windows",
  "zincio",
 ]
 
