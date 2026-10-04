@@ -440,7 +440,7 @@ setup_env_musl() {
 	log_info "  Sysroot: ${sysroot}"
 
 	# Use clang for musl targets (matches the project's Dockerfile approach)
-	if ! command -v clang &>/dev/null; then
+	if ! command -v "${clang}" &>/dev/null; then
 		log_error "clang not found. Required for musl targets."
 		log_error "Install clang:"
 		log_error "  Arch:       sudo pacman -S clang"
