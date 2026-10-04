@@ -176,11 +176,9 @@ Ferron reuses file handles (and I/O errors) for static file responses to reduce 
 
 #### Static file serving
 
-| Metric                       | Type      | Attributes                                                                                                               | Description                                                                       |
-| ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `ferron.static.files_served` | Counter   | `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`) | Number of static files served                                                     |
-| `ferron.static.bytes_sent`   | Histogram | `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`) | Bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB |
-| `ferron.static.responses`    | Counter   | `http.response.status.code` (HTTP response status code), `ferron.static.outcome` (static file serving outcome)           | Static-file responses across normal, conditional, range, and error paths          |
+| Metric | Type | Attributes | Description |
+| ---------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | |
+| `ferron.static.responses` | Counter | `http.response.status.code` (HTTP response status code), `ferron.static.outcome` (static file serving outcome) | Static-file responses across normal, conditional, range, and error paths |
 
 ### Access log fields
 

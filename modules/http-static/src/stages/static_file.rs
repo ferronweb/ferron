@@ -1,6 +1,5 @@
 //! Static file serving stage with streaming I/O and optional zerocopy.
 
-use std::borrow::Cow;
 use std::io;
 
 use async_trait::async_trait;
@@ -22,15 +21,6 @@ use http::{HeaderMap, Method, Response, StatusCode};
 use http_body::Frame;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Empty, StreamBody};
-
-static STATIC_FILE_BYTES_BUCKETS: &[f64] = &[
-    1024.0,
-    10240.0,
-    102400.0,
-    1048576.0,
-    10485760.0,
-    104857600.0,
-];
 
 use crate::util::compression::{
     compress_streaming_brotli, compress_streaming_deflate, compress_streaming_gzip,
@@ -937,42 +927,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
         emit_static_response_metric(ctx, 200, "full");
         ctx.get_span_attributes()
             .insert("http.response.status_code", TraceAttributeValue::I64(200));
-
-        let compression_label = used_compression.header_value().unwrap_or("identity");
-        let cache_hit = is_precompressed_file;
-        let file_size = file_length;
-
-        ctx.http.events.emit(Event::Metric(MetricEvent {
-            name: "ferron.static.files_served",
-            attributes: vec![
-                (
-                    "ferron.compression",
-                    MetricAttributeValue::String(compression_label.to_string()),
-                ),
-                ("ferron.cache_hit", MetricAttributeValue::Bool(cache_hit)),
-            ],
-            ty: MetricType::Counter,
-            value: MetricValue::U64(1),
-            unit: Some("{file}"),
-            description: Some("Number of static files served."),
-            trace_context: current_event_trace_context(&ctx.http),
-        }));
-
-        ctx.http.events.emit(Event::Metric(MetricEvent {
-            name: "ferron.static.bytes_sent",
-            attributes: vec![
-                (
-                    "ferron.compression",
-                    MetricAttributeValue::String(compression_label.to_string()),
-                ),
-                ("ferron.cache_hit", MetricAttributeValue::Bool(cache_hit)),
-            ],
-            ty: MetricType::Histogram(Some(Cow::Borrowed(STATIC_FILE_BYTES_BUCKETS))),
-            value: MetricValue::F64(file_size as f64),
-            unit: Some("By"),
-            description: Some("Bytes sent for static file responses."),
-            trace_context: current_event_trace_context(&ctx.http),
-        }));
 
         Ok(false)
     }
