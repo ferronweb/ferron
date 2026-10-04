@@ -543,7 +543,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "ferron-core"
-version = "3.0.0-rc.8"
+version = "3.0.0-rc.9"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -590,7 +590,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http"
-version = "3.0.0-rc.8"
+version = "3.0.0-rc.9"
 dependencies = [
  "bytes",
  "cidr",
@@ -612,7 +612,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-cache"
-version = "3.0.0-rc.8"
+version = "3.0.0-rc.9"
 dependencies = [
  "ahash",
  "async-trait",
@@ -646,7 +646,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-proxy"
-version = "3.0.0-rc.8"
+version = "3.0.0-rc.9"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -684,7 +684,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-ratelimit"
-version = "3.0.0-rc.8"
+version = "3.0.0-rc.9"
 dependencies = [
  "async-trait",
  "bytes",
@@ -703,7 +703,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-server"
-version = "3.0.0-rc.8"
+version = "3.0.0-rc.9"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability"
-version = "3.0.0-rc.8"
+version = "3.0.0-rc.9"
 dependencies = [
  "async-channel",
  "ferron-core",
@@ -752,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-otlp"
-version = "3.0.0-rc.8"
+version = "3.0.0-rc.9"
 dependencies = [
  "async-channel",
  "base64 0.23.1",
@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls"
-version = "3.0.0-rc.8"
+version = "3.0.0-rc.9"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
