@@ -23,7 +23,8 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
       >> /etc/apt/sources.list.d/llvm.list && \
     apt update && DEBIAN_FRONTEND=noninteractive \
     apt install -y debootstrap clang-23 lld-23 libclang-23-dev wrk \
-    nghttp2-client openssl python3 llvm-23 qemu-user-static cmake curl && \
+    nghttp2-client openssl python3 llvm-23 qemu-user-static cmake curl \
+    clang-19 lld-19 libclang-19-dev llvm && \
     cargo install bindgen-cli
 
 # Install the right Rust target
@@ -84,10 +85,12 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     if [ "${NOPGO}" != "1" ] && ([ "$TARGET_TRIPLE" = "x86_64-unknown-linux-musl" ] \
         || [ "$TARGET_TRIPLE" = "aarch64-unknown-linux-musl" ]); then \
       BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
+      CLANG="clang-23" CLANGXX="clang++-23" LLVM_PROFDATA="llvm-profdata-23" \
       ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG --pgo; \
     else \
       # These targets would fail with PGO, due to missing libprofiler_builtins
       BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
+      CLANG="clang-23" CLANGXX="clang++-23" LLVM_PROFDATA="llvm-profdata-23" \
       ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG; \
     fi && \
     # Copy executables out of the cache
