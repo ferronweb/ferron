@@ -7,6 +7,7 @@ mod grpc;
 mod lb;
 mod priority;
 mod proxy_cache;
+mod proxy_circuit_breaker_half_open_timeout;
 mod proxy_circuit_breaker_latency;
 mod proxy_circuit_breaker_slow_start;
 mod proxy_circuit_breaker_status_code;
