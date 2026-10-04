@@ -392,6 +392,14 @@ fn determine_compression(accept_encoding: Option<&str>) -> Compression {
         return Compression::Identity;
     };
 
+    if accept_encoding == "*" {
+        for penc in PREFERRED_CONTENT_ENCODING {
+            if let Some(compression) = Compression::from_header_value(penc) {
+                return compression;
+            }
+        }
+    }
+
     for enc in parse_q_value_header_grouped(accept_encoding) {
         for penc in PREFERRED_CONTENT_ENCODING {
             if enc.contains(*penc) {

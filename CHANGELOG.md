@@ -73,6 +73,7 @@
 #### HTTP compression
 
 - **304 Not Modified fix**: HTTP dynamic content compression is no longer applicable for 304 (Not Modified) HTTP responses.
+- **`Accept-Encoding` wildcard fix**: the server now correctly handles `Accept-Encoding: *` request headers, selecting the most appropriate compression algorithm from the server's supported ones.
 
 #### Reverse proxying
 

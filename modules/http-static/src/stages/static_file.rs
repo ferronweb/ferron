@@ -471,7 +471,17 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     .get(header::ACCEPT_ENCODING)
                     .and_then(|h| h.to_str().ok())
                 {
-                    for enc in parse_q_value_header_grouped(accept_enc) {
+                    // Had to use Box<dyn Iterator>, since impl Iterator wouldn't be allowed
+                    // in value bindings...
+                    let encs: Box<dyn Iterator<Item = std::collections::BTreeSet<String>>> =
+                        if accept_enc == "*" {
+                            Box::new(std::iter::once(std::collections::BTreeSet::from_iter(
+                                PREFERRED_CONTENT_ENCODING.iter().map(|s| (*s).to_owned()),
+                            )))
+                        } else {
+                            Box::new(parse_q_value_header_grouped(accept_enc).into_iter())
+                        };
+                    for enc in encs {
                         let mut compression_found = false;
                         for penc in PREFERRED_CONTENT_ENCODING {
                             if enc.contains(*penc) {
