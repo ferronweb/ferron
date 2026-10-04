@@ -134,7 +134,34 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         .and_then(|r| r.map_err(|e| PipelineError::custom(e.to_string())))?;
 
         let maindesc_path = ctx.file_path.join(".maindesc");
-        let description = zincio::fs::read_to_string(&maindesc_path).await.ok();
+        let description = {
+            let maindesc_file = ferron_http::file_descriptor::ReusedFile::open_with_symlink_mode(
+                &maindesc_path,
+                &ctx.file_root,
+                file.symlink_mode(),
+            )
+            .await;
+            if let Ok(description) = maindesc_file {
+                // Custom .read_to_string() loop...
+                let mut buf: Vec<u8> = Vec::new();
+                let mut total_read: u64 = 0;
+                loop {
+                    let temp_buf = vec![0u8; 4096];
+                    let (read, mut read_buf) = description.read_at(temp_buf, total_read).await;
+                    let Ok(read) = read else {
+                        break None;
+                    };
+                    if read == 0 {
+                        break String::from_utf8(buf).ok();
+                    }
+                    read_buf.truncate(read);
+                    buf.extend(read_buf);
+                    total_read += read as u64;
+                }
+            } else {
+                None
+            }
+        };
 
         let request_path = (ctx.http.original_uri.as_ref().unwrap_or(request.uri())).path();
 
