@@ -169,7 +169,12 @@ impl ProxyState {
     ///
     /// If a task is already running for this config, does nothing.
     #[inline]
-    fn ensure_health_check_task(&self, config_keys: &[usize], upstreams: &[Upstream]) {
+    fn ensure_health_check_task(
+        &self,
+        config_keys: &[usize],
+        upstreams: &[Upstream],
+        event_sink: ferron_observability::CompositeEventSink,
+    ) {
         if self.health_check_tasks.contains_key(config_keys) {
             return;
         }
@@ -183,9 +188,11 @@ impl ProxyState {
             return;
         }
 
-        let (runtime_handle, event_sink) = match runtime_handle::try_get_secondary_runtime_handle()
-        {
-            Some(h) => h,
+        // Only the runtime handle comes from the module level accessor. Probe
+        // metrics use the sink of the host that owns the upstream, so a host
+        // that configures its own observability providers receives them.
+        let runtime_handle = match runtime_handle::try_get_secondary_runtime_handle() {
+            Some((handle, _)) => handle,
             None => {
                 ferron_core::log_warn!(
                     "Health check task not spawned — secondary runtime not yet available"
@@ -209,7 +216,7 @@ impl ProxyState {
                     *guard.entry(url.to_string()).or_insert(0) += 1;
                 })),
                 &runtime_handle,
-                event_sink,
+                Arc::new(event_sink),
             );
 
             task.abort_handle()

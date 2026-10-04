@@ -80,9 +80,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         };
 
-        // Spawn health check task for this config if needed
+        // Spawn health check task for this config if needed. The task reports
+        // through the sink of the host that owns the upstream.
         self.state
-            .ensure_health_check_task(&config_key, &config.upstreams);
+            .ensure_health_check_task(&config_key, &config.upstreams, ctx.events.clone());
 
         self.state.metrics_resolved_ip.store(
             config.metrics_resolved_ip,

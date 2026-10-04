@@ -729,6 +729,9 @@ This prevents retry storms. When multiple backends fail simultaneously, the retr
 | `ferron.proxy.dns.cache_entries`               | Gauge     | None                                                                                                                                                                                                                               | Number of active entries in the DNS cache                                                                                                                                                                                |
 | `ferron.proxy.upstream.response_truncated`     | Counter   | backend URL or unix socket path                                                                                                                                                                                                    | Upstream responses that ended before the declared Content-Length                                                                                                                                                         |
 
+> [!note]
+> The connection pool and DNS result cache are process wide, so `ferron.proxy.pool.*` and `ferron.proxy.dns.cache_*` are reported once for the whole server. They reach an observability backend only when the backend is configured in the global block. A provider configured inside a host block receives the per-request proxy metrics, the active health check probe metrics, and the circuit breaker metrics for that host, but not the process wide pool and DNS cache metrics.
+
 ### Logs
 
 - **`ERROR`**: Ferron logs this when a proxy setup error occurs during parsing. The message includes the error details.
