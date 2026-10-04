@@ -23,19 +23,19 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
         let is_global = ctx.is_global;
         let used_directives = &mut ctx.used_directives;
         if is_global {
-            if let Some(entries) = config.directives.get("concurrent_conns") {
-                used_directives.insert("concurrent_conns".to_string());
+            if let Some(entries) = config.directives.get("proxy_concurrent_conns") {
+                used_directives.insert("proxy_concurrent_conns".to_string());
                 for e in entries {
                     if let Some(val) = e.args.first().and_then(|v| v.as_number()) {
                         if val < 0 {
                             return Err(ConfigurationValidationError::from(
-                                "Invalid `concurrent_conns` — must be non-negative",
+                                "Invalid `proxy_concurrent_conns` — must be non-negative",
                             )
                             .with_span(entry_span(e)));
                         }
                     } else {
                         return Err(ConfigurationValidationError::from(
-                            "Invalid `concurrent_conns` — expected a number",
+                            "Invalid `proxy_concurrent_conns` — expected a number",
                         )
                         .with_span(entry_span(e)));
                     }
@@ -111,10 +111,6 @@ fn validate_proxy_block(
         sub.insert("request_header".to_string());
     }
     validate_request_header(block)?;
-    if block.directives.contains_key("proxy_concurrent_conns") {
-        sub.insert("proxy_concurrent_conns".to_string());
-    }
-    validate_number(block, "proxy_concurrent_conns", 0)?;
     validate_upstream_directives(block, ctx, &mut sub)?;
     validate_srv_directives(block, ctx, &mut sub)?;
 
