@@ -269,10 +269,6 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
                 .map(|s| s.to_string())
         }
         // Fallback to custom variables in the HashMap (e.g., request.path_info)
-        n => ctx
-            .variables
-            .get(n)
-            .cloned()
-            .or_else(|| Some(format!("{{{{{name}}}}}"))),
+        n => ctx.variables.get(n).cloned(),
     }
 }

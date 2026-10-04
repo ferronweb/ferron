@@ -509,11 +509,9 @@ fn affinity_source(affinity: &CanaryAffinity) -> &'static str {
 /// Detect variable names that `resolve_variable` left unresolved (it echoes
 /// the name itself as a fallback for custom variables).
 #[inline]
-fn is_unresolved(value: &str, affinity: &CanaryAffinity, ctx: &HttpContext) -> bool {
+fn is_unresolved(_value: &str, affinity: &CanaryAffinity, ctx: &HttpContext) -> bool {
     match affinity {
-        CanaryAffinity::Hash(variable) => {
-            value == format!("{{{{{variable}}}}}") && !ctx.variables.contains_key(variable)
-        }
+        CanaryAffinity::Hash(variable) => !ctx.variables.contains_key(variable),
         _ => false,
     }
 }
