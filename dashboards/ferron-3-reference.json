@@ -1175,7 +1175,7 @@
     },
     {
       "type": "row",
-      "title": "Edge cache: hits, evictions, DNS cache, egress",
+      "title": "Edge cache: hits, evictions, DNS cache",
       "collapsed": true,
       "gridPos": {
         "h": 1,
@@ -1366,7 +1366,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Egress bandwidth: static file bytes/s",
+      "title": "Cache request outcomes /s (by reason)",
       "datasource": {
         "type": "prometheus",
         "uid": "$data_source"
@@ -1397,7 +1397,7 @@
               }
             ]
           },
-          "unit": "Bps"
+          "unit": "rps"
         },
         "overrides": []
       },
@@ -1418,18 +1418,9 @@
             "type": "prometheus",
             "uid": "$data_source"
           },
-          "expr": "histogram_sum(sum(rate(ferron_static_bytes_sent{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "sum by (ferron_cache_zone, ferron_cache_result, ferron_cache_reason) (rate(ferron_cache_requests_total{job=\"$job\",instance=~\"$instance\",ferron_cache_zone=~\"$cache_zone\"}[$__rate_interval]))",
           "refId": "A",
-          "legendFormat": "bytes/s"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "$data_source"
-          },
-          "expr": "sum(rate(ferron_static_bytes_sent_sum{job=\"$job\",instance=~\"$instance\"}[$__rate_interval]))",
-          "refId": "B",
-          "legendFormat": "bytes/s classic"
+          "legendFormat": "{{ferron_cache_result}} {{ferron_cache_reason}} ({{ferron_cache_zone}})"
         }
       ]
     },
@@ -1577,66 +1568,6 @@
           "expr": "sum(rate(ferron_proxy_dns_cache_hit_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])) / (sum(rate(ferron_proxy_dns_cache_hit_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])) + sum(rate(ferron_proxy_dns_cache_miss_total{job=\"$job\",instance=~\"$instance\"}[$__rate_interval])))",
           "refId": "B",
           "legendFormat": "hit_ratio"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Cache request outcomes /s (by reason)",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "$data_source"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 100
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "spanNulls": true,
-            "showPoints": "never",
-            "axisCenteredZero": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "rps"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": ["mean", "max", "lastNotNull"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "$data_source"
-          },
-          "expr": "sum by (ferron_cache_zone, ferron_cache_result, ferron_cache_reason) (rate(ferron_cache_requests_total{job=\"$job\",instance=~\"$instance\",ferron_cache_zone=~\"$cache_zone\"}[$__rate_interval]))",
-          "refId": "A",
-          "legendFormat": "{{ferron_cache_result}} {{ferron_cache_reason}} ({{ferron_cache_zone}})"
         }
       ]
     },

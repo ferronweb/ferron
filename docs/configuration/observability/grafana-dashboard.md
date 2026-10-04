@@ -30,7 +30,7 @@ Top-level variables let a single dashboard adapt to any deployment without editi
 | `Cache zone`       | Named cache zone                | `ferron.cache.zone`        |
 | `Rate-limit zone`  | Named rate-limit zone           | `ferron.ratelimit.zone`    |
 
-Latency and egress panels query both native and classic histograms side by side (for example `p95` and `p95 classic`), so panels render regardless of the exporter's histogram mode. Only the matching series carries data; the other stays empty. There is no histogram-mode switch to set.
+Latency panels query both native and classic histograms side by side (for example `p95` and `p95 classic`), so panels render regardless of the exporter's histogram mode. Only the matching series carries data; the other stays empty. There is no histogram-mode switch to set.
 
 > [!warning]
 > Ferron does not expose a per-route (request-path) metric label. The sketch `$route` variable from generic dashboard designs has no matching signal. Filter by upstream backend or by cache/rate-limit zone instead. If you need per-route granularity, promote a bounded route attribute with [baggage promotion](/docs/configuration/observability/prometheus#baggage-promotion). Add it as a variable, but cap `max_distinct` to avoid label explosion.
@@ -76,7 +76,6 @@ Connection-pool and host-pressure panels, crucial for multi-tenant edges and ser
 - **Cache entries**: `ferron_cache_entries` by zone
 - **Cache evictions /s (by reason)**: `rate(ferron_cache_evictions_total)` split by `ferron.cache.reason`
 - **Cache request outcomes /s (by reason)**: `rate(ferron_cache_requests_total)` split by zone, result, and `ferron.cache.reason`, which answers why the hit ratio is low (`response-no-store`, `private-no-identity`, `zero-ttl`, bypasses)
-- **Egress bandwidth: static file bytes/s**: native `histogram_sum` and classic `_sum` queries side by side (static-file and PHP-accelerator egress. See the gap below)
 - **DNS cache TTL remaining**: `ferron_proxy_dns_cache_ttl_remaining_seconds` (min/avg/max via the `aggregation` label) and DNS hit ratio
 
 A CDN or PHP-accelerator operator keeps this row pinned. An API gateway user can ignore it.
@@ -130,7 +129,6 @@ Enable the features whose rows you care about:
 ## Known gaps
 
 - **Per-route filtering** is unavailable without baggage promotion.
-- **Egress bandwidth** exists only as `ferron.static.bytes_sent` (static files, PHP accelerator). Reverse-proxy upstream egress has no bytes metric today. You must measure proxy-dominated CDN egress at the load balancer or add it to Ferron later.
 - **TLS / `ferron.host` metrics** (`ferron_tls_*`) appear only when you configure HTTPS. Those panels render empty on HTTP-only instances.
 - Rows whose Ferron modules are not active show empty panels by design. The dashboard degrades gracefully rather than erroring.
 
