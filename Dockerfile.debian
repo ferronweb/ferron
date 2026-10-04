@@ -22,8 +22,8 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
     echo "deb-src http://apt.llvm.org/trixie/ llvm-toolchain-trixie-23 main" \
       >> /etc/apt/sources.list.d/llvm.list && \
     apt update && DEBIAN_FRONTEND=noninteractive \
-    apt install -y debootstrap clang lld libclang-dev wrk \
-    nghttp2-client openssl python3 llvm qemu-user-static cmake curl && \
+    apt install -y debootstrap clang-23 lld-23 libclang-23-dev wrk \
+    nghttp2-client openssl python3 llvm-23 qemu-user-static cmake curl && \
     cargo install bindgen-cli
 
 # Install the right Rust target
