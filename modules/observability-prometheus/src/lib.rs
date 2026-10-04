@@ -2,6 +2,7 @@ mod endpoint;
 mod mutex;
 mod validator;
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::fmt;
@@ -26,7 +27,7 @@ use ferron_observability::{
 use prometheus_client::encoding::{EncodeLabelKey, EncodeLabelSet, EncodeLabelValue};
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::exemplar::{CounterWithExemplar, HistogramWithExemplars};
-use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::family::{Family, MetricConstructor};
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{self, Histogram, NativeHistogramConfig};
 use tokio_util::sync::CancellationToken;
@@ -284,9 +285,9 @@ enum CachedMetric {
     BareHistogramWithExemplars(HistogramWithExemplars<Vec<(String, String)>>),
     FamilyCounter(Family<DynamicLabels, CounterWithExemplar<Vec<(String, String)>>>),
     FamilyGauge(Family<DynamicLabels, Gauge>),
-    FamilyHistogram(Family<DynamicLabels, Histogram>),
+    FamilyHistogram(Family<DynamicLabels, Histogram, HistogramConstructor>),
     FamilyHistogramWithExemplars(
-        Family<DynamicLabels, HistogramWithExemplars<Vec<(String, String)>>>,
+        Family<DynamicLabels, HistogramWithExemplars<Vec<(String, String)>>, HistogramConstructor>,
     ),
 }
 
@@ -358,23 +359,50 @@ fn init_provider(
     }
 }
 
-fn make_histogram_constructor(native_histograms: bool) -> fn() -> Histogram {
-    if native_histograms {
-        fn constructor_native() -> Histogram {
-            let native = NativeHistogramConfig::new(1.1);
-            Histogram::new_classic_and_native(DEFAULT_BUCKETS, native)
+#[derive(Clone)]
+struct HistogramConstructor {
+    native_histograms: bool,
+    buckets: Option<Cow<'static, [f64]>>,
+}
+
+impl HistogramConstructor {
+    fn new(native_histograms: bool, buckets: Option<Cow<'static, [f64]>>) -> Self {
+        Self {
+            native_histograms,
+            buckets,
         }
-        constructor_native
-    } else {
-        fn constructor_classic() -> Histogram {
-            Histogram::new(DEFAULT_BUCKETS)
-        }
-        constructor_classic
     }
 }
 
-fn exemplar_histogram_constructor() -> HistogramWithExemplars<Vec<(String, String)>> {
-    HistogramWithExemplars::new(DEFAULT_BUCKETS.iter().copied())
+impl MetricConstructor<Histogram> for HistogramConstructor {
+    fn new_metric(&self) -> Histogram {
+        if self.native_histograms {
+            let native = NativeHistogramConfig::new(1.1);
+            Histogram::new_classic_and_native(
+                self.buckets
+                    .clone()
+                    .map_or_else(|| DEFAULT_BUCKETS.to_vec(), |b| b.into_owned()),
+                native,
+            )
+        } else {
+            Histogram::new(
+                self.buckets
+                    .clone()
+                    .map_or_else(|| DEFAULT_BUCKETS.to_vec(), |b| b.into_owned()),
+            )
+        }
+    }
+}
+
+impl MetricConstructor<HistogramWithExemplars<Vec<(String, String)>>> for HistogramConstructor {
+    fn new_metric(&self) -> HistogramWithExemplars<Vec<(String, String)>> {
+        HistogramWithExemplars::new(
+            self.buckets
+                .clone()
+                .map_or_else(|| DEFAULT_BUCKETS.to_vec(), |b| b.into_owned())
+                .into_iter(),
+        )
+    }
 }
 
 fn exemplar_labels(event: &MetricEvent) -> Option<Vec<(String, String)>> {
@@ -693,14 +721,14 @@ async fn emit_metric(
                 _ => {}
             }
         }
-        (MetricType::Histogram(_), MetricValue::F64(val)) => {
+        (MetricType::Histogram(buckets), MetricValue::F64(val)) => {
             if native_histograms {
                 let cached = match cache.entry(event.name) {
                     std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
                     std::collections::hash_map::Entry::Vacant(e) => e.insert({
-                        let constructor = make_histogram_constructor(true);
+                        let constructor = HistogramConstructor::new(true, buckets.clone());
                         if labels.0.is_empty() {
-                            let metric = constructor();
+                            let metric: Histogram = constructor.new_metric();
                             registry.write().await.register(
                                 event.name.to_string().replace(".", "_"),
                                 format_description(event),
@@ -732,8 +760,10 @@ async fn emit_metric(
                 let cached = match cache.entry(event.name) {
                     std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
                     std::collections::hash_map::Entry::Vacant(e) => e.insert({
+                        let constructor = HistogramConstructor::new(false, None);
                         if labels.0.is_empty() {
-                            let metric = exemplar_histogram_constructor();
+                            let metric: HistogramWithExemplars<Vec<(String, String)>> =
+                                constructor.new_metric();
                             registry.write().await.register(
                                 event.name.to_string().replace(".", "_"),
                                 format_description(event),
@@ -741,12 +771,12 @@ async fn emit_metric(
                             );
                             CachedMetric::BareHistogramWithExemplars(metric)
                         } else {
-                            let metric = Family::<
-                                DynamicLabels,
-                                HistogramWithExemplars<Vec<(String, String)>>,
-                            >::new_with_constructor(
-                                exemplar_histogram_constructor
-                            );
+                            let metric =
+                                Family::<
+                                    DynamicLabels,
+                                    HistogramWithExemplars<Vec<(String, String)>>,
+                                    HistogramConstructor,
+                                >::new_with_constructor(constructor);
                             registry.write().await.register(
                                 event.name.to_string().replace(".", "_"),
                                 format_description(event),
@@ -767,14 +797,14 @@ async fn emit_metric(
                 }
             }
         }
-        (MetricType::Histogram(_), MetricValue::U64(val)) => {
+        (MetricType::Histogram(buckets), MetricValue::U64(val)) => {
             if native_histograms {
                 let cached = match cache.entry(event.name) {
                     std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
                     std::collections::hash_map::Entry::Vacant(e) => e.insert({
-                        let constructor = make_histogram_constructor(true);
+                        let constructor = HistogramConstructor::new(true, buckets.clone());
                         if labels.0.is_empty() {
-                            let metric = constructor();
+                            let metric: Histogram = constructor.new_metric();
                             registry.write().await.register(
                                 event.name.to_string().replace(".", "_"),
                                 format_description(event),
@@ -806,8 +836,10 @@ async fn emit_metric(
                 let cached = match cache.entry(event.name) {
                     std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
                     std::collections::hash_map::Entry::Vacant(e) => e.insert({
+                        let constructor = HistogramConstructor::new(false, None);
                         if labels.0.is_empty() {
-                            let metric = exemplar_histogram_constructor();
+                            let metric: HistogramWithExemplars<Vec<(String, String)>> =
+                                constructor.new_metric();
                             registry.write().await.register(
                                 event.name.to_string().replace(".", "_"),
                                 format_description(event),
@@ -815,12 +847,12 @@ async fn emit_metric(
                             );
                             CachedMetric::BareHistogramWithExemplars(metric)
                         } else {
-                            let metric = Family::<
-                                DynamicLabels,
-                                HistogramWithExemplars<Vec<(String, String)>>,
-                            >::new_with_constructor(
-                                exemplar_histogram_constructor
-                            );
+                            let metric =
+                                Family::<
+                                    DynamicLabels,
+                                    HistogramWithExemplars<Vec<(String, String)>>,
+                                    HistogramConstructor,
+                                >::new_with_constructor(constructor);
                             registry.write().await.register(
                                 event.name.to_string().replace(".", "_"),
                                 format_description(event),
