@@ -132,6 +132,12 @@ jobs:
         with:
           packages: debootstrap clang-20 lld-20 libclang-20-dev wrk nghttp2-client openssl python3 llvm qemu-user-static cmake curl
 
+      - name: Setup LLVM
+        if: matrix.cross-build == true
+        uses: ZhongRuoyu/setup-llvm@v0
+        with:
+          llvm-version: 23
+
       - name: Install Cross
         if: matrix.cross-rs == true
         shell: bash
