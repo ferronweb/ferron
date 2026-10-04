@@ -103,11 +103,22 @@ impl BasicAuthStage {
 
         let challenge = format!("Basic realm=\"{realm}\", charset=\"UTF-8\"");
         let mut headers = HeaderMap::new();
-        headers.insert(
-            header_name,
-            HeaderValue::from_str(&challenge)
-                .expect("challenge value should be valid header value"),
-        );
+        // The realm is operator supplied and is embedded in the challenge, so it
+        // can make the challenge unusable as a header even though `ferron
+        // validate` rejects an unusable configured value. Answer without a
+        // challenge rather than failing the response.
+        match HeaderValue::from_str(&challenge) {
+            Ok(value) => {
+                headers.insert(header_name, value);
+            }
+            Err(_) => {
+                ferron_core::log_error!(
+                    "Omitting the `{}` response header: the configured `realm` makes the \
+                     authentication challenge invalid",
+                    header_name
+                );
+            }
+        }
 
         HttpResponse::BuiltinError(status, Some(headers))
     }

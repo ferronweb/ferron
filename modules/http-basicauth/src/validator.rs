@@ -55,6 +55,15 @@ impl ConfigurationValidator for BasicAuthValidator {
     }
 }
 
+/// Returns `true` when `value` can be sent as an HTTP header value.
+///
+/// A `realm` is interpolated into an authentication challenge, so it must not
+/// contain control bytes or line breaks.
+#[inline]
+fn is_valid_header_value(value: &str) -> bool {
+    http::HeaderValue::from_str(value).is_ok()
+}
+
 impl BasicAuthValidator {
     fn validate_basic_auth_block(
         &self,
@@ -267,12 +276,19 @@ impl BasicAuthValidator {
             .with_span(entry_span(entry))
         })?;
 
-        if value
-            .as_string_with_interpolations(&HashMap::new())
-            .is_none()
-        {
+        let Some(resolved) = value.as_string_with_interpolations(&HashMap::new()) else {
             return Err(ConfigurationValidationError::from(format!(
                 "Invalid `basic_auth` — {name} must be a string value"
+            ))
+            .with_span(entry_span(entry)));
+        };
+
+        // The value is embedded in a `WWW-Authenticate` or `Proxy-Authenticate`
+        // challenge, so it must be usable as a header value.
+        if !is_valid_header_value(&resolved) {
+            return Err(ConfigurationValidationError::from(format!(
+                "Invalid `basic_auth` — {name} is not a valid authentication challenge header \
+                 value; it must not contain control bytes or line breaks"
             ))
             .with_span(entry_span(entry)));
         }

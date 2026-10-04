@@ -6,6 +6,32 @@ use http::header::{self, HeaderValue};
 
 use crate::util::compression::COMP_SUFFIXES;
 
+/// Insert a header whose value comes from the configuration.
+///
+/// The value is operator supplied, so it can be unusable as a header even
+/// though the configuration validator reports it at load time. Skip it instead
+/// of asserting, because these maps are built while answering a request.
+#[inline]
+fn insert_configured(
+    header_map: &mut http::HeaderMap,
+    name: header::HeaderName,
+    value: Option<&str>,
+) {
+    let Some(value) = value else {
+        return;
+    };
+    match HeaderValue::from_str(value) {
+        Ok(parsed) => {
+            header_map.insert(name, parsed);
+        }
+        Err(_) => {
+            ferron_core::log_warn!(
+                "Omitting the `{name}` response header: the configured value is not a valid header value"
+            );
+        }
+    }
+}
+
 /// Build a header map with ETag and Vary headers.
 pub fn build_etag_header_map(
     etag: Option<&str>,
@@ -23,18 +49,8 @@ pub fn build_etag_header_map(
     if let Some(v) = vary {
         header_map.insert(header::VARY, v);
     }
-    if let Some(ct) = content_type {
-        header_map.insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_str(ct).expect("invalid content-type header"),
-        );
-    }
-    if let Some(cc) = cache_control {
-        header_map.insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_str(cc).expect("invalid cache-control header"),
-        );
-    }
+    insert_configured(&mut header_map, header::CONTENT_TYPE, content_type);
+    insert_configured(&mut header_map, header::CACHE_CONTROL, cache_control);
     header_map
 }
 
@@ -55,18 +71,8 @@ pub fn build_last_modified_header_map(
     if let Some(v) = vary {
         header_map.insert(header::VARY, v);
     }
-    if let Some(ct) = content_type {
-        header_map.insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_str(ct).expect("invalid content-type header"),
-        );
-    }
-    if let Some(cc) = cache_control {
-        header_map.insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_str(cc).expect("invalid cache-control header"),
-        );
-    }
+    insert_configured(&mut header_map, header::CONTENT_TYPE, content_type);
+    insert_configured(&mut header_map, header::CACHE_CONTROL, cache_control);
     header_map
 }
 
@@ -258,5 +264,47 @@ mod tests {
         } else {
             panic!("extract_etag_inner returned None");
         }
+    }
+
+    #[test]
+    fn configured_values_that_cannot_be_headers_are_skipped() {
+        let map = build_etag_header_map(
+            Some("etag"),
+            Some(HeaderValue::from_static("Accept-Encoding")),
+            Some("text/plain\r\nX-Injected: yes"),
+            Some("public\u{1}"),
+        );
+        assert!(!map.contains_key(header::CONTENT_TYPE));
+        assert!(!map.contains_key(header::CACHE_CONTROL));
+        assert!(map.contains_key(header::ETAG));
+        assert!(map.contains_key(header::VARY));
+    }
+
+    #[test]
+    fn configured_values_that_are_valid_headers_are_kept() {
+        let map = build_etag_header_map(
+            Some("etag"),
+            None,
+            Some("text/plain"),
+            Some("public, max-age=60"),
+        );
+        assert_eq!(map.get(header::CONTENT_TYPE).unwrap(), "text/plain");
+        assert_eq!(
+            map.get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=60"
+        );
+    }
+
+    #[test]
+    fn last_modified_map_skips_unusable_values() {
+        let map = build_last_modified_header_map(
+            Some(&SystemTime::UNIX_EPOCH),
+            None,
+            Some("text/plain\nX-Injected: yes"),
+            Some("no-cache\n"),
+        );
+        assert!(!map.contains_key(header::CONTENT_TYPE));
+        assert!(!map.contains_key(header::CACHE_CONTROL));
+        assert!(map.contains_key(header::LAST_MODIFIED));
     }
 }

@@ -110,6 +110,25 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
                 ServerConfigurationValue::String(_, _)
                     | ServerConfigurationValue::InterpolatedString(_, _)
             ]);
+            // The value is sent as an `Allow` response header.
+            if let Some(entry) = http
+                .directives
+                .get("options_allowed_methods")
+                .and_then(|entries| entries.first())
+            {
+                if let Some((value, span)) = entry.args.first().and_then(|arg| match arg {
+                    ServerConfigurationValue::String(value, span) => Some((value, span)),
+                    _ => None,
+                }) {
+                    if http::HeaderValue::from_str(value).is_err() {
+                        ctx.diagnostics.push(ctx.create_diagnostic(
+                            ferron_core::config::validator::ConfigurationValidatorDiagnosticKind::InvalidConfiguration,
+                            "`options_allowed_methods` value is not a valid `Allow` header value; it must not contain control bytes or line breaks",
+                            span.clone(),
+                        ));
+                    }
+                }
+            }
 
             // Timeout
             validate_nested!(http, used(sub), timeout, args(1) => [

@@ -116,6 +116,7 @@ users {
 >
 > - Use the `ferron-passwd` utility, which ships with Ferron, to create password hashes.
 > - Ferron shows the `realm` value in the browser authentication dialog.
+> - Ferron embeds the `realm` value in the authentication challenge header, so it must not contain control bytes or line breaks. `ferron validate` reports an unusable value.
 > - Configuration validation fails if any password value is not a recognized hash format.
 > - Base64 salt and hash fields accept both padded and unpadded encodings.
 > - PBKDF2 hashes accept a bare iteration count (`$pbkdf2-sha256$600000$...`) or the PHC parameter form (`$pbkdf2-sha256$i=600000,l=32$...`).

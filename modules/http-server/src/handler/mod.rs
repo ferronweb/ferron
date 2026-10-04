@@ -804,11 +804,22 @@ async fn request_handler_inner(
         // `options_allowed_methods` lives inside the `http` block, so it needs the
         // nested lookup; a flat lookup would always miss it and silently fall back
         // to the default list.
+        // The value can be interpolated from request data, so it is not
+        // guaranteed to be usable as a header even though `ferron validate`
+        // rejects an unusable configured value. Fall back to the default list
+        // instead of failing the response.
         let allow_header = resolution
             .configuration
             .get_nested_value("http", "options_allowed_methods", false)
             .and_then(|v| v.as_string_with_interpolations(&ctx))
-            .unwrap_or_else(|| DEFAULT_OPTIONS_ALLOWED_METHODS.to_string());
+            .filter(|value| http::HeaderValue::from_str(value).is_ok())
+            .unwrap_or_else(|| {
+                ferron_core::log_warn!(
+                    "Ignoring `options_allowed_methods`: the resolved value is not a valid \
+                     `Allow` header value"
+                );
+                DEFAULT_OPTIONS_ALLOWED_METHODS.to_string()
+            });
 
         let response = Response::builder()
             .status(200)
