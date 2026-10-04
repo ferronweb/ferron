@@ -681,7 +681,7 @@ impl Drop for CircuitBreakerHalfOpenTimeoutGuard<'_> {
                     emit_circuit_metric(
                         &self.event_sink,
                         self.upstream,
-                        "ferron.proxy.upstream.circuit_half_open_timeout",
+                        "ferron.proxy.circuit.half_open_timeouts",
                         ferron_observability::MetricType::Counter,
                         ferron_observability::MetricValue::I64(1),
                         self.event_trace_context.clone(),
