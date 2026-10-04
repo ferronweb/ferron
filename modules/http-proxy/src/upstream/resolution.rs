@@ -113,9 +113,9 @@ impl<'a> BackendSet<'a> {
         self.upstreams
             .iter()
             .filter(|u| {
-                let active_healthy = self.health_check_state.is_none_or(|state_map| {
-                    crate::health_check::is_upstream_healthy(state_map, &u.proxy_to)
-                });
+                let active_healthy = self
+                    .health_check_state
+                    .is_none_or(|state_map| crate::health_check::is_upstream_healthy(state_map, u));
                 let circuit_healthy = self.circuit_breaker.is_available(u);
                 let not_selected = !self.tried.contains(*u);
 
@@ -140,7 +140,7 @@ impl<'a> BackendSet<'a> {
         let mut unhealthy: FxHashSet<usize> = FxHashSet::default();
         for (i, u) in self.upstreams.iter().enumerate() {
             if let Some(state_map) = self.health_check_state {
-                if !crate::health_check::is_upstream_healthy(state_map, &u.proxy_to) {
+                if !crate::health_check::is_upstream_healthy(state_map, u) {
                     unhealthy.insert(i);
                 }
             }

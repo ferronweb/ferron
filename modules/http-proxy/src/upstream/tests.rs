@@ -215,7 +215,7 @@ fn test_backend_set_filters_unhealthy() {
 
     let health_check_state: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
     health_check_state.insert(
-        "http://backend1".to_string(),
+        make_upstream("http://backend1"),
         HealthCheckState {
             is_healthy: false,
             ..Default::default()

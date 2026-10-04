@@ -9,18 +9,88 @@ use tokio::time::sleep;
 use crate::types::health::{
     ExpectedStatusCodes, HealthCheckMethod, HealthCheckStateMap, UpstreamHealthCheckConfig,
 };
-use crate::types::upstream::{MtlsCredentials, SrvUpstream, Upstream};
+use crate::types::upstream::{MtlsCredentials, ResolvedUpstream, SrvUpstream, Upstream};
 
 use hyper_rustls::HttpsConnectorBuilder;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 
+/// Resolver that sends every connection to one address when it is pinned.
+///
+/// An upstream with a hostname in its URL resolves to one backend per address,
+/// and each backend carries its own health state. A probe has to reach the
+/// address it reports on, so this resolver pins the TCP connection while the
+/// request keeps the hostname as its authority. That keeps the `Host` header
+/// and the TLS server name pointing at the hostname, which an upstream needs
+/// for virtual hosting and for certificate verification. Without a pinned
+/// address the resolver defers to the system resolver.
+#[derive(Clone, Debug, Default)]
+struct PinnedResolver {
+    pinned: Option<std::net::SocketAddr>,
+}
+
+impl PinnedResolver {
+    #[inline]
+    fn pinned(addr: Option<std::net::SocketAddr>) -> Self {
+        Self { pinned: addr }
+    }
+}
+
+/// Address iterator produced by [`PinnedResolver`].
+#[derive(Debug)]
+struct PinnedAddrs(Vec<std::net::SocketAddr>);
+
+impl Iterator for PinnedAddrs {
+    type Item = std::net::SocketAddr;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.is_empty() {
+            None
+        } else {
+            Some(self.0.remove(0))
+        }
+    }
+}
+
+impl tower_service::Service<hyper_util::client::legacy::connect::dns::Name> for PinnedResolver {
+    type Response = PinnedAddrs;
+    type Error = std::io::Error;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    #[inline]
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    #[inline]
+    fn call(&mut self, name: hyper_util::client::legacy::connect::dns::Name) -> Self::Future {
+        match self.pinned {
+            Some(addr) => Box::pin(std::future::ready(Ok(PinnedAddrs(vec![addr])))),
+            None => {
+                let mut gai = hyper_util::client::legacy::connect::dns::GaiResolver::new();
+                let resolved = tower_service::Service::call(&mut gai, name);
+                Box::pin(async move { Ok(PinnedAddrs(resolved.await?.collect())) })
+            }
+        }
+    }
+}
+
 /// Concrete HTTPS connector type used for health check probes.
-type HttpsConnector =
-    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
+type HttpsConnector = hyper_rustls::HttpsConnector<
+    hyper_util::client::legacy::connect::HttpConnector<PinnedResolver>,
+>;
 
 #[inline]
-fn build_default_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsConnector {
+fn build_default_https_connector(
+    mtls: Option<Arc<MtlsCredentials>>,
+    pinned: Option<std::net::SocketAddr>,
+) -> HttpsConnector {
     let mut root_store = rustls::RootCertStore::empty();
     let mut found_any = false;
 
@@ -82,11 +152,18 @@ fn build_default_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsCon
         .https_or_http()
         .enable_http1()
         .enable_http2()
-        .build()
+        .wrap_connector(
+            hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
+                PinnedResolver::pinned(pinned),
+            ),
+        )
 }
 
 #[inline]
-fn build_no_verify_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsConnector {
+fn build_no_verify_https_connector(
+    mtls: Option<Arc<MtlsCredentials>>,
+    pinned: Option<std::net::SocketAddr>,
+) -> HttpsConnector {
     #[derive(Debug)]
     struct NoServerVerifier;
     impl ServerCertVerifier for NoServerVerifier {
@@ -157,7 +234,11 @@ fn build_no_verify_https_connector(mtls: Option<Arc<MtlsCredentials>>) -> HttpsC
         .https_or_http()
         .enable_http1()
         .enable_http2()
-        .build()
+        .wrap_connector(
+            hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
+                PinnedResolver::pinned(pinned),
+            ),
+        )
 }
 
 /// Callback invoked when a backend is marked unhealthy by active health check.
@@ -187,7 +268,7 @@ struct ProbeResult {
 /// and any error that occurred.
 #[inline]
 async fn probe_upstream(
-    upstream_url: &str,
+    upstream: &Arc<ResolvedUpstream>,
     config: &UpstreamHealthCheckConfig,
     mtls: Option<Arc<MtlsCredentials>>,
 ) -> ProbeResult {
@@ -197,7 +278,10 @@ async fn probe_upstream(
     let timeout = config.timeout;
     let no_verification = config.no_verification;
 
-    let full_url = format!("{}{}", upstream_url.trim_end_matches('/'), uri);
+    // The request keeps the hostname as its authority so the `Host` header and
+    // the TLS server name stay correct, while the connector is pinned to the
+    // address this probe reports on.
+    let full_url = format!("{}{}", upstream.proxy_to.trim_end_matches('/'), uri);
 
     let result = execute_probe_request(
         &full_url,
@@ -206,6 +290,7 @@ async fn probe_upstream(
         no_verification,
         config.body_match.as_deref(),
         mtls,
+        upstream.connect_to,
     )
     .await;
 
@@ -241,6 +326,7 @@ async fn execute_probe_request(
     no_verification: bool,
     body_match: Option<&str>,
     mtls: Option<Arc<MtlsCredentials>>,
+    pinned: Option<std::net::SocketAddr>,
 ) -> Result<(u16, Option<Vec<u8>>), String> {
     use bytes::Bytes;
     use http_body_util::Full;
@@ -262,7 +348,7 @@ async fn execute_probe_request(
     };
 
     // Use cached client (the underlying connector supports both HTTP and HTTPS)
-    let client = health_check_client(no_verification, mtls);
+    let client = health_check_client(no_verification, mtls, pinned);
     let req = Request::builder()
         .method(method.to_uppercase().as_str())
         .uri(url_parsed)
@@ -306,14 +392,15 @@ async fn execute_probe_request(
 fn health_check_client(
     no_verification: bool,
     mtls: Option<Arc<MtlsCredentials>>,
+    pinned: Option<std::net::SocketAddr>,
 ) -> hyper_util::client::legacy::Client<HttpsConnector, http_body_util::Full<bytes::Bytes>> {
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
 
     if no_verification {
-        Client::builder(TokioExecutor::new()).build(build_no_verify_https_connector(mtls))
+        Client::builder(TokioExecutor::new()).build(build_no_verify_https_connector(mtls, pinned))
     } else {
-        Client::builder(TokioExecutor::new()).build(build_default_https_connector(mtls))
+        Client::builder(TokioExecutor::new()).build(build_default_https_connector(mtls, pinned))
     }
 }
 
@@ -321,14 +408,15 @@ fn health_check_client(
 #[allow(clippy::type_complexity)]
 #[inline]
 fn process_probe_result(
-    upstream_url: &str,
+    upstream: &Arc<ResolvedUpstream>,
     config: &UpstreamHealthCheckConfig,
     result: &ProbeResult,
     state_map: &HealthCheckStateMap,
     on_unhealthy: Option<&(dyn Fn(&str, bool) + Send + Sync)>,
     event_sink: &ferron_observability::CompositeEventSink,
 ) {
-    let mut state = state_map.entry(upstream_url.to_string()).or_default();
+    let upstream_url = upstream.proxy_to.as_str();
+    let mut state = state_map.entry(Arc::clone(upstream)).or_default();
 
     let probe_success = if let Some(status) = result.status_code {
         let status_ok = config.expect_status.matches(status);
@@ -482,9 +570,12 @@ fn process_probe_result(
 /// Returns true if health checks are disabled for this upstream or if it's currently healthy.
 /// Returns false if health checks are enabled and the upstream is marked unhealthy.
 #[inline]
-pub fn is_upstream_healthy(state_map: &HealthCheckStateMap, upstream_url: &str) -> bool {
+pub fn is_upstream_healthy(
+    state_map: &HealthCheckStateMap,
+    upstream: &Arc<ResolvedUpstream>,
+) -> bool {
     state_map
-        .get(upstream_url)
+        .get(upstream)
         .map(|state| state.is_healthy)
         .unwrap_or(true)
 }
@@ -606,7 +697,8 @@ pub fn spawn_health_check_task(
             ));
         }
 
-        let mut last_probe_times: HashMap<String, tokio::time::Instant> = HashMap::new();
+        let mut last_probe_times: HashMap<Arc<ResolvedUpstream>, tokio::time::Instant> =
+            HashMap::new();
         loop {
             let now = tokio::time::Instant::now();
             let mut next_wake = now + Duration::from_secs(60);
@@ -615,7 +707,22 @@ pub fn spawn_health_check_task(
 
             for (upstream_url, config, mtls) in &probe_configs {
                 let upstreams = match upstream_url {
-                    UpstreamHealthCheckType::Static(url) => vec![url.clone()],
+                    UpstreamHealthCheckType::Static(url) => {
+                        vec![Arc::new(ResolvedUpstream {
+                            proxy_to: url.clone(),
+                            connect_to: None,
+                            proxy_unix: None,
+                            inner: crate::types::upstream::UpstreamInner {
+                                weight: 1,
+                                mtls: None,
+                                priority: 0,
+                                connection_timeout: None,
+                                idle_timeout: Duration::from_secs(60),
+                                limit: None,
+                            },
+                            dns_status: crate::types::upstream::DnsResolutionStatus::NotApplicable,
+                        })]
+                    }
                     UpstreamHealthCheckType::Srv((srv_name, dns_servers, weight)) => {
                         let timeout_result = tokio::time::timeout(
                             Duration::from_secs(5),
@@ -659,7 +766,7 @@ pub fn spawn_health_check_task(
                         timeout_result
                             .unwrap_or_default()
                             .into_iter()
-                            .map(|upstream| upstream.0.proxy_to.clone())
+                            .map(|(upstream, _, _)| upstream)
                             .collect()
                     }
                     UpstreamHealthCheckType::StrictDns((host, port, dns_servers)) => {
@@ -704,20 +811,16 @@ pub fn spawn_health_check_task(
                                 },
                             ));
                         }
-                        timeout_result
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|upstream| upstream.proxy_to.clone())
-                            .collect()
+                        timeout_result.unwrap_or_default().into_iter().collect()
                     }
                 };
 
-                for upstream_url in upstreams {
-                    let last_probe = last_probe_times.get(&upstream_url);
+                for upstream in upstreams {
+                    let last_probe = last_probe_times.get(&upstream);
                     let elapsed = last_probe.map_or(Duration::MAX, |t| t.elapsed());
 
                     if elapsed >= config.interval {
-                        probes_due.push((upstream_url.clone(), config.clone(), mtls.clone()));
+                        probes_due.push((upstream.clone(), config.clone(), mtls.clone()));
                         next_wake = now;
                     } else {
                         let time_until_due = config.interval - elapsed;
@@ -731,18 +834,18 @@ pub fn spawn_health_check_task(
             if !probes_due.is_empty() {
                 let mut probe_tasks = Vec::new();
 
-                for (upstream_url, config, mtls) in probes_due {
+                for (upstream, config, mtls) in probes_due {
                     let state_map = Arc::clone(&state_map);
                     let on_unhealthy_clone = on_unhealthy.clone();
-                    let probe_url = upstream_url.clone();
+                    let probe_target = Arc::clone(&upstream);
 
-                    last_probe_times.insert(upstream_url, now);
+                    last_probe_times.insert(upstream, now);
 
                     let event_sink = event_sink.clone();
                     probe_tasks.push(tokio::spawn(async move {
-                        let result = probe_upstream(&probe_url, &config, mtls).await;
+                        let result = probe_upstream(&probe_target, &config, mtls).await;
                         process_probe_result(
-                            &probe_url,
+                            &probe_target,
                             &config,
                             &result,
                             &state_map,
@@ -769,6 +872,31 @@ mod tests {
     use dashmap::DashMap;
     use rustc_hash::FxBuildHasher;
 
+    fn backend(url: &str) -> Arc<ResolvedUpstream> {
+        Arc::new(ResolvedUpstream {
+            proxy_to: url.to_string(),
+            connect_to: None,
+            proxy_unix: None,
+            inner: crate::types::upstream::UpstreamInner {
+                weight: 1,
+                mtls: None,
+                priority: 0,
+                connection_timeout: None,
+                idle_timeout: Duration::from_secs(60),
+                limit: None,
+            },
+            dns_status: crate::types::upstream::DnsResolutionStatus::NotApplicable,
+        })
+    }
+
+    /// A backend for one address behind a hostname, as strict DNS produces.
+    fn backend_at(url: &str, ip: &str) -> Arc<ResolvedUpstream> {
+        Arc::new(ResolvedUpstream {
+            connect_to: Some(format!("{ip}:80").parse().expect("test address")),
+            ..(*backend(url)).clone()
+        })
+    }
+
     #[test]
     fn test_health_state_transition_to_unhealthy() {
         let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
@@ -786,7 +914,7 @@ mod tests {
         };
 
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &result,
             &state_map,
@@ -794,7 +922,7 @@ mod tests {
             &event_sink,
         );
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &result,
             &state_map,
@@ -802,7 +930,7 @@ mod tests {
             &event_sink,
         );
 
-        let state = state_map.get("http://localhost:8080").unwrap();
+        let state = state_map.get(&backend("http://localhost:8080")).unwrap();
         assert!(!state.is_healthy);
         assert_eq!(state.consecutive_fail_count, 2);
     }
@@ -824,7 +952,7 @@ mod tests {
             error: None,
         };
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &fail_result,
             &state_map,
@@ -832,7 +960,7 @@ mod tests {
             &event_sink,
         );
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &fail_result,
             &state_map,
@@ -848,7 +976,7 @@ mod tests {
         };
 
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &success_result,
             &state_map,
@@ -856,7 +984,7 @@ mod tests {
             &event_sink,
         );
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &success_result,
             &state_map,
@@ -864,7 +992,7 @@ mod tests {
             &event_sink,
         );
 
-        let state = state_map.get("http://localhost:8080").unwrap();
+        let state = state_map.get(&backend("http://localhost:8080")).unwrap();
         assert!(state.is_healthy);
         assert_eq!(state.consecutive_pass_count, 0);
         assert_eq!(state.consecutive_fail_count, 0);
@@ -887,7 +1015,7 @@ mod tests {
             error: None,
         };
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &result_fast,
             &state_map,
@@ -896,7 +1024,7 @@ mod tests {
         );
 
         {
-            let state = state_map.get("http://localhost:8080").unwrap();
+            let state = state_map.get(&backend("http://localhost:8080")).unwrap();
             assert!(state.is_healthy);
         }
 
@@ -907,7 +1035,7 @@ mod tests {
             error: None,
         };
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &result_slow,
             &state_map,
@@ -915,7 +1043,7 @@ mod tests {
             &event_sink,
         );
 
-        let state = state_map.get("http://localhost:8080").unwrap();
+        let state = state_map.get(&backend("http://localhost:8080")).unwrap();
         assert!(!state.is_healthy);
         assert_eq!(state.consecutive_fail_count, 1);
     }
@@ -938,7 +1066,7 @@ mod tests {
             error: None,
         };
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &result,
             &state_map,
@@ -946,7 +1074,7 @@ mod tests {
             &event_sink,
         );
 
-        let state = state_map.get("http://localhost:8080").unwrap();
+        let state = state_map.get(&backend("http://localhost:8080")).unwrap();
         assert!(state.is_healthy);
     }
 
@@ -968,7 +1096,7 @@ mod tests {
             error: None,
         };
         process_probe_result(
-            "http://localhost:8080",
+            &backend("http://localhost:8080"),
             &config,
             &result,
             &state_map,
@@ -976,7 +1104,7 @@ mod tests {
             &event_sink,
         );
 
-        let state = state_map.get("http://localhost:8080").unwrap();
+        let state = state_map.get(&backend("http://localhost:8080")).unwrap();
         assert!(!state.is_healthy);
     }
 
@@ -984,16 +1112,75 @@ mod tests {
     fn test_is_upstream_healthy() {
         let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
 
-        assert!(is_upstream_healthy(&state_map, "http://localhost:8080"));
+        assert!(is_upstream_healthy(
+            &state_map,
+            &backend("http://localhost:8080")
+        ));
 
         state_map.insert(
-            "http://localhost:8080".to_string(),
+            backend("http://localhost:8080"),
             HealthCheckState {
                 is_healthy: false,
                 ..Default::default()
             },
         );
 
-        assert!(!is_upstream_healthy(&state_map, "http://localhost:8080"));
+        assert!(!is_upstream_healthy(
+            &state_map,
+            &backend("http://localhost:8080")
+        ));
+    }
+
+    #[test]
+    fn health_state_is_tracked_per_resolved_address() {
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
+        let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let config = UpstreamHealthCheckConfig {
+            consecutive_fails: 1,
+            ..Default::default()
+        };
+        let failure = ProbeResult {
+            status_code: Some(503),
+            response_time: Duration::from_millis(10),
+            body: None,
+            error: None,
+        };
+
+        // Two addresses behind one hostname, which is what strict DNS produces.
+        let first = backend_at("http://backend:3000", "10.0.0.1");
+        let second = backend_at("http://backend:3000", "10.0.0.2");
+
+        process_probe_result(&first, &config, &failure, &state_map, None, &event_sink);
+
+        assert!(!is_upstream_healthy(&state_map, &first));
+        assert!(
+            is_upstream_healthy(&state_map, &second),
+            "one unreachable address must not mark the other address behind the same hostname unhealthy"
+        );
+    }
+
+    #[test]
+    fn a_hostname_without_addresses_keys_on_the_configured_url() {
+        let state_map: HealthCheckStateMap = Arc::new(DashMap::with_hasher(FxBuildHasher));
+        let event_sink = ferron_observability::CompositeEventSink::new(vec![]);
+        let config = UpstreamHealthCheckConfig {
+            consecutive_fails: 1,
+            ..Default::default()
+        };
+        let failure = ProbeResult {
+            status_code: Some(503),
+            response_time: Duration::from_millis(10),
+            body: None,
+            error: None,
+        };
+
+        let upstream = backend("http://backend:3000");
+        process_probe_result(&upstream, &config, &failure, &state_map, None, &event_sink);
+
+        assert!(!is_upstream_healthy(&state_map, &upstream));
+        assert!(
+            is_upstream_healthy(&state_map, &backend("http://other:3000")),
+            "a different upstream must keep its own state"
+        );
     }
 }

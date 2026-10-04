@@ -674,6 +674,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util",
+ "tower-service",
  "webpki-roots",
  "zincio",
  "zincio-http",

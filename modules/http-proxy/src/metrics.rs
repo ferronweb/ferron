@@ -154,7 +154,7 @@ pub(crate) fn inject_upstream_state_span_attributes(
     }
 
     // Health check state (only when a health check entry exists for this URL)
-    if let Some(hc) = health_check_state.get(&backend.proxy_to) {
+    if let Some(hc) = health_check_state.get(backend) {
         sa.insert(
             "ferron.proxy.upstream.health_status",
             TraceAttributeValue::StaticStr(if hc.is_healthy {

@@ -138,6 +138,18 @@ impl Default for HealthCheckState {
     }
 }
 
-/// Health check state map keyed by upstream URL string.
-pub type HealthCheckStateMap =
-    std::sync::Arc<dashmap::DashMap<String, HealthCheckState, rustc_hash::FxBuildHasher>>;
+/// Health check state map keyed by resolved upstream backend.
+///
+/// A backend with a hostname in its URL resolves to one backend per address,
+/// and the load balancer treats each address as a separate backend, so health
+/// state is tracked per address. Keying by the configured URL instead would let
+/// one unreachable address mark every address behind the hostname unhealthy.
+///
+/// This mirrors how the circuit breaker keys its own state.
+pub type HealthCheckStateMap = std::sync::Arc<
+    dashmap::DashMap<
+        std::sync::Arc<super::upstream::ResolvedUpstream>,
+        HealthCheckState,
+        rustc_hash::FxBuildHasher,
+    >,
+>;
