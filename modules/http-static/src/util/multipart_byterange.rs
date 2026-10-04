@@ -82,7 +82,11 @@ impl Body for MultipartByterangeBody {
                 "--{}\r\ncontent-range: bytes {start}-{end}/{}\r\n",
                 self.boundary, self.file_length
             ));
-            if let Some(content_type) = &self.content_type {
+            if let Some(content_type) = self
+                .content_type
+                .as_deref()
+                .filter(|ct| crate::util::mime::is_valid_header_value(ct))
+            {
                 multipart_head.push_str(&format!("content-type: {content_type}\r\n"));
             }
             multipart_head.push_str("\r\n");

@@ -75,6 +75,7 @@ example.com {
 > - When compression is active, Ferron appends a suffix to the ETag (for example, `W/"abc123-br"` for Brotli).
 > - `If-None-Match` requests that match the current ETag return `304 Not Modified`.
 > - Pre-compressed sidecar files receive their own ETag based on their own metadata.
+> - The value is sent as a `Cache-Control` response header, and Ferron passes it through as given. A value that cannot be sent as a header is a configuration error, and `ferron validate` reports it.
 
 ### MIME types
 
@@ -95,6 +96,7 @@ example.com {
 >
 > - If custom mappings do not contain the extension, Ferron uses the built-in database as a fallback.
 > - If neither mapping matches, Ferron sends the response with no `Content-Type` header.
+> - The value is sent as a `Content-Type` response header, and Ferron writes it into `multipart/byteranges` part headers for multi-range requests. A value that cannot be sent as a header is a configuration error, and `ferron validate` reports it.
 
 ### Error pages
 

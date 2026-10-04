@@ -103,6 +103,45 @@ fn respond_with_httpresponse(
     Ok(false)
 }
 
+/// Complete a response builder whose headers may carry configuration values.
+///
+/// Returns `None` when a header value that the HTTP crate rejects makes the
+/// response unbuildable. Configuration values are validated when Ferron loads
+/// the configuration, and header values derived from them are validated where
+/// they are produced, so this is a last-resort path. Report it as a server
+/// error rather than panicking the request and dropping the connection.
+#[inline]
+fn finish_response(
+    builder: http::response::Builder,
+    body: UnsyncBoxBody<Bytes, io::Error>,
+) -> Option<Response<UnsyncBoxBody<Bytes, io::Error>>> {
+    match builder.body(body) {
+        Ok(response) => Some(response),
+        Err(error) => {
+            ferron_core::log_error!(
+                "Static file response rejected a header value: {error}. Check the configured \
+                 `mime_type` and `file_cache_control` values."
+            );
+            None
+        }
+    }
+}
+
+/// Answer a request whose static file response could not be built.
+#[inline]
+fn respond_with_build_failure(
+    ctx: &mut HttpFileContext,
+    request: HttpRequest,
+) -> Result<bool, PipelineError> {
+    respond_with_httpresponse(
+        ctx,
+        request,
+        HttpResponse::BuiltinError(500, None),
+        500,
+        "internal_error",
+    )
+}
+
 #[async_trait(?Send)]
 impl Stage<HttpFileContext> for StaticFileStage {
     #[inline]
@@ -308,29 +347,27 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     .ok()
                     .and_then(|ius| httpdate::parse_http_date(ius).ok())
                 {
-                    Some(if_unmodified_since) => {
+                    Some(if_unmodified_since)
                         if mdate
                             .as_ref()
-                            .is_some_and(|mdate| mdate > &if_unmodified_since)
-                        {
-                            let header_map = build_last_modified_header_map(
-                                mdate.as_ref(),
-                                vary_header,
-                                None,
-                                cache_control.as_deref(),
-                            );
-                            return respond_with_builtin(
-                                ctx,
-                                request,
-                                412,
-                                Some(header_map),
-                                "precondition_failed",
-                            );
-                        }
+                            .is_some_and(|mdate| mdate > &if_unmodified_since) =>
+                    {
+                        let header_map = build_last_modified_header_map(
+                            mdate.as_ref(),
+                            vary_header,
+                            None,
+                            cache_control.as_deref(),
+                        );
+                        return respond_with_builtin(
+                            ctx,
+                            request,
+                            412,
+                            Some(header_map),
+                            "precondition_failed",
+                        );
                     }
-                    None => {
-                        // RFC 9110 13.1.4: ignore
-                    }
+                    // RFC 9110 13.1.4: ignore
+                    _ => {}
                 }
             }
         }
@@ -375,9 +412,12 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                     .unwrap_or_else(|_| HeaderValue::from_static("")),
                             );
                         }
-                        let response = builder
-                            .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                            .expect("failed to build 304 response");
+                        let Some(response) = finish_response(
+                            builder,
+                            Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
+                        ) else {
+                            return respond_with_build_failure(ctx, request);
+                        };
                         ctx.http.req = Some(request);
                         ctx.http.res = Some(HttpResponse::Custom(response));
                         emit_static_response_metric(ctx, 304, "not_modified");
@@ -396,41 +436,42 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     .ok()
                     .and_then(|ims| httpdate::parse_http_date(ims).ok())
                 {
-                    Some(if_modified_since) => {
+                    Some(if_modified_since)
                         if metadata
                             .modified()
-                            .is_ok_and(|mdate| mdate <= if_modified_since)
-                        {
-                            let mut builder =
-                                Response::builder().status(StatusCode::NOT_MODIFIED).header(
-                                    header::VARY,
-                                    vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
-                                );
-                            if let Some(mdate) = &mdate {
-                                builder = builder
-                                    .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
-                            }
-                            if let Some(cc) = cache_control.as_deref() {
-                                builder = builder.header(
-                                    header::CACHE_CONTROL,
-                                    HeaderValue::from_str(cc)
-                                        .unwrap_or_else(|_| HeaderValue::from_static("")),
-                                );
-                            }
-                            let response = builder
-                                .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                                .expect("failed to build 304 response");
-                            ctx.http.req = Some(request);
-                            ctx.http.res = Some(HttpResponse::Custom(response));
-                            emit_static_response_metric(ctx, 304, "not_modified");
-                            ctx.get_span_attributes()
-                                .insert("http.response.status_code", TraceAttributeValue::I64(304));
-                            return Ok(false);
+                            .is_ok_and(|mdate| mdate <= if_modified_since) =>
+                    {
+                        let mut builder =
+                            Response::builder().status(StatusCode::NOT_MODIFIED).header(
+                                header::VARY,
+                                vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
+                            );
+                        if let Some(mdate) = &mdate {
+                            builder = builder
+                                .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
                         }
+                        if let Some(cc) = cache_control.as_deref() {
+                            builder = builder.header(
+                                header::CACHE_CONTROL,
+                                HeaderValue::from_str(cc)
+                                    .unwrap_or_else(|_| HeaderValue::from_static("")),
+                            );
+                        }
+                        let Some(response) = finish_response(
+                            builder,
+                            Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
+                        ) else {
+                            return respond_with_build_failure(ctx, request);
+                        };
+                        ctx.http.req = Some(request);
+                        ctx.http.res = Some(HttpResponse::Custom(response));
+                        emit_static_response_metric(ctx, 304, "not_modified");
+                        ctx.get_span_attributes()
+                            .insert("http.response.status_code", TraceAttributeValue::I64(304));
+                        return Ok(false);
                     }
-                    None => {
-                        // RFC 9110 13.1.3: ignore
-                    }
+                    // RFC 9110 13.1.3: ignore
+                    _ => {}
                 }
             }
         }
@@ -605,11 +646,12 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 builder = builder.header(header::VARY, vary);
 
                                 if method == Method::HEAD {
-                                    let response = builder
-                                        .body(
-                                            Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
-                                        )
-                                        .expect("failed to build 206 HEAD response");
+                                    let Some(response) = finish_response(
+                                        builder,
+                                        Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
+                                    ) else {
+                                        return respond_with_build_failure(ctx, request);
+                                    };
                                     return respond_with_httpresponse(
                                         ctx,
                                         request,
@@ -618,18 +660,17 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         "partial_content",
                                     );
                                 } else {
-                                    let response = builder
-                                        .body(
-                                            MultipartByterangeBody::new(
-                                                multipart_boundary,
-                                                file_length,
-                                                content_type,
-                                                ranges,
-                                                FileStream::new(file, 0, Some(file_length)),
-                                            )
-                                            .boxed_unsync(),
-                                        )
-                                        .expect("failed to build 206 response");
+                                    let body = MultipartByterangeBody::new(
+                                        multipart_boundary,
+                                        file_length,
+                                        content_type,
+                                        ranges,
+                                        FileStream::new(file, 0, Some(file_length)),
+                                    )
+                                    .boxed_unsync();
+                                    let Some(response) = finish_response(builder, body) else {
+                                        return respond_with_build_failure(ctx, request);
+                                    };
                                     return respond_with_httpresponse(
                                         ctx,
                                         request,
@@ -672,11 +713,12 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                 builder = builder.header(header::VARY, vary);
 
                                 if method == Method::HEAD {
-                                    let response = builder
-                                        .body(
-                                            Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
-                                        )
-                                        .expect("failed to build 206 HEAD response");
+                                    let Some(response) = finish_response(
+                                        builder,
+                                        Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
+                                    ) else {
+                                        return respond_with_build_failure(ctx, request);
+                                    };
                                     return respond_with_httpresponse(
                                         ctx,
                                         request,
@@ -685,15 +727,14 @@ impl Stage<HttpFileContext> for StaticFileStage {
                                         "partial_content",
                                     );
                                 } else {
-                                    let response = builder
-                                        .body(
-                                            StreamBody::new(
-                                                FileStream::new(file, start, Some(end + 1))
-                                                    .map_ok(Frame::data),
-                                            )
-                                            .boxed_unsync(),
-                                        )
-                                        .expect("failed to build 206 response");
+                                    let body = StreamBody::new(
+                                        FileStream::new(file, start, Some(end + 1))
+                                            .map_ok(Frame::data),
+                                    )
+                                    .boxed_unsync();
+                                    let Some(response) = finish_response(builder, body) else {
+                                        return respond_with_build_failure(ctx, request);
+                                    };
                                     return respond_with_httpresponse(
                                         ctx,
                                         request,
@@ -849,9 +890,12 @@ impl Stage<HttpFileContext> for StaticFileStage {
         }
 
         if method == Method::HEAD {
-            let response = builder
-                .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                .expect("failed to build HEAD response");
+            let Some(response) = finish_response(
+                builder,
+                Empty::new().map_err(|_| unreachable!()).boxed_unsync(),
+            ) else {
+                return respond_with_build_failure(ctx, request);
+            };
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::Custom(response));
             emit_static_response_metric(ctx, 200, "head");
@@ -903,7 +947,9 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         };
 
-        let mut response = builder.body(body).expect("failed to build file response");
+        let Some(mut response) = finish_response(builder, body) else {
+            return respond_with_build_failure(ctx, request);
+        };
 
         // Enable zerocopy for uncompressed responses on Linux
         // zincio-http's zerocopy bypasses the body entirely, using sendfile_exact
