@@ -169,6 +169,7 @@ impl<'a> CircuitBreaker<'a> {
                     self.flapping_state,
                     self.config,
                     &upstream.proxy_to,
+                    upstream.dns_status.as_label(),
                     self.event_sink,
                     self.event_trace_context.clone(),
                 );
@@ -335,11 +336,15 @@ fn emit_circuit_metric(
                 MetricAttributeValue::String(resolved_ip.to_string()),
             ));
         }
-        attributes.push((
-            "ferron.proxy.dns_status",
-            MetricAttributeValue::String(upstream.dns_status.as_label().to_string()),
-        ));
     }
+    // Keep the attribute set identical to the one the per-request proxy metrics
+    // use, otherwise the same metric name is exported as two distinct series.
+    // The DNS outcome has a bounded set of values, so it does not raise
+    // cardinality the way the resolved address does.
+    attributes.push((
+        "ferron.proxy.dns_status",
+        MetricAttributeValue::String(upstream.dns_status.as_label().to_string()),
+    ));
     event_sink.emit(Event::Metric(MetricEvent {
         name,
         attributes,
@@ -414,6 +419,7 @@ fn record_circuit_breaker_failure(
                 flapping_state,
                 circuit_breaker,
                 &upstream.proxy_to,
+                upstream.dns_status.as_label(),
                 event_sink,
                 event_trace_context.clone(),
             );
@@ -477,6 +483,7 @@ fn record_circuit_breaker_failure(
                 flapping_state,
                 circuit_breaker,
                 &upstream.proxy_to,
+                upstream.dns_status.as_label(),
                 event_sink,
                 event_trace_context.clone(),
             );
@@ -581,6 +588,7 @@ fn record_circuit_breaker_success(
             flapping_state,
             circuit_breaker,
             &upstream.proxy_to,
+            upstream.dns_status.as_label(),
             event_sink,
             event_trace_context.clone(),
         );

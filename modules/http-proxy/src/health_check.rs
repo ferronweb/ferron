@@ -447,10 +447,18 @@ fn process_probe_result(
 
     use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
     let duration_secs = result.response_time.as_secs_f64();
-    let health_attrs = vec![(
-        "ferron.proxy.backend_url",
-        MetricAttributeValue::String(upstream_url.to_string()),
-    )];
+    // Same attribute set as the other backend scoped proxy metrics, so the
+    // metric name maps to one Prometheus series per backend.
+    let health_attrs = vec![
+        (
+            "ferron.proxy.backend_url",
+            MetricAttributeValue::String(upstream_url.to_string()),
+        ),
+        (
+            "ferron.proxy.dns_status",
+            MetricAttributeValue::String(upstream.dns_status.as_label().to_string()),
+        ),
+    ];
 
     event_sink.emit(Event::Metric(MetricEvent {
         name: "ferron.proxy.health.duration",

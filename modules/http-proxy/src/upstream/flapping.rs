@@ -21,6 +21,7 @@ pub fn record_circuit_transition(
     flapping_state_map: Option<&FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream_url: &str,
+    dns_status: &'static str,
     event_sink: &ferron_observability::CompositeEventSink,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
 ) -> bool {
@@ -75,7 +76,7 @@ pub fn record_circuit_transition(
                 trace_context: event_trace_context.clone(),
             },
         ));
-        emit_flapping_metric(event_sink, upstream_url, 1, event_trace_context);
+        emit_flapping_metric(event_sink, upstream_url, dns_status, 1, event_trace_context);
     } else if !is_flapping && was_flapping {
         event_sink.emit(ferron_observability::Event::Log(
             ferron_observability::LogEvent {
@@ -93,10 +94,10 @@ pub fn record_circuit_transition(
                 trace_context: event_trace_context.clone(),
             },
         ));
-        emit_flapping_metric(event_sink, upstream_url, 0, event_trace_context);
+        emit_flapping_metric(event_sink, upstream_url, dns_status, 0, event_trace_context);
     } else if is_flapping {
         // Still flapping...
-        emit_flapping_metric(event_sink, upstream_url, 1, event_trace_context);
+        emit_flapping_metric(event_sink, upstream_url, dns_status, 1, event_trace_context);
     }
 
     is_flapping
@@ -106,15 +107,24 @@ pub fn record_circuit_transition(
 fn emit_flapping_metric(
     event_sink: &ferron_observability::CompositeEventSink,
     upstream_url: &str,
+    dns_status: &'static str,
     value: u64,
     trace_context: Option<ferron_observability::EventTraceContext>,
 ) {
     use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 
-    let attributes = vec![(
-        "ferron.proxy.backend_url",
-        MetricAttributeValue::String(upstream_url.to_string()),
-    )];
+    // Same attribute set as the other backend scoped proxy metrics, so the
+    // metric name maps to one Prometheus series per backend.
+    let attributes = vec![
+        (
+            "ferron.proxy.backend_url",
+            MetricAttributeValue::String(upstream_url.to_string()),
+        ),
+        (
+            "ferron.proxy.dns_status",
+            MetricAttributeValue::String(dns_status.to_string()),
+        ),
+    ];
     event_sink.emit(Event::Metric(MetricEvent {
         name: "ferron.proxy.circuit.flapping",
         attributes,
@@ -149,6 +159,7 @@ mod tests {
             Some(&state_map),
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         ));
@@ -156,6 +167,7 @@ mod tests {
             Some(&state_map),
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         ));
@@ -176,6 +188,7 @@ mod tests {
             Some(&state_map),
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         );
@@ -183,6 +196,7 @@ mod tests {
             Some(&state_map),
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         );
@@ -191,6 +205,7 @@ mod tests {
             Some(&state_map),
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         ));
@@ -211,6 +226,7 @@ mod tests {
             Some(&state_map),
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         );
@@ -218,6 +234,7 @@ mod tests {
             Some(&state_map),
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         ));
@@ -230,6 +247,7 @@ mod tests {
             Some(&state_map),
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         ));
@@ -249,6 +267,7 @@ mod tests {
             Some(&state_map),
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         ));
@@ -263,6 +282,7 @@ mod tests {
             None,
             &cb,
             "http://localhost:8080",
+            "static",
             &event_sink,
             None,
         ));
