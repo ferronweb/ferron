@@ -243,9 +243,12 @@ impl Stage<HttpFileContext> for StaticFileStage {
         // If-Match -> If-Unmodified-Since -> If-None-Match -> If-Modified-Since
         // (RFC 7232 compliant order)
 
+        let mut had_if_match = false;
+
         // Ferron only emits weak ETags, so strong If-Match won't match...
         if let Some(etag) = &etag_value {
             if let Some(if_match_value) = request.headers().get(header::IF_MATCH) {
+                had_if_match = true;
                 match if_match_value.to_str() {
                     Ok(if_match) => {
                         // "*" means any version is acceptable (RFC 7232 section 3.1)
@@ -308,40 +311,44 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
-        if let Some(if_unmodified_since) = request.headers().get(header::IF_UNMODIFIED_SINCE) {
-            match if_unmodified_since
-                .to_str()
-                .ok()
-                .and_then(|ius| httpdate::parse_http_date(ius).ok())
-            {
-                Some(if_unmodified_since) => {
-                    if mdate
-                        .as_ref()
-                        .is_some_and(|mdate| mdate > &if_unmodified_since)
-                    {
-                        let header_map = build_last_modified_header_map(
-                            mdate.as_ref(),
-                            vary_header,
-                            None,
-                            cache_control.as_deref(),
-                        );
-                        return respond_with_builtin(
-                            ctx,
-                            request,
-                            412,
-                            Some(header_map),
-                            "precondition_failed",
-                        );
+        if !had_if_match {
+            if let Some(if_unmodified_since) = request.headers().get(header::IF_UNMODIFIED_SINCE) {
+                match if_unmodified_since
+                    .to_str()
+                    .ok()
+                    .and_then(|ius| httpdate::parse_http_date(ius).ok())
+                {
+                    Some(if_unmodified_since) => {
+                        if mdate
+                            .as_ref()
+                            .is_some_and(|mdate| mdate > &if_unmodified_since)
+                        {
+                            let header_map = build_last_modified_header_map(
+                                mdate.as_ref(),
+                                vary_header,
+                                None,
+                                cache_control.as_deref(),
+                            );
+                            return respond_with_builtin(
+                                ctx,
+                                request,
+                                412,
+                                Some(header_map),
+                                "precondition_failed",
+                            );
+                        }
                     }
-                }
-                None => {
-                    // RFC 9110 13.1.4: ignore
+                    None => {
+                        // RFC 9110 13.1.4: ignore
+                    }
                 }
             }
         }
 
+        let mut had_if_none_match = false;
         if let Some(etag) = &etag_value {
             if let Some(if_none_match) = request.headers().get(header::IF_NONE_MATCH) {
+                had_if_none_match = true;
                 if let Ok(val) = if_none_match.to_str() {
                     if let Some(suffix_opt) = matches_if_none_match(val, etag) {
                         if !matches!(request.method(), &Method::GET | &Method::HEAD)
@@ -392,46 +399,48 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
-        if let Some(if_modified_since) = request.headers().get(header::IF_MODIFIED_SINCE) {
-            match if_modified_since
-                .to_str()
-                .ok()
-                .and_then(|ims| httpdate::parse_http_date(ims).ok())
-            {
-                Some(if_modified_since) => {
-                    if metadata
-                        .modified()
-                        .is_ok_and(|mdate| mdate <= if_modified_since)
-                    {
-                        let mut builder =
-                            Response::builder().status(StatusCode::NOT_MODIFIED).header(
-                                header::VARY,
-                                vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
-                            );
-                        if let Some(mdate) = &mdate {
-                            builder = builder
-                                .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
+        if !had_if_none_match {
+            if let Some(if_modified_since) = request.headers().get(header::IF_MODIFIED_SINCE) {
+                match if_modified_since
+                    .to_str()
+                    .ok()
+                    .and_then(|ims| httpdate::parse_http_date(ims).ok())
+                {
+                    Some(if_modified_since) => {
+                        if metadata
+                            .modified()
+                            .is_ok_and(|mdate| mdate <= if_modified_since)
+                        {
+                            let mut builder =
+                                Response::builder().status(StatusCode::NOT_MODIFIED).header(
+                                    header::VARY,
+                                    vary_header.unwrap_or_else(|| HeaderValue::from_static("")),
+                                );
+                            if let Some(mdate) = &mdate {
+                                builder = builder
+                                    .header(header::LAST_MODIFIED, httpdate::fmt_http_date(*mdate));
+                            }
+                            if let Some(cc) = cache_control.as_deref() {
+                                builder = builder.header(
+                                    header::CACHE_CONTROL,
+                                    HeaderValue::from_str(cc)
+                                        .unwrap_or_else(|_| HeaderValue::from_static("")),
+                                );
+                            }
+                            let response = builder
+                                .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                                .expect("failed to build 304 response");
+                            ctx.http.req = Some(request);
+                            ctx.http.res = Some(HttpResponse::Custom(response));
+                            emit_static_response_metric(ctx, 304, "not_modified");
+                            ctx.get_span_attributes()
+                                .insert("http.response.status_code", TraceAttributeValue::I64(304));
+                            return Ok(false);
                         }
-                        if let Some(cc) = cache_control.as_deref() {
-                            builder = builder.header(
-                                header::CACHE_CONTROL,
-                                HeaderValue::from_str(cc)
-                                    .unwrap_or_else(|_| HeaderValue::from_static("")),
-                            );
-                        }
-                        let response = builder
-                            .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-                            .expect("failed to build 304 response");
-                        ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::Custom(response));
-                        emit_static_response_metric(ctx, 304, "not_modified");
-                        ctx.get_span_attributes()
-                            .insert("http.response.status_code", TraceAttributeValue::I64(304));
-                        return Ok(false);
                     }
-                }
-                None => {
-                    // RFC 9110 13.1.3: ignore
+                    None => {
+                        // RFC 9110 13.1.3: ignore
+                    }
                 }
             }
         }

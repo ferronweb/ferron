@@ -71,6 +71,7 @@
 - **HTTP ranges with precompression support**: previously, when precompressed file was present and precompression was enabled, a range request would lead to a response with parts of compressed file, which could be malformed.
 - **`If-Modified-Since` and `If-Unmodified-Since` malformed date fix**: the server now ignores malformed date values in `If-Modified-Since` and `If-Unmodified-Since` request headers instead of responding with a 400 (Bad Request) error.
 - **HTTP range `bytes=-0` fix**: the server now correctly handles `bytes=-0` range requests, treating them as unsatisfiable (416) instead of invalid syntax (ignored).
+- **ETag + Date conditional request precedence fix**: previously, `If-Modified-Since` was evaluated even if `If-None-Match` was present, which could lead to incorrect behavior. Similar happened with `If-Unmodified-Since` and `If-Match`.
 
 #### HTTP compression
 
