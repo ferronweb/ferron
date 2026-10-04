@@ -213,7 +213,7 @@ The static file stage sets the following attributes on its `ferron.stage.static_
 | Attribute                               | Type   | Description                                                |
 | --------------------------------------- | ------ | ---------------------------------------------------------- |
 | `http.response.status_code`             | int    | HTTP status code of the file response.                     |
-| `ferron.static.file_path`               | string | The file path relative to the document root.               |
+| `ferron.static.file_path`               | string | The absolute static file path.                             |
 | `ferron.static.file_path_precompressed` | string | The precompressed file path (if applicable).               |
 | `ferron.static.precompressed`           | bool   | Whether Ferron served a precompressed variant of the file. |
 
