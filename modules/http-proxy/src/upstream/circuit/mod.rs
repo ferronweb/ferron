@@ -620,3 +620,75 @@ fn record_circuit_breaker_success(
         );
     }
 }
+
+pub struct CircuitBreakerHalfOpenTimeoutGuard<'a> {
+    state: Option<&'a CircuitBreakerStateMap>,
+    upstream: &'a Arc<ResolvedUpstream>,
+    event_sink: ferron_observability::CompositeEventSink,
+    event_trace_context: Option<ferron_observability::EventTraceContext>,
+    metrics_resolved_ip: bool,
+}
+
+impl<'a> CircuitBreakerHalfOpenTimeoutGuard<'a> {
+    #[inline]
+    pub fn new(
+        state: Option<&'a CircuitBreakerStateMap>,
+        upstream: &'a Arc<ResolvedUpstream>,
+        event_sink: ferron_observability::CompositeEventSink,
+        event_trace_context: Option<ferron_observability::EventTraceContext>,
+        metrics_resolved_ip: bool,
+    ) -> Self {
+        Self {
+            state,
+            upstream,
+            event_sink,
+            event_trace_context,
+            metrics_resolved_ip,
+        }
+    }
+
+    #[inline]
+    pub fn cancel(&mut self) {
+        self.state = None;
+    }
+}
+
+impl Drop for CircuitBreakerHalfOpenTimeoutGuard<'_> {
+    #[inline]
+    fn drop(&mut self) {
+        if let Some(state_map) = self.state {
+            if let Some(state) = state_map.get(self.upstream) {
+                if state.status.load(Ordering::Relaxed) == CIRCUIT_BREAKER_STATUS_HALFOPEN {
+                    state.half_open_in_flight.store(false, Ordering::Relaxed);
+                    self.event_sink.emit(ferron_observability::Event::Log(
+                        ferron_observability::LogEvent {
+                            level: ferron_observability::LogLevel::Warn,
+                            message: format!(
+                                "Upstream {} half-open trial timed out, releasing slot",
+                                self.upstream.proxy_to
+                            ),
+                            summary: "Upstream half-open trial timed out".into(),
+                            target: crate::LOG_TARGET,
+                            attributes: vec![(
+                                "upstream.address",
+                                ferron_observability::LogAttributeValue::String(
+                                    self.upstream.proxy_to.clone(),
+                                ),
+                            )],
+                            trace_context: self.event_trace_context.clone(),
+                        },
+                    ));
+                    emit_circuit_metric(
+                        &self.event_sink,
+                        self.upstream,
+                        "ferron.proxy.upstream.circuit_half_open_timeout",
+                        ferron_observability::MetricType::Counter,
+                        ferron_observability::MetricValue::I64(1),
+                        self.event_trace_context.clone(),
+                        self.metrics_resolved_ip,
+                    );
+                }
+            }
+        }
+    }
+}

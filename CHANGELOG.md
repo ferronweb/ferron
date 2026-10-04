@@ -76,6 +76,7 @@
 - **`Connection: upgrade` header fix**: previously, when there was a request header with `Upgrade` inside the `Connection` header value (if the header wasn't exactly `Upgrade`), it would erroneously set to `upgrade`.
 - **Request body chunked encoding fix**: previously, when the request body was chunked-encoded, the server would wrongfully strip `Transfer-Encoding` header from the request before sending it to the upstream server, which could cause issues with some upstream servers that expect the header to be present.
 - **Retry budget fix**: previously, cross-backend failovers could consume a retry token before checking whether another backend was available, and `max_retry_rate` was accepted but not enforced. The budget now charges only retries that can be attempted and enforces the configured retry-rate share.
+- **Circuit breaker half-open timeout fix**: previously, the circuit breaker would not transition from half-open to closed when the HTTP pipeline timeout occurred, which could cause the circuit breaker to remain half-open until the process restart.
 
 #### URL rewriting
 

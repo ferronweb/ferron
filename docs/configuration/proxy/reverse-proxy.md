@@ -745,6 +745,7 @@ This prevents retry storms. When multiple backends fail simultaneously, the retr
 | Upstream circuit opened                                 | WARN  | `upstream.address` (string): backend server URL                                                                                                                      |
 | Upstream circuit closed                                 | INFO  | `upstream.address` (string): backend server URL                                                                                                                      |
 | Upstream circuit reopened after half-open trial failure | WARN  | `upstream.address` (string): backend server URL                                                                                                                      |
+| Upstream half-open trial timed out                      | WARN  | `upstream.address` (string): backend server URL                                                                                                                      |
 | Upstream flapping                                       | WARN  | `upstream.address` (string): backend server URL                                                                                                                      |
 | Upstream flapping resolved                              | INFO  | `upstream.address` (string): backend server URL                                                                                                                      |
 | Upstream circuit transitioned to half-open              | INFO  | `upstream.address` (string): backend server URL, `ferron.proxy.circuit.open_duration_ms`: open duration in milliseconds                                              |
@@ -768,21 +769,22 @@ The reverse proxy module contributes the following fields to the HTTP access log
 
 The reverse proxy stage sets the following attributes on its `ferron.stage.reverse_proxy` span:
 
-| Attribute                                    | Type   | Description                                                                                                                                   |
-| -------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `http.response.status_code`                  | int    | HTTP status code returned by the upstream backend.                                                                                            |
-| `error.type`                                 | string | Error type string on failure (for example `connection_refused`, `timeout`), enabling trace UI highlighting.                                   |
-| `ferron.proxy.backend_url`                   | string | URL of the upstream backend selected for the request.                                                                                         |
-| `ferron.proxy.backend_unix_path`             | string | Unix socket path of the backend, when using Unix sockets.                                                                                     |
-| `ferron.proxy.connection_reused`             | bool   | Whether the module reused the connection to the backend from the pool.                                                                        |
-| `ferron.proxy.retry_count`                   | int    | Number of retry attempts made during the request (includes same-upstream retries).                                                            |
-| `ferron.proxy.same_upstream_retry_count`     | int    | Number of times Ferron retried the same upstream during the request.                                                                          |
-| `ferron.proxy.upstream.circuit_state`        | string | Circuit breaker state of the selected backend: `closed`, `open`, or `half_open`.                                                              |
-| `ferron.proxy.upstream.is_flapping`          | bool   | Whether the selected backend is currently flapping (rapidly oscillating circuit breaker states).                                              |
-| `ferron.proxy.upstream.slow_start`           | bool   | Whether the selected backend is in slow-start (circuit breaker recently recovered). Only present when you configure `slow_start`.             |
-| `ferron.proxy.upstream.health_status`        | string | Active health check status of the selected backend: `healthy` or `unhealthy`. Only present when you configure health checks for the upstream. |
-| `ferron.proxy.upstream.consecutive_failures` | int    | Number of consecutive health check failures for the selected backend. Only present when you configure health checks.                          |
-| `ferron.proxy.upstream.active_connections`   | int    | Approximate number of active connections to the selected backend at the time of routing.                                                      |
+| Attribute                                         | Type   | Description                                                                                                                                   |
+| ------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http.response.status_code`                       | int    | HTTP status code returned by the upstream backend.                                                                                            |
+| `error.type`                                      | string | Error type string on failure (for example `connection_refused`, `timeout`), enabling trace UI highlighting.                                   |
+| `ferron.proxy.backend_url`                        | string | URL of the upstream backend selected for the request.                                                                                         |
+| `ferron.proxy.backend_unix_path`                  | string | Unix socket path of the backend, when using Unix sockets.                                                                                     |
+| `ferron.proxy.connection_reused`                  | bool   | Whether the module reused the connection to the backend from the pool.                                                                        |
+| `ferron.proxy.retry_count`                        | int    | Number of retry attempts made during the request (includes same-upstream retries).                                                            |
+| `ferron.proxy.same_upstream_retry_count`          | int    | Number of times Ferron retried the same upstream during the request.                                                                          |
+| `ferron.proxy.upstream.circuit_state`             | string | Circuit breaker state of the selected backend: `closed`, `open`, or `half_open`.                                                              |
+| `ferron.proxy.upstream.circuit_half_open_timeout` | int    | Number of times the half-open circuit trial timed out for the selected backend.                                                               |
+| `ferron.proxy.upstream.is_flapping`               | bool   | Whether the selected backend is currently flapping (rapidly oscillating circuit breaker states).                                              |
+| `ferron.proxy.upstream.slow_start`                | bool   | Whether the selected backend is in slow-start (circuit breaker recently recovered). Only present when you configure `slow_start`.             |
+| `ferron.proxy.upstream.health_status`             | string | Active health check status of the selected backend: `healthy` or `unhealthy`. Only present when you configure health checks for the upstream. |
+| `ferron.proxy.upstream.consecutive_failures`      | int    | Number of consecutive health check failures for the selected backend. Only present when you configure health checks.                          |
+| `ferron.proxy.upstream.active_connections`        | int    | Approximate number of active connections to the selected backend at the time of routing.                                                      |
 
 ## Best practices
 

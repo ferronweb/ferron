@@ -23,7 +23,7 @@ use crate::types::flapping::FlappingStateMap;
 use crate::types::health::HealthCheckStateMap;
 use crate::types::retry_budget::SharedRetryBudget;
 use crate::types::ConnectionsTrackState;
-use crate::upstream::circuit::CircuitBreaker;
+use crate::upstream::circuit::{CircuitBreaker, CircuitBreakerHalfOpenTimeoutGuard};
 use crate::upstream::lb::{ConsistentHashRing, EwmaStateMap, LoadBalancerAlgorithmInner};
 use crate::upstream::{record_backend_response, record_backend_transport_failure, BackendSet};
 use crate::ProxyMetrics;
@@ -182,6 +182,14 @@ pub async fn execute_proxy(
             .excluded_overloaded
             .extend(selected.exclusions.overloaded);
 
+        let mut circuit_timeout_guard = CircuitBreakerHalfOpenTimeoutGuard::new(
+            Some(&circuit_breaker_state),
+            &selected.upstream,
+            ctx.events.clone(),
+            ferron_http::trace_context::current_event_trace_context(ctx),
+            config.metrics_resolved_ip,
+        );
+
         // Stage span attributes for the selected backend before any network
         // I/O. The post-request injection in `ReverseProxyStage` never runs
         // when a pipeline timeout cancels this future, so without this the
@@ -278,6 +286,7 @@ pub async fn execute_proxy(
                         budget.record_request();
                     }
 
+                    circuit_timeout_guard.cancel();
                     return Ok((resp, metrics));
                 }
                 Err(e) => {
@@ -346,6 +355,7 @@ pub async fn execute_proxy(
                                     http::HeaderValue::from_str(&retry_after_value.to_string())
                                         .expect("retry-after value should be valid"),
                                 );
+                                circuit_timeout_guard.cancel();
                                 return Ok((
                                     HttpResponse::BuiltinError(503, Some(headers)),
                                     metrics,
@@ -425,6 +435,7 @@ pub async fn execute_proxy(
                                         http::HeaderValue::from_str(&retry_after_value.to_string())
                                             .expect("retry-after value should be valid"),
                                     );
+                                    circuit_timeout_guard.cancel();
                                     return Ok((
                                         HttpResponse::BuiltinError(503, Some(headers)),
                                         metrics,
@@ -494,9 +505,12 @@ pub async fn execute_proxy(
                         metrics.active_unhealthy_backends =
                             guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
                     }
+                    circuit_timeout_guard.cancel();
                     return Ok((HttpResponse::BuiltinError(status.as_u16(), None), metrics));
                 }
             }
         }
+
+        drop(circuit_timeout_guard);
     }
 }
