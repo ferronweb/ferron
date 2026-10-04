@@ -68,6 +68,7 @@
 
 - **`If-None-Match` wildcard fix**: the server now responds with a 304 response when a `If-None-Match: *` request header is sent, instead of a 200 response.
 - **HTTP ranges with precompression support**: previously, when precompressed file was present and precompression was enabled, a range request would lead to a response with parts of compressed file, which could be malformed.
+- **`If-Modified-Since` and `If-Unmodified-Since` malformed date fix**: the server now ignores malformed date values in `If-Modified-Since` and `If-Unmodified-Since` request headers instead of responding with a 400 (Bad Request) error.
 
 #### HTTP compression
 

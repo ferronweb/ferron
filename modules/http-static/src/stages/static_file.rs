@@ -335,19 +335,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     }
                 }
                 None => {
-                    let header_map = build_last_modified_header_map(
-                        mdate.as_ref(),
-                        vary_header,
-                        None,
-                        cache_control.as_deref(),
-                    );
-                    return respond_with_builtin(
-                        ctx,
-                        request,
-                        400,
-                        Some(header_map),
-                        "bad_request",
-                    );
+                    // RFC 9110 13.1.4: ignore
                 }
             }
         }
@@ -443,16 +431,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
                     }
                 }
                 None => {
-                    let header_map = build_last_modified_header_map(
-                        mdate.as_ref(),
-                        vary_header,
-                        None,
-                        cache_control.as_deref(),
-                    );
-                    ctx.http.req = Some(request);
-                    ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
-                    emit_static_response_metric(ctx, 400, "bad_request");
-                    return Ok(false);
+                    // RFC 9110 13.1.3: ignore
                 }
             }
         }
