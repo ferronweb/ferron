@@ -67,7 +67,8 @@ pub fn parse_range_header(
                 .parse::<u64>()
                 .map_err(|_| RangeParseError::InvalidSyntax)?;
             if n == 0 {
-                return Err(RangeParseError::InvalidSyntax);
+                // See RFC 9110, section 14.1.1
+                return Err(RangeParseError::Unsatisfiable);
             }
             let file_len = default_end.saturating_add(1);
             if n >= file_len {
