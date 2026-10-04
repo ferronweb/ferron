@@ -177,7 +177,7 @@ Ferron reuses file handles (and I/O errors) for static file responses to reduce 
 #### Static file serving
 
 | Metric | Type | Attributes | Description |
-| ---------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | |
+| ---------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
 | `ferron.static.responses` | Counter | `http.response.status.code` (HTTP response status code), `ferron.static.outcome` (static file serving outcome) | Static-file responses across normal, conditional, range, and error paths |
 
 ### Access log fields
