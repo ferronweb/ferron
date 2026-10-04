@@ -24,7 +24,7 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
     apt update && DEBIAN_FRONTEND=noninteractive \
     apt install -y debootstrap clang-23 lld-23 libclang-23-dev wrk \
     nghttp2-client openssl python3 llvm-23 qemu-user-static cmake curl \
-    clang-19 lld-19 libclang-19-dev llvm && \
+    clang lld libclang-dev llvm && \
     cargo install bindgen-cli
 
 # Install the right Rust target
