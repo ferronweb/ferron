@@ -154,17 +154,6 @@ fn run_service_impl() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[inline]
-fn parse_config_params(params_str: &str) -> HashMap<String, String> {
-    let mut params = HashMap::new();
-    for pair in params_str.split(';') {
-        if let Some((key, value)) = pair.split_once('=') {
-            params.insert(key.trim().to_string(), value.trim().to_string());
-        }
-    }
-    params
-}
-
 /// STUB: Intentional platform stub. On non-Windows platforms, service support is not available.
 #[cfg(not(windows))]
 pub fn run_service() -> Result<(), Box<dyn std::error::Error>> {
