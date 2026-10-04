@@ -145,9 +145,10 @@ mod tests {
 
     #[test]
     fn parse_suffix_range_zero() {
+        // A zero-length suffix range is unsatisfiable, not a syntax error.
         assert_eq!(
             parse_range_header("bytes=-0", 999),
-            Err(RangeParseError::InvalidSyntax)
+            Err(RangeParseError::Unsatisfiable)
         );
     }
 
