@@ -53,6 +53,16 @@ impl HttpTraceSettings {
             ferron_observability::sampler::TraceSamplingMode::AlwaysOff
         )
     }
+
+    /// The probability that `trace_sampling` applies to traces Ferron starts.
+    ///
+    /// Reported to backends as the W3C `ot` tracestate entry so they can
+    /// extrapolate counts from partially sampled traces. `None` when the
+    /// sampler is not probabilistic or the probability carries no information.
+    #[inline]
+    pub fn sampling_probability(&self) -> Option<f64> {
+        self.sampling.mode.root_probability()
+    }
 }
 
 /// Return the `http` sub-block of a configuration block, if present.

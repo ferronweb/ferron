@@ -88,6 +88,31 @@ pub fn format_traceparent(tc: &TraceContext) -> String {
     format!("00-{}-{}-{:02x}", tc.trace_id, tc.span_id, flags)
 }
 
+/// Build a W3C `tracestate` value carrying the OpenTelemetry sampling probability.
+///
+/// Backends use `ot` to extrapolate counts from traces that were only partially
+/// sampled. Without it, a trace sampled at 10% reports one request per stored
+/// trace and the totals silently disagree with the unsampled metrics.
+///
+/// Returns `None` when there is nothing to report: probabilities of `1.0` drop
+/// no traces, and anything outside `(0.0, 1.0)` or non-finite is rejected rather
+/// than written as a value a backend would have to guess about.
+pub fn format_sampling_tracestate(probability: f64) -> Option<String> {
+    if !(probability > 0.0 && probability < 1.0) || !probability.is_finite() {
+        return None;
+    }
+    // Render with enough precision to round-trip a typical ratio, then drop
+    // trailing zeros so `0.10000000000000001` does not become a long literal.
+    let mut rendered = format!("{probability:.6}");
+    if rendered.contains('.') {
+        rendered = rendered
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string();
+    }
+    Some(format!("ot={rendered}"))
+}
+
 /// Inject trace headers into an http HeaderMap
 pub fn inject_trace_headers(headers: &mut HeaderMap, tc: &TraceContext) {
     // Sanitize existing traceparent/tracestate/baggage headers before injecting new ones.
@@ -199,6 +224,32 @@ mod tests {
         assert!(tc.sampled);
         assert!(is_hex(&tc.trace_id));
         assert!(is_hex(&tc.span_id));
+    }
+
+    #[test]
+    fn test_format_sampling_tracestate() {
+        assert_eq!(format_sampling_tracestate(0.1), Some("ot=0.1".to_string()));
+        assert_eq!(
+            format_sampling_tracestate(0.25),
+            Some("ot=0.25".to_string())
+        );
+        assert_eq!(
+            format_sampling_tracestate(0.001),
+            Some("ot=0.001".to_string())
+        );
+    }
+
+    #[test]
+    fn test_format_sampling_tracestate_skips_uninformative_values() {
+        // 1.0 drops no traces, so there is nothing to extrapolate.
+        assert_eq!(format_sampling_tracestate(1.0), None);
+        // 0.0 means no trace is sampled at all.
+        assert_eq!(format_sampling_tracestate(0.0), None);
+        // Out-of-range and non-finite values would be a guess, not a probability.
+        assert_eq!(format_sampling_tracestate(1.5), None);
+        assert_eq!(format_sampling_tracestate(-0.1), None);
+        assert_eq!(format_sampling_tracestate(f64::NAN), None);
+        assert_eq!(format_sampling_tracestate(f64::INFINITY), None);
     }
 
     #[test]

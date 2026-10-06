@@ -22,6 +22,22 @@ When the `trace` block enables `trust_request`, Ferron parses the incoming `trac
 
 With `trust_request` enabled, Ferron also parses the incoming `baggage` header and attaches it to the local request span context. Ferron then propagates baggage to upstream services and includes it in OTLP span exports. This lets application-defined key-value pairs flow through the entire request path.
 
+### Sampling probability in `tracestate`
+
+When Ferron starts a trace itself, it owns the sampling decision, so it records the probability of that decision in the W3C `ot` `tracestate` entry:
+
+```ferron
+http {
+    trace_sampling traceidratio { ratio 0.1 }
+}
+```
+
+Traces generated for those requests carry `tracestate: ot=0.1`, both in the headers sent to upstreams and on the exported span. Backends that support extrapolating sampled traces read `ot` to scale trace-derived counts back up. Without it, a 10% sampler looks like a 10x drop in traffic when you total up traces.
+
+Fermon omits `ot` when the probability carries no information. That covers `always_on`, `always_off`, `parentbased_always_on`, and any ratio of `1.0` or `0.0`, plus `attribute_based` sampling, which decides per trace rather than by ratio.
+
+When `trust_request` is enabled and the request carries a `tracestate`, that value is passed through unchanged. The caller owns the sampling decision for its own trace, so Ferron does not overwrite its `ot` entry.
+
 ### Trace configuration
 
 These directives go inside the `http` block.

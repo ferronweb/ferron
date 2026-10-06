@@ -33,6 +33,29 @@ pub enum TraceSamplingMode {
     },
 }
 
+impl TraceSamplingMode {
+    /// The sampling probability this mode applies to a root trace.
+    ///
+    /// Returns `None` when the mode is not a probabilistic sampler, or when the
+    /// probability carries no information (`0.0` and `1.0` both mean "no traces
+    /// were dropped"). Backends use this to extrapolate counts from partially
+    /// sampled traces, so reporting a wrong value silently skews every
+    /// aggregated number derived from traces.
+    #[inline]
+    pub fn root_probability(&self) -> Option<f64> {
+        let probability = match self {
+            TraceSamplingMode::AlwaysOn | TraceSamplingMode::ParentBasedAlwaysOn => 1.0,
+            TraceSamplingMode::AlwaysOff => 0.0,
+            TraceSamplingMode::TraceIdRatioBased { ratio }
+            | TraceSamplingMode::ParentBasedTraceIdRatio { ratio } => *ratio,
+            // Attribute-based sampling takes an all-or-nothing decision per trace,
+            // so there is no ratio to extrapolate from.
+            TraceSamplingMode::AttributeBased { .. } => return None,
+        };
+        (probability > 0.0 && probability < 1.0 && probability.is_finite()).then_some(probability)
+    }
+}
+
 /// A rule for attribute-based sampling.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttributeSamplingRule {
@@ -727,5 +750,46 @@ mod tests {
         let first = sampler.should_sample(None, Some(&trace_id), &[]);
         let second = sampler.should_sample(None, Some(&trace_id), &[]);
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn root_probability_reports_the_configured_ratio() {
+        assert_eq!(
+            TraceSamplingMode::TraceIdRatioBased { ratio: 0.1 }.root_probability(),
+            Some(0.1)
+        );
+        assert_eq!(
+            TraceSamplingMode::ParentBasedTraceIdRatio { ratio: 0.25 }.root_probability(),
+            Some(0.25)
+        );
+    }
+
+    #[test]
+    fn root_probability_omits_uninformative_modes() {
+        // AlwaysOn and AlwaysOff drop nothing and everything respectively, so
+        // there is no ratio for a backend to extrapolate with.
+        assert_eq!(TraceSamplingMode::AlwaysOn.root_probability(), None);
+        assert_eq!(TraceSamplingMode::AlwaysOff.root_probability(), None);
+        assert_eq!(
+            TraceSamplingMode::ParentBasedAlwaysOn.root_probability(),
+            None
+        );
+        assert_eq!(
+            TraceSamplingMode::TraceIdRatioBased { ratio: 1.0 }.root_probability(),
+            None
+        );
+        assert_eq!(
+            TraceSamplingMode::TraceIdRatioBased { ratio: 0.0 }.root_probability(),
+            None
+        );
+        // Attribute-based sampling decides per trace, so it has no probability.
+        assert_eq!(
+            TraceSamplingMode::AttributeBased {
+                rules: vec![],
+                default_action: AttributeBasedDefaultAction::Drop,
+            }
+            .root_probability(),
+            None
+        );
     }
 }

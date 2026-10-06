@@ -16,6 +16,14 @@
 
 - **`http.route` is now a route template**: the `ferron.request` span reported `http.route` as the requested hostname (or `"*"`). It now reports the matched route template built from the configured `location` block names, for example `/api/users/:id`, and is omitted when no `location` block matched. Dashboards and queries that grouped traces by `http.route` should group by `ferron.host` instead. See [Tracing](/docs/configuration/observability/tracing).
 - **`ferron.host` added to request spans**: the requested virtual host is now reported as `ferron.host` on the `ferron.request` span. It uses the same attribute name as the TLS metrics, so traces and metrics join on the same key. `server.address` is unchanged and still reports the bound socket address.
+- **Sampling probability reported in `tracestate`**: when Ferron starts a trace itself and `trace_sampling` uses a ratio, the request's trace context now carries the OpenTelemetry `ot` `tracestate` entry (for example `ot=0.1`), on the propagated headers and on the exported span. Backends that extrapolate sampled traces can scale counts back up; previously a ratio sampler silently reported only the sampled fraction of traffic. No `ot` entry is written for `always_on`, `always_off`, `parentbased_always_on`, a ratio of `1.0` or `0.0`, or `attribute_based` sampling. An incoming `tracestate` is passed through unchanged.
+
+### Fixed
+
+#### Observability
+
+- **`tracestate` is now exported on spans**: the OTLP exporter wrote an empty `trace_state` on every span, discarding the W3C `tracestate` that Ferron parses and propagates to upstreams. The span now reports it.
+- **Span trace flags follow the sampling decision**: the OTLP exporter hardcoded the "sampled" flag on every span. The flag now reflects the recorded decision, and a stale comment claiming the exporter used an OpenTelemetry SDK configured with `Sampler::AlwaysOn` was corrected.
 
 ## Ferron 3.0.0-rc.9
 

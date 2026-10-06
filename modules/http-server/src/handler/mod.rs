@@ -122,6 +122,7 @@ pub async fn request_handler(
         &request,
         trace_settings.generate,
         trace_settings.default_sampled(),
+        trace_settings.sampling_probability(),
         trace_settings.trust_request,
         has_traces,
     );

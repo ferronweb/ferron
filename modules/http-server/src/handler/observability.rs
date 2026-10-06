@@ -377,6 +377,7 @@ pub fn resolve_request_trace_context(
     request: &HttpRequest,
     generate_enabled: bool,
     default_sampled: bool,
+    sampling_probability: Option<f64>,
     trust_request: bool,
     has_traces: bool,
 ) -> (Option<trace_context::TraceContext>, Option<Parent>) {
@@ -425,6 +426,13 @@ pub fn resolve_request_trace_context(
 
     if generate_enabled {
         let mut context = trace_context::generate_traceparent(default_sampled);
+        // Ferron owns the sampling decision for a trace it starts, so it also
+        // owns the reported probability. Recording it lets backends extrapolate
+        // counts from a partially sampled trace instead of under-reporting by
+        // the sampling ratio. An incoming `tracestate` is not overwritten: that
+        // decision belongs to the caller.
+        context.tracestate =
+            trace_context::format_sampling_tracestate(sampling_probability.unwrap_or(1.0));
         if trust_request {
             context.baggage = request
                 .headers()
@@ -588,6 +596,66 @@ mod tests {
             &http::Method::from_bytes(b"CUSTOM").unwrap(),
         ));
         assert_eq!(values.len(), 10, "bounded to 9 standard + 1 _other");
+    }
+
+    fn trace_context_request(headers: &[(&str, &str)]) -> HttpRequest {
+        use bytes::Bytes;
+        use http_body_util::Empty;
+
+        let mut builder = http::Request::builder().method("GET");
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        builder
+            .body(
+                Empty::<Bytes>::new()
+                    .map_err(|_| unreachable!())
+                    .boxed_unsync(),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn generated_trace_context_records_the_sampling_probability() {
+        // Ferron owns the decision for a trace it starts, so it records the
+        // probability for backends to extrapolate from.
+        let request = trace_context_request(&[]);
+        let (context, parent) =
+            resolve_request_trace_context(&request, true, true, Some(0.1), false, true);
+
+        assert!(parent.is_none(), "no external parent for a generated trace");
+        assert_eq!(
+            context.expect("trace context").tracestate.as_deref(),
+            Some("ot=0.1")
+        );
+    }
+
+    #[test]
+    fn generated_trace_context_omits_tracestate_without_a_ratio() {
+        let request = trace_context_request(&[]);
+        let (context, _) = resolve_request_trace_context(&request, true, true, None, false, true);
+
+        assert_eq!(context.expect("trace context").tracestate, None);
+    }
+
+    #[test]
+    fn trusted_tracestate_is_preserved_not_overwritten() {
+        // When the caller started the trace, its `tracestate` is authoritative.
+        let request = trace_context_request(&[
+            (
+                "traceparent",
+                "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            ),
+            ("tracestate", "vendor=abc"),
+        ]);
+        let (context, parent) =
+            resolve_request_trace_context(&request, true, true, Some(0.1), true, true);
+
+        assert!(parent.is_some(), "the incoming context becomes the parent");
+        assert_eq!(
+            context.expect("trace context").tracestate.as_deref(),
+            Some("vendor=abc")
+        );
     }
 
     #[test]

@@ -191,6 +191,89 @@ fn start_span_ferron_request_uses_server_kind() {
 }
 
 #[test]
+fn start_span_carries_tracestate_for_extrapolation() {
+    let mut correlation = CorrelationContext::new();
+    let event = TraceEvent::StartSpan {
+        key: Cow::Borrowed("test.span"),
+        name: Cow::Borrowed("ferron.request"),
+        parent: None,
+        trace_context: Some(EventTraceContext {
+            trace_id: TRACE_ID_HEX.as_bytes().try_into().unwrap(),
+            span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
+            baggage: None,
+            sampled: Some(true),
+            // `ot` is the OpenTelemetry sampling probability a backend reads to
+            // extrapolate counts from a partially sampled trace.
+            tracestate: Some("ot=0.1".to_string()),
+        }),
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    };
+    start_span(&event, &mut correlation, &[], &None, now());
+
+    let span = correlation.get_span("test.span").unwrap();
+    assert_eq!(span.trace_state, "ot=0.1");
+}
+
+#[test]
+fn start_span_flags_follow_the_sampling_decision() {
+    let span_for = |sampled: Option<bool>| {
+        let mut correlation = CorrelationContext::new();
+        let event = TraceEvent::StartSpan {
+            key: Cow::Borrowed("test.span"),
+            name: Cow::Borrowed("ferron.request"),
+            parent: None,
+            trace_context: Some(EventTraceContext {
+                trace_id: TRACE_ID_HEX.as_bytes().try_into().unwrap(),
+                span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
+                baggage: None,
+                sampled,
+                tracestate: None,
+            }),
+            builder_attributes: vec![],
+            attributes: vec![],
+            links: vec![],
+            control_plane_metadata: None,
+        };
+        start_span(&event, &mut correlation, &[], &None, now());
+        correlation.get_span("test.span").unwrap().flags
+    };
+
+    assert_eq!(span_for(Some(true)), 1);
+    assert_eq!(span_for(Some(false)), 0);
+    // An unrecorded decision is treated as sampled so spans are not dropped
+    // downstream for lacking a flag.
+    assert_eq!(span_for(None), 1);
+}
+
+#[test]
+fn start_span_without_tracestate_leaves_trace_state_empty() {
+    let mut correlation = CorrelationContext::new();
+    let event = TraceEvent::StartSpan {
+        key: Cow::Borrowed("test.span"),
+        name: Cow::Borrowed("ferron.request"),
+        parent: None,
+        trace_context: Some(EventTraceContext {
+            trace_id: TRACE_ID_HEX.as_bytes().try_into().unwrap(),
+            span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
+            baggage: None,
+            sampled: Some(true),
+            tracestate: None,
+        }),
+        builder_attributes: vec![],
+        attributes: vec![],
+        links: vec![],
+        control_plane_metadata: None,
+    };
+    start_span(&event, &mut correlation, &[], &None, now());
+
+    let span = correlation.get_span("test.span").unwrap();
+    assert!(span.trace_state.is_empty());
+}
+
+#[test]
 fn start_span_uses_requested_trace_and_span_ids() {
     let mut correlation = CorrelationContext::new();
     let event = TraceEvent::StartSpan {

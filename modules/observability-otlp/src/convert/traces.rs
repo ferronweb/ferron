@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use ferron_observability::baggage::{self, BaggageKeyPromotion, SignalSet};
-use ferron_observability::{Parent, SpanLink, TraceAttributeValue, TraceEvent};
+use ferron_observability::{EventTraceContext, Parent, SpanLink, TraceAttributeValue, TraceEvent};
 
 use crate::proto::opentelemetry::proto::common::v1::KeyValue;
 use crate::proto::opentelemetry::proto::trace::v1::{span, status, Span, Status};
@@ -15,9 +15,23 @@ use super::context::{
 };
 use super::{any_bool, any_double, any_int, any_string, kv, nanos};
 
-/// The span flags field carries the W3C trace flags in its low 8 bits. The
-/// SDK configured `Sampler::AlwaysOn`, so every span is sampled.
+/// The span flags field carries the W3C trace flags in its low 8 bits. Ferron
+/// decides sampling in [`TraceSampler`] before a span reaches this converter, so
+/// a span that arrives here was sampled; the per-event value below still
+/// reflects the decision that was actually made.
 const SPAN_FLAGS_SAMPLED: u32 = 1;
+
+/// Resolve the W3C trace flags for a span from its trace context.
+///
+/// A trace context without a recorded decision is treated as sampled, which
+/// keeps spans exported while `trace_sampling` keeps them.
+#[inline]
+fn span_flags(trace_context: Option<&EventTraceContext>) -> u32 {
+    match trace_context.and_then(|tc| tc.sampled) {
+        Some(false) => 0,
+        _ => SPAN_FLAGS_SAMPLED,
+    }
+}
 
 /// Handle a `TraceEvent::StartSpan`: build the proto span and track it in the
 /// correlation context so `Parent::ByKey` and `EndSpan` can resolve it.
@@ -99,7 +113,14 @@ pub(crate) fn start_span(
     let span = Span {
         trace_id,
         span_id,
-        trace_state: String::new(),
+        // Carry the W3C `tracestate` through to the span. Backends read the
+        // OpenTelemetry `ot` entry from here to extrapolate counts from a
+        // partially sampled trace; dropping it makes every trace-derived total
+        // report only the sampled fraction.
+        trace_state: trace_context
+            .as_ref()
+            .and_then(|tc| tc.tracestate.clone())
+            .unwrap_or_default(),
         parent_span_id,
         name: name.to_string(),
         kind,
@@ -112,7 +133,7 @@ pub(crate) fn start_span(
         links: span_links,
         dropped_links_count: 0,
         status: None,
-        flags: SPAN_FLAGS_SAMPLED,
+        flags: span_flags(trace_context.as_ref()),
     };
 
     let stored = StoredSpan {
