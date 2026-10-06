@@ -14,8 +14,8 @@ ferron-observability = { path = "../../types/observability" }
 ferron-ocsp = { path = "../../types/ocsp" }
 ferron-tls = { path = "../../types/tls", features = ["observability"] }
 time = "0.3"
-rasn = "0.28.13"
-rasn-pkix = "0.28.13"
+rasn = "0.29"
+rasn-pkix = "0.29"
 anyhow = "1.0.102"
 tempfile = "3"
 chrono = "0.4.45"

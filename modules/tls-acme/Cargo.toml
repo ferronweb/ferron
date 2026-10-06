@@ -42,8 +42,8 @@ base64 = "0.23"
 xxhash-rust = { version = "0.8", features = ["std", "xxh3"] }
 
 # Certificate parsing
-rasn = "0.28.13"
-rasn-pkix = "0.28.13"
+rasn = "0.29"
+rasn-pkix = "0.29"
 
 # HTTP (for ACME client and HTTP-01 challenge)
 hyper = { version = "1", features = ["client", "http1", "http2"] }
