@@ -230,6 +230,7 @@ pub enum Parent {
 
 /// A distributed trace event: either start or end a span.
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum TraceEvent {
     /// Start a new span with the given name, optional parent, and attributes.
     ///
