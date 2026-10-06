@@ -10,6 +10,13 @@
 
 - **`EventTraceContext` API change**: the `EventTraceContext` struct for `ferron_observability` has been updated to include `tracestate`. If your custom Ferron modules rely on the `EventTraceContext` struct, you may need to update it to include `tracestate` (you can use `tracestate: None`).
 
+### Changed
+
+#### Observability
+
+- **`http.route` is now a route template**: the `ferron.request` span reported `http.route` as the requested hostname (or `"*"`). It now reports the matched route template built from the configured `location` block names, for example `/api/users/:id`, and is omitted when no `location` block matched. Dashboards and queries that grouped traces by `http.route` should group by `ferron.host` instead. See [Tracing](/docs/configuration/observability/tracing).
+- **`ferron.host` added to request spans**: the requested virtual host is now reported as `ferron.host` on the `ferron.request` span. It uses the same attribute name as the TLS metrics, so traces and metrics join on the same key. `server.address` is unchanged and still reports the bound socket address.
+
 ## Ferron 3.0.0-rc.9
 
 **Released in October 4, 2026**

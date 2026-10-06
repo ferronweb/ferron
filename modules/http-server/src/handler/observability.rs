@@ -14,6 +14,17 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 pub use ferron_http::trace_context::to_event_trace_context;
 
+/// Build the OpenTelemetry `http.route` value from the matched location path.
+///
+/// The segments are the configured `location` block names from root to leaf, so
+/// the result stays low-cardinality (`/api/users/:id`) rather than repeating the
+/// concrete request path. Returns `None` when no `location` block matched, so the
+/// attribute can be omitted instead of reporting a placeholder route.
+#[inline]
+pub(super) fn route_template(path_segments: &[String]) -> Option<String> {
+    (!path_segments.is_empty()).then(|| format!("/{}", path_segments.join("/")))
+}
+
 static SPAN_KEY_COUNTER: AtomicU64 = AtomicU64::new(1);
 /// List of sensitive fields to redact from log output by default (lower-case).
 pub const SENSITIVE_FIELDS_REDACTED: &[&str] = &[
@@ -689,6 +700,63 @@ mod tests {
         assert!(
             ctx.get_span_attributes().is_empty(),
             "staged attributes must be drained by the flush"
+        );
+    }
+
+    #[test]
+    fn route_template_joins_matched_location_segments() {
+        let segments = |v: &[&str]| -> Vec<String> { v.iter().map(|s| s.to_string()).collect() };
+
+        assert_eq!(
+            route_template(&segments(&["api"])),
+            Some("/api".to_string())
+        );
+        assert_eq!(
+            route_template(&segments(&["api", "users", ":id"])),
+            Some("/api/users/:id".to_string())
+        );
+    }
+
+    #[test]
+    fn route_template_is_none_without_location_match() {
+        // A request that matches only a host or IP block has no route template, so
+        // `http.route` must be omitted rather than reported as a placeholder.
+        assert_eq!(route_template(&[]), None);
+    }
+
+    /// `ferron.host` is a builder attribute, which means it is visible to the
+    /// sampler before the request is routed. Attribute-based sampling rules for a
+    /// single virtual host only work if that holds.
+    #[test]
+    fn ferron_host_is_visible_to_attribute_based_sampling() {
+        use ferron_observability::sampler::{
+            AttributeBasedDefaultAction, AttributeMatcher, AttributeSamplingRule,
+            TraceSamplingConfig, TraceSamplingMode,
+        };
+
+        let rule = AttributeSamplingRule {
+            attribute: "ferron.host".to_string(),
+            matcher: AttributeMatcher::Exact("admin.example.com".to_string()),
+        };
+
+        let config = TraceSamplingConfig {
+            mode: TraceSamplingMode::AttributeBased {
+                rules: vec![rule],
+                default_action: AttributeBasedDefaultAction::Drop,
+            },
+        };
+        let sampler = ferron_observability::sampler::TraceSampler::new(&config);
+
+        let admin = TraceAttributeValue::String("admin.example.com".to_string());
+        assert!(
+            sampler.should_sample(None, None, &[("ferron.host", &admin)]),
+            "the sampled virtual host must be sampled"
+        );
+
+        let www = TraceAttributeValue::String("www.example.com".to_string());
+        assert!(
+            !sampler.should_sample(None, None, &[("ferron.host", &www)]),
+            "a different virtual host must fall through to the default action"
         );
     }
 }

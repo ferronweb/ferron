@@ -177,6 +177,15 @@ pub async fn request_handler(
                     TraceAttributeValue::String(tls.cipher_suite.clone()),
                 ));
             }
+            // The requested hostname is known before routing, so it is available to
+            // attribute-based sampling. `server.address` stays the bound socket
+            // address; this attribute names the virtual host the request targets.
+            if let Some(ref host) = hostname {
+                builder_attributes.push((
+                    Cow::Borrowed("ferron.host"),
+                    TraceAttributeValue::String(host.clone()),
+                ));
+            }
 
             let emitted = events.emit(Event::Trace(TraceEvent::StartSpan {
                 key: Cow::Owned(request_span_key.clone()),
@@ -245,6 +254,7 @@ pub async fn request_handler(
         custom_fields,
         resolved_control_plane_metadata,
         hide_server,
+        route,
     ) = request_handler_inner(
         request,
         pipeline,
@@ -388,10 +398,12 @@ pub async fn request_handler(
                 "http.response.status_code",
                 TraceAttributeValue::I64(status_code as i64),
             ));
-            end_attrs.push((
-                "http.route",
-                TraceAttributeValue::String(hostname.as_deref().unwrap_or("*").to_string()),
-            ));
+            // The OpenTelemetry `http.route` attribute is the matched route template.
+            // Omit it when no `location` block matched, rather than reporting a
+            // placeholder that reads like a real route.
+            if let Some(ref route) = route {
+                end_attrs.push(("http.route", TraceAttributeValue::String(route.clone())));
+            }
             if status_code >= 400 {
                 end_attrs.push((
                     "error.type",
@@ -452,6 +464,8 @@ async fn request_handler_inner(
     Option<FxHashMap<String, CustomAccessLogField>>,
     Option<Arc<std::collections::BTreeMap<String, String>>>,
     bool,
+    // The last element is the route template of the matched location blocks.
+    Option<String>,
 ) {
     // Cache global config once to avoid multiple Arc clones on the hot path
     let global_config = config_resolver.global();
@@ -485,7 +499,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None, None, None, None, false);
+            return (Ok(response), None, None, None, None, false, None);
         }
         return (
             Ok(builtin_error_response(
@@ -504,6 +518,7 @@ async fn request_handler_inner(
             None,
             None,
             false,
+            None,
         );
     }
 
@@ -542,6 +557,7 @@ async fn request_handler_inner(
             None,
             None,
             false,
+            None,
         );
     }
 
@@ -586,7 +602,7 @@ async fn request_handler_inner(
             )
             .await
             {
-                return (Ok(response), None, None, None, None, false);
+                return (Ok(response), None, None, None, None, false, None);
             }
             return (
                 Ok(builtin_error_response(
@@ -605,6 +621,7 @@ async fn request_handler_inner(
                 None,
                 None,
                 false,
+                None,
             );
         }
 
@@ -642,7 +659,7 @@ async fn request_handler_inner(
                             )
                             .await
                             {
-                                return (Ok(response), None, None, None, None, false);
+                                return (Ok(response), None, None, None, None, false, None);
                             }
                             return (
                                 Ok(builtin_error_response(
@@ -662,6 +679,7 @@ async fn request_handler_inner(
                                 None,
                                 None,
                                 false,
+                                None,
                             );
                         }
                     };
@@ -696,7 +714,7 @@ async fn request_handler_inner(
                 )
                 .await
                 {
-                    return (Ok(response), None, None, None, None, false);
+                    return (Ok(response), None, None, None, None, false, None);
                 }
                 return (
                     Ok(builtin_error_response(
@@ -715,6 +733,7 @@ async fn request_handler_inner(
                     None,
                     None,
                     false,
+                    None,
                 );
             }
         }
@@ -766,7 +785,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None, None, None, None, ctx.hide_server);
+            return (Ok(response), None, None, None, None, ctx.hide_server, None);
         }
         return (
             Ok(builtin_error_response(
@@ -785,6 +804,7 @@ async fn request_handler_inner(
             None,
             None,
             ctx.hide_server,
+            None,
         );
     };
 
@@ -792,6 +812,10 @@ async fn request_handler_inner(
     ctx.configuration = resolution.configuration.clone();
     ctx.hostname = (!resolution.location_path.hostname_segments.is_empty())
         .then_some(resolution.location_path.hostname_segments.join("."));
+
+    // Route template for observability, built from the configured `location` block
+    // names, so it stays low-cardinality (for example `/api/users/:id`).
+    let route = route_template(&resolution.location_path.path_segments);
 
     // Extract resolved control plane metadata for post-resolution events
     let resolved_control_plane_metadata =
@@ -822,7 +846,7 @@ async fn request_handler_inner(
             .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
             .expect("failed to build OPTIONS * response");
 
-        return (Ok(response), None, None, None, None, ctx.hide_server);
+        return (Ok(response), None, None, None, None, ctx.hide_server, route);
     }
 
     let request = ctx.req.take().expect("invalid HTTP context state");
@@ -953,5 +977,6 @@ async fn request_handler_inner(
         custom_fields,
         resolved_control_plane_metadata,
         ctx.hide_server,
+        route,
     )
 }

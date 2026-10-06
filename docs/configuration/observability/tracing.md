@@ -210,10 +210,26 @@ Each HTTP request generates a root trace span and multiple nested spans for pipe
 ### Root request span
 
 - **`StartSpan("ferron.request")`** emits when the request enters the handler.
-  - Attributes: `http.request.method`, `url.full`, `url.scheme`, `server.address`, `server.port`, `client.address`
+  - Attributes: `http.request.method`, `url.full`, `url.scheme`, `server.address`, `server.port`, `client.address`, `ferron.host`
   - For HTTPS connections: `tls.protocol.version` (for example, `"TLSv1.3"`), `tls.cipher_suite` (for example, `"TLS_AES_256_GCM_SHA384"`)
 - **`EndSpan("ferron.request", error)`** emits when the request completes.
   - Attributes: `http.response.status_code`, `http.route` (if applicable), `error.type` (if status >= 400)
+
+`ferron.host` is the requested virtual host, taken from the `Host` header or the SNI hostname. It is omitted when the request has neither. This is the attribute to group by for multi-tenant filtering, and it matches the `ferron.host` attribute used by the TLS metrics, so traces and metrics join on the same key.
+
+`server.address` is the bound socket address (an IP address, or the Unix socket path), not the virtual host.
+
+`http.route` is the matched route template, built from the `location` block names from root to leaf. Given this configuration:
+
+```ferron
+api.example.com {
+    location /api {
+        location /users/:id { proxy http://localhost:8080 }
+    }
+}
+```
+
+a request to `/api/users/42` reports `http.route` as `/api/users/:id`. The concrete request path is not used, so the attribute stays low-cardinality. When no `location` block matches, `http.route` is omitted rather than reported as a placeholder.
 
 ### Pipeline execution span
 
@@ -333,7 +349,9 @@ Each `rule` takes 2 or 3 arguments:
 > Setting `attribute_based` without an explicit `default_action` drops all non-matching spans silently. This is usually not intended. For example, adding rules to sample `/api/` routes also drops health checks, static assets, and everything else. Always set `default_action "sample"` unless you deliberately want to drop non-matching spans.
 
 > [!note]
-> In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`) appear during this stage. They drive the sampling decisions for attribute-based sampling.
+> In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`, `ferron.host`, `tls.protocol.version`, `tls.cipher_suite`) appear during this stage. They drive the sampling decisions for attribute-based sampling.
+
+`http.route` is **not** in that list. It describes the outcome of routing, which happens after the sampling decision, so an `attribute_based` rule can never match on it. Use `ferron.host` to sample one virtual host, or `url.path` with a `prefix` matcher to sample a path prefix.
 
 ## See also
 
