@@ -918,6 +918,7 @@ mod tests {
             span_id: [0; 16],
             baggage: Some("tenant.id=acme,other=skip".to_string()),
             sampled: None,
+            tracestate: None,
         });
 
         let mut tracker = DistinctValueTracker::new();
@@ -957,6 +958,7 @@ mod tests {
             span_id: [0; 16],
             baggage: Some("tenant.id=acme".to_string()),
             sampled: None,
+            tracestate: None,
         });
 
         let mut tracker = DistinctValueTracker::new();

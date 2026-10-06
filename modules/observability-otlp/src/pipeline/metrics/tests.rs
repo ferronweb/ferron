@@ -436,6 +436,7 @@ async fn exemplar_ring_overwrites_and_attaches_last_sample() {
         trace_id: trace.as_bytes().try_into().unwrap(),
         span_id: span.as_bytes().try_into().unwrap(),
         baggage: None,
+        tracestate: None,
         sampled: None,
     };
     let mut tracker = DistinctValueTracker::new();
@@ -477,6 +478,7 @@ async fn exemplars_disabled_do_not_attach_samples() {
             .unwrap(),
         span_id: "bbbbbbbbbbbbbbbb".as_bytes().try_into().unwrap(),
         baggage: None,
+        tracestate: None,
         sampled: None,
     });
     let mut tracker = DistinctValueTracker::new();
@@ -501,6 +503,7 @@ async fn zero_trace_ids_do_not_produce_exemplars() {
         trace_id: [b'0'; 32],
         span_id: [b'0'; 16],
         baggage: None,
+        tracestate: None,
         sampled: None,
     });
     pipeline

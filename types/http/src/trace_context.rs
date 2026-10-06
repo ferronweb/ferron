@@ -135,10 +135,12 @@ pub fn to_event_trace_context(
         .try_into()
         .expect("span_id must be 16 hex chars");
     let baggage = trace_context.baggage.clone();
+    let tracestate = trace_context.tracestate.clone();
     ferron_observability::EventTraceContext {
         trace_id,
         span_id,
         baggage,
+        tracestate,
         sampled: Some(trace_context.sampled),
     }
 }

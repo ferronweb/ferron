@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Breaking changes
+
+#### Observability
+
+- **`EventTraceContext` API change**: the `EventTraceContext` struct for `ferron_observability` has been updated to include `tracestate`. If your custom Ferron modules rely on the `EventTraceContext` struct, you may need to update it to include `tracestate` (you can use `tracestate: None`).
+
 ## Ferron 3.0.0-rc.9
 
 **Released in October 4, 2026**

@@ -186,6 +186,8 @@ pub struct EventTraceContext {
     pub span_id: [u8; SPAN_ID_LEN],
     /// Baggage associated with the event.
     pub baggage: Option<String>,
+    /// Trace state associated with the event.
+    pub tracestate: Option<String>,
     /// Whether the trace was sampled, if known.
     pub sampled: Option<bool>,
 }

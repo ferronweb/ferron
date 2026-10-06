@@ -90,6 +90,7 @@ fn correlation_context_tracks_active_spans() {
             trace_id: [b'0'; 32],
             span_id: [b'0'; 16],
             baggage: Some("a=b".to_string()),
+            tracestate: None,
             sampled: Some(true),
         }),
         builder_attributes: vec![],
@@ -201,6 +202,7 @@ fn start_span_uses_requested_trace_and_span_ids() {
             span_id: [b'0'; 16],
             baggage: None,
             sampled: Some(true),
+            tracestate: None,
         }),
         builder_attributes: vec![],
         attributes: vec![],
@@ -223,6 +225,7 @@ fn start_span_uses_requested_trace_and_span_ids() {
             span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
             baggage: None,
             sampled: Some(true),
+            tracestate: None,
         }),
         builder_attributes: vec![],
         attributes: vec![],
@@ -318,6 +321,7 @@ fn start_span_promotes_baggage_per_signal() {
             span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
             baggage: Some("tenant.id=acme,user.role=admin,other=skip".to_string()),
             sampled: Some(true),
+            tracestate: None,
         }),
         builder_attributes: vec![],
         attributes: vec![],
@@ -656,6 +660,7 @@ fn build_log_record_sets_trace_context() {
             span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
             baggage: None,
             sampled: Some(true),
+            tracestate: None,
         }),
     };
     let record = build_log_record(&event, &[], LogStyle::Modern, now());
@@ -677,6 +682,7 @@ fn build_log_record_skips_malformed_trace_context() {
             span_id: [b'0'; 16],
             baggage: None,
             sampled: Some(true),
+            tracestate: None,
         }),
     };
     let record = build_log_record(&event, &[], LogStyle::Modern, now());
@@ -704,6 +710,7 @@ fn build_log_record_promotes_baggage() {
             span_id: SPAN_ID_HEX.as_bytes().try_into().unwrap(),
             baggage: Some("tenant.id=acme".to_string()),
             sampled: Some(true),
+            tracestate: None,
         }),
     };
     let record = build_log_record(&event, &promotions, LogStyle::Legacy, now());
