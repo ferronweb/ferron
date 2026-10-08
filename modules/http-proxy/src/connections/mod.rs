@@ -13,22 +13,20 @@ use std::thread::ThreadId;
 use std::time::Duration;
 
 use crossbeam_queue::SegQueue;
-use dashmap::DashMap;
-use rustc_hash::{FxBuildHasher, FxHashMap};
+use rustc_hash::FxHashMap;
 use tokio_util::sync::CancellationToken;
 
 mod pool;
+mod stats;
 
 use self::pool::SingleThreadPool;
 use crate::send_request::SendRequestWrapper;
 use crate::types::upstream::ResolvedUpstream;
 
+pub use stats::*;
+
 /// Connection pool key type: (upstream via Arc for cheap cloning, optional client IP for PROXY protocol).
 pub type PoolKey = (Arc<ResolvedUpstream>, Option<IpAddr>);
-
-/// Concrete pool item type used throughout the proxy.
-pub(crate) type PooledConnection =
-    self::pool::PoolItem<PoolKey, Arc<ResolvedUpstream>, SendRequestWrapper>;
 
 /// Thread-local pool storage.
 ///
@@ -62,119 +60,58 @@ static PENDING_PULLS: LazyLock<
 /// connection and `return_connection_to_pool` can skip the read lock entirely.
 static PENDING_PULL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-/// Global pool depth stats collector.
-///
-/// Tracks idle and outstanding connection counts per (worker thread, upstream) pair.
-/// Updated at pull/return boundaries and consumed by a background gauge emission task.
-pub static POOL_STATS: LazyLock<PoolStatsCollector> = LazyLock::new(PoolStatsCollector::new);
-
-pub struct PoolStatsCollector {
-    // AtomicUsize #1 - idle connections
-    // AtomicUsize #2 - outstanding connections
-    inner: DashMap<
-        (std::thread::ThreadId, Arc<ResolvedUpstream>),
-        (AtomicUsize, AtomicUsize),
-        FxBuildHasher,
-    >,
-    local_limits: DashMap<Arc<ResolvedUpstream>, AtomicUsize, FxBuildHasher>,
+/// Concrete pool item type used throughout the proxy.
+pub struct PooledConnection {
+    inner: Option<self::pool::PoolItem<PoolKey, Arc<ResolvedUpstream>, SendRequestWrapper>>,
 }
 
-impl PoolStatsCollector {
-    #[inline]
-    pub fn new() -> Self {
-        Self {
-            inner: DashMap::with_hasher(FxBuildHasher),
-            local_limits: DashMap::with_hasher(FxBuildHasher),
-        }
+impl PooledConnection {
+    /// Creates a pooled connection from pool item
+    const fn new(
+        inner: self::pool::PoolItem<PoolKey, Arc<ResolvedUpstream>, SendRequestWrapper>,
+    ) -> Self {
+        Self { inner: Some(inner) }
     }
 
+    /// Takes the inner value from the item, preventing it from being returned to the pool.
+    #[allow(dead_code)]
     #[inline]
-    pub fn record_pull(
-        &self,
-        thread_id: ThreadId,
-        upstream: &Arc<ResolvedUpstream>,
-        had_idle: bool,
-    ) {
-        let key = (thread_id, upstream.clone());
-        let entry = if let Some(entry) = self.inner.get(&key) {
-            entry
-        } else {
-            self.inner
-                .entry(key)
-                .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)))
-                .downgrade()
-        };
-        entry.value().1.fetch_add(1, Ordering::Relaxed);
-        if had_idle {
-            entry.value().0.fetch_sub(1, Ordering::Relaxed);
-        }
-    }
-
-    #[inline]
-    pub fn record_return(
-        &self,
-        thread_id: ThreadId,
-        upstream: &Arc<ResolvedUpstream>,
-        stored: bool,
-    ) {
-        let key = (thread_id, upstream.clone());
-        let entry = if let Some(entry) = self.inner.get(&key) {
-            entry
-        } else {
-            self.inner
-                .entry(key)
-                .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)))
-                .downgrade()
-        };
-        entry.value().1.fetch_sub(1, Ordering::Relaxed);
-        if stored {
-            entry.value().0.fetch_add(1, Ordering::Relaxed);
-        }
-    }
-
-    #[inline]
-    pub fn record_local_limit(&self, upstream: &Arc<ResolvedUpstream>, local_limit: usize) {
-        let entry = if let Some(entry) = self.local_limits.get(upstream) {
-            entry
-        } else {
-            self.local_limits
-                .entry(upstream.clone())
-                .or_insert_with(|| AtomicUsize::new(usize::MAX))
-                .downgrade()
-        };
-        entry.value().store(local_limit, Ordering::Relaxed);
-    }
-
-    #[allow(clippy::type_complexity)]
-    #[inline]
-    pub fn snapshot(
-        &self,
-    ) -> Vec<(
-        (std::thread::ThreadId, Arc<ResolvedUpstream>),
-        (usize, usize),
-    )> {
+    pub fn take(mut self) -> Option<SendRequestWrapper> {
         self.inner
-            .iter()
-            .map(|entry| {
-                let key = entry.key().clone();
-                let idle = entry.value().0.load(Ordering::Relaxed);
-                let outstanding = entry.value().1.load(Ordering::Relaxed);
-                (key, (idle, outstanding))
-            })
-            .collect()
+            .take()
+            .expect("invalid pooled connection state")
+            .take()
     }
+}
 
-    #[allow(clippy::type_complexity)]
+impl std::ops::Deref for PooledConnection {
+    type Target = self::pool::PoolItem<PoolKey, Arc<ResolvedUpstream>, SendRequestWrapper>;
+
     #[inline]
-    pub fn snapshot_local_limits(&self) -> Vec<(Arc<ResolvedUpstream>, usize)> {
-        self.local_limits
-            .iter()
-            .filter_map(|entry| {
-                let key = entry.key().clone();
-                let local_limit = entry.value().load(Ordering::Relaxed);
-                (local_limit != usize::MAX).then_some((key, local_limit))
-            })
-            .collect()
+    fn deref(&self) -> &Self::Target {
+        self.inner
+            .as_ref()
+            .expect("invalid pooled connection state")
+    }
+}
+
+impl std::ops::DerefMut for PooledConnection {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner
+            .as_mut()
+            .expect("invalid pooled connection state")
+    }
+}
+
+impl Drop for PooledConnection {
+    #[inline]
+    fn drop(&mut self) {
+        if let Some(key) = self.inner.as_ref().and_then(|k| k.key()) {
+            let stored = self.inner.as_ref().is_some_and(|i| i.inner().is_some()); // See what's in `pool.rs`...
+            let thread_id = get_tls_thread_id();
+            POOL_STATS.record_return(thread_id, &key.0, stored);
+        }
     }
 }
 
@@ -469,7 +406,7 @@ impl ConnectionManager {
             POOL_STATS.record_pull(thread_id, &upstream_for_stats, result.inner().is_some());
         }
 
-        result
+        result.map(PooledConnection::new)
     }
 
     /// Pull a connection with a local limit applied, returning immediately.
@@ -542,7 +479,7 @@ impl ConnectionManager {
             POOL_STATS.record_pull(thread_id, &upstream_for_stats, result.inner().is_some());
         }
 
-        result
+        result.map(PooledConnection::new)
     }
 }
 
@@ -681,10 +618,10 @@ fn get_tls_thread_id() -> ThreadId {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_pool_stats_collector() {
-        let collector = PoolStatsCollector::new();
-        let upstream = Arc::new(ResolvedUpstream {
+    use std::sync::Arc;
+
+    fn obtain_test_connection() -> (PooledConnection, ConnectionManager, Arc<ResolvedUpstream>) {
+        let upstream = Arc::new(crate::types::upstream::ResolvedUpstream {
             proxy_to: "http://backend".to_string(),
             connect_to: None,
             proxy_unix: None,
@@ -698,24 +635,67 @@ mod tests {
             },
             dns_status: Default::default(),
         });
+        let item = crate::send_request::SendRequestWrapper::empty();
 
-        // Record some pulls and returns
-        // - record_pull with had_idle = true: +1 outstanding, -1 idle
-        // - record_pull with had_idle = false: +1 outstanding, 0 idle
-        // - record_return with stored = true: -1 outstanding, +1 idle
-        // - record_return with stored = false: -1 outstanding, 0 idle
-        let thread_id = std::thread::current().id();
-        collector.record_pull(thread_id, &upstream, false); // +1 outstanding, 0 idle
-        collector.record_return(thread_id, &upstream, true); // -1 outstanding, +1 idle
-        collector.record_pull(thread_id, &upstream, true); // +1 outstanding, -1 idle
-        collector.record_pull(thread_id, &upstream, false); // +1 outstanding, 0 idle
-        collector.record_return(thread_id, &upstream, false); // -1 outstanding, 0 idle
+        let cm = ConnectionManager::with_global_limit(2);
+        let mut conn = cm
+            .try_pull(upstream.clone(), None, Duration::from_secs(10))
+            .expect("failed to pull connection");
 
-        let snapshot = collector.snapshot();
-        assert_eq!(snapshot.len(), 1);
-        let ((_thread_id, recorded_upstream), (idle, outstanding)) = &snapshot[0];
-        assert_eq!(recorded_upstream.proxy_to, "http://backend");
-        assert_eq!(*idle, 0);
-        assert_eq!(*outstanding, 1);
+        *conn.inner_mut() = Some(item);
+
+        (conn, cm, upstream)
+    }
+
+    fn get_stats_snapshot(upstream: &Arc<ResolvedUpstream>) -> (usize, usize) {
+        let snapshot = POOL_STATS.snapshot();
+        let snapshot_for_upstream = snapshot
+            .iter()
+            .find(|p| Arc::ptr_eq(&p.0 .1, upstream))
+            .expect("snapshot for tested upstream not found");
+        snapshot_for_upstream.1
+    }
+
+    #[test]
+    fn test_pooled_connection_lifecycle_drop() {
+        let (conn, _cm, up) = obtain_test_connection();
+
+        // There should be one outstanding connection that's just pulled
+        assert_eq!(get_stats_snapshot(&up), (0, 1)); // stats: (idle, outstanding)
+
+        drop(conn);
+
+        // There should be one idle connection that's just returned to the pool
+        assert_eq!(get_stats_snapshot(&up), (1, 0));
+    }
+
+    #[test]
+    fn test_pooled_connection_lifecycle_returninfo() {
+        let (mut conn, _cm, up) = obtain_test_connection();
+
+        // There should be one outstanding connection that's just pulled
+        assert_eq!(get_stats_snapshot(&up), (0, 1)); // stats: (idle, outstanding)
+
+        let wrapper = conn.inner_mut().take().expect("invalid connection state");
+        let ret_info = crate::send_request::PoolReturnInfo::from_item(conn, wrapper, false);
+        drop(ret_info);
+
+        // There should be one idle connection that's just returned to the pool
+        assert_eq!(get_stats_snapshot(&up), (1, 0));
+    }
+
+    #[test]
+    fn test_pooled_connection_lifecycle_returninfo_discard() {
+        let (mut conn, _cm, up) = obtain_test_connection();
+
+        // There should be one outstanding connection that's just pulled
+        assert_eq!(get_stats_snapshot(&up), (0, 1)); // stats: (idle, outstanding)
+
+        let wrapper = conn.inner_mut().take().expect("invalid connection state");
+        let ret_info = crate::send_request::PoolReturnInfo::from_item(conn, wrapper, false);
+        ret_info.discard();
+
+        // There should be zero idle connections (the connection is discarded earlier)
+        assert_eq!(get_stats_snapshot(&up), (0, 0));
     }
 }

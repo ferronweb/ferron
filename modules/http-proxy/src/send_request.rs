@@ -122,6 +122,15 @@ impl SendRequestWrapper {
         }
     }
 
+    #[cfg(test)]
+    #[inline]
+    pub fn empty() -> Self {
+        Self {
+            inner: None,
+            last_used: std::time::Instant::now(),
+        }
+    }
+
     /// Check if the connection is closed.
     #[inline]
     pub fn is_closed(&self) -> bool {
@@ -304,7 +313,7 @@ impl PoolReturnInfo {
     /// Closed connections must not be returned to the pool; they are
     /// discarded instead so the next pull establishes a fresh one.
     #[inline]
-    fn is_closed(&self) -> bool {
+    pub fn is_closed(&self) -> bool {
         self.wrapper.as_ref().is_some_and(|w| w.is_closed())
     }
 
@@ -315,7 +324,7 @@ impl PoolReturnInfo {
     /// the slot is released (outstanding is decremented, waiters are woken)
     /// and the connection is dropped instead of parked as idle.
     #[inline]
-    fn discard(mut self) {
+    pub fn discard(mut self) {
         let _ = self.wrapper.take();
         if let Some(key) = self.key.take() {
             crate::connections::discard_connection_to_pool(
