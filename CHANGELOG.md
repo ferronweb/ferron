@@ -19,6 +19,7 @@
 - **Sampling probability reported in `tracestate`**: when Ferron starts a trace itself and `trace_sampling` uses a ratio, the request's trace context now carries the OpenTelemetry `ot` `tracestate` entry (for example `ot=0.1`), on the propagated headers and on the exported span. Backends that extrapolate sampled traces can scale counts back up; previously a ratio sampler silently reported only the sampled fraction of traffic. No `ot` entry is written for `always_on`, `always_off`, `parentbased_always_on`, a ratio of `1.0` or `0.0`, or `attribute_based` sampling. An incoming `tracestate` is passed through unchanged.
 - **Active health checking metric attributes**: the metrics related to active health checking now have resolved IP address attributes when `metrics_resolved_ip` is enabled (similarly to circuit breaker metrics).
 - **Aggregate active health checking partial success metrics**: added a `ferron.proxy.health.partial_success` metric that reports health check probe results that succeeded only for some backend servers (percentage of successes in 0.0-1.0 scale).
+- **Circuit breaker and active health check status metrics for multi-address upstreams**: improved overall metric clarity and reduced ambiguity when `metrics_resolved_ip` is disabled.
 
 ### Fixed
 
