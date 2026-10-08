@@ -83,8 +83,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // Spawn health check task for this config if needed. The task reports
         // through the sink of the host that owns the upstream.
-        self.state
-            .ensure_health_check_task(&config_key, &config.upstreams, ctx.events.clone());
+        self.state.ensure_health_check_task(
+            &config_key,
+            &config.upstreams,
+            ctx.events.clone(),
+            config.metrics_resolved_ip,
+        );
 
         let (algorithm, ring) = if let Some(algo) = self.state.algorithms.load().get(&config_key) {
             algo.clone()

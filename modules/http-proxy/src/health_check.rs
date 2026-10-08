@@ -414,6 +414,7 @@ fn process_probe_result(
     state_map: &HealthCheckStateMap,
     on_unhealthy: Option<&(dyn Fn(&str, bool) + Send + Sync)>,
     event_sink: &ferron_observability::CompositeEventSink,
+    metrics_resolved_ip: bool,
 ) {
     let upstream_url = upstream.proxy_to.as_str();
     let mut state = state_map.entry(Arc::clone(upstream)).or_default();
@@ -449,16 +450,21 @@ fn process_probe_result(
     let duration_secs = result.response_time.as_secs_f64();
     // Same attribute set as the other backend scoped proxy metrics, so the
     // metric name maps to one Prometheus series per backend.
-    let health_attrs = vec![
-        (
-            "ferron.proxy.backend_url",
-            MetricAttributeValue::String(upstream_url.to_string()),
-        ),
-        (
-            "ferron.proxy.dns_status",
-            MetricAttributeValue::String(upstream.dns_status.as_label().to_string()),
-        ),
-    ];
+    let mut health_attrs = Vec::with_capacity(4);
+    health_attrs.push((
+        "ferron.proxy.backend_url",
+        MetricAttributeValue::String(upstream_url.to_string()),
+    ));
+    if let Some(ref unix_path) = upstream.proxy_unix {
+        health_attrs.push((
+            "ferron.proxy.backend_unix_path",
+            MetricAttributeValue::String(unix_path.clone()),
+        ));
+    }
+    health_attrs.extend(crate::metrics::resolved_ip_attrs(
+        metrics_resolved_ip,
+        upstream,
+    ));
 
     event_sink.emit(Event::Metric(MetricEvent {
         name: "ferron.proxy.health.duration",
@@ -600,6 +606,7 @@ pub fn spawn_health_check_task(
     on_unhealthy: Option<UnhealthyCallback>,
     runtime_handle: &tokio::runtime::Handle,
     event_sink: Arc<ferron_observability::CompositeEventSink>,
+    metrics_resolved_ip: bool,
 ) -> tokio::task::JoinHandle<()> {
     runtime_handle.spawn(async move {
         let mut probe_configs: Vec<(
@@ -859,6 +866,7 @@ pub fn spawn_health_check_task(
                             &state_map,
                             on_unhealthy_clone.as_deref(),
                             &event_sink,
+                            metrics_resolved_ip,
                         );
                     }));
                 }
@@ -928,6 +936,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
         process_probe_result(
             &backend("http://localhost:8080"),
@@ -936,6 +945,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
 
         let state = state_map.get(&backend("http://localhost:8080")).unwrap();
@@ -966,6 +976,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
         process_probe_result(
             &backend("http://localhost:8080"),
@@ -974,6 +985,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
 
         let success_result = ProbeResult {
@@ -990,6 +1002,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
         process_probe_result(
             &backend("http://localhost:8080"),
@@ -998,6 +1011,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
 
         let state = state_map.get(&backend("http://localhost:8080")).unwrap();
@@ -1029,6 +1043,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
 
         {
@@ -1049,6 +1064,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
 
         let state = state_map.get(&backend("http://localhost:8080")).unwrap();
@@ -1080,6 +1096,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
 
         let state = state_map.get(&backend("http://localhost:8080")).unwrap();
@@ -1110,6 +1127,7 @@ mod tests {
             &state_map,
             None,
             &event_sink,
+            false,
         );
 
         let state = state_map.get(&backend("http://localhost:8080")).unwrap();
@@ -1158,7 +1176,15 @@ mod tests {
         let first = backend_at("http://backend:3000", "10.0.0.1");
         let second = backend_at("http://backend:3000", "10.0.0.2");
 
-        process_probe_result(&first, &config, &failure, &state_map, None, &event_sink);
+        process_probe_result(
+            &first,
+            &config,
+            &failure,
+            &state_map,
+            None,
+            &event_sink,
+            false,
+        );
 
         assert!(!is_upstream_healthy(&state_map, &first));
         assert!(
@@ -1183,7 +1209,15 @@ mod tests {
         };
 
         let upstream = backend("http://backend:3000");
-        process_probe_result(&upstream, &config, &failure, &state_map, None, &event_sink);
+        process_probe_result(
+            &upstream,
+            &config,
+            &failure,
+            &state_map,
+            None,
+            &event_sink,
+            false,
+        );
 
         assert!(!is_upstream_healthy(&state_map, &upstream));
         assert!(

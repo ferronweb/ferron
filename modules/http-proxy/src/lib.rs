@@ -170,6 +170,7 @@ impl ProxyState {
         config_keys: &[usize],
         upstreams: &[Upstream],
         event_sink: ferron_observability::CompositeEventSink,
+        metrics_resolved_ip: bool,
     ) {
         if self.health_check_tasks.contains_key(config_keys) {
             return;
@@ -213,6 +214,7 @@ impl ProxyState {
                 })),
                 &runtime_handle,
                 Arc::new(event_sink),
+                metrics_resolved_ip,
             );
 
             task.abort_handle()
