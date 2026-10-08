@@ -100,9 +100,6 @@ struct ProxyState {
     health_check_tasks: TaskRegistry,
     /// Counters for active health check unhealthy events, keyed by configuration pointer.
     active_unhealthy_counters: PerConfigCache<Arc<ActiveUnhealthyCounters>>,
-    /// Whether to include resolved IP addresses in proxy metrics attributes.
-    /// Updated from config on each request.
-    metrics_resolved_ip: std::sync::atomic::AtomicBool,
     /// Retry budget state, keyed by config pointer identity.
     retry_budget_states: PerConfigCache<SharedRetryBudget>,
 }
@@ -120,7 +117,6 @@ impl ProxyState {
             flapping_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             health_check_tasks: TaskRegistry::new(),
             active_unhealthy_counters: PerConfigCache::new(),
-            metrics_resolved_ip: std::sync::atomic::AtomicBool::new(false),
             retry_budget_states: PerConfigCache::new(),
         }
     }
