@@ -20,6 +20,10 @@
 
 ### Fixed
 
+#### HTTP server core
+
+- **`trace.id` and `span.id` resolution fix**: previously, `trace.id` and `span.id` variable interpolations resolve to a doubly hex-encoded IDs, not proper single hex-encoded values.
+
 #### Observability
 
 - **`tracestate` is now exported on spans**: the OTLP exporter wrote an empty `trace_state` on every span, discarding the W3C `tracestate` that Ferron parses and propagates to upstreams. The span now reports it.

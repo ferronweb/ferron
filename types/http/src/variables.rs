@@ -141,11 +141,15 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
         var::AUTH_USER => Some(ctx.auth_user.clone().unwrap_or_default()),
         var::TRACE_ID => Some(
             crate::trace_context::current_event_trace_context(ctx)
-                .map_or(Default::default(), |ctx| hex::encode(ctx.trace_id)),
+                .map_or(Default::default(), |ctx| {
+                    String::from_utf8_lossy(&ctx.trace_id).into_owned()
+                }),
         ),
         var::TRACE_SPANID => Some(
             crate::trace_context::current_event_trace_context(ctx)
-                .map_or(Default::default(), |ctx| hex::encode(ctx.span_id)),
+                .map_or(Default::default(), |ctx| {
+                    String::from_utf8_lossy(&ctx.span_id).into_owned()
+                }),
         ),
         #[cfg(feature = "mtls")]
         var::MTLS_CN => {
