@@ -595,7 +595,7 @@ fn process_probe_result(
         event_sink.emit(Event::Metric(MetricEvent {
             name: "ferron.proxy.health.partial_success",
             attributes: health_attrs,
-            ty: MetricType::Counter,
+            ty: MetricType::Gauge,
             value: MetricValue::F64(ratio),
             unit: Some("{probe}"),
             description: Some("Partially successful active health check probes (percentage of successes in 0.0-1.0 scale)."),
