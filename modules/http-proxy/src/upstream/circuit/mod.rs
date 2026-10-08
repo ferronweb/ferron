@@ -199,7 +199,7 @@ impl<'a> CircuitBreaker<'a> {
                 crate::upstream::flapping::record_circuit_transition(
                     self.flapping_state,
                     self.config,
-                    &upstream,
+                    upstream,
                     self.event_sink,
                     self.event_trace_context.clone(),
                 );
@@ -296,7 +296,9 @@ pub fn record_backend_response(
         upstream_time_secs.is_some_and(|t| std::time::Duration::from_secs_f64(t) > threshold)
     });
 
-    let r = if is_5xx_failure || is_latency_failure {
+    
+
+    if is_5xx_failure || is_latency_failure {
         record_circuit_breaker_failure(
             circuit_breaker_state,
             flapping_state,
@@ -316,9 +318,7 @@ pub fn record_backend_response(
             trace_context,
             metrics_resolved_ip,
         )
-    };
-
-    r
+    }
 }
 
 #[inline]
@@ -522,7 +522,7 @@ fn record_circuit_breaker_failure(
             crate::upstream::flapping::record_circuit_transition(
                 flapping_state,
                 circuit_breaker,
-                &upstream,
+                upstream,
                 event_sink,
                 event_trace_context.clone(),
             );
@@ -581,7 +581,7 @@ fn record_circuit_breaker_failure(
             crate::upstream::flapping::record_circuit_transition(
                 flapping_state,
                 circuit_breaker,
-                &upstream,
+                upstream,
                 event_sink,
                 event_trace_context.clone(),
             );
@@ -682,7 +682,7 @@ fn record_circuit_breaker_success(
         crate::upstream::flapping::record_circuit_transition(
             flapping_state,
             circuit_breaker,
-            &upstream,
+            upstream,
             event_sink,
             event_trace_context.clone(),
         );

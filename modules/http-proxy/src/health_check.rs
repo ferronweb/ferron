@@ -872,6 +872,7 @@ pub fn spawn_health_check_task(
 
             if !probes_due.is_empty() {
                 let mut probe_tasks = Vec::new();
+                #[allow(clippy::type_complexity)]
                 let aggregated_probe_results: Arc<
                     dashmap::DashMap<
                         (String, Option<String>),
