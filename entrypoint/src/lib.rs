@@ -103,7 +103,7 @@ pub fn init() {
 
 /// Entrypoint for the application. Initializes logging and runs the main logic,
 /// handling any errors that occur.
-pub fn main(loaders: Vec<Box<dyn ModuleLoader>>) {
+pub fn main(loaders: Vec<Box<dyn ModuleLoader>>) -> std::process::ExitCode {
     if let Err(e) = main_inner(loaders) {
         if !ferron_core::logging::is_init() {
             let _ = ferron_core::logging::init_stdio_logger(LogLevel::Error);
@@ -113,9 +113,9 @@ pub fn main(loaders: Vec<Box<dyn ModuleLoader>>) {
         } else {
             eprintln!("Error: {}", e);
         }
-        std::process::exit(1);
+        std::process::ExitCode::FAILURE
     } else {
-        std::process::exit(0);
+        std::process::ExitCode::SUCCESS
     }
 }
 
