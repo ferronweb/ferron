@@ -49,7 +49,6 @@ fn test_circuit_breaker_opens_after_transport_failures() {
     let circuit_breaker_state: CircuitBreakerStateMap =
         Arc::new(DashMap::with_hasher(FxBuildHasher));
     let upstream = make_upstream("http://backend1");
-    let mut metrics = crate::ProxyMetrics::new();
     let circuit_breaker = crate::config::CircuitBreakerConfig {
         enabled: true,
         max_fails: 2,
@@ -68,7 +67,6 @@ fn test_circuit_breaker_opens_after_transport_failures() {
         None,
         &circuit_breaker,
         &upstream,
-        &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
         None,
         false,
@@ -82,7 +80,6 @@ fn test_circuit_breaker_opens_after_transport_failures() {
         None,
         &circuit_breaker,
         &upstream,
-        &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
         None,
         false,
@@ -91,7 +88,6 @@ fn test_circuit_breaker_opens_after_transport_failures() {
     let sink = ferron_observability::CompositeEventSink::new(vec![]);
     let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
     assert!(!cb.is_available(&upstream));
-    assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
 }
 
 #[test]
@@ -244,7 +240,6 @@ fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
         &upstream,
         200,
         None,
-        &mut crate::ProxyMetrics::new(),
         &ferron_observability::CompositeEventSink::new(vec![]),
         None,
         false,
@@ -282,13 +277,11 @@ fn test_circuit_breaker_reopens_after_half_open_failure() {
         },
     );
 
-    let mut metrics = crate::ProxyMetrics::new();
     record_backend_transport_failure(
         Some(&circuit_breaker_state),
         None,
         &circuit_breaker,
         &upstream,
-        &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
         None,
         false,
@@ -297,7 +290,6 @@ fn test_circuit_breaker_reopens_after_half_open_failure() {
     let sink = ferron_observability::CompositeEventSink::new(vec![]);
     let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
     assert!(!cb.is_available(&upstream));
-    assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
 }
 
 #[test]
@@ -326,7 +318,6 @@ fn test_circuit_breaker_ignores_5xx_when_record_5xx_false() {
         &upstream,
         500,
         None,
-        &mut crate::ProxyMetrics::new(),
         &ferron_observability::CompositeEventSink::new(vec![]),
         None,
         false,
@@ -356,7 +347,6 @@ fn test_circuit_breaker_trips_on_5xx_when_record_5xx_true() {
     };
 
     // A 500 response SHOULD trip the circuit when record_5xx is true
-    let mut metrics = crate::ProxyMetrics::new();
     record_backend_response(
         Some(&circuit_breaker_state),
         None,
@@ -364,7 +354,6 @@ fn test_circuit_breaker_trips_on_5xx_when_record_5xx_true() {
         &upstream,
         500,
         None,
-        &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
         None,
         false,
@@ -373,7 +362,6 @@ fn test_circuit_breaker_trips_on_5xx_when_record_5xx_true() {
     let sink = ferron_observability::CompositeEventSink::new(vec![]);
     let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
     assert!(!cb.is_available(&upstream));
-    assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
 }
 
 #[test]
@@ -395,7 +383,6 @@ fn test_circuit_breaker_trips_on_high_latency() {
     };
 
     // A 200 response with 200ms latency SHOULD trip the circuit when latency_threshold is 100ms
-    let mut metrics = crate::ProxyMetrics::new();
     record_backend_response(
         Some(&circuit_breaker_state),
         None,
@@ -403,7 +390,6 @@ fn test_circuit_breaker_trips_on_high_latency() {
         &upstream,
         200,
         Some(0.2),
-        &mut metrics,
         &ferron_observability::CompositeEventSink::new(vec![]),
         None,
         false,
@@ -412,7 +398,6 @@ fn test_circuit_breaker_trips_on_high_latency() {
     let sink = ferron_observability::CompositeEventSink::new(vec![]);
     let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
     assert!(!cb.is_available(&upstream));
-    assert_eq!(metrics.circuit_breaker_unhealthy_backends, vec![upstream]);
 }
 
 #[test]
@@ -441,7 +426,6 @@ fn test_circuit_breaker_ignores_latency_when_not_configured() {
         &upstream,
         200,
         Some(5.0),
-        &mut crate::ProxyMetrics::new(),
         &ferron_observability::CompositeEventSink::new(vec![]),
         None,
         false,
@@ -478,7 +462,6 @@ fn test_circuit_breaker_latency_below_threshold_does_not_trip() {
         &upstream,
         200,
         Some(0.05),
-        &mut crate::ProxyMetrics::new(),
         &ferron_observability::CompositeEventSink::new(vec![]),
         None,
         false,

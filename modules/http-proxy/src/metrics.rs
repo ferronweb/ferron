@@ -22,7 +22,6 @@ pub type CircuitBreakerMetrics = Vec<(
 pub struct ProxyMetrics {
     pub selected_backends: rustc_hash::FxHashSet<Arc<types::upstream::ResolvedUpstream>>,
     pub final_selected_backend: Option<Arc<types::upstream::ResolvedUpstream>>,
-    pub circuit_breaker_unhealthy_backends: Vec<Arc<types::upstream::ResolvedUpstream>>,
     pub circuit_breaker_metrics: CircuitBreakerMetrics,
     pub connection_reused: bool,
     pub tls_handshake_failures: u64,
@@ -63,7 +62,6 @@ impl ProxyMetrics {
         Self {
             selected_backends: rustc_hash::FxHashSet::default(),
             final_selected_backend: None,
-            circuit_breaker_unhealthy_backends: Vec::new(),
             circuit_breaker_metrics: CircuitBreakerMetrics::default(),
             connection_reused: false,
             tls_handshake_failures: 0,

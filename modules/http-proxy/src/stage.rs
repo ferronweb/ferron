@@ -274,28 +274,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
-        let mut circuit_breaker_dup_track: rustc_hash::FxHashSet<(String, Option<String>)> =
-            Default::default();
-        for backend in metrics
-            .circuit_breaker_unhealthy_backends
-            .iter()
-            .filter(|e| {
-                if config.metrics_resolved_ip {
-                    return true;
-                }
-
-                circuit_breaker_dup_track.insert((e.proxy_to.clone(), e.proxy_unix.clone()))
-            })
-        {
-            crate::metrics::emit_backend_unhealthy(
-                &ctx.events,
-                &backend,
-                "circuit_breaker",
-                current_event_trace_context(ctx),
-                config.metrics_resolved_ip,
-            );
-        }
-
         let mut upstream_attrs = vec![];
         if let Some(backend) = metrics.final_selected_backend.as_ref() {
             upstream_attrs.push((
@@ -325,10 +303,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     circuit_state_metrics.sort_unstable_by_key(|(_, s)| {
                         // Reverse, so it's descending, not ascending
                         std::cmp::Reverse(s.and_then(|s| match s.0 {
-                            0 => Some(2), // closed
-                            1 => Some(0), // open
-                            2 => Some(1), // half-open
-                            _ => None,    // undefined
+                            crate::types::circuit::CIRCUIT_BREAKER_STATUS_CLOSED => Some(2),
+                            crate::types::circuit::CIRCUIT_BREAKER_STATUS_OPEN => Some(0),
+                            crate::types::circuit::CIRCUIT_BREAKER_STATUS_HALFOPEN => Some(1),
+                            _ => None,
                         }))
                     });
                     circuit_state_metrics.retain(|(u, _)| {
@@ -348,6 +326,18 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         current_event_trace_context(ctx),
                         config.metrics_resolved_ip,
                     );
+                    if state == crate::types::circuit::CIRCUIT_BREAKER_STATUS_OPEN {
+                        // The metrics above are logged only when circuit breaker state changes.
+                        // Code below executes when the circuit breaker is opened.
+                        // Therefore, emit a backend unhealthy event here.
+                        crate::metrics::emit_backend_unhealthy(
+                            &ctx.events,
+                            &backend,
+                            "circuit_breaker",
+                            current_event_trace_context(ctx),
+                            config.metrics_resolved_ip,
+                        );
+                    }
                 }
             }
             if config.circuit_breaker.flapping_transitions != 0 {

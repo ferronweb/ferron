@@ -262,12 +262,11 @@ pub fn record_backend_transport_failure(
     flapping_state: Option<&crate::types::flapping::FlappingStateMap>,
     circuit_breaker: &CircuitBreakerConfig,
     upstream: &Arc<ResolvedUpstream>,
-    metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
 ) -> bool {
-    let r = record_circuit_breaker_failure(
+    record_circuit_breaker_failure(
         circuit_breaker_state,
         flapping_state,
         circuit_breaker,
@@ -275,13 +274,7 @@ pub fn record_backend_transport_failure(
         event_sink,
         event_trace_context,
         metrics_resolved_ip,
-    );
-    if r.0 {
-        metrics
-            .circuit_breaker_unhealthy_backends
-            .push(upstream.clone());
-    }
-    r.1
+    )
 }
 
 /// Record an upstream response for the circuit breaker state machine.
@@ -294,7 +287,6 @@ pub fn record_backend_response(
     upstream: &Arc<ResolvedUpstream>,
     status: u16,
     upstream_time_secs: Option<f64>,
-    metrics: &mut crate::ProxyMetrics,
     event_sink: &ferron_observability::CompositeEventSink,
     trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
@@ -315,7 +307,7 @@ pub fn record_backend_response(
             metrics_resolved_ip,
         )
     } else {
-        let c = record_circuit_breaker_success(
+        record_circuit_breaker_success(
             circuit_breaker_state,
             flapping_state,
             circuit_breaker,
@@ -323,17 +315,10 @@ pub fn record_backend_response(
             event_sink,
             trace_context,
             metrics_resolved_ip,
-        );
-        (false, c)
+        )
     };
 
-    let should_open = r.0;
-    if should_open {
-        metrics
-            .circuit_breaker_unhealthy_backends
-            .push(upstream.clone());
-    }
-    r.1
+    r
 }
 
 #[inline]
@@ -473,13 +458,13 @@ fn record_circuit_breaker_failure(
     event_sink: &ferron_observability::CompositeEventSink,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
-) -> (bool, bool) {
+) -> bool {
     if !circuit_breaker.enabled {
-        return (false, false);
+        return false;
     }
 
     let Some(circuit_breaker_state) = circuit_breaker_state else {
-        return (false, false);
+        return false;
     };
 
     let now = std::time::Instant::now();
@@ -571,11 +556,11 @@ fn record_circuit_breaker_failure(
                 event_trace_context,
                 metrics_resolved_ip,
             );
-            (true, true)
+            true
         }
         CIRCUIT_BREAKER_STATUS_OPEN => {
             *state.opened_at.write() = Some(now);
-            (false, new_state)
+            new_state
         }
         CIRCUIT_BREAKER_STATUS_CLOSED
             if state.recent_failures.as_ref().is_none_or(|rf| {
@@ -631,9 +616,9 @@ fn record_circuit_breaker_failure(
                 event_trace_context,
                 metrics_resolved_ip,
             );
-            (true, true)
+            true
         }
-        _ => (false, new_state),
+        _ => new_state,
     }
 }
 
