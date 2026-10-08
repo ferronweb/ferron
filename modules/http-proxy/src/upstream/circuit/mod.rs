@@ -296,8 +296,6 @@ pub fn record_backend_response(
         upstream_time_secs.is_some_and(|t| std::time::Duration::from_secs_f64(t) > threshold)
     });
 
-    
-
     if is_5xx_failure || is_latency_failure {
         record_circuit_breaker_failure(
             circuit_breaker_state,
