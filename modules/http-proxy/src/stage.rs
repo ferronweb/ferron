@@ -107,8 +107,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 .clone()
         };
 
-        let active_unhealthy_counter = self.state.active_unhealthy_counters.get(&config_key);
-
         // Capture HTTP method before execute_proxy() consumes ctx.req
         let captured_method = ctx
             .req
@@ -141,7 +139,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             Some(&self.state.conn_state),
             Some(&self.state.ewma_state),
             Some(&self.state.active_health_check_state),
-            active_unhealthy_counter.as_deref(),
             retry_budget.as_ref(),
         )
         .await;
@@ -276,58 +273,13 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         }
 
         for backend in &metrics.circuit_breaker_unhealthy_backends {
-            let mut attrs = Vec::with_capacity(5);
-            attrs.push((
-                "ferron.proxy.backend_url",
-                MetricAttributeValue::String(backend.proxy_to.clone()),
-            ));
-            if let Some(ref unix_path) = backend.proxy_unix {
-                attrs.push((
-                    "ferron.proxy.backend_unix_path",
-                    MetricAttributeValue::String(unix_path.clone()),
-                ));
-            }
-            attrs.extend(crate::metrics::resolved_ip_attrs(
+            crate::metrics::emit_backend_unhealthy(
+                &ctx.events,
+                &backend,
+                "circuit_breaker",
+                current_event_trace_context(ctx),
                 config.metrics_resolved_ip,
-                backend,
-            ));
-            attrs.push((
-                "ferron.proxy.health_check_type",
-                MetricAttributeValue::String("circuit_breaker".to_string()),
-            ));
-            ctx.events
-                .emit(ferron_observability::Event::Metric(MetricEvent {
-                    name: "ferron.proxy.backends.unhealthy",
-                    attributes: attrs,
-                    ty: MetricType::Counter,
-                    value: MetricValue::U64(1),
-                    unit: Some("{backend}"),
-                    description: Some("Number of health check failures for a backend server."),
-                    trace_context: current_event_trace_context(ctx),
-                }));
-        }
-
-        for (backend_url, count) in &metrics.active_unhealthy_backends {
-            let attrs = vec![
-                (
-                    "ferron.proxy.backend_url",
-                    MetricAttributeValue::String(backend_url.clone()),
-                ),
-                (
-                    "ferron.proxy.health_check_type",
-                    MetricAttributeValue::String("active".to_string()),
-                ),
-            ];
-            ctx.events
-                .emit(ferron_observability::Event::Metric(MetricEvent {
-                    name: "ferron.proxy.backends.unhealthy",
-                    attributes: attrs,
-                    ty: MetricType::Counter,
-                    value: MetricValue::U64(*count),
-                    unit: Some("{backend}"),
-                    description: Some("Number of health check failures for a backend server."),
-                    trace_context: current_event_trace_context(ctx),
-                }));
+            );
         }
 
         let mut upstream_attrs = vec![];

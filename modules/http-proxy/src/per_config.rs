@@ -47,6 +47,7 @@ impl<T> PerConfigCache<T> {
     }
 
     /// Get a clone of the entry for `key`, if present.
+    #[allow(dead_code)]
     #[inline]
     pub fn get(&self, key: &[usize]) -> Option<T>
     where

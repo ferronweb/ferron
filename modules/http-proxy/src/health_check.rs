@@ -242,10 +242,6 @@ fn build_no_verify_https_connector(
         )
 }
 
-/// Callback invoked when a backend is marked unhealthy by active health check.
-/// Arguments: (backend_url, is_active_health_check=true)
-pub type UnhealthyCallback = Arc<dyn Fn(&str, bool) + Send + Sync>;
-
 /// Type of upstream health check to perform.
 #[derive(Hash, Eq, PartialEq)]
 enum UpstreamHealthCheckType {
@@ -413,7 +409,6 @@ fn process_probe_result(
     config: &UpstreamHealthCheckConfig,
     result: &[ProbeResult],
     state_map: &HealthCheckStateMap,
-    on_unhealthy: Option<&(dyn Fn(&str, bool) + Send + Sync)>,
     event_sink: &ferron_observability::CompositeEventSink,
     metrics_resolved_ip: bool,
 ) {
@@ -546,9 +541,6 @@ fn process_probe_result(
                         trace_context: None,
                     },
                 ));
-                if let Some(callback) = on_unhealthy {
-                    callback(upstream_url, true);
-                }
             }
 
             state.last_failure_time = Some(now);
@@ -602,6 +594,13 @@ fn process_probe_result(
             description: Some("Failed active health check probes."),
             trace_context: None,
         }));
+        crate::metrics::emit_backend_unhealthy(
+            event_sink,
+            upstream,
+            "active",
+            None,
+            metrics_resolved_ip,
+        );
     } else if failures == 0 {
         event_sink.emit(Event::Metric(MetricEvent {
             name: "ferron.proxy.health.success",
@@ -654,7 +653,6 @@ pub fn is_upstream_healthy(
 pub fn spawn_health_check_task(
     upstreams: Vec<Upstream>,
     state_map: HealthCheckStateMap,
-    on_unhealthy: Option<UnhealthyCallback>,
     runtime_handle: &tokio::runtime::Handle,
     event_sink: Arc<ferron_observability::CompositeEventSink>,
     metrics_resolved_ip: bool,
@@ -912,7 +910,6 @@ pub fn spawn_health_check_task(
 
                 for (upstream, config, mtls) in probes_due {
                     let state_map = Arc::clone(&state_map);
-                    let on_unhealthy_clone = on_unhealthy.clone();
                     let probe_target = Arc::clone(&upstream);
                     let aggregated_probe_results = Arc::clone(&aggregated_probe_results);
 
@@ -927,7 +924,6 @@ pub fn spawn_health_check_task(
                                 &config,
                                 &[result],
                                 &state_map,
-                                on_unhealthy_clone.as_deref(),
                                 &event_sink,
                                 metrics_resolved_ip,
                             );
@@ -958,7 +954,6 @@ pub fn spawn_health_check_task(
                         config,
                         results,
                         &state_map,
-                        on_unhealthy.as_deref(),
                         &event_sink,
                         metrics_resolved_ip,
                     );
@@ -1023,7 +1018,6 @@ mod tests {
             &config,
             &result,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1032,7 +1026,6 @@ mod tests {
             &config,
             &result,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1063,7 +1056,6 @@ mod tests {
             &config,
             &fail_result,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1072,7 +1064,6 @@ mod tests {
             &config,
             &fail_result,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1089,7 +1080,6 @@ mod tests {
             &config,
             &success_result,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1098,7 +1088,6 @@ mod tests {
             &config,
             &success_result,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1130,7 +1119,6 @@ mod tests {
             &config,
             &result_fast,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1151,7 +1139,6 @@ mod tests {
             &config,
             &result_slow,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1183,7 +1170,6 @@ mod tests {
             &config,
             &result,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1214,7 +1200,6 @@ mod tests {
             &config,
             &result,
             &state_map,
-            None,
             &event_sink,
             false,
         );
@@ -1265,15 +1250,7 @@ mod tests {
         let first = backend_at("http://backend:3000", "10.0.0.1");
         let second = backend_at("http://backend:3000", "10.0.0.2");
 
-        process_probe_result(
-            &first,
-            &config,
-            &failure,
-            &state_map,
-            None,
-            &event_sink,
-            false,
-        );
+        process_probe_result(&first, &config, &failure, &state_map, &event_sink, false);
 
         assert!(!is_upstream_healthy(&state_map, &first));
         assert!(
@@ -1298,15 +1275,7 @@ mod tests {
         }];
 
         let upstream = backend("http://backend:3000");
-        process_probe_result(
-            &upstream,
-            &config,
-            &failure,
-            &state_map,
-            None,
-            &event_sink,
-            false,
-        );
+        process_probe_result(&upstream, &config, &failure, &state_map, &event_sink, false);
 
         assert!(!is_upstream_healthy(&state_map, &upstream));
         assert!(

@@ -22,7 +22,6 @@ pub mod upstream;
 mod upstream;
 mod validator;
 
-use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -52,9 +51,6 @@ pub use send_net_io::SendUnixStreamPoll;
 pub use send_net_io::{SendTcpStreamPoll, SendTcpStreamPollDropGuard};
 
 pub use metrics::ProxyMetrics;
-
-/// Shared counter type for tracking active health check unhealthy events.
-type ActiveUnhealthyCounters = parking_lot::RwLock<std::collections::HashMap<String, u64>>;
 
 const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
 const LOG_TARGET: &str = "ferron-http-proxy";
@@ -98,8 +94,6 @@ struct ProxyState {
     /// Background health check task handles, keyed by configuration pointer.
     /// Tasks are aborted on reload via `on_reload`.
     health_check_tasks: TaskRegistry,
-    /// Counters for active health check unhealthy events, keyed by configuration pointer.
-    active_unhealthy_counters: PerConfigCache<Arc<ActiveUnhealthyCounters>>,
     /// Retry budget state, keyed by config pointer identity.
     retry_budget_states: PerConfigCache<SharedRetryBudget>,
 }
@@ -116,7 +110,6 @@ impl ProxyState {
             active_health_check_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             flapping_state: Arc::new(DashMap::with_hasher(FxBuildHasher)),
             health_check_tasks: TaskRegistry::new(),
-            active_unhealthy_counters: PerConfigCache::new(),
             retry_budget_states: PerConfigCache::new(),
         }
     }
@@ -135,7 +128,6 @@ impl ProxyState {
         // Since active health check state is set on first (immediately),
         // and later (after delays) health checks, let's just clear it all.
         self.active_health_check_state.clear();
-        self.active_unhealthy_counters.clear();
         self.algorithms.swap(Default::default());
     }
 
@@ -199,19 +191,9 @@ impl ProxyState {
         };
 
         self.health_check_tasks.ensure(config_keys, || {
-            let counter = self
-                .active_unhealthy_counters
-                .get_or_insert_with(config_keys, || {
-                    Arc::new(ActiveUnhealthyCounters::new(HashMap::new()))
-                });
-            let counter_clone = Arc::clone(&counter);
             let task = health_check::spawn_health_check_task(
                 upstreams.to_vec(),
                 Arc::clone(&self.active_health_check_state),
-                Some(Arc::new(move |url: &str, _is_active: bool| {
-                    let mut guard = counter_clone.write();
-                    *guard.entry(url.to_string()).or_insert(0) += 1;
-                })),
                 &runtime_handle,
                 Arc::new(event_sink),
                 metrics_resolved_ip,

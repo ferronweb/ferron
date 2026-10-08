@@ -7,8 +7,6 @@ mod request;
 mod response;
 mod tls;
 
-use std::collections::HashMap;
-
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogAttributeValue, LogEvent, LogLevel};
 use http::StatusCode;
@@ -90,7 +88,6 @@ pub async fn execute_proxy(
     conn_state: Option<&ConnectionsTrackState>,
     ewma_state: Option<&EwmaStateMap>,
     health_check_state: Option<&HealthCheckStateMap>,
-    active_unhealthy_counter: Option<&RwLock<HashMap<String, u64>>>,
     retry_budget: Option<&SharedRetryBudget>,
 ) -> Result<(HttpResponse, ProxyMetrics), ProxyError> {
     let upstreams = crate::upstream::resolve_upstreams(std::mem::take(&mut config.upstreams)).await;
@@ -111,11 +108,6 @@ pub async fn execute_proxy(
             attributes: Vec::new(),
             trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
         }));
-        if let Some(counter) = active_unhealthy_counter {
-            let guard = counter.read();
-            metrics.active_unhealthy_backends =
-                guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
-        }
         return Ok((HttpResponse::BuiltinError(502, None), metrics));
     }
 
@@ -153,11 +145,6 @@ pub async fn execute_proxy(
                 attributes: Vec::new(),
                 trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
             }));
-            if let Some(counter) = active_unhealthy_counter {
-                let guard = counter.read();
-                metrics.active_unhealthy_backends =
-                    guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
-            }
             let exclusions = backend_set.take_exclusions();
             metrics
                 .excluded_already_tried
@@ -270,12 +257,6 @@ pub async fn execute_proxy(
                         }
                     }
 
-                    if let Some(counter) = active_unhealthy_counter {
-                        let guard = counter.read();
-                        metrics.active_unhealthy_backends =
-                            guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
-                    }
-
                     let resp = maybe_set_affinity_cookie(
                         resp,
                         &config.affinity,
@@ -341,11 +322,6 @@ pub async fn execute_proxy(
                                     )],
                                     trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                                 }));
-                                if let Some(counter) = active_unhealthy_counter {
-                                    let guard = counter.read();
-                                    metrics.active_unhealthy_backends =
-                                        guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
-                                }
                                 let retry_after_secs = budget.time_until_available(1);
                                 let retry_after_value =
                                     retry_after_secs.ceil().clamp(1.0, 3600.0) as u64;
@@ -421,11 +397,6 @@ pub async fn execute_proxy(
                                         )],
                                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                                     }));
-                                    if let Some(counter) = active_unhealthy_counter {
-                                        let guard = counter.read();
-                                        metrics.active_unhealthy_backends =
-                                            guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
-                                    }
                                     let retry_after_secs = budget.time_until_available(1);
                                     let retry_after_value =
                                         retry_after_secs.ceil().clamp(1.0, 3600.0) as u64;
@@ -500,11 +471,6 @@ pub async fn execute_proxy(
                         attributes: attrs,
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     }));
-                    if let Some(counter) = active_unhealthy_counter {
-                        let guard = counter.read();
-                        metrics.active_unhealthy_backends =
-                            guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
-                    }
                     circuit_timeout_guard.cancel();
                     return Ok((HttpResponse::BuiltinError(status.as_u16(), None), metrics));
                 }

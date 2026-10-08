@@ -18,7 +18,6 @@ pub struct ProxyMetrics {
     pub selected_backends: rustc_hash::FxHashSet<Arc<types::upstream::ResolvedUpstream>>,
     pub final_selected_backend: Option<Arc<types::upstream::ResolvedUpstream>>,
     pub circuit_breaker_unhealthy_backends: Vec<Arc<types::upstream::ResolvedUpstream>>,
-    pub active_unhealthy_backends: Vec<(String, u64)>,
     pub connection_reused: bool,
     pub tls_handshake_failures: u64,
     pub tls_handshake_time_secs: f64,
@@ -59,7 +58,6 @@ impl ProxyMetrics {
             selected_backends: rustc_hash::FxHashSet::default(),
             final_selected_backend: None,
             circuit_breaker_unhealthy_backends: Vec::new(),
-            active_unhealthy_backends: Vec::new(),
             connection_reused: false,
             tls_handshake_failures: 0,
             tls_handshake_time_secs: 0.0,
@@ -251,6 +249,44 @@ pub(crate) fn emit_backend_excluded(
         description: Some(
             "Backend excluded from selection due to health, circuit breaker, or retry state.",
         ),
+        trace_context,
+    }));
+}
+
+#[inline]
+pub(crate) fn emit_backend_unhealthy(
+    events: &ferron_observability::CompositeEventSink,
+    backend: &Arc<types::upstream::ResolvedUpstream>,
+    health_check_type: &'static str,
+    trace_context: Option<ferron_observability::EventTraceContext>,
+    metrics_resolved_ip: bool,
+) {
+    let mut attrs = Vec::with_capacity(5);
+    attrs.push((
+        "ferron.proxy.backend_url",
+        MetricAttributeValue::String(backend.proxy_to.clone()),
+    ));
+    if let Some(ref unix_path) = backend.proxy_unix {
+        attrs.push((
+            "ferron.proxy.backend_unix_path",
+            MetricAttributeValue::String(unix_path.clone()),
+        ));
+    }
+    attrs.extend(crate::metrics::resolved_ip_attrs(
+        metrics_resolved_ip,
+        backend,
+    ));
+    attrs.push((
+        "ferron.proxy.health_check_type",
+        MetricAttributeValue::StaticStr(health_check_type),
+    ));
+    events.emit(ferron_observability::Event::Metric(MetricEvent {
+        name: "ferron.proxy.backends.unhealthy",
+        attributes: attrs,
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{backend}"),
+        description: Some("Number of health check failures for a backend server."),
         trace_context,
     }));
 }
