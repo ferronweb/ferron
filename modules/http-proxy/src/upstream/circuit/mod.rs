@@ -221,7 +221,7 @@ impl<'a> CircuitBreaker<'a> {
                 emit_circuit_transition_metric(
                     self.event_sink,
                     upstream,
-                    CIRCUIT_BREAKER_STATUS_OPEN,
+                    Some(CIRCUIT_BREAKER_STATUS_OPEN),
                     CIRCUIT_BREAKER_STATUS_HALFOPEN,
                     self.event_trace_context.clone(),
                     self.metrics_resolved_ip,
@@ -377,7 +377,7 @@ pub fn emit_circuit_metric(
 fn emit_circuit_transition_metric(
     event_sink: &ferron_observability::CompositeEventSink,
     upstream: &Arc<ResolvedUpstream>,
-    old_state: u8,
+    old_state: Option<u8>,
     new_state: u8,
     trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
@@ -412,13 +412,25 @@ fn emit_circuit_transition_metric(
         MetricAttributeValue::String(upstream.dns_status.as_label().to_string()),
     ));
 
-    let mut old_attributes = attributes.clone();
-    old_attributes.push((
-        "ferron.proxy.upstream.circuit_state",
-        MetricAttributeValue::StaticStr(crate::types::circuit::circuit_breaker_state_label(
-            old_state,
-        )),
-    ));
+    if let Some(old_state) = old_state {
+        let mut old_attributes = attributes.clone();
+        old_attributes.push((
+            "ferron.proxy.upstream.circuit_state",
+            MetricAttributeValue::StaticStr(crate::types::circuit::circuit_breaker_state_label(
+                old_state,
+            )),
+        ));
+
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.circuit.partial_state",
+            attributes: old_attributes,
+            ty: ferron_observability::MetricType::UpDownCounter,
+            value: ferron_observability::MetricValue::I64(-1),
+            unit: Some("{circuit}"),
+            description: Some("Number of circuit breakers in each state for each backend."),
+            trace_context: trace_context.clone(),
+        }));
+    }
 
     let mut new_attributes = attributes;
     new_attributes.push((
@@ -427,16 +439,6 @@ fn emit_circuit_transition_metric(
             new_state,
         )),
     ));
-
-    event_sink.emit(Event::Metric(MetricEvent {
-        name: "ferron.proxy.circuit.partial_state",
-        attributes: old_attributes,
-        ty: ferron_observability::MetricType::UpDownCounter,
-        value: ferron_observability::MetricValue::I64(-1),
-        unit: Some("{circuit}"),
-        description: Some("Number of circuit breakers in each state for each backend."),
-        trace_context: trace_context.clone(),
-    }));
 
     event_sink.emit(Event::Metric(MetricEvent {
         name: "ferron.proxy.circuit.partial_state",
@@ -468,6 +470,7 @@ fn record_circuit_breaker_failure(
     };
 
     let now = std::time::Instant::now();
+    let mut new_state = false;
     let state = if let Some(state) = circuit_breaker_state.get(upstream) {
         let recent_failures_would_some = circuit_breaker.max_fails > 1;
         if (!recent_failures_would_some && state.recent_failures.is_some())
@@ -477,7 +480,12 @@ fn record_circuit_breaker_failure(
                 }))
         {
             drop(state);
-            let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+            let mut state = circuit_breaker_state
+                .entry(upstream.clone())
+                .or_insert_with(|| {
+                    new_state = true;
+                    Default::default()
+                });
             state.recent_failures = (circuit_breaker.max_fails > 1).then(|| {
                 Arc::new(crossbeam_queue::ArrayQueue::new(
                     (circuit_breaker.max_fails as usize).saturating_sub(1),
@@ -488,7 +496,12 @@ fn record_circuit_breaker_failure(
             state
         }
     } else {
-        let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+        let mut state = circuit_breaker_state
+            .entry(upstream.clone())
+            .or_insert_with(|| {
+                new_state = true;
+                Default::default()
+            });
         state.recent_failures = (circuit_breaker.max_fails > 1).then(|| {
             Arc::new(crossbeam_queue::ArrayQueue::new(
                 (circuit_breaker.max_fails as usize).saturating_sub(1),
@@ -531,7 +544,7 @@ fn record_circuit_breaker_failure(
             emit_circuit_transition_metric(
                 event_sink,
                 upstream,
-                CIRCUIT_BREAKER_STATUS_HALFOPEN,
+                Some(CIRCUIT_BREAKER_STATUS_HALFOPEN),
                 CIRCUIT_BREAKER_STATUS_OPEN,
                 event_trace_context.clone(),
                 metrics_resolved_ip,
@@ -591,7 +604,7 @@ fn record_circuit_breaker_failure(
             emit_circuit_transition_metric(
                 event_sink,
                 upstream,
-                CIRCUIT_BREAKER_STATUS_CLOSED,
+                (!new_state).then_some(CIRCUIT_BREAKER_STATUS_CLOSED),
                 CIRCUIT_BREAKER_STATUS_OPEN,
                 event_trace_context.clone(),
                 metrics_resolved_ip,
@@ -692,7 +705,7 @@ fn record_circuit_breaker_success(
         emit_circuit_transition_metric(
             event_sink,
             upstream,
-            CIRCUIT_BREAKER_STATUS_HALFOPEN,
+            Some(CIRCUIT_BREAKER_STATUS_HALFOPEN),
             CIRCUIT_BREAKER_STATUS_CLOSED,
             event_trace_context.clone(),
             metrics_resolved_ip,
