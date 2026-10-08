@@ -177,7 +177,18 @@ fn test_backend_set_no_upstreams() {
     let config = crate::config::CircuitBreakerConfig::default();
     let sink = ferron_observability::CompositeEventSink::new(vec![]);
     let cb = cb_view(&config, &sink);
-    let mut backend_set = BackendSet::new(&[], &algorithm, None, None, None, cb, None, None, &ring);
+    let mut backend_set = BackendSet::new(
+        &[],
+        &algorithm,
+        None,
+        None,
+        None,
+        cb,
+        None,
+        None,
+        &ring,
+        false,
+    );
     assert!(backend_set.next_backend().is_none());
 }
 
@@ -201,6 +212,7 @@ fn test_backend_set_single_backend() {
         None,
         None,
         &ring,
+        false,
     );
     let selected = backend_set.next_backend().unwrap();
     assert_eq!(selected.upstream.proxy_to, "http://backend1");
@@ -238,6 +250,7 @@ fn test_backend_set_filters_unhealthy() {
         None,
         None,
         &ring,
+        false,
     );
     let selected = backend_set.next_backend().unwrap();
     assert_eq!(selected.upstream.proxy_to, "http://backend2");
@@ -267,6 +280,7 @@ fn test_backend_set_all_healthy() {
         None,
         None,
         &ring,
+        false,
     );
     let selected = backend_set.next_backend().unwrap();
     assert!(
@@ -287,7 +301,7 @@ fn test_backend_set_tracks_tried_backends_and_reports_exclusions() {
     let cb = cb_view(&config, &sink);
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new());
     let mut backend_set = BackendSet::new(
-        &upstreams, &algorithm, None, None, None, cb, None, None, &ring,
+        &upstreams, &algorithm, None, None, None, cb, None, None, &ring, false,
     );
 
     assert_eq!(backend_set.available_count(), 2);
@@ -342,7 +356,7 @@ fn test_backend_set_reports_overloaded_exclusions() {
     let ring = RwLock::new(ConsistentHashRing::new(&[]));
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new());
     let mut backend_set = BackendSet::new(
-        &upstreams, &algorithm, None, None, None, cb, None, None, &ring,
+        &upstreams, &algorithm, None, None, None, cb, None, None, &ring, false,
     );
 
     let selected = backend_set.next_backend().unwrap();
@@ -390,7 +404,7 @@ fn test_backend_set_reoffers_circuit_refused_backend_on_next_round() {
     let ring = RwLock::new(ConsistentHashRing::new(&[]));
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new());
     let mut backend_set = BackendSet::new(
-        &upstreams, &algorithm, None, None, None, cb, None, None, &ring,
+        &upstreams, &algorithm, None, None, None, cb, None, None, &ring, false,
     );
 
     // Round 1: backend1 is half-open with a busy probe slot, so backend2 wins.

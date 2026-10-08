@@ -129,7 +129,7 @@ fn test_backend_set_skips_open_circuit_breaker_backend() {
     let ring = RwLock::new(ConsistentHashRing::new(&[]));
     let algorithm = LoadBalancerAlgorithmInner::RoundRobin(WeightedRoundRobinState::new());
     let mut backend_set = BackendSet::new(
-        &upstreams, &algorithm, None, None, None, cb, None, None, &ring,
+        &upstreams, &algorithm, None, None, None, cb, None, None, &ring, false,
     );
     let result = backend_set.next_backend().unwrap();
 
@@ -166,7 +166,7 @@ fn test_try_acquire_delegates_decision_to_is_available() {
         },
     );
     assert!(!cb.is_available(&upstream));
-    assert!(!cb.try_acquire(&upstream));
+    assert!(!cb.try_acquire(&upstream).0);
     let state = circuit_breaker_state.get(&upstream).unwrap();
     assert_eq!(
         state.status.load(Ordering::Relaxed),
@@ -184,7 +184,7 @@ fn test_try_acquire_delegates_decision_to_is_available() {
         },
     );
     assert!(!cb.is_available(&upstream));
-    assert!(!cb.try_acquire(&upstream));
+    assert!(!cb.try_acquire(&upstream).0);
     circuit_breaker_state.insert(
         upstream.clone(),
         CircuitBreakerState {
@@ -194,7 +194,7 @@ fn test_try_acquire_delegates_decision_to_is_available() {
         },
     );
     assert!(cb.is_available(&upstream));
-    assert!(cb.try_acquire(&upstream));
+    assert!(cb.try_acquire(&upstream).0);
     let state = circuit_breaker_state.get(&upstream).unwrap();
     assert_eq!(
         state.status.load(Ordering::Relaxed),
@@ -232,7 +232,7 @@ fn test_circuit_breaker_transitions_to_half_open_and_closes_after_success() {
 
     let sink = ferron_observability::CompositeEventSink::new(vec![]);
     let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
-    assert!(cb.try_acquire(&upstream));
+    assert!(cb.try_acquire(&upstream).0);
     let sink = ferron_observability::CompositeEventSink::new(vec![]);
     let cb = cb_view(&circuit_breaker_state, &circuit_breaker, &sink);
     assert!(!cb.is_available(&upstream));

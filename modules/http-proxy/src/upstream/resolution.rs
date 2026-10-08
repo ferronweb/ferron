@@ -75,6 +75,9 @@ pub struct BackendSet<'a> {
     ring: &'a parking_lot::RwLock<ConsistentHashRing>,
     tried: FxHashSet<Arc<ResolvedUpstream>>,
     exclusions: SelectionExclusions,
+    metrics_resolved_ip: bool,
+    breaker_state_changed: FxHashSet<Arc<ResolvedUpstream>>,
+    breaker_state_changed_nmri: FxHashSet<(String, Option<String>)>,
 }
 
 impl<'a> BackendSet<'a> {
@@ -91,6 +94,7 @@ impl<'a> BackendSet<'a> {
         affinity_type: Option<&'a AffinityType>,
         affinity_key: Option<&'a [u8]>,
         ring: &'a parking_lot::RwLock<ConsistentHashRing>,
+        metrics_resolved_ip: bool,
     ) -> Self {
         Self {
             upstreams,
@@ -102,8 +106,11 @@ impl<'a> BackendSet<'a> {
             affinity_type,
             affinity_key,
             ring,
+            metrics_resolved_ip,
             tried: FxHashSet::default(),
             exclusions: SelectionExclusions::default(),
+            breaker_state_changed: FxHashSet::default(),
+            breaker_state_changed_nmri: FxHashSet::default(),
         }
     }
 
@@ -281,7 +288,13 @@ impl<'a> BackendSet<'a> {
                 *affinity_index = None;
             }
 
-            if !self.circuit_breaker.try_acquire(&upstream) {
+            let acq_result = self.circuit_breaker.try_acquire(&upstream);
+            if acq_result.1 {
+                // Circuit breaker state transitioned
+                self.mark_circuit_state_changed(Arc::clone(&upstream));
+            }
+            if !acq_result.0 {
+                // Circuit breaker couldn't be acquired
                 if self.circuit_breaker.is_open(&upstream) {
                     self.exclusions.circuit_open.push(Arc::clone(&upstream));
                 } else {
@@ -309,11 +322,35 @@ impl<'a> BackendSet<'a> {
         None
     }
 
-    /// Obtain circuit breaker metrics for all backends
+    /// Mark that the circuit breaker state of a backend has changed, so metrics can be updated.
+    #[inline]
+    pub fn mark_circuit_state_changed(&mut self, upstream: Arc<ResolvedUpstream>) {
+        if self.metrics_resolved_ip {
+            self.breaker_state_changed.insert(upstream);
+        } else {
+            self.breaker_state_changed_nmri
+                .insert((upstream.proxy_to.clone(), upstream.proxy_unix.clone()));
+        }
+    }
+
+    /// Obtain circuit breaker metrics for backends whose circuit breaker state has been changed
     #[inline]
     pub fn get_circuit_metrics(&self) -> crate::metrics::CircuitBreakerMetrics {
+        if self.breaker_state_changed.is_empty() && self.breaker_state_changed_nmri.is_empty() {
+            // Nothing changed, so nothing to return (as fast path)...
+            return vec![];
+        }
+
         self.upstreams
             .iter()
+            .filter(|u| {
+                if self.metrics_resolved_ip {
+                    self.breaker_state_changed.contains(*u)
+                } else {
+                    self.breaker_state_changed_nmri
+                        .contains(&(u.proxy_to.clone(), u.proxy_unix.clone()))
+                }
+            })
             .map(|u| (u.clone(), self.circuit_breaker.upstream_state(u)))
             .collect()
     }

@@ -131,6 +131,7 @@ pub async fn execute_proxy(
         config.affinity.as_ref().map(|t| &t.affinity_type),
         affinity_key.as_deref(),
         ring,
+        config.metrics_resolved_ip,
     );
 
     // Backend selection loop, retries on connection failure when retry_connection is enabled
@@ -230,7 +231,7 @@ pub async fn execute_proxy(
             {
                 Ok(resp) => {
                     if let Some(status) = metrics.status_code {
-                        record_backend_response(
+                        let changed = record_backend_response(
                             Some(&circuit_breaker_state),
                             Some(&flapping_state),
                             &config.circuit_breaker,
@@ -242,6 +243,9 @@ pub async fn execute_proxy(
                             ferron_http::trace_context::current_event_trace_context(ctx),
                             config.metrics_resolved_ip,
                         );
+                        if changed {
+                            backend_set.mark_circuit_state_changed(selected.upstream.clone());
+                        }
                     }
 
                     if metrics.upstream_time_secs > 0.0
@@ -287,7 +291,7 @@ pub async fn execute_proxy(
                         && can_retry_same
                         && matches!(e, ProxyError::SendRequestError(_));
                     if !is_stale_reuse {
-                        record_backend_transport_failure(
+                        let changed = record_backend_transport_failure(
                             Some(&circuit_breaker_state),
                             Some(&flapping_state),
                             &config.circuit_breaker,
@@ -297,6 +301,9 @@ pub async fn execute_proxy(
                             ferron_http::trace_context::current_event_trace_context(ctx),
                             config.metrics_resolved_ip,
                         );
+                        if changed {
+                            backend_set.mark_circuit_state_changed(selected.upstream.clone());
+                        }
                     }
 
                     // First, try to retry the same upstream on intermittent failures.

@@ -121,24 +121,32 @@ impl<'a> CircuitBreaker<'a> {
     /// are unavailable (closed-circuit cooldown, half-open slot busy) are
     /// rejected without any state transitions. Otherwise the state machine
     /// advances (open -> half-open) and the acquisition is emitted.
+    ///
+    /// Returns whether the acquisition was successful, and whether the state has been changed
     #[inline]
-    pub fn try_acquire(&self, upstream: &Arc<ResolvedUpstream>) -> bool {
+    pub fn try_acquire(&self, upstream: &Arc<ResolvedUpstream>) -> (bool, bool) {
         if !self.is_available(upstream) {
-            return false;
+            return (false, false);
         }
 
         if !self.config.enabled {
-            return true;
+            return (true, false);
         }
 
         let Some(circuit_breaker_state) = self.state else {
-            return true;
+            return (true, false);
         };
 
+        let mut new_state = false;
         let state = if let Some(state) = circuit_breaker_state.get(upstream) {
             state
         } else {
-            let mut state = circuit_breaker_state.entry(upstream.clone()).or_default();
+            let mut state = circuit_breaker_state
+                .entry(upstream.clone())
+                .or_insert_with(|| {
+                    new_state = true;
+                    Default::default()
+                });
             state.recent_failures = (self.config.max_fails > 1).then(|| {
                 Arc::new(crossbeam_queue::ArrayQueue::new(
                     (self.config.max_fails as usize).saturating_sub(1),
@@ -148,7 +156,7 @@ impl<'a> CircuitBreaker<'a> {
         };
 
         match state.status.load(Ordering::Relaxed) {
-            CIRCUIT_BREAKER_STATUS_CLOSED => true,
+            CIRCUIT_BREAKER_STATUS_CLOSED => (true, new_state),
             CIRCUIT_BREAKER_STATUS_OPEN => {
                 let opened_at = {
                     let mut opened_at_ref = state.opened_at.upgradable_read();
@@ -165,13 +173,13 @@ impl<'a> CircuitBreaker<'a> {
                         });
                         let Some(opened_at) = &*opened_at_ref else {
                             // At this point, something else has overwriten the value, so return `false`
-                            return false;
+                            return (false, new_state);
                         };
                         opened_at
                     };
 
                     if opened_at.elapsed() < self.config.open_duration {
-                        return false;
+                        return (false, new_state);
                     }
 
                     *opened_at
@@ -235,12 +243,13 @@ impl<'a> CircuitBreaker<'a> {
                     self.event_trace_context.clone(),
                     self.metrics_resolved_ip,
                 );
-                true
+                (true, true)
             }
-            CIRCUIT_BREAKER_STATUS_HALFOPEN => {
-                !state.half_open_in_flight.swap(true, Ordering::Relaxed)
-            }
-            _ => false, // Possibly corrupted state
+            CIRCUIT_BREAKER_STATUS_HALFOPEN => (
+                !state.half_open_in_flight.swap(true, Ordering::Relaxed),
+                new_state,
+            ),
+            _ => (false, new_state), // Possibly corrupted state
         }
     }
 }
@@ -257,8 +266,8 @@ pub fn record_backend_transport_failure(
     event_sink: &ferron_observability::CompositeEventSink,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
-) {
-    if record_circuit_breaker_failure(
+) -> bool {
+    let r = record_circuit_breaker_failure(
         circuit_breaker_state,
         flapping_state,
         circuit_breaker,
@@ -266,11 +275,13 @@ pub fn record_backend_transport_failure(
         event_sink,
         event_trace_context,
         metrics_resolved_ip,
-    ) {
+    );
+    if r.0 {
         metrics
             .circuit_breaker_unhealthy_backends
             .push(upstream.clone());
     }
+    r.1
 }
 
 /// Record an upstream response for the circuit breaker state machine.
@@ -287,13 +298,13 @@ pub fn record_backend_response(
     event_sink: &ferron_observability::CompositeEventSink,
     trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
-) {
+) -> bool {
     let is_5xx_failure = circuit_breaker.record_5xx && (500..600).contains(&status);
     let is_latency_failure = circuit_breaker.latency_threshold.is_some_and(|threshold| {
         upstream_time_secs.is_some_and(|t| std::time::Duration::from_secs_f64(t) > threshold)
     });
 
-    let should_open = if is_5xx_failure || is_latency_failure {
+    let r = if is_5xx_failure || is_latency_failure {
         record_circuit_breaker_failure(
             circuit_breaker_state,
             flapping_state,
@@ -304,7 +315,7 @@ pub fn record_backend_response(
             metrics_resolved_ip,
         )
     } else {
-        record_circuit_breaker_success(
+        let c = record_circuit_breaker_success(
             circuit_breaker_state,
             flapping_state,
             circuit_breaker,
@@ -313,14 +324,16 @@ pub fn record_backend_response(
             trace_context,
             metrics_resolved_ip,
         );
-        false
+        (false, c)
     };
 
+    let should_open = r.0;
     if should_open {
         metrics
             .circuit_breaker_unhealthy_backends
             .push(upstream.clone());
     }
+    r.1
 }
 
 #[inline]
@@ -460,13 +473,13 @@ fn record_circuit_breaker_failure(
     event_sink: &ferron_observability::CompositeEventSink,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
-) -> bool {
+) -> (bool, bool) {
     if !circuit_breaker.enabled {
-        return false;
+        return (false, false);
     }
 
     let Some(circuit_breaker_state) = circuit_breaker_state else {
-        return false;
+        return (false, false);
     };
 
     let now = std::time::Instant::now();
@@ -558,11 +571,11 @@ fn record_circuit_breaker_failure(
                 event_trace_context,
                 metrics_resolved_ip,
             );
-            true
+            (true, true)
         }
         CIRCUIT_BREAKER_STATUS_OPEN => {
             *state.opened_at.write() = Some(now);
-            false
+            (false, new_state)
         }
         CIRCUIT_BREAKER_STATUS_CLOSED
             if state.recent_failures.as_ref().is_none_or(|rf| {
@@ -618,9 +631,9 @@ fn record_circuit_breaker_failure(
                 event_trace_context,
                 metrics_resolved_ip,
             );
-            true
+            (true, true)
         }
-        _ => false,
+        _ => (false, new_state),
     }
 }
 
@@ -633,13 +646,13 @@ fn record_circuit_breaker_success(
     event_sink: &ferron_observability::CompositeEventSink,
     event_trace_context: Option<ferron_observability::EventTraceContext>,
     metrics_resolved_ip: bool,
-) {
+) -> bool {
     if !circuit_breaker.enabled {
-        return;
+        return false;
     }
 
     let Some(circuit_breaker_state) = circuit_breaker_state else {
-        return;
+        return false;
     };
 
     // Fast path: bail if not in HALFOPEN state.
@@ -647,11 +660,11 @@ fn record_circuit_breaker_success(
         .get(upstream)
         .is_none_or(|s| s.status.load(Ordering::Relaxed) != CIRCUIT_BREAKER_STATUS_HALFOPEN)
     {
-        return;
+        return false;
     }
 
     let Some(state) = circuit_breaker_state.get(upstream) else {
-        return;
+        return false;
     };
 
     state.half_open_in_flight.store(false, Ordering::Relaxed);
@@ -719,7 +732,10 @@ fn record_circuit_breaker_success(
             event_trace_context,
             metrics_resolved_ip,
         );
+        return true;
     }
+
+    false
 }
 
 pub struct CircuitBreakerHalfOpenTimeoutGuard<'a> {
