@@ -1236,7 +1236,7 @@ mod tests {
             ..Default::default()
         };
         let failure = vec![(
-            backend("http://localhost:8080"),
+            backend_at("http://backend:3000", "10.0.0.1"),
             ProbeResult {
                 status_code: Some(503),
                 response_time: Duration::from_millis(10),
@@ -1267,7 +1267,7 @@ mod tests {
             ..Default::default()
         };
         let failure = vec![(
-            backend("http://localhost:8080"),
+            backend("http://backend:3000"),
             ProbeResult {
                 status_code: Some(503),
                 response_time: Duration::from_millis(10),
