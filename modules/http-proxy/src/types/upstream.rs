@@ -181,7 +181,7 @@ impl Upstream {
 
 /// Returns true if the URL host is an IP literal (IPv4 or IPv6) or localhost.
 #[inline]
-fn is_ip_literal_or_localhost(url: &str) -> bool {
+pub(crate) fn is_ip_literal_or_localhost(url: &str) -> bool {
     let host = url
         .strip_prefix("http://")
         .or_else(|| url.strip_prefix("https://"))

@@ -9,7 +9,7 @@ use tokio::time::sleep;
 use crate::types::health::{
     ExpectedStatusCodes, HealthCheckMethod, HealthCheckStateMap, UpstreamHealthCheckConfig,
 };
-use crate::types::upstream::{MtlsCredentials, ResolvedUpstream, SrvUpstream, Upstream};
+use crate::types::upstream::{MtlsCredentials, ResolvedUpstream, Upstream};
 
 use hyper_rustls::HttpsConnectorBuilder;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -239,14 +239,6 @@ fn build_no_verify_https_connector(
                 PinnedResolver::pinned(pinned),
             ),
         )
-}
-
-/// Type of upstream health check to perform.
-#[derive(Hash, Eq, PartialEq)]
-enum UpstreamHealthCheckType {
-    Static(String),
-    Srv((String, Vec<std::net::IpAddr>, u32)),
-    StrictDns((String, u16, Vec<std::net::IpAddr>)),
 }
 
 /// Health check probe result.
@@ -634,7 +626,7 @@ pub fn spawn_health_check_task(
 ) -> tokio::task::JoinHandle<()> {
     runtime_handle.spawn(async move {
         let mut probe_configs: Vec<(
-            UpstreamHealthCheckType,
+            Upstream,
             UpstreamHealthCheckConfig,
             Option<Arc<MtlsCredentials>>,
         )> = Vec::new();
@@ -643,45 +635,17 @@ pub fn spawn_health_check_task(
             match upstream {
                 Upstream::Static(cfg) => {
                     if cfg.health_check_config.enabled {
-                        if let Some((host, port)) =
-                            crate::types::strict_dns::parse_host_port(&cfg.url)
-                        {
-                            let is_ip = host.parse::<std::net::IpAddr>().is_ok();
-                            let is_logical = cfg.logical_dns;
-                            if !is_ip && !is_logical && !cfg.url.starts_with("unix:") {
-                                probe_configs.push((
-                                    UpstreamHealthCheckType::StrictDns((
-                                        host,
-                                        port,
-                                        cfg.dns_servers.clone(),
-                                    )),
-                                    cfg.health_check_config.clone(),
-                                    cfg.mtls.clone(),
-                                ));
-                            } else {
-                                probe_configs.push((
-                                    UpstreamHealthCheckType::Static(cfg.url.clone()),
-                                    cfg.health_check_config.clone(),
-                                    cfg.mtls.clone(),
-                                ));
-                            }
-                        } else {
-                            probe_configs.push((
-                                UpstreamHealthCheckType::Static(cfg.url.clone()),
-                                cfg.health_check_config.clone(),
-                                cfg.mtls.clone(),
-                            ));
-                        }
+                        probe_configs.push((
+                            upstream.clone(),
+                            cfg.health_check_config.clone(),
+                            cfg.mtls.clone(),
+                        ));
                     }
                 }
                 Upstream::Srv(cfg) => {
                     if cfg.health_check_config.enabled {
                         probe_configs.push((
-                            UpstreamHealthCheckType::Srv((
-                                cfg.srv_name.clone(),
-                                cfg.dns_servers.clone(),
-                                cfg.weight,
-                            )),
+                            upstream.clone(),
                             cfg.health_check_config.clone(),
                             cfg.mtls.clone(),
                         ));
@@ -698,11 +662,18 @@ pub fn spawn_health_check_task(
         for probe_config in &probe_configs {
             let (upstream_type, config, _) = probe_config;
             let upstream_desc = match upstream_type {
-                UpstreamHealthCheckType::Static(url) => format!("Static({})", url),
-                UpstreamHealthCheckType::Srv((srv_name, _, _)) => format!("SRV({})", srv_name),
-                UpstreamHealthCheckType::StrictDns((host, port, _)) => {
-                    format!("StrictDns({}:{})", host, port)
+                Upstream::Static(cfg) => {
+                    if let Some(sock) = &cfg.unix_socket {
+                        format!("StaticUnix({sock} => {})", cfg.url)
+                    } else if !cfg.logical_dns
+                        && !crate::types::upstream::is_ip_literal_or_localhost(&cfg.url)
+                    {
+                        format!("StrictDns({})", cfg.url)
+                    } else {
+                        format!("Static({})", cfg.url)
+                    }
                 }
+                Upstream::Srv(cfg) => format!("SRV({})", cfg.srv_name),
             };
             event_sink.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
@@ -745,113 +716,41 @@ pub fn spawn_health_check_task(
             let mut probes_due = Vec::new();
 
             for (upstream_url, config, mtls) in &probe_configs {
-                let upstreams = match upstream_url {
-                    UpstreamHealthCheckType::Static(url) => {
-                        vec![Arc::new(ResolvedUpstream {
-                            proxy_to: url.clone(),
-                            connect_to: None,
-                            proxy_unix: None,
-                            inner: crate::types::upstream::UpstreamInner {
-                                weight: 1,
-                                mtls: None,
-                                priority: 0,
-                                connection_timeout: None,
-                                idle_timeout: Duration::from_secs(60),
-                                limit: None,
-                            },
-                            dns_status: crate::types::upstream::DnsResolutionStatus::NotApplicable,
-                        })]
-                    }
-                    UpstreamHealthCheckType::Srv((srv_name, dns_servers, weight)) => {
-                        let timeout_result = tokio::time::timeout(
-                            Duration::from_secs(5),
-                            crate::types::srv::resolve_srv_inner(SrvUpstream {
-                                srv_name: srv_name.clone(),
-                                dns_servers: dns_servers.clone(),
-                                // Use default health check config (SrvUpstream is only used for resolving SRV records)
-                                health_check_config: UpstreamHealthCheckConfig::default(),
-                                inner: crate::types::upstream::UpstreamInner {
-                                    weight: *weight,
-                                    limit: None,
-                                    // mTLS isn't applicable for resolution only
-                                    mtls: None,
-                                    priority: 0,
-                                    connection_timeout: None,
-                                    idle_timeout: Duration::from_secs(60),
-                                },
-                            }),
-                        )
-                        .await;
-                        if timeout_result.is_err() {
-                            event_sink.emit(ferron_observability::Event::Log(
-                                ferron_observability::LogEvent {
-                                    level: ferron_observability::LogLevel::Warn,
-                                    message: format!(
-                                        "Timeout (5s) while resolving SRV record for upstream {}",
-                                        srv_name
+                let upstreams = {
+                    let (upstream_type, upstream_address) = match upstream_url {
+                        Upstream::Static(cfg) => ("static", cfg.url.clone()),
+                        Upstream::Srv(cfg) => ("srv", cfg.srv_name.clone()),
+                    };
+                    let timeout_result = tokio::time::timeout(
+                        Duration::from_secs(5),
+                        upstream_url.clone().resolve(),
+                    )
+                    .await;
+                    if timeout_result.is_err() {
+                        event_sink.emit(ferron_observability::Event::Log(
+                            ferron_observability::LogEvent {
+                                level: ferron_observability::LogLevel::Warn,
+                                message: format!(
+                                    "Timeout (5s) while resolving {upstream_type} upstream {upstream_address}"
+                                ),
+                                summary: "Timeout while resolving upstream".into(),
+                                target: super::LOG_TARGET,
+                                attributes: vec![(
+                                    "ferron.proxy.health_upstream_address",
+                                    ferron_observability::LogAttributeValue::String(
+                                        upstream_address,
                                     ),
-                                    summary: "Timeout while resolving SRV record".into(),
-                                    target: super::LOG_TARGET,
-                                    attributes: vec![(
-                                        "dns.name",
-                                        ferron_observability::LogAttributeValue::String(
-                                            srv_name.to_string(),
-                                        ),
-                                    )],
-                                    trace_context: None,
-                                },
-                            ));
-                        }
-                        timeout_result
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|(upstream, _, _)| upstream)
-                            .collect()
-                    }
-                    UpstreamHealthCheckType::StrictDns((host, port, dns_servers)) => {
-                        let temp_cfg = crate::types::upstream::StaticUpstream {
-                            url: format!("http://{}:{}", host, port),
-                            unix_socket: None,
-                            inner: crate::types::upstream::UpstreamInner {
-                                limit: None,
-                                weight: 1,
-                                mtls: None,
-                                priority: 0,
-                                connection_timeout: None,
-                                idle_timeout: Duration::from_secs(60),
-                            },
-                            health_check_config:
-                                crate::types::health::UpstreamHealthCheckConfig::default(),
-                            logical_dns: false,
-                            dns_servers: dns_servers.clone(),
-                        };
-                        let timeout_result = tokio::time::timeout(
-                            Duration::from_secs(5),
-                            crate::types::strict_dns::resolve_strict_dns(temp_cfg),
-                        )
-                        .await;
-                        if timeout_result.is_err() {
-                            event_sink.emit(ferron_observability::Event::Log(
-                                ferron_observability::LogEvent {
-                                    level: ferron_observability::LogLevel::Warn,
-                                    message: format!(
-                                        "Timeout (5s) while resolving DNS for upstream {}:{}",
-                                        host, port
+                                ), (
+                                    "ferron.proxy.health_upstream_type",
+                                    ferron_observability::LogAttributeValue::StaticStr(
+                                        upstream_type,
                                     ),
-                                    summary: "Timeout while resolving DNS".into(),
-                                    target: super::LOG_TARGET,
-                                    attributes: vec![(
-                                        "dns.name",
-                                        ferron_observability::LogAttributeValue::String(
-                                            host.to_string(),
-                                        ),
-                                    )],
-                                    trace_context: None,
-                                },
-                            ));
-                        }
-                        timeout_result.unwrap_or_default().into_iter().collect()
+                                )],
+                                trace_context: None,
+                            },
+                        ));
                     }
+                    timeout_result.unwrap_or_default()
                 };
 
                 for upstream in upstreams {
