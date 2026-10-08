@@ -417,13 +417,14 @@ fn process_probe_result(
     }
 
     let upstream_url = upstream.proxy_to.as_str();
-    let mut state = state_map.entry(Arc::clone(upstream)).or_default();
 
     let now = SystemTime::now();
     let mut successes: usize = 0;
     let mut failures: usize = 0;
 
     for (upstream, result) in result {
+        let mut state = state_map.entry(Arc::clone(upstream)).or_default();
+
         let probe_success = if let Some(status) = result.status_code {
             let status_ok = config.expect_status.matches(status);
 
