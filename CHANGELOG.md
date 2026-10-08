@@ -17,6 +17,8 @@
 - **`http.route` is now a route template**: previously, the `ferron.request` span reported `http.route` as the requested hostname (or `"*"`). It now reports the matched route template built from the configured `location` block names, for example `/api/users/:id`, and is omitted when no `location` block matched.
 - **`ferron.host` added to request spans**: the requested virtual host is now reported as `ferron.host` on the `ferron.request` span. It uses the same attribute name as the TLS metrics, so traces and metrics join on the same key. `server.address` is unchanged and still reports the bound socket address.
 - **Sampling probability reported in `tracestate`**: when Ferron starts a trace itself and `trace_sampling` uses a ratio, the request's trace context now carries the OpenTelemetry `ot` `tracestate` entry (for example `ot=0.1`), on the propagated headers and on the exported span. Backends that extrapolate sampled traces can scale counts back up; previously a ratio sampler silently reported only the sampled fraction of traffic. No `ot` entry is written for `always_on`, `always_off`, `parentbased_always_on`, a ratio of `1.0` or `0.0`, or `attribute_based` sampling. An incoming `tracestate` is passed through unchanged.
+- **Active health checking metric attributes**: the metrics related to active health checking now have resolved IP address attributes when `metrics_resolved_ip` is enabled (similarly to circuit breaker metrics).
+- **Aggregate active health checking partial success metrics**: added a `ferron.proxy.health.partial_success` metric that reports health check probe results that succeeded only for some backend servers (percentage of successes in 0.0-1.0 scale).
 
 ### Fixed
 

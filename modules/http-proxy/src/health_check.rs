@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use ferron_observability::LogAttributeValue;
 use tokio::time::sleep;
 
 use crate::types::health::{
@@ -410,44 +411,159 @@ fn health_check_client(
 fn process_probe_result(
     upstream: &Arc<ResolvedUpstream>,
     config: &UpstreamHealthCheckConfig,
-    result: &ProbeResult,
+    result: &[ProbeResult],
     state_map: &HealthCheckStateMap,
     on_unhealthy: Option<&(dyn Fn(&str, bool) + Send + Sync)>,
     event_sink: &ferron_observability::CompositeEventSink,
     metrics_resolved_ip: bool,
 ) {
+    if result.is_empty() {
+        // Nothing to process!
+        return;
+    }
+
     let upstream_url = upstream.proxy_to.as_str();
     let mut state = state_map.entry(Arc::clone(upstream)).or_default();
 
-    let probe_success = if let Some(status) = result.status_code {
-        let status_ok = config.expect_status.matches(status);
+    let now = SystemTime::now();
+    let mut successes: usize = 0;
+    let mut failures: usize = 0;
 
-        let time_ok = config
-            .response_time_threshold
-            .map(|threshold| result.response_time <= threshold)
-            .unwrap_or(true);
+    for result in result {
+        let probe_success = if let Some(status) = result.status_code {
+            let status_ok = config.expect_status.matches(status);
 
-        let body_ok = if config.method == HealthCheckMethod::Get {
-            if let Some(ref body_match) = config.body_match {
-                if let Some(ref body) = result.body {
-                    String::from_utf8_lossy(body).contains(body_match)
+            let time_ok = config
+                .response_time_threshold
+                .map(|threshold| result.response_time <= threshold)
+                .unwrap_or(true);
+
+            let body_ok = if config.method == HealthCheckMethod::Get {
+                if let Some(ref body_match) = config.body_match {
+                    if let Some(ref body) = result.body {
+                        String::from_utf8_lossy(body).contains(body_match)
+                    } else {
+                        false
+                    }
                 } else {
-                    false
+                    true
                 }
             } else {
                 true
-            }
+            };
+
+            status_ok && time_ok && body_ok
         } else {
-            true
+            false
         };
 
-        status_ok && time_ok && body_ok
-    } else {
-        false
-    };
+        let mut health_attrs = Vec::with_capacity(4);
+        health_attrs.push((
+            "upstream.address",
+            LogAttributeValue::String(upstream_url.to_string()),
+        ));
+        health_attrs.push((
+            "ferron.proxy.backend_url",
+            LogAttributeValue::String(upstream_url.to_string()),
+        ));
+        if let Some(ref unix_path) = upstream.proxy_unix {
+            health_attrs.push((
+                "ferron.proxy.backend_unix_path",
+                LogAttributeValue::String(unix_path.clone()),
+            ));
+        }
+        if let Some(ref connect_to) = upstream.connect_to {
+            health_attrs.push((
+                "ferron.proxy.backend_resolved_ip",
+                LogAttributeValue::String(connect_to.to_string()),
+            ));
+        }
+        let upstream_log_id = if let Some(ref connect_to) = upstream.connect_to {
+            format!("{upstream_url} (at {connect_to})")
+        } else {
+            upstream_url.to_owned()
+        };
+
+        if probe_success {
+            successes += 1;
+            if state.is_healthy {
+                state.consecutive_pass_count = 0;
+            } else {
+                state.consecutive_pass_count += 1;
+                if state.consecutive_pass_count >= config.consecutive_passes {
+                    state.is_healthy = true;
+                    state.consecutive_pass_count = 0;
+                    state.consecutive_fail_count = 0;
+                    event_sink.emit(ferron_observability::Event::Log(
+                        ferron_observability::LogEvent {
+                            level: ferron_observability::LogLevel::Info,
+                            message: format!(
+                                "Upstream {} recovered after {} consecutive successes",
+                                upstream_log_id, config.consecutive_passes
+                            ),
+                            summary: "Upstream recovered".into(),
+                            target: super::LOG_TARGET,
+                            attributes: health_attrs,
+                            trace_context: None,
+                        },
+                    ));
+                }
+            }
+            state.last_success_time = Some(now);
+            state.last_probe_status = result.status_code;
+            state.last_probe_error = None;
+        } else {
+            failures += 1;
+            state.consecutive_fail_count += 1;
+            state.consecutive_pass_count = 0;
+
+            if state.is_healthy && state.consecutive_fail_count >= config.consecutive_fails {
+                state.is_healthy = false;
+                let error_msg = result.error.clone().unwrap_or_else(|| {
+                    format!(
+                        "Status {} (expected {})",
+                        result.status_code.unwrap_or(0),
+                        match &config.expect_status {
+                            ExpectedStatusCodes::Successful => "2xx",
+                            ExpectedStatusCodes::SuccessfulOrRedirect => "2xx/3xx",
+                            _ => "custom",
+                        }
+                    )
+                });
+                event_sink.emit(ferron_observability::Event::Log(
+                    ferron_observability::LogEvent {
+                        level: ferron_observability::LogLevel::Warn,
+                        message: format!(
+                            "Upstream {} marked unhealthy: {} ({}/{})",
+                            upstream_log_id,
+                            error_msg,
+                            state.consecutive_fail_count,
+                            config.consecutive_fails
+                        ),
+                        summary: "Upstream marked unhealthy".into(),
+                        target: super::LOG_TARGET,
+                        attributes: health_attrs,
+                        trace_context: None,
+                    },
+                ));
+                if let Some(callback) = on_unhealthy {
+                    callback(upstream_url, true);
+                }
+            }
+
+            state.last_failure_time = Some(now);
+            state.last_probe_error = result.error.clone();
+        }
+    }
 
     use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
-    let duration_secs = result.response_time.as_secs_f64();
+
+    let duration_secs = result
+        .iter()
+        .map(|r| r.response_time.as_secs_f64())
+        .sum::<f64>()
+        / result.len() as f64; // Average of all response times (result.len() == 0 would return earlier anyway)
+
     // Same attribute set as the other backend scoped proxy metrics, so the
     // metric name maps to one Prometheus series per backend.
     let mut health_attrs = Vec::with_capacity(4);
@@ -476,7 +592,17 @@ fn process_probe_result(
         trace_context: None,
     }));
 
-    if probe_success {
+    if successes == 0 {
+        event_sink.emit(Event::Metric(MetricEvent {
+            name: "ferron.proxy.health.failure",
+            attributes: health_attrs,
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{probe}"),
+            description: Some("Failed active health check probes."),
+            trace_context: None,
+        }));
+    } else if failures == 0 {
         event_sink.emit(Event::Metric(MetricEvent {
             name: "ferron.proxy.health.success",
             attributes: health_attrs,
@@ -487,95 +613,20 @@ fn process_probe_result(
             trace_context: None,
         }));
     } else {
+        let ratio = if successes + failures == 0 {
+            0.0
+        } else {
+            (successes) as f64 / (successes + failures) as f64
+        };
         event_sink.emit(Event::Metric(MetricEvent {
-            name: "ferron.proxy.health.failure",
+            name: "ferron.proxy.health.partial_success",
             attributes: health_attrs,
             ty: MetricType::Counter,
-            value: MetricValue::U64(1),
+            value: MetricValue::F64(ratio),
             unit: Some("{probe}"),
-            description: Some("Failed active health check probes."),
+            description: Some("Partially successful active health check probes (percentage of successes in 0.0-1.0 scale)."),
             trace_context: None,
         }));
-    }
-
-    let now = SystemTime::now();
-    let _was_healthy = state.is_healthy;
-
-    if probe_success {
-        if state.is_healthy {
-            state.consecutive_pass_count = 0;
-        } else {
-            state.consecutive_pass_count += 1;
-            if state.consecutive_pass_count >= config.consecutive_passes {
-                state.is_healthy = true;
-                state.consecutive_pass_count = 0;
-                state.consecutive_fail_count = 0;
-                event_sink.emit(ferron_observability::Event::Log(
-                    ferron_observability::LogEvent {
-                        level: ferron_observability::LogLevel::Info,
-                        message: format!(
-                            "Upstream {} recovered after {} consecutive successes",
-                            upstream_url, config.consecutive_passes
-                        ),
-                        summary: "Upstream recovered".into(),
-                        target: super::LOG_TARGET,
-                        attributes: vec![(
-                            "upstream.address",
-                            ferron_observability::LogAttributeValue::String(
-                                upstream_url.to_string(),
-                            ),
-                        )],
-                        trace_context: None,
-                    },
-                ));
-            }
-        }
-        state.last_success_time = Some(now);
-        state.last_probe_status = result.status_code;
-        state.last_probe_error = None;
-    } else {
-        state.consecutive_fail_count += 1;
-        state.consecutive_pass_count = 0;
-
-        if state.is_healthy && state.consecutive_fail_count >= config.consecutive_fails {
-            state.is_healthy = false;
-            let error_msg = result.error.clone().unwrap_or_else(|| {
-                format!(
-                    "Status {} (expected {})",
-                    result.status_code.unwrap_or(0),
-                    match &config.expect_status {
-                        ExpectedStatusCodes::Successful => "2xx",
-                        ExpectedStatusCodes::SuccessfulOrRedirect => "2xx/3xx",
-                        _ => "custom",
-                    }
-                )
-            });
-            event_sink.emit(ferron_observability::Event::Log(
-                ferron_observability::LogEvent {
-                    level: ferron_observability::LogLevel::Warn,
-                    message: format!(
-                        "Upstream {} marked unhealthy: {} ({}/{})",
-                        upstream_url,
-                        error_msg,
-                        state.consecutive_fail_count,
-                        config.consecutive_fails
-                    ),
-                    summary: "Upstream marked unhealthy".into(),
-                    target: super::LOG_TARGET,
-                    attributes: vec![(
-                        "upstream.address",
-                        ferron_observability::LogAttributeValue::String(upstream_url.to_string()),
-                    )],
-                    trace_context: None,
-                },
-            ));
-            if let Some(callback) = on_unhealthy {
-                callback(upstream_url, true);
-            }
-        }
-
-        state.last_failure_time = Some(now);
-        state.last_probe_error = result.error.clone();
     }
 }
 
@@ -848,31 +899,69 @@ pub fn spawn_health_check_task(
 
             if !probes_due.is_empty() {
                 let mut probe_tasks = Vec::new();
+                let aggregated_probe_results: Arc<
+                    dashmap::DashMap<
+                        (String, Option<String>),
+                        (
+                            Arc<ResolvedUpstream>,
+                            UpstreamHealthCheckConfig,
+                            Vec<ProbeResult>,
+                        ),
+                    >,
+                > = Arc::new(Default::default());
 
                 for (upstream, config, mtls) in probes_due {
                     let state_map = Arc::clone(&state_map);
                     let on_unhealthy_clone = on_unhealthy.clone();
                     let probe_target = Arc::clone(&upstream);
+                    let aggregated_probe_results = Arc::clone(&aggregated_probe_results);
 
                     last_probe_times.insert(upstream, now);
 
                     let event_sink = event_sink.clone();
                     probe_tasks.push(tokio::spawn(async move {
                         let result = probe_upstream(&probe_target, &config, mtls).await;
-                        process_probe_result(
-                            &probe_target,
-                            &config,
-                            &result,
-                            &state_map,
-                            on_unhealthy_clone.as_deref(),
-                            &event_sink,
-                            metrics_resolved_ip,
-                        );
+                        if metrics_resolved_ip {
+                            process_probe_result(
+                                &probe_target,
+                                &config,
+                                &[result],
+                                &state_map,
+                                on_unhealthy_clone.as_deref(),
+                                &event_sink,
+                                metrics_resolved_ip,
+                            );
+                        } else {
+                            let key = (
+                                probe_target.proxy_to.clone(),
+                                probe_target.proxy_unix.clone(),
+                            );
+                            aggregated_probe_results
+                                .entry(key)
+                                .or_insert_with(|| {
+                                    (probe_target.clone(), config.clone(), Vec::new())
+                                })
+                                .2
+                                .push(result);
+                        }
                     }));
                 }
 
                 for task in probe_tasks {
                     let _ = task.await;
+                }
+
+                for value in aggregated_probe_results.iter() {
+                    let (upstream, config, results) = &*value;
+                    process_probe_result(
+                        upstream,
+                        config,
+                        results,
+                        &state_map,
+                        on_unhealthy.as_deref(),
+                        &event_sink,
+                        metrics_resolved_ip,
+                    );
                 }
             }
 
@@ -922,12 +1011,12 @@ mod tests {
             ..Default::default()
         };
 
-        let result = ProbeResult {
+        let result = vec![ProbeResult {
             status_code: Some(500),
             response_time: Duration::from_millis(100),
             body: None,
             error: None,
-        };
+        }];
 
         process_probe_result(
             &backend("http://localhost:8080"),
@@ -963,12 +1052,12 @@ mod tests {
             ..Default::default()
         };
 
-        let fail_result = ProbeResult {
+        let fail_result = vec![ProbeResult {
             status_code: Some(500),
             response_time: Duration::from_millis(100),
             body: None,
             error: None,
-        };
+        }];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -988,12 +1077,12 @@ mod tests {
             false,
         );
 
-        let success_result = ProbeResult {
+        let success_result = vec![ProbeResult {
             status_code: Some(200),
             response_time: Duration::from_millis(100),
             body: None,
             error: None,
-        };
+        }];
 
         process_probe_result(
             &backend("http://localhost:8080"),
@@ -1030,12 +1119,12 @@ mod tests {
             ..Default::default()
         };
 
-        let result_fast = ProbeResult {
+        let result_fast = vec![ProbeResult {
             status_code: Some(200),
             response_time: Duration::from_millis(30),
             body: None,
             error: None,
-        };
+        }];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -1051,12 +1140,12 @@ mod tests {
             assert!(state.is_healthy);
         }
 
-        let result_slow = ProbeResult {
+        let result_slow = vec![ProbeResult {
             status_code: Some(200),
             response_time: Duration::from_millis(100),
             body: None,
             error: None,
-        };
+        }];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -1083,12 +1172,12 @@ mod tests {
             ..Default::default()
         };
 
-        let result = ProbeResult {
+        let result = vec![ProbeResult {
             status_code: Some(200),
             response_time: Duration::from_millis(50),
             body: Some(b"status: ok".to_vec()),
             error: None,
-        };
+        }];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -1114,12 +1203,12 @@ mod tests {
             ..Default::default()
         };
 
-        let result = ProbeResult {
+        let result = vec![ProbeResult {
             status_code: Some(200),
             response_time: Duration::from_millis(50),
             body: Some(b"status: fail".to_vec()),
             error: None,
-        };
+        }];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -1165,12 +1254,12 @@ mod tests {
             consecutive_fails: 1,
             ..Default::default()
         };
-        let failure = ProbeResult {
+        let failure = vec![ProbeResult {
             status_code: Some(503),
             response_time: Duration::from_millis(10),
             body: None,
             error: None,
-        };
+        }];
 
         // Two addresses behind one hostname, which is what strict DNS produces.
         let first = backend_at("http://backend:3000", "10.0.0.1");
@@ -1201,12 +1290,12 @@ mod tests {
             consecutive_fails: 1,
             ..Default::default()
         };
-        let failure = ProbeResult {
+        let failure = vec![ProbeResult {
             status_code: Some(503),
             response_time: Duration::from_millis(10),
             body: None,
             error: None,
-        };
+        }];
 
         let upstream = backend("http://backend:3000");
         process_probe_result(
