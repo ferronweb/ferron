@@ -260,7 +260,9 @@ pub async fn execute_proxy(
                     let resp = maybe_set_affinity_cookie(
                         resp,
                         &config.affinity,
-                        affinity_key.map(|k| String::from_utf8_lossy(&k).to_string()),
+                        affinity_key
+                            .as_deref()
+                            .map(|k| String::from_utf8_lossy(k).to_string()),
                     );
 
                     if let Some(budget) = retry_budget {
@@ -268,6 +270,7 @@ pub async fn execute_proxy(
                     }
 
                     circuit_timeout_guard.cancel();
+                    metrics.circuit_breaker_metrics = backend_set.get_circuit_metrics();
                     return Ok((resp, metrics));
                 }
                 Err(e) => {
@@ -332,6 +335,7 @@ pub async fn execute_proxy(
                                         .expect("retry-after value should be valid"),
                                 );
                                 circuit_timeout_guard.cancel();
+                                metrics.circuit_breaker_metrics = backend_set.get_circuit_metrics();
                                 return Ok((
                                     HttpResponse::BuiltinError(503, Some(headers)),
                                     metrics,
@@ -407,6 +411,8 @@ pub async fn execute_proxy(
                                             .expect("retry-after value should be valid"),
                                     );
                                     circuit_timeout_guard.cancel();
+                                    metrics.circuit_breaker_metrics =
+                                        backend_set.get_circuit_metrics();
                                     return Ok((
                                         HttpResponse::BuiltinError(503, Some(headers)),
                                         metrics,
@@ -472,6 +478,7 @@ pub async fn execute_proxy(
                         trace_context: ferron_http::trace_context::current_event_trace_context(ctx),
                     }));
                     circuit_timeout_guard.cancel();
+                    metrics.circuit_breaker_metrics = backend_set.get_circuit_metrics();
                     return Ok((HttpResponse::BuiltinError(status.as_u16(), None), metrics));
                 }
             }

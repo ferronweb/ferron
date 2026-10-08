@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use ferron_observability::LogAttributeValue;
 use tokio::time::sleep;
 
 use crate::types::health::{
@@ -452,32 +451,7 @@ fn process_probe_result(
             false
         };
 
-        let mut health_attrs = Vec::with_capacity(4);
-        health_attrs.push((
-            "upstream.address",
-            LogAttributeValue::String(upstream_url.to_string()),
-        ));
-        health_attrs.push((
-            "ferron.proxy.backend_url",
-            LogAttributeValue::String(upstream_url.to_string()),
-        ));
-        if let Some(ref unix_path) = upstream.proxy_unix {
-            health_attrs.push((
-                "ferron.proxy.backend_unix_path",
-                LogAttributeValue::String(unix_path.clone()),
-            ));
-        }
-        if let Some(ref connect_to) = upstream.connect_to {
-            health_attrs.push((
-                "ferron.proxy.backend_resolved_ip",
-                LogAttributeValue::String(connect_to.to_string()),
-            ));
-        }
-        let upstream_log_id = if let Some(ref connect_to) = upstream.connect_to {
-            format!("{upstream_url} (at {connect_to})")
-        } else {
-            upstream_url.to_owned()
-        };
+        let (health_attrs, upstream_log_id) = crate::upstream::health_upstream_attrs(upstream);
 
         if probe_success {
             successes += 1;

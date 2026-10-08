@@ -12,6 +12,7 @@ pub mod resolution;
 #[cfg(test)]
 pub mod tests;
 
+use ferron_observability::LogAttributeValue;
 use std::hash::BuildHasher;
 
 // Re-export upstream-specific functions
@@ -32,4 +33,40 @@ pub fn get_ahasher() -> ahash::AHasher {
         0xda2d3937288cc846,
     )
     .build_hasher()
+}
+
+/// Obtains log attributes and upstream log ID for health checking
+#[inline]
+pub fn health_upstream_attrs(
+    upstream: &std::sync::Arc<crate::types::upstream::ResolvedUpstream>,
+) -> (Vec<(&'static str, LogAttributeValue)>, String) {
+    let mut health_attrs = Vec::with_capacity(8);
+    let upstream_url = upstream.proxy_to.clone();
+    health_attrs.push((
+        "upstream.address",
+        LogAttributeValue::String(upstream_url.clone()),
+    ));
+    health_attrs.push((
+        "ferron.proxy.backend_url",
+        LogAttributeValue::String(upstream_url.clone()),
+    ));
+    if let Some(ref unix_path) = upstream.proxy_unix {
+        health_attrs.push((
+            "ferron.proxy.backend_unix_path",
+            LogAttributeValue::String(unix_path.clone()),
+        ));
+    }
+    if let Some(ref connect_to) = upstream.connect_to {
+        health_attrs.push((
+            "ferron.proxy.backend_resolved_ip",
+            LogAttributeValue::String(connect_to.to_string()),
+        ));
+    }
+    let upstream_log_id = if let Some(ref connect_to) = upstream.connect_to {
+        format!("{upstream_url} (at {connect_to})")
+    } else {
+        upstream_url.to_owned()
+    };
+
+    (health_attrs, upstream_log_id)
 }

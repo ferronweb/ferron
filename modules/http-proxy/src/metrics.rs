@@ -14,10 +14,16 @@ use crate::types::ConnectionsTrackState;
 pub(crate) static PROXY_POOL_BUCKETS: &[f64] = &[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0];
 pub(crate) static PROXY_TLS_BUCKETS: &[f64] = &[0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0];
 
+pub type CircuitBreakerMetrics = Vec<(
+    Arc<types::upstream::ResolvedUpstream>,
+    Option<(u8, Option<bool>)>,
+)>;
+
 pub struct ProxyMetrics {
     pub selected_backends: rustc_hash::FxHashSet<Arc<types::upstream::ResolvedUpstream>>,
     pub final_selected_backend: Option<Arc<types::upstream::ResolvedUpstream>>,
     pub circuit_breaker_unhealthy_backends: Vec<Arc<types::upstream::ResolvedUpstream>>,
+    pub circuit_breaker_metrics: CircuitBreakerMetrics,
     pub connection_reused: bool,
     pub tls_handshake_failures: u64,
     pub tls_handshake_time_secs: f64,
@@ -58,6 +64,7 @@ impl ProxyMetrics {
             selected_backends: rustc_hash::FxHashSet::default(),
             final_selected_backend: None,
             circuit_breaker_unhealthy_backends: Vec::new(),
+            circuit_breaker_metrics: CircuitBreakerMetrics::default(),
             connection_reused: false,
             tls_handshake_failures: 0,
             tls_handshake_time_secs: 0.0,
@@ -144,7 +151,7 @@ pub(crate) fn inject_upstream_state_span_attributes(
     }
 
     // Flapping state
-    if let Some(flapping) = flapping_state.get(&backend.proxy_to) {
+    if let Some(flapping) = flapping_state.get(backend) {
         sa.insert(
             "ferron.proxy.upstream.is_flapping",
             TraceAttributeValue::Bool(flapping.is_flapping()),

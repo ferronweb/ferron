@@ -81,6 +81,29 @@ impl<'a> CircuitBreaker<'a> {
         }
     }
 
+    /// The current circuit breaker state for a specific upstream, if enabled
+    /// (state and optional flapping state)
+    #[inline]
+    pub fn upstream_state(&self, upstream: &Arc<ResolvedUpstream>) -> Option<(u8, Option<bool>)> {
+        let circuit_breaker_state = self
+            .config
+            .enabled
+            .then_some(self.state)
+            .flatten()
+            .and_then(|s| s.get(upstream))
+            .map(|s| s.status.load(Ordering::Relaxed));
+        if let Some(s) = circuit_breaker_state {
+            let flapping_state = (self.config.flapping_transitions > 0)
+                .then_some(self.flapping_state)
+                .flatten()
+                .and_then(|s| s.get(upstream))
+                .map(|s| s.is_flapping());
+            Some((s, flapping_state))
+        } else {
+            None
+        }
+    }
+
     /// Whether a backend's circuit breaker is currently in the open state.
     #[inline]
     pub fn is_open(&self, upstream: &Arc<ResolvedUpstream>) -> bool {
@@ -168,44 +191,38 @@ impl<'a> CircuitBreaker<'a> {
                 crate::upstream::flapping::record_circuit_transition(
                     self.flapping_state,
                     self.config,
-                    &upstream.proxy_to,
-                    upstream.dns_status.as_label(),
+                    &upstream,
                     self.event_sink,
                     self.event_trace_context.clone(),
                 );
+                let (mut log_attributes, upstream_id) =
+                    crate::upstream::health_upstream_attrs(upstream);
                 self.event_sink.emit(ferron_observability::Event::Log(
                     ferron_observability::LogEvent {
                         level: ferron_observability::LogLevel::Info,
                         message: format!(
-                            "Upstream {} circuit transitioned to half-open after {:?}",
-                            upstream.proxy_to,
+                            "Upstream {upstream_id} circuit transitioned to half-open after {:?}",
                             opened_at.elapsed()
                         ),
                         summary: "Upstream circuit transitioned to half-open".into(),
                         target: crate::LOG_TARGET,
-                        attributes: vec![
-                            (
-                                "upstream.address",
-                                ferron_observability::LogAttributeValue::String(
-                                    upstream.proxy_to.clone(),
-                                ),
-                            ),
-                            (
+                        attributes: {
+                            log_attributes.push((
                                 "ferron.proxy.circuit.open_duration_ms",
                                 ferron_observability::LogAttributeValue::I64(
                                     opened_at.elapsed().as_millis() as i64,
                                 ),
-                            ),
-                        ],
+                            ));
+                            log_attributes
+                        },
                         trace_context: self.event_trace_context.clone(),
                     },
                 ));
-                emit_circuit_metric(
+                emit_circuit_transition_metric(
                     self.event_sink,
                     upstream,
-                    "ferron.proxy.circuit.state",
-                    ferron_observability::MetricType::Gauge,
-                    ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_HALFOPEN as u64),
+                    CIRCUIT_BREAKER_STATUS_OPEN,
+                    CIRCUIT_BREAKER_STATUS_HALFOPEN,
                     self.event_trace_context.clone(),
                     self.metrics_resolved_ip,
                 );
@@ -307,7 +324,7 @@ pub fn record_backend_response(
 }
 
 #[inline]
-fn emit_circuit_metric(
+pub fn emit_circuit_metric(
     event_sink: &ferron_observability::CompositeEventSink,
     upstream: &Arc<ResolvedUpstream>,
     name: &'static str,
@@ -352,6 +369,82 @@ fn emit_circuit_metric(
         value,
         unit: Some("{circuit}"),
         description: Some("Circuit breaker state and transitions for upstream backends."),
+        trace_context,
+    }));
+}
+
+#[inline]
+fn emit_circuit_transition_metric(
+    event_sink: &ferron_observability::CompositeEventSink,
+    upstream: &Arc<ResolvedUpstream>,
+    old_state: u8,
+    new_state: u8,
+    trace_context: Option<ferron_observability::EventTraceContext>,
+    metrics_resolved_ip: bool,
+) {
+    use ferron_observability::{Event, MetricAttributeValue, MetricEvent};
+
+    let mut attributes = Vec::with_capacity(5);
+    attributes.push((
+        "ferron.proxy.backend_url",
+        MetricAttributeValue::String(upstream.proxy_to.clone()),
+    ));
+    if let Some(ref unix_path) = upstream.proxy_unix {
+        attributes.push((
+            "ferron.proxy.backend_unix_path",
+            MetricAttributeValue::String(unix_path.clone()),
+        ));
+    }
+    if metrics_resolved_ip {
+        if let Some(ref resolved_ip) = upstream.connect_to {
+            attributes.push((
+                "ferron.proxy.backend_resolved_ip",
+                MetricAttributeValue::String(resolved_ip.to_string()),
+            ));
+        }
+    }
+    // Keep the attribute set identical to the one the per-request proxy metrics
+    // use, otherwise the same metric name is exported as two distinct series.
+    // The DNS outcome has a bounded set of values, so it does not raise
+    // cardinality the way the resolved address does.
+    attributes.push((
+        "ferron.proxy.dns_status",
+        MetricAttributeValue::String(upstream.dns_status.as_label().to_string()),
+    ));
+
+    let mut old_attributes = attributes.clone();
+    old_attributes.push((
+        "ferron.proxy.upstream.circuit_state",
+        MetricAttributeValue::StaticStr(crate::types::circuit::circuit_breaker_state_label(
+            old_state,
+        )),
+    ));
+
+    let mut new_attributes = attributes;
+    new_attributes.push((
+        "ferron.proxy.upstream.circuit_state",
+        MetricAttributeValue::StaticStr(crate::types::circuit::circuit_breaker_state_label(
+            new_state,
+        )),
+    ));
+
+    event_sink.emit(Event::Metric(MetricEvent {
+        name: "ferron.proxy.circuit.partial_state",
+        attributes: old_attributes,
+        ty: ferron_observability::MetricType::UpDownCounter,
+        value: ferron_observability::MetricValue::I64(-1),
+        unit: Some("{circuit}"),
+        description: Some("Number of circuit breakers in each state for each backend."),
+        trace_context: trace_context.clone(),
+    }));
+
+    event_sink.emit(Event::Metric(MetricEvent {
+        name: "ferron.proxy.circuit.partial_state",
+        attributes: new_attributes,
+        ty: ferron_observability::MetricType::UpDownCounter,
+        value: ferron_observability::MetricValue::I64(1),
+        unit: Some("{circuit}"),
+        description: Some("Number of circuit breakers in each state for each backend."),
         trace_context,
     }));
 }
@@ -418,33 +511,28 @@ fn record_circuit_breaker_failure(
             crate::upstream::flapping::record_circuit_transition(
                 flapping_state,
                 circuit_breaker,
-                &upstream.proxy_to,
-                upstream.dns_status.as_label(),
+                &upstream,
                 event_sink,
                 event_trace_context.clone(),
             );
+            let (log_attributes, upstream_id) = crate::upstream::health_upstream_attrs(upstream);
             event_sink.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Warn,
                     message: format!(
-                        "Upstream {} circuit reopened after a half-open trial failure",
-                        upstream.proxy_to
+                        "Upstream {upstream_id} circuit reopened after a half-open trial failure"
                     ),
                     summary: "Upstream circuit reopened after half-open trial failure".into(),
                     target: crate::LOG_TARGET,
-                    attributes: vec![(
-                        "upstream.address",
-                        ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
-                    )],
+                    attributes: log_attributes,
                     trace_context: event_trace_context.clone(),
                 },
             ));
-            emit_circuit_metric(
+            emit_circuit_transition_metric(
                 event_sink,
                 upstream,
-                "ferron.proxy.circuit.state",
-                ferron_observability::MetricType::Gauge,
-                ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_OPEN as u64),
+                CIRCUIT_BREAKER_STATUS_HALFOPEN,
+                CIRCUIT_BREAKER_STATUS_OPEN,
                 event_trace_context.clone(),
                 metrics_resolved_ip,
             );
@@ -482,33 +570,29 @@ fn record_circuit_breaker_failure(
             crate::upstream::flapping::record_circuit_transition(
                 flapping_state,
                 circuit_breaker,
-                &upstream.proxy_to,
-                upstream.dns_status.as_label(),
+                &upstream,
                 event_sink,
                 event_trace_context.clone(),
             );
+            let (log_attributes, upstream_id) = crate::upstream::health_upstream_attrs(upstream);
             event_sink.emit(ferron_observability::Event::Log(
                 ferron_observability::LogEvent {
                     level: ferron_observability::LogLevel::Warn,
                     message: format!(
-                        "Upstream {} circuit opened after {} failures within {:?}",
-                        upstream.proxy_to, circuit_breaker.max_fails, circuit_breaker.window
+                        "Upstream {upstream_id} circuit opened after {} failures within {:?}",
+                        circuit_breaker.max_fails, circuit_breaker.window
                     ),
                     summary: "Upstream circuit opened".into(),
                     target: crate::LOG_TARGET,
-                    attributes: vec![(
-                        "upstream.address",
-                        ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
-                    )],
+                    attributes: log_attributes,
                     trace_context: event_trace_context.clone(),
                 },
             ));
-            emit_circuit_metric(
+            emit_circuit_transition_metric(
                 event_sink,
                 upstream,
-                "ferron.proxy.circuit.state",
-                ferron_observability::MetricType::Gauge,
-                ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_OPEN as u64),
+                CIRCUIT_BREAKER_STATUS_CLOSED,
+                CIRCUIT_BREAKER_STATUS_OPEN,
                 event_trace_context.clone(),
                 metrics_resolved_ip,
             );
@@ -587,33 +671,29 @@ fn record_circuit_breaker_success(
         crate::upstream::flapping::record_circuit_transition(
             flapping_state,
             circuit_breaker,
-            &upstream.proxy_to,
-            upstream.dns_status.as_label(),
+            &upstream,
             event_sink,
             event_trace_context.clone(),
         );
+        let (log_attributes, upstream_id) = crate::upstream::health_upstream_attrs(upstream);
         event_sink.emit(ferron_observability::Event::Log(
             ferron_observability::LogEvent {
                 level: ferron_observability::LogLevel::Info,
                 message: format!(
-                    "Upstream {} circuit closed after {} successful half-open request(s)",
-                    upstream.proxy_to, circuit_breaker.consecutive_passes
+                    "Upstream {upstream_id} circuit closed after {} successful half-open request(s)",
+                    circuit_breaker.consecutive_passes
                 ),
                 summary: "Upstream circuit closed".into(),
                 target: crate::LOG_TARGET,
-                attributes: vec![(
-                    "upstream.address",
-                    ferron_observability::LogAttributeValue::String(upstream.proxy_to.clone()),
-                )],
+                attributes: log_attributes,
                 trace_context: event_trace_context.clone(),
             },
         ));
-        emit_circuit_metric(
+        emit_circuit_transition_metric(
             event_sink,
             upstream,
-            "ferron.proxy.circuit.state",
-            ferron_observability::MetricType::Gauge,
-            ferron_observability::MetricValue::U64(CIRCUIT_BREAKER_STATUS_CLOSED as u64),
+            CIRCUIT_BREAKER_STATUS_HALFOPEN,
+            CIRCUIT_BREAKER_STATUS_CLOSED,
             event_trace_context.clone(),
             metrics_resolved_ip,
         );
@@ -668,21 +748,18 @@ impl Drop for CircuitBreakerHalfOpenTimeoutGuard<'_> {
             if let Some(state) = state_map.get(self.upstream) {
                 if state.status.load(Ordering::Relaxed) == CIRCUIT_BREAKER_STATUS_HALFOPEN {
                     state.half_open_in_flight.store(false, Ordering::Relaxed);
+                    let (log_attributes, upstream_id) =
+                        crate::upstream::health_upstream_attrs(self.upstream);
                     self.event_sink.emit(ferron_observability::Event::Log(
                         ferron_observability::LogEvent {
                             level: ferron_observability::LogLevel::Warn,
                             message: format!(
                                 "Upstream {} half-open trial timed out, releasing slot",
-                                self.upstream.proxy_to
+                                upstream_id
                             ),
                             summary: "Upstream half-open trial timed out".into(),
                             target: crate::LOG_TARGET,
-                            attributes: vec![(
-                                "upstream.address",
-                                ferron_observability::LogAttributeValue::String(
-                                    self.upstream.proxy_to.clone(),
-                                ),
-                            )],
+                            attributes: log_attributes,
                             trace_context: self.event_trace_context.clone(),
                         },
                     ));

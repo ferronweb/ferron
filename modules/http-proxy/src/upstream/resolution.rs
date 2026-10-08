@@ -308,4 +308,13 @@ impl<'a> BackendSet<'a> {
 
         None
     }
+
+    /// Obtain circuit breaker metrics for all backends
+    #[inline]
+    pub fn get_circuit_metrics(&self) -> crate::metrics::CircuitBreakerMetrics {
+        self.upstreams
+            .iter()
+            .map(|u| (u.clone(), self.circuit_breaker.upstream_state(u)))
+            .collect()
+    }
 }

@@ -84,4 +84,10 @@ impl FlappingState {
 }
 
 /// Shared map from upstream URL to flapping state.
-pub type FlappingStateMap = Arc<dashmap::DashMap<String, FlappingState, rustc_hash::FxBuildHasher>>;
+pub type FlappingStateMap = Arc<
+    dashmap::DashMap<
+        Arc<super::upstream::ResolvedUpstream>,
+        FlappingState,
+        rustc_hash::FxBuildHasher,
+    >,
+>;

@@ -11,6 +11,8 @@ use parking_lot::RwLock;
 
 use crate::types::circuit::circuit_breaker_state_label;
 use crate::types::retry_budget::SharedRetryBudget;
+use crate::upstream::circuit::emit_circuit_metric;
+use crate::upstream::flapping::emit_flapping_metric;
 use crate::upstream::lb::p2c_ewma::{self, P2cEwmaParams};
 use crate::upstream::lb::{ConsistentHashRing, LoadBalancerAlgorithmInner};
 use crate::ProxyState;
@@ -272,7 +274,19 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
-        for backend in &metrics.circuit_breaker_unhealthy_backends {
+        let mut circuit_breaker_dup_track: rustc_hash::FxHashSet<(String, Option<String>)> =
+            Default::default();
+        for backend in metrics
+            .circuit_breaker_unhealthy_backends
+            .iter()
+            .filter(|e| {
+                if config.metrics_resolved_ip {
+                    return true;
+                }
+
+                circuit_breaker_dup_track.insert((e.proxy_to.clone(), e.proxy_unix.clone()))
+            })
+        {
             crate::metrics::emit_backend_unhealthy(
                 &ctx.events,
                 &backend,
@@ -300,46 +314,64 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             ));
         }
 
-        // Emit per-request circuit breaker state gauge for the selected backend
-        if let Some(backend) = metrics.final_selected_backend.as_ref() {
-            if config.circuit_breaker.enabled {
-                let status = self
-                    .state
-                    .circuit_breaker_state
-                    .get(backend)
-                    .map_or(0, |cb_state| {
-                        cb_state.status.load(std::sync::atomic::Ordering::Relaxed)
+        // Emit per-request circuit breaker state gauges
+        if config.circuit_breaker.enabled {
+            {
+                let mut circuit_state_metrics = metrics.circuit_breaker_metrics.clone();
+                if !config.metrics_resolved_ip {
+                    let mut csm_duptrack: rustc_hash::FxHashSet<(String, Option<String>)> =
+                        Default::default();
+                    // closed > half-open > open > unspecified
+                    circuit_state_metrics.sort_unstable_by_key(|(_, s)| {
+                        s.and_then(|s| match s.0 {
+                            0 => Some(2), // closed
+                            1 => Some(0), // open
+                            2 => Some(1), // half-open
+                            _ => None,    // undefined
+                        })
                     });
-                ctx.events
-                    .emit(ferron_observability::Event::Metric(MetricEvent {
-                        name: "ferron.proxy.circuit.state",
-                        attributes: upstream_attrs.clone(),
-                        ty: MetricType::Gauge,
-                        value: MetricValue::U64(status as u64),
-                        unit: Some("{circuit}"),
-                        description: Some("Current circuit breaker state per backend (0=closed, 1=open, 2=half_open)."),
-                        trace_context: current_event_trace_context(ctx),
-
-                    }));
-                if config.circuit_breaker.flapping_transitions != 0 {
-                    // If flapping transitions are set to 0, flapping detection would be disabled...
-                    let is_flapping = self
-                        .state
-                        .flapping_state
-                        .get(&backend.proxy_to)
-                        .is_some_and(|flapping| flapping.is_flapping());
-                    ctx.events
-                        .emit(ferron_observability::Event::Metric(MetricEvent {
-                        name: "ferron.proxy.circuit.flapping",
-                        attributes: upstream_attrs.clone(),
-                        ty: MetricType::Gauge,
-                        value: MetricValue::U64(is_flapping as u64),
-                        unit: Some("{circuit}"),
-                        description: Some(
-                            "Whether an upstream backend is flapping (1 = flapping, 0 = stable).",
-                        ),
-                        trace_context: current_event_trace_context(ctx),
-                    }));
+                    circuit_state_metrics.retain(|(u, _)| {
+                        csm_duptrack.insert((u.proxy_to.clone(), u.proxy_unix.clone()))
+                    });
+                }
+                for (backend, state) in circuit_state_metrics
+                    .into_iter()
+                    .filter_map(|(u, s)| s.map(|s| (u, s.0)))
+                {
+                    emit_circuit_metric(
+                        &ctx.events,
+                        &backend,
+                        "ferron.proxy.circuit.state",
+                        ferron_observability::MetricType::Gauge,
+                        ferron_observability::MetricValue::U64(state as u64),
+                        current_event_trace_context(ctx),
+                        config.metrics_resolved_ip,
+                    );
+                }
+            }
+            if config.circuit_breaker.flapping_transitions != 0 {
+                // If flapping transitions are set to 0, flapping detection would be disabled...
+                let mut flapping_state_metrics = metrics.circuit_breaker_metrics.clone();
+                if !config.metrics_resolved_ip {
+                    let mut fsm_duptrack: rustc_hash::FxHashSet<(String, Option<String>)> =
+                        Default::default();
+                    // Some(true) > Some(false) > None
+                    flapping_state_metrics.sort_unstable_by_key(|(_, s)| s.and_then(|s| s.1));
+                    flapping_state_metrics.retain(|(u, _)| {
+                        fsm_duptrack.insert((u.proxy_to.clone(), u.proxy_unix.clone()))
+                    });
+                }
+                for (backend, flapping) in flapping_state_metrics
+                    .into_iter()
+                    .filter_map(|(u, s)| s.and_then(|s| s.1).map(|s| (u, s)))
+                {
+                    emit_flapping_metric(
+                        &ctx.events,
+                        &backend,
+                        if flapping { 1 } else { 0 },
+                        current_event_trace_context(ctx),
+                        config.metrics_resolved_ip,
+                    );
                 }
             }
         }
