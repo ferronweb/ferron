@@ -406,7 +406,7 @@ fn health_check_client(
 fn process_probe_result(
     upstream: &Arc<ResolvedUpstream>,
     config: &UpstreamHealthCheckConfig,
-    result: &[ProbeResult],
+    result: &[(Arc<ResolvedUpstream>, ProbeResult)],
     state_map: &HealthCheckStateMap,
     event_sink: &ferron_observability::CompositeEventSink,
     metrics_resolved_ip: bool,
@@ -423,7 +423,7 @@ fn process_probe_result(
     let mut successes: usize = 0;
     let mut failures: usize = 0;
 
-    for result in result {
+    for (upstream, result) in result {
         let probe_success = if let Some(status) = result.status_code {
             let status_ok = config.expect_status.matches(status);
 
@@ -526,7 +526,7 @@ fn process_probe_result(
 
     let duration_secs = result
         .iter()
-        .map(|r| r.response_time.as_secs_f64())
+        .map(|r| r.1.response_time.as_secs_f64())
         .sum::<f64>()
         / result.len() as f64; // Average of all response times (result.len() == 0 would return earlier anyway)
 
@@ -877,7 +877,7 @@ pub fn spawn_health_check_task(
                         (
                             Arc<ResolvedUpstream>,
                             UpstreamHealthCheckConfig,
-                            Vec<ProbeResult>,
+                            Vec<(Arc<ResolvedUpstream>, ProbeResult)>,
                         ),
                     >,
                 > = Arc::new(Default::default());
@@ -896,7 +896,7 @@ pub fn spawn_health_check_task(
                             process_probe_result(
                                 &probe_target,
                                 &config,
-                                &[result],
+                                &[(probe_target.clone(), result)],
                                 &state_map,
                                 &event_sink,
                                 metrics_resolved_ip,
@@ -912,7 +912,7 @@ pub fn spawn_health_check_task(
                                     (probe_target.clone(), config.clone(), Vec::new())
                                 })
                                 .2
-                                .push(result);
+                                .push((probe_target.clone(), result));
                         }
                     }));
                 }
@@ -980,12 +980,15 @@ mod tests {
             ..Default::default()
         };
 
-        let result = vec![ProbeResult {
-            status_code: Some(500),
-            response_time: Duration::from_millis(100),
-            body: None,
-            error: None,
-        }];
+        let result = vec![(
+            backend("http://localhost:8080"),
+            ProbeResult {
+                status_code: Some(500),
+                response_time: Duration::from_millis(100),
+                body: None,
+                error: None,
+            },
+        )];
 
         process_probe_result(
             &backend("http://localhost:8080"),
@@ -1019,12 +1022,15 @@ mod tests {
             ..Default::default()
         };
 
-        let fail_result = vec![ProbeResult {
-            status_code: Some(500),
-            response_time: Duration::from_millis(100),
-            body: None,
-            error: None,
-        }];
+        let fail_result = vec![(
+            backend("http://localhost:8080"),
+            ProbeResult {
+                status_code: Some(500),
+                response_time: Duration::from_millis(100),
+                body: None,
+                error: None,
+            },
+        )];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -1042,12 +1048,15 @@ mod tests {
             false,
         );
 
-        let success_result = vec![ProbeResult {
-            status_code: Some(200),
-            response_time: Duration::from_millis(100),
-            body: None,
-            error: None,
-        }];
+        let success_result = vec![(
+            backend("http://localhost:8080"),
+            ProbeResult {
+                status_code: Some(200),
+                response_time: Duration::from_millis(100),
+                body: None,
+                error: None,
+            },
+        )];
 
         process_probe_result(
             &backend("http://localhost:8080"),
@@ -1082,12 +1091,15 @@ mod tests {
             ..Default::default()
         };
 
-        let result_fast = vec![ProbeResult {
-            status_code: Some(200),
-            response_time: Duration::from_millis(30),
-            body: None,
-            error: None,
-        }];
+        let result_fast = vec![(
+            backend("http://localhost:8080"),
+            ProbeResult {
+                status_code: Some(200),
+                response_time: Duration::from_millis(30),
+                body: None,
+                error: None,
+            },
+        )];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -1102,12 +1114,15 @@ mod tests {
             assert!(state.is_healthy);
         }
 
-        let result_slow = vec![ProbeResult {
-            status_code: Some(200),
-            response_time: Duration::from_millis(100),
-            body: None,
-            error: None,
-        }];
+        let result_slow = vec![(
+            backend("http://localhost:8080"),
+            ProbeResult {
+                status_code: Some(200),
+                response_time: Duration::from_millis(100),
+                body: None,
+                error: None,
+            },
+        )];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -1133,12 +1148,15 @@ mod tests {
             ..Default::default()
         };
 
-        let result = vec![ProbeResult {
-            status_code: Some(200),
-            response_time: Duration::from_millis(50),
-            body: Some(b"status: ok".to_vec()),
-            error: None,
-        }];
+        let result = vec![(
+            backend("http://localhost:8080"),
+            ProbeResult {
+                status_code: Some(200),
+                response_time: Duration::from_millis(50),
+                body: Some(b"status: ok".to_vec()),
+                error: None,
+            },
+        )];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -1163,12 +1181,15 @@ mod tests {
             ..Default::default()
         };
 
-        let result = vec![ProbeResult {
-            status_code: Some(200),
-            response_time: Duration::from_millis(50),
-            body: Some(b"status: fail".to_vec()),
-            error: None,
-        }];
+        let result = vec![(
+            backend("http://localhost:8080"),
+            ProbeResult {
+                status_code: Some(200),
+                response_time: Duration::from_millis(50),
+                body: Some(b"status: fail".to_vec()),
+                error: None,
+            },
+        )];
         process_probe_result(
             &backend("http://localhost:8080"),
             &config,
@@ -1213,12 +1234,15 @@ mod tests {
             consecutive_fails: 1,
             ..Default::default()
         };
-        let failure = vec![ProbeResult {
-            status_code: Some(503),
-            response_time: Duration::from_millis(10),
-            body: None,
-            error: None,
-        }];
+        let failure = vec![(
+            backend("http://localhost:8080"),
+            ProbeResult {
+                status_code: Some(503),
+                response_time: Duration::from_millis(10),
+                body: None,
+                error: None,
+            },
+        )];
 
         // Two addresses behind one hostname, which is what strict DNS produces.
         let first = backend_at("http://backend:3000", "10.0.0.1");
@@ -1241,12 +1265,15 @@ mod tests {
             consecutive_fails: 1,
             ..Default::default()
         };
-        let failure = vec![ProbeResult {
-            status_code: Some(503),
-            response_time: Duration::from_millis(10),
-            body: None,
-            error: None,
-        }];
+        let failure = vec![(
+            backend("http://localhost:8080"),
+            ProbeResult {
+                status_code: Some(503),
+                response_time: Duration::from_millis(10),
+                body: None,
+                error: None,
+            },
+        )];
 
         let upstream = backend("http://backend:3000");
         process_probe_result(&upstream, &config, &failure, &state_map, &event_sink, false);
