@@ -24,6 +24,7 @@
 
 - **`tracestate` is now exported on spans**: the OTLP exporter wrote an empty `trace_state` on every span, discarding the W3C `tracestate` that Ferron parses and propagates to upstreams. The span now reports it.
 - **Span trace flags follow the sampling decision**: the OTLP exporter hardcoded the "sampled" flag on every span. The flag sent to the OTLP backend or collector now reflects the recorded decision.
+- **Prometheus scrape error metric**: previously, `ferron_prometheus_scrape_errors_total` metric didn't increase at all. This has been fix to increase when an internal error with Prometheus endpoint occured.
 
 ## Ferron 3.0.0-rc.9
 

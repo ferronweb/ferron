@@ -142,19 +142,33 @@ async fn request_fn(
 }
 
 async fn endpoint_fn(
-    (registry, format, scrape_duration, scrape_total, _scrape_errors): EndpointState,
+    (registry, format, scrape_duration, scrape_total, scrape_errors): EndpointState,
 ) -> anyhow::Result<hyper::Response<Full<Bytes>>> {
     let start = std::time::Instant::now();
     scrape_total.inc();
 
+    let result = endpoint_inner_fn(registry, format).await;
+
+    let duration = start.elapsed().as_secs_f64();
+    scrape_duration.observe(duration);
+
+    if result.is_err() {
+        scrape_errors.inc();
+    }
+
+    result
+}
+
+#[inline]
+async fn endpoint_inner_fn(
+    registry: Arc<tokio::sync::RwLock<prometheus_client::registry::Registry>>,
+    format: String,
+) -> anyhow::Result<hyper::Response<Full<Bytes>>> {
     match format.as_str() {
         "protobuf" => {
             let buffer = prometheus_client::encoding::prometheus_protobuf::encode_to_vec(
                 &*registry.read().await,
             )?;
-
-            let duration = start.elapsed().as_secs_f64();
-            scrape_duration.observe(duration);
 
             Ok(http::Response::builder()
                     .status(http::StatusCode::OK)
@@ -167,9 +181,6 @@ async fn endpoint_fn(
         _ => {
             let mut buffer = String::new();
             prometheus_client::encoding::text::encode(&mut buffer, &*registry.read().await)?;
-
-            let duration = start.elapsed().as_secs_f64();
-            scrape_duration.observe(duration);
 
             Ok(http::Response::builder()
                 .status(http::StatusCode::OK)
