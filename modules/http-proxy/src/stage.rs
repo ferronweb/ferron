@@ -323,12 +323,13 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         Default::default();
                     // closed > half-open > open > unspecified
                     circuit_state_metrics.sort_unstable_by_key(|(_, s)| {
-                        s.and_then(|s| match s.0 {
+                        // Reverse, so it's descending, not ascending
+                        std::cmp::Reverse(s.and_then(|s| match s.0 {
                             0 => Some(2), // closed
                             1 => Some(0), // open
                             2 => Some(1), // half-open
                             _ => None,    // undefined
-                        })
+                        }))
                     });
                     circuit_state_metrics.retain(|(u, _)| {
                         csm_duptrack.insert((u.proxy_to.clone(), u.proxy_unix.clone()))
@@ -356,7 +357,9 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     let mut fsm_duptrack: rustc_hash::FxHashSet<(String, Option<String>)> =
                         Default::default();
                     // Some(true) > Some(false) > None
-                    flapping_state_metrics.sort_unstable_by_key(|(_, s)| s.and_then(|s| s.1));
+                    // Also, Reverse, so it's descending, not ascending
+                    flapping_state_metrics
+                        .sort_unstable_by_key(|(_, s)| std::cmp::Reverse(s.and_then(|s| s.1)));
                     flapping_state_metrics.retain(|(u, _)| {
                         fsm_duptrack.insert((u.proxy_to.clone(), u.proxy_unix.clone()))
                     });
