@@ -337,9 +337,6 @@ example.com {
 
                 # Sample spans where url.path starts with "/api/"
                 rule prefix url.path /api/
-
-                # Sample spans that have an "error.type" attribute (any value)
-                rule exists error.type
             }
         }
     }
@@ -366,6 +363,9 @@ Each `rule` takes 2 or 3 arguments:
 
 > [!note]
 > In Ferron, HTTP request attributes (`http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`, `ferron.host`, `tls.protocol.version`, `tls.cipher_suite`) appear during this stage. They drive the sampling decisions for attribute-based sampling.
+
+> [!important]
+> `attribute_based` sampling only supports head sampling for attributes. Tail sampling is not supported by this sampling mode. For tail sampling, configure your collector instead.
 
 `http.route` is **not** in that list. It describes the outcome of routing, which happens after the sampling decision, so an `attribute_based` rule can never match on it. Use `ferron.host` to sample one virtual host, or `url.path` with a `prefix` matcher to sample a path prefix.
 
