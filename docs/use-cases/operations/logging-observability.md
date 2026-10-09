@@ -13,16 +13,20 @@ For specific backend configurations:
 - [OTLP observability](/docs/configuration/observability/otlp)
 
 > [!tip]
-> Start simple: text or JSON logs first, then add Prometheus metrics, then OTLP for full observability. All three signals (logs, metrics, traces) from the same HTTP request share the same `trace_id`, enabling correlated queries.
+>
+> - Start simple: text or JSON logs first, then add Prometheus metrics, then OTLP for full observability. All three signals (logs, metrics, traces) from the same HTTP request share the same `trace_id`, allowing for correlated queries.
+> - Enable logging and observability in global scope (outside any host block) to be able to see control plane (automatic TLS, configuration drift detection, and more) events. This is because many control plane events are not associated with any specific host and thus would not be logged if logging is only enabled inside host blocks.
 
 ## Basic production logs to files
 
 Use this when running Ferron directly on a VM or bare metal and collecting logs from disk:
 
 ```ferron
-example.com {
+{
     log "access.log"
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -34,11 +38,13 @@ The text formatter uses the Combined Log Format (CLF) by default, the same forma
 Use this when you need structured logs for easier parsing by log aggregation tools. For example, ELK Stack, Splunk, or cloud-native log processors:
 
 ```ferron
-example.com {
+{
     log "access.log" {
         format json
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -59,12 +65,14 @@ Example output:
 You can also select specific fields:
 
 ```ferron
-example.com {
+{
     log "access.log" {
         format json
         fields method path status duration_secs client_ip
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -74,12 +82,14 @@ example.com {
 You can customize the text log format using the `access_pattern` directive:
 
 ```ferron
-example.com {
+{
     log "access.log" {
         format text
         access_pattern "%client_ip - %auth_user [%{%d/%b/%Y:%H:%M:%S %z}t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -89,7 +99,7 @@ example.com {
 To prevent log files from growing too large, you can configure Ferron to rotate them automatically:
 
 ```ferron
-example.com {
+{
     log "access.log" {
         access_log_rotate_size 10485760
         access_log_rotate_keep 7
@@ -119,12 +129,30 @@ You can then use `grep` to filter logs by a specific trace ID:
 grep "trace=abc123def456" /var/log/ferron/access.log /var/log/ferron/error.log
 ```
 
+## Per-host logs
+
+Ferron also works with logs configured for each host, which can be configured like this:
+
+```ferron
+{
+    log "access.log"
+    error_log "error.log"
+}
+
+example.com {
+    log "example-access.log"
+    error_log "example-access.log"
+
+    root /var/www/html
+}
+```
+
 ## Centralized observability with OTLP
 
 Use this when shipping logs, metrics, and traces to an OpenTelemetry collector:
 
 ```ferron
-example.com {
+{
     observability {
         provider otlp
 
@@ -134,7 +162,9 @@ example.com {
 
         service_name ferron-prod
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -142,7 +172,7 @@ example.com {
 If you use gRPC OTLP endpoints, set `protocol "grpc"` and optionally an auth header:
 
 ```ferron
-example.com {
+{
     observability {
         provider otlp
 
@@ -171,7 +201,7 @@ example.com {
 If your collector or APM expects log records in the OpenTelemetry semantic-convention shape, set `log_style modern`. In this mode each log record body is a short summary (for example, `"Upstream circuit opened"`). Ferron publishes per-event attributes as typed OpenTelemetry attributes. Access logs use a body of `"Access log (http)"`. Ferron remaps them to OTEL semantic-convention names such as `url.path`, `http.request.method`, `http.response.status_code`, `client.address`, and `http.server.request.duration`. Local console and file log sinks remain unaffected.
 
 ```ferron
-example.com {
+{
     observability {
         provider otlp
         log_style modern
@@ -181,7 +211,9 @@ example.com {
             protocol "http/protobuf"
         }
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -191,7 +223,7 @@ example.com {
 If you want to send traditional, human-readable log records via OTLP, set `log_style` to `legacy`. This preserves the original log message body and disables per-event attribute mapping.
 
 ```ferron
-example.com {
+{
     observability {
         provider otlp
         log_style legacy
@@ -201,7 +233,9 @@ example.com {
             protocol "http/protobuf"
         }
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -211,13 +245,15 @@ example.com {
 Use this when you want to expose metrics for Prometheus scraping:
 
 ```ferron
-example.com {
+{
     observability {
         provider prometheus
         endpoint_listen "127.0.0.1:8889"
         endpoint_format text
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -227,14 +263,16 @@ This starts a metrics endpoint at `http://localhost:8889/metrics` that Prometheu
 ### Production Prometheus setup
 
 ```ferron
-example.com {
+{
     observability {
         provider prometheus
         endpoint_listen "0.0.0.0:8889"
         endpoint_auth_token "your-secret-token"
         endpoint_format text
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -266,7 +304,7 @@ api.example.com {
 A practical migration strategy is to keep file logs for local troubleshooting while also exporting telemetry centrally:
 
 ```ferron
-example.com {
+{
     log "access.log" {
         format json
     }
@@ -280,7 +318,9 @@ example.com {
 
         service_name ferron-prod
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
@@ -290,7 +330,7 @@ example.com {
 You can combine both Prometheus and OTLP for maximum flexibility:
 
 ```ferron
-example.com {
+{
     # Local Prometheus metrics
     observability {
         provider prometheus
@@ -306,7 +346,9 @@ example.com {
         metrics http://otel-collector.internal:4318/v1/metrics
         traces http://otel-collector.internal:4317/v1/traces
     }
+}
 
+example.com {
     root /var/www/html
 }
 ```
