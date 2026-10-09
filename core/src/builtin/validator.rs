@@ -30,6 +30,7 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
             validate_directive!(config, used_directives, runtime, no_args, {
                 let mut sub = std::collections::HashSet::new();
                 validate_nested!(runtime, used(sub), io_uring, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(runtime, used(sub), cpu_affinity, args(*) => [ServerConfigurationValue::Number(_, _)]);
                 crate::check_unused_subdirectives!(
                     runtime,
                     sub,

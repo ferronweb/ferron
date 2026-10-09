@@ -39,6 +39,7 @@ use zincio::blocking::DefaultBlockingThreadPool;
 use crate::log_warn;
 
 static IO_URING_FAILED_WARNING_LOGGED: std::sync::Once = std::sync::Once::new();
+static CPU_AFFINITY_WARNING_LOGGED: std::sync::Once = std::sync::Once::new();
 
 /// Manages async task execution across primary and secondary runtimes.
 ///
@@ -71,7 +72,43 @@ impl Runtime {
     /// Returns `std::io::Error` if the secondary tokio runtime fails to build.
     pub fn new(settings: RuntimeSettings) -> Result<Self, std::io::Error> {
         // Spawn multiple threads (with pinning to each CPU core) to run primary tasks
-        let core_ids = core_affinity::get_core_ids();
+        let mut core_ids = core_affinity::get_core_ids();
+        if let Some(ref cpu_affinity) = settings.cpu_affinity {
+            if core_ids.is_none() {
+                CPU_AFFINITY_WARNING_LOGGED.call_once(|| {
+                    log_warn!(
+                        "Cannot determine CPU cores for primary threads; \
+                        falling back to all available cores"
+                    );
+                });
+            } else {
+                if let Some(core_ids) = core_ids.as_mut() {
+                    core_ids.retain(|core_id| cpu_affinity.contains(&core_id.id));
+                }
+                if core_ids.as_ref().is_some_and(|i| i.is_empty()) {
+                    core_ids = None;
+                }
+                if core_ids.is_none() {
+                    CPU_AFFINITY_WARNING_LOGGED.call_once(|| {
+                        log_warn!(
+                            "No CPU cores available for primary threads after applying \
+                             cpu_affinity filter; falling back to all available cores"
+                        );
+                    });
+                    core_ids = core_affinity::get_core_ids();
+                } else if core_ids
+                    .as_ref()
+                    .is_some_and(|i| i.len() < cpu_affinity.len())
+                {
+                    CPU_AFFINITY_WARNING_LOGGED.call_once(|| {
+                        log_warn!(
+                            "Some CPU cores specified in cpu_affinity are not available; \
+                             falling back to available cores"
+                        );
+                    });
+                }
+            }
+        }
         let available_parallelism = core_ids.as_ref().map_or_else(
             || std::thread::available_parallelism().map_or(1, |ap| ap.get()),
             |core_ids| core_ids.len(),
@@ -231,6 +268,9 @@ pub struct RuntimeSettings {
     /// supports it). If initialization fails, Ferron falls back to `epoll`
     /// and logs a warning. Default: disabled.
     pub io_uring_enabled: bool,
+    /// Optional CPU core identifiers to pin primary threads to.
+    /// If not set, Ferron uses all available cores. Default: not set.
+    pub cpu_affinity: Option<Vec<usize>>,
 }
 
 static GLOBAL_BLOCKING_POOL: LazyLock<DefaultBlockingThreadPool> =

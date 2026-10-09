@@ -10,6 +10,12 @@
 
 - **`EventTraceContext` API change**: the `EventTraceContext` struct for `ferron_observability` has been updated to include `tracestate`. If your custom Ferron modules rely on the `EventTraceContext` struct, you may need to update it to include `tracestate` (you can use `tracestate: None`).
 
+### Added
+
+#### Runtime
+
+- **Support for pinning into specific CPU cores**: Ferron now supports pinning worker threads to specific CPU cores (for asymmetric CPU cores and NUMA). This can be configured via the `cpu_affinity` directive in the global configuration block.
+
 ### Changed
 
 #### Observability

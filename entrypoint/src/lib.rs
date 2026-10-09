@@ -850,10 +850,25 @@ fn load_modules(
                     .get_entry("runtime", false)
                     .and_then(|d| d.children.as_ref().map(|c| c.get_flag("io_uring")))
                     .unwrap_or(false);
+                let cpu_affinity = layered_config
+                    .get_entry("runtime", false)
+                    .and_then(|d| {
+                        d.children
+                            .as_ref()
+                            .and_then(|c| c.directives.get("cpu_affinity"))
+                    })
+                    .and_then(|e| e.last())
+                    .map(|e| {
+                        e.args
+                            .iter()
+                            .filter_map(|v| v.as_number().and_then(|n| usize::try_from(n).ok()))
+                            .collect::<Vec<usize>>()
+                    });
 
                 if runtime.is_none() {
                     let mut runtime_settings = RuntimeSettings::default();
                     runtime_settings.io_uring_enabled = io_uring_enabled;
+                    runtime_settings.cpu_affinity = cpu_affinity;
                     runtime = Some(Runtime::new(runtime_settings)?);
                 }
                 let runtime = runtime

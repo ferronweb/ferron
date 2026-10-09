@@ -65,6 +65,18 @@ fn register_runtime_directives(registry: &mut crate::directives::DirectiveRegist
                 subblock_link: None,
             },
             DirectiveSubblock::custom("global_runtime"),
+        )
+        .register(
+            Directive {
+                name: "cpu_affinity",
+                usage: "cpu_affinity <core_id> [<core_id> ...]",
+                description: "This directive specifies the CPU cores (0-indexed) to \
+                which primary (data plane) threads are pinned. Default: all available CPU cores",
+                applicable_protocols: None,
+                global_only: true,
+                subblock_link: None,
+            },
+            DirectiveSubblock::custom("global_runtime"),
         );
 }
 

@@ -67,6 +67,8 @@ This page documents directives that belong in top-level global blocks:
 
 - `io_uring <bool>`
   - This directive turns on `io_uring` for the server when it is available. Enabling `io_uring` could improve performance for static file serving involving large files or reverse proxying involving very high concurrency. If initialization fails, Ferron falls back to `epoll` and logs a warning. Default: disabled
+- `cpu_affinity <core_id> [<core_id> ...]`
+  - This directive sets CPU affinity for Ferron's primary (data plane) threads. It accepts a list of CPU core IDs (0-based). This could be useful when using asymmetric CPU cores (ASMP) or NUMA, as this allows pinning CPU cores into specific CPU cores that are symmetric together or NUMA nodes. The thread count is set to the number of cores specified in CPU affinity. Default: all available CPU cores
 
 **Configuration example:**
 
@@ -74,6 +76,7 @@ This page documents directives that belong in top-level global blocks:
 {
     runtime {
         io_uring
+        cpu_affinity 0 1 2 3 # first 4 CPU cores
     }
 }
 ```
