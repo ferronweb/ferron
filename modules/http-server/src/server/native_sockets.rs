@@ -310,8 +310,10 @@ pub(crate) async fn handle_http1_connection<S>(
             ConnectionAddr::Unix { .. } => "unix_connection_error",
         };
         let error_msg = match &conn_addr {
-            ConnectionAddr::Tcp { .. } => {
-                format!("HTTP/1 connection error: {error}")
+            ConnectionAddr::Tcp { remote_address, .. } => {
+                let client_ip = remote_address.ip().to_canonical();
+                let client_port = remote_address.port();
+                format!("HTTP/1 connection error (client: {client_ip}:{client_port}): {error}")
             }
             ConnectionAddr::Unix { unix_socket_path } => {
                 format!(
@@ -448,8 +450,10 @@ pub(crate) async fn handle_http1_connection_zerocopy<S>(
             ConnectionAddr::Unix { .. } => "unix_connection_error",
         };
         let error_msg = match &conn_addr {
-            ConnectionAddr::Tcp { .. } => {
-                format!("HTTP/1 connection error: {error}")
+            ConnectionAddr::Tcp { remote_address, .. } => {
+                let client_ip = remote_address.ip().to_canonical();
+                let client_port = remote_address.port();
+                format!("HTTP/1 connection error (client: {client_ip}:{client_port}): {error}")
             }
             ConnectionAddr::Unix { unix_socket_path } => {
                 format!(
@@ -519,8 +523,10 @@ pub(crate) async fn handle_http2_connection<S>(
                     ConnectionAddr::Unix { .. } => "unix_stream_error",
                 };
                 let error_msg = match &stream_error_addr {
-                    ConnectionAddr::Tcp { .. } => {
-                        format!("HTTP/2 stream error: {error}")
+                    ConnectionAddr::Tcp { remote_address, .. } => {
+                        let client_ip = remote_address.ip().to_canonical();
+                        let client_port = remote_address.port();
+                        format!("HTTP/2 stream error (client: {client_ip}:{client_port}): {error}")
                     }
                     ConnectionAddr::Unix { unix_socket_path } => {
                         format!(
@@ -558,8 +564,10 @@ pub(crate) async fn handle_http2_connection<S>(
             ConnectionAddr::Unix { .. } => "unix_connection_error",
         };
         let error_msg = match &conn_addr {
-            ConnectionAddr::Tcp { .. } => {
-                format!("HTTP/2 connection error: {error}")
+            ConnectionAddr::Tcp { remote_address, .. } => {
+                let client_ip = remote_address.ip().to_canonical();
+                let client_port = remote_address.port();
+                format!("HTTP/2 connection error (client: {client_ip}:{client_port}): {error}")
             }
             ConnectionAddr::Unix { unix_socket_path } => {
                 format!(

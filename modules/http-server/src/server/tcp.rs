@@ -258,9 +258,11 @@ impl TcpListenerHandle {
                             let start_handshake = match tokio_rustls::LazyConfigAcceptor::new(Acceptor::default(), socket.into()).await {
                                 Ok(start_handshake) => start_handshake,
                                 Err(e) => {
+                                    let client_ip = remote_addr.ip().to_canonical();
+                                    let client_port = remote_addr.port();
                                   emit_error(
                                       &ip_observability,
-                                      format!("Failed to start TLS handshake {e}"),
+                                      format!("Failed to start TLS handshake (client: {client_ip}:{client_port}) {e}"),
                                       vec![(
                                           "error.type",
                                           LogAttributeValue::String("tcp_tls_handshake_error".into()),
@@ -271,12 +273,14 @@ impl TcpListenerHandle {
                                       ),
                                       (
                                           "client.address",
-                                          LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
+                                          LogAttributeValue::String(client_ip.to_string()),
                                       ),
+                                      ("client.port", LogAttributeValue::I64(client_port as i64)),
                                       (
                                           "server.address",
                                           LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
-                                      )],
+                                      ),
+                                      ("server.port", LogAttributeValue::I64(local_addr.port() as i64))],
                                   );
                                   emit_connection_error_metric(&ip_observability, "tcp", "tls_handshake");
                                   return;
@@ -313,7 +317,9 @@ impl TcpListenerHandle {
                                         hinted_hostname.as_deref(),
                                         &ip_observability,
                                     );
-                                    let mut error_message = format!("Failed to start TLS handshake: {e}");
+                                    let client_ip = remote_addr.ip().to_canonical();
+                                    let client_port = remote_addr.port();
+                                    let mut error_message = format!("Failed to start TLS handshake (client: {client_ip}:{client_port}): {e}");
                                     let mut attrs = vec![(
                                         "error.type",
                                         LogAttributeValue::String("tcp_tls_handshake_error".into()),
@@ -324,11 +330,19 @@ impl TcpListenerHandle {
                                     ),
                                     (
                                         "client.address",
-                                        LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
+                                        LogAttributeValue::String(client_ip.to_string()),
+                                    ),
+                                    (
+                                        "client.port",
+                                        LogAttributeValue::I64(client_port as i64),
                                     ),
                                     (
                                         "server.address",
                                         LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
+                                    ),
+                                    (
+                                        "server.port",
+                                        LogAttributeValue::I64(local_addr.port() as i64),
                                     )];
                                     if e.to_string().to_lowercase().contains("resolve")
                                       || e.to_string().to_lowercase().contains("resolution") {
@@ -456,20 +470,30 @@ impl TcpListenerHandle {
                                         )
                                         .await;
                                     } else {
+                                        let client_ip = remote_addr.ip().to_canonical();
+                                        let client_port = remote_addr.port();
                                         emit_error(
                                             &tls_observability,
-                                            "TLS connection did not negotiate a supported HTTP protocol",
+                                            "TLS connection did not negotiate a supported HTTP protocol (client: {client_ip}:{client_port})",
                                             vec![(
                                                 "error.type",
                                                 LogAttributeValue::String("tcp_tls_protocol_error".into()),
                                             ),
                                             (
                                                 "client.address",
-                                                LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
+                                                LogAttributeValue::String(client_ip.to_string()),
+                                            ),
+                                            (
+                                                "client.port",
+                                                LogAttributeValue::I64(client_port as i64),
                                             ),
                                             (
                                                 "server.address",
                                                 LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
+                                            ),
+                                            (
+                                                "server.port",
+                                                LogAttributeValue::I64(local_addr.port() as i64),
                                             )],
                                         );
                                     }
@@ -490,9 +514,11 @@ impl TcpListenerHandle {
                                                                     hinted_hostname.as_deref(),
                                                                     &ip_observability,
                                                                 );
+                                                                let client_ip = remote_addr.ip().to_canonical();
+                                                                let client_port = remote_addr.port();
                                                                 emit_error(
                                                                     &tls_observability,
-                                                                    format!("Failed to start TLS handshake: {e}"),
+                                                                    format!("Failed to start TLS handshake (client: {client_ip}:{client_port}): {e}"),
                                                                     vec![(
                                                                         "error.type",
                                                                         LogAttributeValue::String("tcp_tls_handshake_error".into()),
@@ -503,11 +529,19 @@ impl TcpListenerHandle {
                                                                     ),
                                                                     (
                                                                         "client.address",
-                                                                        LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
+                                                                        LogAttributeValue::String(client_ip.to_string()),
+                                                                    ),
+                                                                    (
+                                                                        "client.port",
+                                                                        LogAttributeValue::I64(client_port as i64),
                                                                     ),
                                                                     (
                                                                         "server.address",
                                                                         LogAttributeValue::String(local_addr.ip().to_canonical().to_string()),
+                                                                    ),
+                                                                    (
+                                                                        "server.port",
+                                                                        LogAttributeValue::I64(local_addr.port() as i64),
                                                                     )],
                                                                 );
                                                             }
@@ -563,10 +597,11 @@ impl TcpListenerHandle {
                             )
                             .await;
                             } else {
-
+                                let client_ip = remote_addr.ip().to_canonical();
+                                let client_port = remote_addr.port();
                                 emit_error(
                                     &ip_observability,
-                                    "Plain TCP listener requires HTTP/1.x or h2c support",
+                                    "Plain TCP listener requires HTTP/1.x or h2c support (client: {client_ip}:{client_port})",
                                     vec![
                                         (
                                             "error.type",
@@ -574,11 +609,11 @@ impl TcpListenerHandle {
                                         ),
                                         (
                                             "client.address",
-                                            LogAttributeValue::String(remote_addr.ip().to_canonical().to_string()),
+                                            LogAttributeValue::String(client_ip.to_string()),
                                         ),
                                         (
                                             "client.port",
-                                            LogAttributeValue::I64(remote_addr.port() as i64)
+                                            LogAttributeValue::I64(client_port as i64)
                                         ),
                                         (
                                             "server.address",

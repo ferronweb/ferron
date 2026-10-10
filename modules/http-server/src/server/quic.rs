@@ -515,7 +515,7 @@ async fn handle_http3_connection(
             };
             emit_error(
                 &stream_error_observability,
-                format!("HTTP/3 stream error: {error}"),
+                format!("HTTP/3 stream error (client: {client_ip}:{client_port}): {error}"),
                 vec![
                     (
                         "error.type",
@@ -547,9 +547,18 @@ async fn handle_http3_connection(
     };
 
     if let Err(error) = connection_result {
+        let client_ip = handler_state
+            .remote_address
+            .expect("QUIC should set remote address")
+            .ip()
+            .to_canonical();
+        let client_port = handler_state
+            .remote_address
+            .expect("QUIC should set remote address")
+            .port();
         emit_error(
             &handler_state.connection_observability,
-            format!("HTTP/3 connection error: {error}"),
+            format!("HTTP/3 connection error (client: {client_ip}:{client_port}): {error}"),
             vec![
                 (
                     "error.type",
@@ -561,24 +570,9 @@ async fn handle_http3_connection(
                 ),
                 (
                     "client.address",
-                    LogAttributeValue::String(
-                        handler_state
-                            .remote_address
-                            .expect("QUIC should set remote address")
-                            .ip()
-                            .to_canonical()
-                            .to_string(),
-                    ),
+                    LogAttributeValue::String(client_ip.to_string()),
                 ),
-                (
-                    "client.port",
-                    LogAttributeValue::I64(
-                        handler_state
-                            .remote_address
-                            .expect("QUIC should set remote address")
-                            .port() as i64,
-                    ),
-                ),
+                ("client.port", LogAttributeValue::I64(client_port as i64)),
                 (
                     "server.address",
                     LogAttributeValue::String(
