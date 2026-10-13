@@ -8,6 +8,9 @@
           "./doctest/Cargo.toml",
           "./fuzz/Cargo.toml",
         ],
+        "check": {
+          "command": "clippy",
+        },
       },
     },
   },
