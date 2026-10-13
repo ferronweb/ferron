@@ -14,3 +14,6 @@ regex-syntax = "0.8.10"
 
 [build-dependencies]
 winresource = "0.1.19"
+
+[lints]
+workspace = true

@@ -9,3 +9,6 @@ tokio-util = "0.7.18"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
+
+[lints]
+workspace = true

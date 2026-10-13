@@ -69,3 +69,6 @@ nix = { version = "0.31.3", features = ["dir"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+
+[lints]
+workspace = true

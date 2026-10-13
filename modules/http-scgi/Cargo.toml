@@ -17,3 +17,6 @@ http-body = "1.0.1"
 send_wrapper = "0.6.0"
 tokio = "1.52.1"
 pin-project-lite = "0.2.17"
+
+[lints]
+workspace = true

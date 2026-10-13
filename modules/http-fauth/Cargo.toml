@@ -21,3 +21,6 @@ tokio-rustls = { version = "0.26", default-features = false }
 webpki-roots = "1.0"
 anyhow = "1.0.102"
 tokio = "1.52.1"
+
+[lints]
+workspace = true

@@ -31,3 +31,6 @@ httpdate = "1.0.3"
 
 [package.metadata.cargo-shear]
 ignored = ["flate2"]
+
+[lints]
+workspace = true

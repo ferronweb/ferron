@@ -23,3 +23,6 @@ winresource = "0.1.19"
 
 [features]
 fips = ["aws-lc-rs", "base64", "getrandom"]
+
+[lints]
+workspace = true

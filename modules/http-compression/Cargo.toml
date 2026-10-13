@@ -20,3 +20,6 @@ typemap_rev = "0.4"
 
 [package.metadata.cargo-shear]
 ignored = ["flate2"]
+
+[lints]
+workspace = true

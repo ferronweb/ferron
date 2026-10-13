@@ -11,3 +11,6 @@ winresource = "0.1.19"
 
 [features]
 fips = ["ferron-entrypoint/fips"]
+
+[lints]
+workspace = true

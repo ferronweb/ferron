@@ -11,3 +11,6 @@ ferron-core = { path = "../../core" }
 async-channel = "2.5.0"
 tokio = { version = "1", features = ["net", "rt", "sync", "macros", "time"] }
 tokio-util = "0.7"
+
+[lints]
+workspace = true

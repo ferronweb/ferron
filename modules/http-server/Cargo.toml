@@ -47,3 +47,6 @@ libc = "0.2"
 [features]
 fuzz = []
 fips = ["rustls/fips", "ferron-tls/fips"]
+
+[lints]
+workspace = true

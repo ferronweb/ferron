@@ -22,3 +22,6 @@ windows = { version = "0.62", features = [
     "Win32_System_EventLog",
     "Win32_Security",
 ] }
+
+[lints]
+workspace = true

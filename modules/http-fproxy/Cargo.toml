@@ -25,3 +25,6 @@ libc = "0.2.189"
 windows = { version = "0.62", features = [
     "Win32_Networking_WinSock",
 ] }
+
+[lints]
+workspace = true

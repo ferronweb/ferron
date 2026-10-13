@@ -33,3 +33,6 @@ bindgen = "0.73.1"
 
 [features]
 fips = ["aws-lc-rs/fips"]
+
+[lints]
+workspace = true

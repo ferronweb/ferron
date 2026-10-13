@@ -13,3 +13,6 @@ tokio = { version = "1", features = ["sync"] }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 ferron-core = { path = "../../core" }
+
+[lints]
+workspace = true

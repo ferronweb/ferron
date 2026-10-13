@@ -125,3 +125,6 @@ fips = [
     "ferron-http-server/fips",
     "ferron-ocsp-stapler/fips"
 ]
+
+[lints]
+workspace = true

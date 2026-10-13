@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use shadow_rs::{BuildPattern, ShadowBuilder};
 use std::borrow::Cow;
 use std::{env, io};

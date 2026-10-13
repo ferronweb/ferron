@@ -7,3 +7,6 @@ edition = "2021"
 ferron-observability = { path = "../../types/observability" }
 ferron-core = { path = "../../core" }
 serde_json = "1.0.149"
+
+[lints]
+workspace = true

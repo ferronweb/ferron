@@ -7,3 +7,6 @@ edition = "2021"
 async-trait = "0.1"
 ferron-core = { path = "../../core" }
 hickory-resolver = "0.26"
+
+[lints]
+workspace = true

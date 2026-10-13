@@ -30,3 +30,6 @@ windows = { version = "0.62", features = [
 util = []
 abuse = []
 mtls = ["rustls-pki-types"]
+
+[lints]
+workspace = true

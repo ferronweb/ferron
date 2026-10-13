@@ -21,3 +21,6 @@ bytes = "1.11.1"
 anyhow = "1.0.102"
 parking_lot = "0.12.5"
 rustc-hash = "2.1"
+
+[lints]
+workspace = true

@@ -23,3 +23,6 @@ rustc-hash = "2.1"
 
 [target.'cfg(not(unix))'.dependencies]
 shlex = "2.0.1"
+
+[lints]
+workspace = true

@@ -30,3 +30,6 @@ aws-lc-rs = { version = "1", features = ["bindgen"] }
 
 [features]
 fips = ["aws-lc-rs/fips", "rustls/fips"]
+
+[lints]
+workspace = true

@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 cgi = "0.8.0"
+
+[lints]
+workspace = true

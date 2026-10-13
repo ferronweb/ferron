@@ -49,3 +49,6 @@ tonic = { version = "0.14", features = ["gzip"] }
 
 [package.metadata.cargo-shear]
 ignored = ["pbjson", "tonic-prost"]
+
+[lints]
+workspace = true

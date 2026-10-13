@@ -40,3 +40,6 @@ ferron-observability = { path = "../../types/observability" }
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
 zincio = "0.2.22"
+
+[lints]
+workspace = true

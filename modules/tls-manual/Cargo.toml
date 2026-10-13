@@ -12,3 +12,6 @@ ferron-observability = { path = "../../types/observability" }
 ferron-ocsp = { path = "../../types/ocsp" }
 ferron-tls = { path = "../../types/tls", features = ["observability"] }
 rustls-pki-types = "1.14.0"
+
+[lints]
+workspace = true

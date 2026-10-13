@@ -40,3 +40,6 @@ arc-swap = "1.9.1"
 [features]
 default = []
 fuzz = []
+
+[lints]
+workspace = true

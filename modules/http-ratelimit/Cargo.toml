@@ -28,3 +28,6 @@ redis = { version = "1", default-features = false, features = ["tokio-comp", "sc
 tokio = { version = "1", features = ["rt", "macros", "time"] }
 ferron-observability = { path = "../../types/observability" }
 futures-executor = "0.3.32"
+
+[lints]
+workspace = true

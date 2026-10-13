@@ -17,3 +17,6 @@ http-body-util = "0.1.4"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
+
+[lints]
+workspace = true
