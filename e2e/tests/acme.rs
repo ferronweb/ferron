@@ -1136,8 +1136,8 @@ async fn test_acme_http01_shared_cache_two_nodes() {
     let mut success1 = false;
     let mut success2 = false;
     for _ in 0..150 {
-        if !success1 {
-            if let Ok(response) = client1
+        if !success1
+            && let Ok(response) = client1
                 .get(format!("https://{}:{}/", hostname, port1))
                 .send()
                 .await
@@ -1145,9 +1145,8 @@ async fn test_acme_http01_shared_cache_two_nodes() {
             {
                 success1 = true;
             }
-        }
-        if !success2 {
-            if let Ok(response) = client2
+        if !success2
+            && let Ok(response) = client2
                 .get(format!("https://{}:{}/", hostname, port2))
                 .send()
                 .await
@@ -1155,7 +1154,6 @@ async fn test_acme_http01_shared_cache_two_nodes() {
             {
                 success2 = true;
             }
-        }
         if success1 && success2 {
             break;
         }
