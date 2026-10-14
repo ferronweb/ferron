@@ -22,3 +22,5 @@ panic = "abort"
 
 [workspace.lints.clippy]
 unwrap_used = { level = "warn" }
+redundant_clone = { level = "warn" }
+indexing_slicing = { level = "warn" }
