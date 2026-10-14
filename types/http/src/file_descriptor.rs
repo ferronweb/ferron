@@ -543,7 +543,7 @@ mod tests {
                 .contains_key(&(expired_path.clone(), SymlinkMode::default()))
                 || pool
                     .entries
-                    .get(&(expired_path.clone(), SymlinkMode::default()))
+                    .get(&(expired_path, SymlinkMode::default()))
                     .unwrap()
                     .handles
                     .is_empty()

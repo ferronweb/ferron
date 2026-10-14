@@ -137,7 +137,7 @@ fn test_select_backend_index_least_connections() {
     let tracker1 = Arc::new(());
     conn_state.insert(backends[0].1.clone(), tracker1.clone());
     let _clone1 = tracker1.clone();
-    let _clone2 = tracker1.clone();
+    let _clone2 = tracker1;
 
     let idx = old_select_backend_index(&algorithm, &backends, Some(&conn_state), None);
     assert_eq!(idx, 1);
@@ -715,7 +715,7 @@ fn test_select_backend_index_p2c_ewma_prefers_fewer_connections() {
 
     // Backend2 has few active connections (just the entry tracker)
     let tracker2 = Arc::new(());
-    conn_state.insert(backends[1].1.clone(), tracker2.clone());
+    conn_state.insert(backends[1].1.clone(), tracker2);
 
     let mut backend1_wins = 0;
     let mut backend2_wins = 0;

@@ -371,7 +371,7 @@ fn test_ticket_key_rotator_encrypt_decrypt() {
     )
     .expect("Failed to persist keys");
 
-    let rotator = TicketKeyRotator::new(keys.clone(), None, key_file.to_str().unwrap().to_string())
+    let rotator = TicketKeyRotator::new(keys, None, key_file.to_str().unwrap().to_string())
         .expect("Failed to create rotator");
 
     let plaintext = b"rotator test data";
@@ -397,7 +397,7 @@ fn test_ticket_key_rotator_multiple_keys() {
     persist_ticket_keys(key_file.to_str().unwrap(), &key_components)
         .expect("Failed to persist keys");
 
-    let rotator = TicketKeyRotator::new(keys.clone(), None, key_file.to_str().unwrap().to_string())
+    let rotator = TicketKeyRotator::new(keys, None, key_file.to_str().unwrap().to_string())
         .expect("Failed to create rotator");
 
     let plaintext = b"multi-key test";
@@ -422,7 +422,7 @@ fn test_ticket_key_rotator_rotates() {
     .expect("Failed to persist keys");
 
     let rotator = TicketKeyRotator::new(
-        keys.clone(),
+        keys,
         Some(Duration::from_secs(1)),
         key_file.to_str().unwrap().to_string(),
     )

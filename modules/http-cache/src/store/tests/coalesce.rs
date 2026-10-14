@@ -75,7 +75,7 @@ async fn vary_variants_have_distinct_inflight_keys() {
         &FxHashMap::default(),
     );
     store.insert_with_request(
-        stored_entry(base_key, CacheScope::Public, "br-body", vary.clone()),
+        stored_entry(base_key, CacheScope::Public, "br-body", vary),
         None,
         &br_headers,
         &cookies,

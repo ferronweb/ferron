@@ -397,7 +397,7 @@ mod tests {
         // Far-future heartbeat (clock skew) is never stale.
         let future = LockHeader {
             heartbeat_at_unix: 10_000,
-            ..fresh.clone()
+            ..fresh
         };
         assert!(!is_stale(&future, 100));
     }

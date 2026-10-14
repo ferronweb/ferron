@@ -484,7 +484,7 @@ fn private_key_caps_cookie_components_and_value_length() {
     // Individual cookie values longer than the cap are truncated.
     let mut long = ahash::AHashMap::default();
     let long_value = "x".repeat(1000);
-    long.insert("lsc_private".to_string(), long_value.clone());
+    long.insert("lsc_private".to_string(), long_value);
     let key = build_private_cache_key(&long, None, &[]).unwrap();
     assert!(key.contains("cookie:lsc_private="));
     assert!(key.split('=').next_back().unwrap().len() <= 256);
