@@ -160,7 +160,7 @@ impl CacheStore {
                 UnitWeighter,
                 DefaultHashBuilder::default(),
                 StoreLifecycle {
-                    persist: persist,
+                    persist,
                     base_key_entries: base_key_entries.clone(),
                 },
             ),

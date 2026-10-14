@@ -247,7 +247,7 @@ impl ModuleLoader for ConsoleObservabilityModuleLoader {
             let module = Arc::new(ConsoleObservabilityModule {
                 inner: self.shared.get_or_init().1.clone(),
                 cancel_token: tokio_util::sync::CancellationToken::new(),
-                registry: registry,
+                registry,
             });
 
             self.cache = Some(module.clone());

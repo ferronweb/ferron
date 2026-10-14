@@ -195,7 +195,7 @@ pub(super) fn parse_upstream_entry(
         None
     };
     cfg.upstreams.push(Upstream::Static(StaticUpstream {
-        url: url,
+        url,
         unix_socket,
         health_check_config,
         inner: crate::types::upstream::UpstreamInner {
@@ -381,7 +381,7 @@ pub(super) fn parse_srv_entry(
         None
     };
     cfg.upstreams.push(Upstream::Srv(SrvUpstream {
-        srv_name: srv_name,
+        srv_name,
         dns_servers,
         inner: crate::types::upstream::UpstreamInner {
             limit,

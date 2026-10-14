@@ -604,7 +604,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
             let module = Arc::new(OtlpObservabilityModule {
                 inner: self.shared.get_or_init().1.clone(),
                 cancel_token: tokio_util::sync::CancellationToken::new(),
-                registry: registry,
+                registry,
                 event_sink,
             });
 
