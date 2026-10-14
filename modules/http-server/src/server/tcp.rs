@@ -350,7 +350,7 @@ impl TcpListenerHandle {
                                             error_message.push_str(&format!("\nPossible cause: {possible_cause}"));
                                             attrs.push((
                                                 "ferron.error.possible_cause",
-                                                LogAttributeValue::String(possible_cause.to_string())
+                                                LogAttributeValue::String(possible_cause)
                                             ));
                                         }
                                     }

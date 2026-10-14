@@ -1226,7 +1226,7 @@ impl UnixHttpModule {
         let cfg = BasicHttpModule::build_config_inner(
             registry,
             &port_config,
-            global_config.clone(),
+            global_config,
             None,
             false,
             true,
@@ -1270,7 +1270,7 @@ impl UnixHttpModule {
         let new_cfg = BasicHttpModule::build_config_inner(
             registry,
             &port_config,
-            global_config.clone(),
+            global_config,
             https_port,
             false,
             true,

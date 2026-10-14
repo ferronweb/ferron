@@ -85,7 +85,7 @@ fn parse_string_value(block: &ServerConfigurationBlock, directive: &str) -> Opti
         .args
         .first()
         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-        .map(|s| s.to_string())
+        .map(|s| s)
 }
 
 /// Parse a boolean flag from the admin config block.

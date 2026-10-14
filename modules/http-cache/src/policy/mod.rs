@@ -310,7 +310,7 @@ pub fn evaluate_response_policy(
         stale_while_revalidate: standard.stale_while_revalidate,
         stale_if_error: standard.stale_if_error,
         must_revalidate,
-        no_cache_field_names: standard.no_cache_field_names.clone(),
+        no_cache_field_names: standard.no_cache_field_names,
         reason: "storable",
     }
 }

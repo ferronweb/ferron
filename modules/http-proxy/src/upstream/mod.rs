@@ -65,7 +65,7 @@ pub fn health_upstream_attrs(
     let upstream_log_id = if let Some(ref connect_to) = upstream.connect_to {
         format!("{upstream_url} (at {connect_to})")
     } else {
-        upstream_url.to_owned()
+        upstream_url
     };
 
     (health_attrs, upstream_log_id)

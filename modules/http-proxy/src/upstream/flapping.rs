@@ -70,7 +70,7 @@ pub fn record_circuit_transition(
                 summary: "Upstream is flapping".into(),
                 target: crate::LOG_TARGET,
                 attributes: log_attributes,
-                trace_context: event_trace_context.clone(),
+                trace_context: event_trace_context,
             },
         ));
     } else if !is_flapping && was_flapping {
@@ -85,7 +85,7 @@ pub fn record_circuit_transition(
                 summary: "Upstream flapping resolved".into(),
                 target: crate::LOG_TARGET,
                 attributes: log_attributes,
-                trace_context: event_trace_context.clone(),
+                trace_context: event_trace_context,
             },
         ));
     }

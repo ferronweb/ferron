@@ -114,14 +114,14 @@ impl GrpcSignal {
         let interceptor = AuthInterceptor(authorization);
         let client = match kind {
             SignalKind::Logs => GrpcSignalClient::Logs(LogsServiceClient::with_interceptor(
-                channel.clone(),
+                channel,
                 interceptor,
             )),
             SignalKind::Metrics => GrpcSignalClient::Metrics(
-                MetricsServiceClient::with_interceptor(channel.clone(), interceptor),
+                MetricsServiceClient::with_interceptor(channel, interceptor),
             ),
             SignalKind::Traces => GrpcSignalClient::Traces(TraceServiceClient::with_interceptor(
-                channel.clone(),
+                channel,
                 interceptor,
             )),
         };

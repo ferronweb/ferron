@@ -153,7 +153,7 @@ pub async fn request_handler(
             if let Some(server_ip) = server_ip_canonical.clone().or_else(|| server_ip.clone()) {
                 builder_attributes.push((
                     Cow::Borrowed("server.address"),
-                    TraceAttributeValue::String(server_ip.clone()),
+                    TraceAttributeValue::String(server_ip),
                 ));
             }
             if let Some(server_port) = server_port {
@@ -416,7 +416,7 @@ pub async fn request_handler(
                 name: Cow::Borrowed("ferron.request"),
                 error: error_description,
                 attributes: end_attrs,
-                control_plane_metadata: resolved_control_plane_metadata.clone(),
+                control_plane_metadata: resolved_control_plane_metadata,
             }));
         }
     }

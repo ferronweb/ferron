@@ -101,7 +101,7 @@ impl RateLimitEngine {
     ) -> Result<Arc<RateLimitBackendKind>, BackendError> {
         let fingerprint = Self::rule_fingerprint(config);
         let backend_fp = backend_config.fingerprint();
-        let key = (zone_id.clone(), fingerprint.clone(), backend_fp);
+        let key = (zone_id.clone(), fingerprint, backend_fp);
 
         // Fast path under lock: clone Arc if present.
         {

@@ -54,7 +54,7 @@ impl UnixListenerHandle {
         }
 
         let cancel_token = Arc::new(CancellationToken::new());
-        let config_clone = config.clone();
+        let config_clone = config;
         let cancel_token_clone = cancel_token.clone();
         let path_clone = options.path.clone();
 
@@ -204,7 +204,7 @@ impl UnixListenerHandle {
                                             {
                                                 if let Some(cause) = resolver.get_tls_background_error() {
                                                     error_message.push_str(&format!("\nPossible cause: {cause}"));
-                                                    attrs.push(("ferron.error.possible_cause", LogAttributeValue::String(cause.to_string())));
+                                                    attrs.push(("ferron.error.possible_cause", LogAttributeValue::String(cause)));
                                                 }
                                             }
                                             emit_error(&tls_observability, error_message, attrs);

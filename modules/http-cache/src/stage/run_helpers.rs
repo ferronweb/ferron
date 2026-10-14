@@ -276,7 +276,7 @@ pub(super) async fn run_forward(
                     LookupResult::StaleWhileRevalidate {
                         entry: Box::new(entry),
                         stats,
-                        inflight_key: is_leader.then_some(cache_key.clone()),
+                        inflight_key: is_leader.then_some(cache_key),
                         scope: Some(scope),
                         items,
                     }

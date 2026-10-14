@@ -233,7 +233,7 @@ impl Runtime {
     {
         let task_factory = Arc::new(task_factory);
         if let Some(channel) = self.primary_task_channels.get(index) {
-            let _ = channel.send(task_factory.clone());
+            let _ = channel.send(task_factory);
         }
     }
 
