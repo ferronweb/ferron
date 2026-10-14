@@ -384,7 +384,7 @@ impl ConnectionManager {
             }
             // Here, `opt` is guaranteed to be `Some`, because we just initialized
             // it if it was `None`
-            let pools = opt.as_mut().unwrap();
+            let pools = opt.as_mut().expect("invalid thread-local pool state");
             if pools.last_global_limit != per_thread {
                 pools.tcp_pool.update_capacity(per_thread);
                 pools.last_global_limit = per_thread;
@@ -457,7 +457,7 @@ impl ConnectionManager {
             }
             // Here, `opt` is guaranteed to be `Some`, because we just initialized
             // it if it was `None`
-            let pools = opt.as_mut().unwrap();
+            let pools = opt.as_mut().expect("invalid thread-local pool state");
             if pools.last_global_limit != per_thread {
                 pools.tcp_pool.update_capacity(per_thread);
                 pools.last_global_limit = per_thread;

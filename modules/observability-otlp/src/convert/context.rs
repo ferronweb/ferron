@@ -87,7 +87,11 @@ impl CorrelationContext {
         Self {
             // 65536 is always non-zero, so the conversion to NonZeroUsize
             // cannot panic.
-            active_spans: lru::LruCache::new(65536.try_into().unwrap()),
+            active_spans: lru::LruCache::new(
+                65536
+                    .try_into()
+                    .expect("65536 -> NonZeroUsize shouldn't panic, but it did"),
+            ),
         }
     }
 
