@@ -101,7 +101,7 @@ Ferron uses a dual runtime: primary threads run `zincio` (one per CPU, pinned, o
 - When you leave a stub implementation, add a `TODO` marker in the comment that explains the stub.
 - When your stub implementation is intentional (because of some constraint that prevents de-stubbing), add a `STUB` marker in the comment that explains why.
 - When you leave a comment about a known issue, add a `FIXME` marker.
-- Many code conventions are enforced in Clippy lint configuration in `Cargo.toml` file.
+- Some code conventions are enforced in Clippy lint configuration in `Cargo.toml` file (run `cargo clippy` to check for them)
 
 ## Documentation expectations
 
