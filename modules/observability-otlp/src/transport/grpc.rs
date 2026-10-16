@@ -113,17 +113,15 @@ impl GrpcSignal {
             .transpose()?;
         let interceptor = AuthInterceptor(authorization);
         let client = match kind {
-            SignalKind::Logs => GrpcSignalClient::Logs(LogsServiceClient::with_interceptor(
-                channel,
-                interceptor,
-            )),
+            SignalKind::Logs => {
+                GrpcSignalClient::Logs(LogsServiceClient::with_interceptor(channel, interceptor))
+            }
             SignalKind::Metrics => GrpcSignalClient::Metrics(
                 MetricsServiceClient::with_interceptor(channel, interceptor),
             ),
-            SignalKind::Traces => GrpcSignalClient::Traces(TraceServiceClient::with_interceptor(
-                channel,
-                interceptor,
-            )),
+            SignalKind::Traces => {
+                GrpcSignalClient::Traces(TraceServiceClient::with_interceptor(channel, interceptor))
+            }
         };
         let client = client.max_message_sizes().maybe_gzip(gzip);
         Ok(Self { client })
