@@ -33,6 +33,7 @@
 #### HTTP server core
 
 - **`trace.id` and `span.id` resolution fix**: previously, `trace.id` and `span.id` variable interpolations resolve to a doubly hex-encoded IDs, not proper single hex-encoded values.
+- **`HEAD` request response body discard**: When sending a response for an HTTP `HEAD` request, the response body is now discarded instead of being sent to the client, improving HTTP spec compliance (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0412)).
 
 #### Observability
 
