@@ -12,17 +12,34 @@
 #![no_main]
 
 use ferron_observability_otlp::proto::opentelemetry::proto::collector::trace::v1::ExportTraceServiceRequest;
+use ferron_observability_otlp::proto::opentelemetry::proto::common::v1::any_value::Value::DoubleValue;
 use ferron_observability_otlp::transport::json::{hexify_id_fields, request_to_json};
 use libfuzzer_sys::fuzz_target;
 use prost::Message;
 
 fuzz_target!(|data: &[u8]| {
     if let Ok(request) = ExportTraceServiceRequest::decode(data) {
+        if request.resource_spans.iter().any(|s| {
+            s.resource.as_ref().is_some_and(|r| {
+                r.attributes.iter().any(|a| {
+                    a.value
+                        .as_ref()
+                        .and_then(|v| v.value.as_ref())
+                        .is_some_and(|v| matches!(v, DoubleValue(v) if v.is_nan()))
+                })
+            })
+        }) {
+            // NaN != NaN in Rust, so skip it to avoid false positives.
+            return;
+        }
+
         // Protobuf encode round-trip: encode must succeed and decode must
         // reproduce the original request exactly.
         let wire = request.encode_to_vec();
         match ExportTraceServiceRequest::decode(wire.as_slice()) {
-            Ok(roundtrip) => assert_eq!(roundtrip, request, "encode/decode round-trip drift"),
+            Ok(roundtrip) => {
+                assert_eq!(roundtrip, request, "encode/decode round-trip drift")
+            }
             Err(error) => panic!("encoded request failed to decode: {error}"),
         }
 
