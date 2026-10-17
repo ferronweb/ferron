@@ -22,7 +22,7 @@ Stworzony dla szybkiej konfiguracji, przewidywalności i niezawodności w środo
 
 - **Czytelna konfiguracja**: postaw strony internetowe i odwrotne proxy z jasną, czytelną konfiguracją bez ukrytych szczegółów.
 - **Automatyczne TLS**: certyfikaty są wystawiane i odświeżane automatycznie. Otrzymujesz jasne sygnały, gdy (nie) działa.
-- **Obserwowalność pierwszej klasy**: zobacz dokładnie, co się stało z każdym żądaniem. Ślady dotyczą każdej warstwy i odsyłają się bezpośrednio do odpowiednich dzienników.
+- **Obserwowalność pierwszej klasy**: zobacz dokładnie, co się stało z każdym żądaniem, nawet bez wielkiej konieczności konfiguracji. Ślady dotyczą każdej warstwy i odsyłają się bezpośrednio do odpowiednich dzienników (logów). Możesz nawet wyszukiwać identyfikatory śladów wewnątrz plików dzienników, aby zobaczyć, co się wydarzyło w każdym żądaniu.
 - **Przewidywalna wydajność**: szybki i spójny pod obciążeniem, od razu po uruchomieniu. Nie trzeba dostrajać.
 - **Bezpieczeństwo pamięci**: cały zakres podatności związanych z bezpieczeństwem pamięci po prostu nie istnieje w Ferronie (jest napisany w [Rust](https://rust-lang.org/)).
 - **Niezawodny**: radzi sobie z chaotycznym ruchem rzeczywistości, awariami serwerów upstream i przypadkami brzegowymi protokołów, przewidywalnie.

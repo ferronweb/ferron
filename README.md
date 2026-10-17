@@ -22,7 +22,7 @@ Built to set up quickly, behave predictably, and hold up reliably in production.
 
 - **Readable configuration**: set up websites and reverse proxies with a clear, compact config that avoids sprawl and hidden surprises.
 - **Automatic TLS**: certificates are issued and renewed automatically. You get clear signals when it works (or doesn't).
-- **First-class observability**: see exactly what happened with any request. Traces cover every layer and link directly to the relevant logs.
+- **First-class observability**: see exactly what happened with any request, even without having to do much configuration. Traces cover every layer and link directly to the relevant logs. You can even search for trace IDs inside log files to see what happened in each request.
 - **Predictable performance**: fast and consistent under load, right out of the box. No runtime tuning required.
 - **Memory-safe**: entire categories of memory-related security holes simply don't exist in Ferron (it's built with [Rust](https://rust-lang.org/)).
 - **Reliable in production**: handles messy real-world traffic, upstream failures, and protocol edge cases predictably.
