@@ -34,7 +34,7 @@ http {
 
 Traces generated for those requests carry `tracestate: ot=0.1`, both in the headers sent to upstreams and on the exported span. Backends that support extrapolating sampled traces read `ot` to scale trace-derived counts back up. Without it, a 10% sampler looks like a 10x drop in traffic when you total up traces.
 
-Fermon omits `ot` when the probability carries no information. That covers `always_on`, `always_off`, `parentbased_always_on`, and any ratio of `1.0` or `0.0`, plus `attribute_based` sampling, which decides per trace rather than by ratio.
+Ferron omits `ot` when the probability carries no information. That covers `always_on`, `always_off`, `parentbased_always_on`, and any ratio of `1.0` or `0.0`, plus `attribute_based` sampling, which decides per trace rather than by ratio.
 
 When `trust_request` is enabled and the request carries a `tracestate`, that value is passed through unchanged. The caller owns the sampling decision for its own trace, so Ferron does not overwrite its `ot` entry.
 
