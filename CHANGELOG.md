@@ -18,6 +18,11 @@
 
 ### Changed
 
+
+#### HTTP server core
+
+- **HTTP body buffering**: added support for disabling request and response body buffering using `Incremental: ?1` or `X-Accel-Buffering: no` headers.
+
 #### Observability
 
 - **`http.route` is now a route template**: previously, the `ferron.request` span reported `http.route` as the requested hostname (or `"*"`). It now reports the matched route template built from the configured `location` block names, for example `/api/users/:id`, and is omitted when no `location` block matched.

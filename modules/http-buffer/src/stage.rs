@@ -117,6 +117,21 @@ impl HttpBufferStage {
 
         Ok(http::Response::from_parts(parts, new_body))
     }
+
+    /// Checks if the request or response headers are configured to explicitly disable buffering.
+    fn is_buffering_disabled(headers: &http::HeaderMap, is_response: bool) -> bool {
+        // X-Accel-Buffering (used by many NGINX setups)
+        if is_response && headers.get("x-accel-buffering").is_some_and(|v| v == "no") {
+            return true;
+        }
+
+        // Incremental (see RFC 10036)
+        if headers.get("incremental").is_some_and(|v| v == "?1") {
+            return true;
+        }
+
+        false
+    }
 }
 
 #[async_trait(?Send)]
@@ -165,16 +180,6 @@ impl Stage<HttpContext> for HttpBufferStage {
             })
             .transpose()?;
 
-        if let Some(max_size) = request_buffer_size {
-            if max_size > 0 {
-                Self::buffer_request_body(ctx, max_size).await?;
-            }
-        }
-
-        ctx.extensions.insert::<BufferStateKey>(BufferState {
-            response_buffer_size,
-        });
-
         let capacity = request_buffer_size
             .unwrap_or(0)
             .max(response_buffer_size.unwrap_or(0));
@@ -182,6 +187,30 @@ impl Stage<HttpContext> for HttpBufferStage {
             "ferron.buffer.capacity",
             TraceAttributeValue::I64(capacity as i64),
         );
+
+        if let Some(max_size) = request_buffer_size {
+            if max_size > 0 {
+                if ctx
+                    .req
+                    .as_ref()
+                    .is_some_and(|req| Self::is_buffering_disabled(req.headers(), false))
+                {
+                    // If request buffering would be disabled, client could be able to
+                    // do slow HTTP POST attacks, possibly defeating the protection
+                    // designed for pre-fork backends.
+                    //
+                    // Therefore, just return 501.
+                    ctx.res = Some(HttpResponse::BuiltinError(501, None));
+                    return Ok(false);
+                }
+
+                Self::buffer_request_body(ctx, max_size).await?;
+            }
+        }
+
+        ctx.extensions.insert::<BufferStateKey>(BufferState {
+            response_buffer_size,
+        });
 
         Ok(true)
     }
@@ -208,8 +237,10 @@ impl Stage<HttpContext> for HttpBufferStage {
             None => return Ok(()),
         };
 
-        let buffered_response = Self::buffer_response_body(response, max_size).await?;
-        ctx.res = Some(HttpResponse::Custom(buffered_response));
+        if !Self::is_buffering_disabled(response.headers(), true) {
+            let buffered_response = Self::buffer_response_body(response, max_size).await?;
+            ctx.res = Some(HttpResponse::Custom(buffered_response));
+        }
 
         Ok(())
     }
