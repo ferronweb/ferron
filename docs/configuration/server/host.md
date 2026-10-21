@@ -148,7 +148,7 @@ A per-host override applies to requests whose host matches the host block. A hos
   - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests. Ferron returns the methods as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not to `OPTIONS /path` requests. The value supports [interpolated strings](/docs/configuration/fundamentals/conditionals). Because the value is sent as the `Allow` response header, it must not contain control bytes or line breaks. Ferron reports an unusable configured value with `ferron validate`, and falls back to the default list if an interpolated value resolves to something that cannot be sent as a header. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
 
 - `timeout <duration>`
-  - This directive specifies the pipeline execution timeout. Accepts a duration string (for example, `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout "5m"` (5 minutes)
+  - This directive specifies the pipeline execution timeout. Accepts a duration string (for example, `30m`, `1h`, `90s`), a number in seconds, or `false` to disable. Default: `timeout "5m"` (5 minutes)
 
 - `h1_enable_early_hints <bool>`
   - This directive enables or disables HTTP/1.1 early hints support. For the `early_hints` block that sets the links, see [Response control](/docs/configuration/routing/response). Default: `h1_enable_early_hints false`
