@@ -18,7 +18,6 @@
 
 ### Changed
 
-
 #### HTTP server core
 
 - **HTTP body buffering**: added support for disabling request and response body buffering using `Incremental: ?1` or `X-Accel-Buffering: no` headers.
@@ -39,6 +38,7 @@
 
 - **`trace.id` and `span.id` resolution fix**: previously, `trace.id` and `span.id` variable interpolations resolve to a doubly hex-encoded IDs, not proper single hex-encoded values.
 - **`HEAD` request response body discard**: When sending a response for an HTTP `HEAD` request, the response body is now discarded instead of being sent to the client, improving HTTP spec compliance (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0412)).
+- **Conditional configuration validation**: the server is now reporting (via `ferron validate`) invalid forms of `if`, `if_not`, `location` and `handle_error` directives.
 
 #### Observability
 

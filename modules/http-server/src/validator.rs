@@ -346,15 +346,78 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         // Conditional directives
         if config.has_directive("if") {
             ctx.used_directives.insert("if".to_string());
+            for if_block in config.directives.get("if").iter().flat_map(|v| v.iter()) {
+                if if_block.children.is_none() {
+                    return Err(ConfigurationValidationError::from(
+                        "`if` directive must have a block",
+                    )
+                    .with_span(entry_span(if_block)));
+                }
+                if let Some(matcher) = if_block.get_value().and_then(|v| v.as_str()) {
+                    if !config.matchers.contains_key(matcher) {
+                        return Err(ConfigurationValidationError::from(format!(
+                            "Undefined matcher '{matcher}' for `if` block"
+                        ))
+                        .with_span(entry_span(if_block)));
+                    }
+                }
+            }
         }
         if config.has_directive("if_not") {
             ctx.used_directives.insert("if_not".to_string());
+            for if_not_block in config
+                .directives
+                .get("if_not")
+                .iter()
+                .flat_map(|v| v.iter())
+            {
+                if if_not_block.children.is_none() {
+                    return Err(ConfigurationValidationError::from(
+                        "`if_not` directive must have a block",
+                    )
+                    .with_span(entry_span(if_not_block)));
+                }
+                if let Some(matcher) = if_not_block.get_value().and_then(|v| v.as_str()) {
+                    if !config.matchers.contains_key(matcher) {
+                        return Err(ConfigurationValidationError::from(format!(
+                            "Undefined matcher '{matcher}' for `if_not` block"
+                        ))
+                        .with_span(entry_span(if_not_block)));
+                    }
+                }
+            }
         }
         if config.has_directive("location") {
             ctx.used_directives.insert("location".to_string());
+            for location_block in config
+                .directives
+                .get("location")
+                .iter()
+                .flat_map(|v| v.iter())
+            {
+                if location_block.children.is_none() {
+                    return Err(ConfigurationValidationError::from(
+                        "`location` directive must have a block",
+                    )
+                    .with_span(entry_span(location_block)));
+                }
+            }
         }
         if config.has_directive("handle_error") {
             ctx.used_directives.insert("handle_error".to_string());
+            for handle_error_block in config
+                .directives
+                .get("handle_error")
+                .iter()
+                .flat_map(|v| v.iter())
+            {
+                if handle_error_block.children.is_none() {
+                    return Err(ConfigurationValidationError::from(
+                        "`handle_error` directive must have a block",
+                    )
+                    .with_span(entry_span(handle_error_block)));
+                }
+            }
         }
 
         // HTTP-only deployment check (per-host only)
