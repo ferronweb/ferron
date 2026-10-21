@@ -47,6 +47,10 @@ A `location` block inherits directives from the enclosing host block and from gl
 
 ```ferron
 example.com {
+    match api_request {
+        request.uri.path ~ r"^/api(?:$|/)"
+    }
+    
     if api_request {
         # Applied when api_request matcher passes
     }
