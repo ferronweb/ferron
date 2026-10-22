@@ -94,7 +94,18 @@ pub async fn resolve_strict_dns(cfg: StaticUpstream) -> Vec<Arc<ResolvedUpstream
                         } else {
                             "http"
                         };
-                        let proxy_to = format!("{}://{}:{}", scheme, hostname, port);
+                        let path = {
+                            let mut split = url.split("/");
+                            if split.next().is_some_and(|s| s.ends_with(':')) {
+                                split.next();
+                            }
+                            split.fold(String::new(), |mut s, j| {
+                                s.push('/');
+                                s.push_str(j);
+                                s
+                            })
+                        };
+                        let proxy_to = format!("{}://{}:{}{}", scheme, hostname, port, path);
                         upstreams.push(Arc::new(ResolvedUpstream {
                             proxy_to,
                             connect_to: Some(SocketAddr::new(ip, port)),

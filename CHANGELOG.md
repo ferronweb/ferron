@@ -47,6 +47,10 @@
 - **Prometheus scrape error metric**: previously, `ferron_prometheus_scrape_errors_total` metric didn't increase at all. This has been fix to increase when an internal error with Prometheus endpoint occured.
 - **Connection pool metric fix**: previously, outstanding connection count measured from exported metrics (like Prometheus or OTLP) was bogus, it didn't decrease properly due to a logic bug.
 
+### Reverse proxying
+
+- **Strict-DNS URL resolution fix**: previously, strict-DNS URL resolution dropped the upstream path prefix (like `/api` in `http://backend.example/api`). This has been fixed to preserve the upstream path prefix.
+
 ## Ferron 3.0.0-rc.9
 
 **Released in October 4, 2026**
