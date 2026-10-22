@@ -240,6 +240,8 @@ impl Stage<HttpContext> for HttpBufferStage {
         if !Self::is_buffering_disabled(response.headers(), true) {
             let buffered_response = Self::buffer_response_body(response, max_size).await?;
             ctx.res = Some(HttpResponse::Custom(buffered_response));
+        } else {
+            ctx.res = Some(HttpResponse::Custom(response));
         }
 
         Ok(())
