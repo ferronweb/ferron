@@ -70,6 +70,11 @@ pub fn canonicalize_ip(ip: std::net::IpAddr) -> String {
     }
 }
 
+#[inline]
+fn maybe_decode_uri(uri: &str) -> String {
+    urlencoding::decode(uri).map_or_else(|_| uri.to_owned(), |r| r.into_owned())
+}
+
 /// Resolve a variable by name from the HTTP context.
 ///
 /// Supports:
@@ -89,8 +94,9 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
         var::REQUEST_URI_PATH => ctx
             .original_uri
             .as_ref()
-            .map(|u| u.path().to_string())
-            .or_else(|| ctx.req.as_ref().map(|r| r.uri().path().to_string())),
+            .map(|u| u.path())
+            .or_else(|| ctx.req.as_ref().map(|r| r.uri().path()))
+            .map(maybe_decode_uri),
         var::REQUEST_URI_QUERY => ctx
             .original_uri
             .as_ref()

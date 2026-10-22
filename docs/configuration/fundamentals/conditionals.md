@@ -66,10 +66,10 @@ The HTTP resolver exposes these variables for use in `match` blocks and interpol
 | Variable                    | Value                                                                                     |
 | --------------------------- | ----------------------------------------------------------------------------------------- |
 | `request.method`            | HTTP method (for example `GET`, `POST`)                                                   |
-| `request.uri.path`          | Request path                                                                              |
-| `request.uri.query`         | Query string, or empty string                                                             |
+| `request.uri.path`          | URL-decoded request path                                                                  |
+| `request.uri.query`         | Query string (not URL-decoded), or empty string                                           |
 | `request.uri.query.<param>` | URL-decoded query parameter value, if present                                             |
-| `request.uri`               | Full request URI                                                                          |
+| `request.uri`               | Full request URI (not URL-decoded)                                                        |
 | `request.version`           | HTTP version string (for example `HTTP/1.1`)                                              |
 | `request.header.<name>`     | Request header value                                                                      |
 | `request.cookie.<name>`     | URL-decoded HTTP cookie value, if present                                                 |

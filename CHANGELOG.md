@@ -32,6 +32,10 @@
 - **Circuit breaker and active health check status metrics for multi-address upstreams**: improved overall metric clarity and reduced ambiguity when `metrics_resolved_ip` is disabled.
 - **TLS and HTTP protocol error log improvement**: when server is logging to text-format application logs (not JSON structured ones), it now logs client IP address and port for TLS and HTTP protocol error logs.
 
+#### HTTP server core
+
+- **`request.uri.path` improvement**: the `request.uri.path` variable is now resolving to URL-decoded value for more consistent matching. `request.uri` and `request.uri.query` are documented as not necessarily URL-decoded.
+
 ### Fixed
 
 #### HTTP server core
