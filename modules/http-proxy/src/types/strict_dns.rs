@@ -98,6 +98,7 @@ pub async fn resolve_strict_dns(cfg: StaticUpstream) -> Vec<Arc<ResolvedUpstream
                             let mut split = url.split("/");
                             if split.next().is_some_and(|s| s.ends_with(':')) {
                                 split.next();
+                                split.next();
                             }
                             split.fold(String::new(), |mut s, j| {
                                 s.push('/');
@@ -106,6 +107,7 @@ pub async fn resolve_strict_dns(cfg: StaticUpstream) -> Vec<Arc<ResolvedUpstream
                             })
                         };
                         let proxy_to = format!("{}://{}:{}{}", scheme, hostname, port, path);
+                        println!("{proxy_to}");
                         upstreams.push(Arc::new(ResolvedUpstream {
                             proxy_to,
                             connect_to: Some(SocketAddr::new(ip, port)),
