@@ -1,12 +1,16 @@
 [package]
 name = "ferron-http-static"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
 zincio = { version = "0.2.22", default-features = false, features = ["fs"] }
-zincio-http = { version = "0.4.2", default-features = false, features = ["h1", "h2", "h1-zerocopy"] }
+zincio-http = { version = "0.4.2", default-features = false, features = [
+    "h1",
+    "h2",
+    "h1-zerocopy",
+] }
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http", features = ["util"] }
 ferron-observability = { path = "../../types/observability" }
@@ -18,7 +22,13 @@ tokio-util = { version = "0.7", features = ["io", "rt"] }
 futures-util = "0.3"
 futures-core = "0.3"
 send_wrapper = { version = "0.6", features = ["futures"] }
-async-compression = { version = "0.4", features = ["tokio", "gzip", "brotli", "deflate", "zstd"] }
+async-compression = { version = "0.4", features = [
+    "tokio",
+    "gzip",
+    "brotli",
+    "deflate",
+    "zstd",
+] }
 flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
 multi-mime-guess = "0.1"
 urlencoding = "2"

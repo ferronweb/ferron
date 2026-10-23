@@ -1,6 +1,6 @@
 [package]
 name = "ferron-http-ratelimit"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [features]
@@ -22,7 +22,11 @@ ferron-observability = { path = "../../types/observability" }
 tokio = { version = "1", features = ["sync", "rt", "time"] }
 # `redis` crate depends on SHA-1. SHA-1 is used in Redis for identifying loaded Lua scripts.
 # It's not used for cryptography.
-redis = { version = "1", default-features = false, features = ["tokio-comp", "script", "connection-manager"] }
+redis = { version = "1", default-features = false, features = [
+    "tokio-comp",
+    "script",
+    "connection-manager",
+] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time"] }

@@ -1,10 +1,12 @@
 [package]
 name = "ferron-observability-logfile"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
-ferron-observability = { path = "../../types/observability", features = ["module"] }
+ferron-observability = { path = "../../types/observability", features = [
+    "module",
+] }
 ferron-core = { path = "../../core" }
 tokio-util = "0.7.18"
 tokio = { version = "1.50.0", features = ["fs", "macros", "time"] }

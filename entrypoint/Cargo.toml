@@ -1,6 +1,6 @@
 [package]
 name = "ferron-entrypoint"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
@@ -66,7 +66,10 @@ mimalloc = "0.1.52"
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["fs", "signal", "process"] }
 signal-hook = "0.4"
-tikv-jemallocator = { version = "0.7", features = ["background_threads", "unprefixed_malloc_on_supported_platforms"] }
+tikv-jemallocator = { version = "0.7", features = [
+    "background_threads",
+    "unprefixed_malloc_on_supported_platforms",
+] }
 
 [build-dependencies]
 shadow-rs = { version = "2.0.0", default-features = false, features = [
@@ -123,7 +126,7 @@ profile-default = [
 fips = [
     "ferron-http-basicauth/fips",
     "ferron-http-server/fips",
-    "ferron-ocsp-stapler/fips"
+    "ferron-ocsp-stapler/fips",
 ]
 
 [lints]

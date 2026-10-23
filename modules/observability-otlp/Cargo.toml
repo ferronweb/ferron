@@ -1,22 +1,38 @@
 [package]
 name = "ferron-observability-otlp"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [features]
 fuzz = []
 
 [dependencies]
-ferron-observability = { path = "../../types/observability", features = ["module"] }
+ferron-observability = { path = "../../types/observability", features = [
+    "module",
+] }
 ferron-core = { path = "../../core" }
 async-channel = "2.5.0"
 tokio-util = "0.7.18"
 tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
 hyper = { version = "1", features = ["client", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["client", "client-legacy", "tokio"] }
-hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2"] }
-tonic = { version = "0.14", default-features = false, features = ["codegen", "channel", "gzip"] }
-rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
+hyper-util = { version = "0.1", features = [
+    "client",
+    "client-legacy",
+    "tokio",
+] }
+hyper-rustls = { version = "0.27", default-features = false, features = [
+    "http1",
+    "http2",
+] }
+tonic = { version = "0.14", default-features = false, features = [
+    "codegen",
+    "channel",
+    "gzip",
+] }
+rustls = { version = "0.23", default-features = false, features = [
+    "std",
+    "aws_lc_rs",
+] }
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
 flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }

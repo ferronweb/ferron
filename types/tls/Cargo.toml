@@ -1,13 +1,17 @@
 [package]
 name = "ferron-tls"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
 aws-lc-rs = { version = "1", features = ["bindgen"] }
 getrandom = "0.4"
-rustls = { version = "0.23.37", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
+rustls = { version = "0.23.37", default-features = false, features = [
+    "std",
+    "tls12",
+    "aws_lc_rs",
+] }
 rustls-pki-types = "1"
 rustls-native-certs = "0.8"
 webpki-roots = "1"
@@ -22,7 +26,12 @@ tokio = { version = "1.53.1", features = ["io-util"] }
 
 [features]
 default = []
-observability = ["dep:rasn", "dep:rasn-pkix", "dep:num-bigint", "dep:ferron-observability"]
+observability = [
+    "dep:rasn",
+    "dep:rasn-pkix",
+    "dep:num-bigint",
+    "dep:ferron-observability",
+]
 fips = ["rustls/fips"]
 
 [dev-dependencies]

@@ -1,6 +1,6 @@
 [package]
 name = "ferron-tls-acme"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
@@ -15,17 +15,25 @@ ferron-ocsp = { path = "../../types/ocsp" }
 instant-acme = { version = "0.8.4", default-features = false, features = [
     "hyper-rustls", # Required for HTTP client in ACME, it also gives some convenience...
     "aws-lc-rs",
-    "time" # Required for renewal info
+    "time",         # Required for renewal info
 ] }
 
 # TLS
-rustls = { version = "0.23.37", default-features = false, features = ["tls12", "std", "aws_lc_rs"] }
+rustls = { version = "0.23.37", default-features = false, features = [
+    "tls12",
+    "std",
+    "aws_lc_rs",
+] }
 rustls-pki-types = "1.14.0"
 rustls-native-certs = "0.8"
 webpki-roots = "1"
 
 # Certificate generation
-rcgen = { version = "0.14.1", default-features = false, features = ["crypto", "aws_lc_rs", "pem"] }
+rcgen = { version = "0.14.1", default-features = false, features = [
+    "crypto",
+    "aws_lc_rs",
+    "pem",
+] }
 
 # Async
 async-trait = "0.1"
@@ -47,8 +55,16 @@ rasn-pkix = "0.29"
 
 # HTTP (for ACME client and HTTP-01 challenge)
 hyper = { version = "1", features = ["client", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["client", "tokio", "http1", "http2"] }
-hyper-rustls = { version = "0.27.7", default-features = false, features = ["http1", "http2"] }
+hyper-util = { version = "0.1", features = [
+    "client",
+    "tokio",
+    "http1",
+    "http2",
+] }
+hyper-rustls = { version = "0.27.7", default-features = false, features = [
+    "http1",
+    "http2",
+] }
 http = "1"
 http-body-util = "0.1"
 bytes = "1"

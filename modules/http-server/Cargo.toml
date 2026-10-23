@@ -1,13 +1,19 @@
 [package]
 name = "ferron-http-server"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"] }
 zincio = { version = "0.2.22", default-features = false, features = ["time"] }
-zincio-http = { version = "0.4.2", default-features = false, features = ["h1", "h1-zerocopy", "h2", "h3", "h3-quinn"] }
+zincio-http = { version = "0.4.2", default-features = false, features = [
+    "h1",
+    "h1-zerocopy",
+    "h2",
+    "h3",
+    "h3-quinn",
+] }
 zincio-quinn = { version = "0.2.22" }
 parking_lot = "0.12"
 arc-swap = "1.7"

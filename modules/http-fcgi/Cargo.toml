@@ -1,6 +1,6 @@
 [package]
 name = "ferron-http-fcgi"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
@@ -10,7 +10,7 @@ ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
 http = "1"
 http-body-util = "0.1"
-zincio = { version = "0.2.22", features = [ "fs" ] }
+zincio = { version = "0.2.22", features = ["fs"] }
 cegla-fcgi = { version = "0.2.2", features = ["client"] }
 http-body = "1.0.1"
 send_wrapper = "0.6.0"

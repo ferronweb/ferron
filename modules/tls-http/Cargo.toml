@@ -1,6 +1,6 @@
 [package]
 name = "ferron-tls-http"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
@@ -12,11 +12,23 @@ ferron-ocsp = { path = "../../types/ocsp" }
 ferron-tls = { path = "../../types/tls", features = ["observability"] }
 
 hyper = { version = "1", features = ["client", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["client", "tokio", "http1", "http2"] }
-hyper-rustls = { version = "0.27.7", default-features = false, features = ["http1", "http2"] }
+hyper-util = { version = "0.1", features = [
+    "client",
+    "tokio",
+    "http1",
+    "http2",
+] }
+hyper-rustls = { version = "0.27.7", default-features = false, features = [
+    "http1",
+    "http2",
+] }
 http-body-util = "0.1"
 bytes = "1"
-rustls = { version = "0.23.37", default-features = false, features = ["tls12", "std", "aws_lc_rs"] }
+rustls = { version = "0.23.37", default-features = false, features = [
+    "tls12",
+    "std",
+    "aws_lc_rs",
+] }
 rustls-pki-types = "1.14.0"
 rustls-native-certs = "0.8"
 webpki-roots = "1"

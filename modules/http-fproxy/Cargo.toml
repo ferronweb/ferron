@@ -1,6 +1,6 @@
 [package]
 name = "ferron-http-fproxy"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
@@ -15,16 +15,21 @@ bytes = "1"
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
-tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time", "net"] }
+tokio = { version = "1", features = [
+    "rt",
+    "io-util",
+    "sync",
+    "macros",
+    "time",
+    "net",
+] }
 ipnet = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.189"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = [
-    "Win32_Networking_WinSock",
-] }
+windows = { version = "0.62", features = ["Win32_Networking_WinSock"] }
 
 [lints]
 workspace = true

@@ -1,6 +1,6 @@
 [package]
 name = "ferron-ocsp"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
@@ -8,7 +8,10 @@ edition = "2021"
 ferron-observability = { path = "../observability" }
 tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
 
-rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
+rustls = { version = "0.23", default-features = false, features = [
+    "std",
+    "aws_lc_rs",
+] }
 parking_lot = "0.12"
 tokio-util = "0.7"
 

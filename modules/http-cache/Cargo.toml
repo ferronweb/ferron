@@ -1,6 +1,6 @@
 [package]
 name = "ferron-http-cache"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [features]
@@ -22,14 +22,27 @@ dashmap = "6.2.1"
 cidr = "0.3"
 tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
 rustc-hash = "2"
-hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
-hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2"] }
-rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
+hyper-util = { version = "0.1", features = [
+    "client-legacy",
+    "http1",
+    "http2",
+    "tokio",
+] }
+hyper-rustls = { version = "0.27", default-features = false, features = [
+    "http1",
+    "http2",
+] }
+rustls = { version = "0.23", default-features = false, features = [
+    "std",
+    "aws_lc_rs",
+] }
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
 serde_json = "1"
 crc32fast = "1.4" # Here, CRC32 is used for verifying snapshot integrity as checksums, not cryptographic hashing, and so it should be allowed for these purposes even under FIPS 140-3
-xxhash-rust = { version = "0.8", features = ["xxh3"] } # Non-cryptographic hashing for log-safe key fingerprints, not used for any security purpose
+xxhash-rust = { version = "0.8", features = [
+    "xxh3",
+] } # Non-cryptographic hashing for log-safe key fingerprints, not used for any security purpose
 parking_lot = "0.12.5"
 zincio = { version = "0.2.22", default-features = false, features = ["fs"] }
 

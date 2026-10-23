@@ -1,6 +1,6 @@
 [package]
 name = "ferron-passwd"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [package.metadata.winresource]
@@ -15,7 +15,7 @@ rpassword = "7.4.0"
 # This is because RustCrypto doesn't seem to have FIPS-certified version,
 # so we have to use AWS-LC FIPS instead, and use only PBKDF2...
 aws-lc-rs = { optional = true, version = "1", features = ["fips"] }
-base64 = { optional = true, version = "0.23.1"}
+base64 = { optional = true, version = "0.23.1" }
 getrandom = { version = "0.4.3", optional = true }
 
 [build-dependencies]

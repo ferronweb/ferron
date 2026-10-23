@@ -1,11 +1,15 @@
 [package]
 name = "ferron-tls-manual"
-version = "3.0.0-rc.9"
+version = "3.0.0-rc.10"
 edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
-rustls = { version = "0.23.37", default-features = false, features = ["tls12", "std", "aws_lc_rs"] }
+rustls = { version = "0.23.37", default-features = false, features = [
+    "tls12",
+    "std",
+    "aws_lc_rs",
+] }
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
