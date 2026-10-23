@@ -16,12 +16,12 @@
   stdenv,
   fetchurl,
   autoPatchelfHook,
-  version ? "3.0.0-rc.9",
+  version ? "3.0.0-rc.10",
   # NOTE: named `releaseHashes` (not `hashes`) because `pkgs.hashes`
   # exists -- `callPackage` would inject it over a `hashes` default.
   releaseHashes ? {
-    x86_64-linux = "sha256-xwP3xUaOfg44BLb1mjyk6zdGLZufn24DV7F5dFo5l1g=";
-    aarch64-linux = "sha256-IQgtqg27tkUxzLx+r6SjKhwC4bZHSepzz5mHHBUh67o=";
+    x86_64-linux = "sha256-GqAO4/NYnm2lB+TuzWyDywVneNw8ag4vgs07+U0FXII=";
+    aarch64-linux = "sha256-folfK/X5jHHK1KzGgtHVn5yi/gjhuE4ObmiZ3CxD3fQ=";
   },
 }:
 
