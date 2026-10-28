@@ -54,7 +54,7 @@ foldhash = "0.2.0"
 
 [build-dependencies]
 find_git = "1.2.1"
-protox = "0.9.1"
+protox = "0.10.0"
 tonic-prost-build = "0.14.6"
 pbjson-build = "0.9"
 
