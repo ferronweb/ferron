@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Changed
+
+#### Reverse proxying
+
+- **Improved keep-alive handling for intercepted responses**: when HTTP response status code interception is enabled, the backend server connection is now reused.
+
 ## Ferron 3.0.0-rc.10
 
 **Released in October 23, 2026**

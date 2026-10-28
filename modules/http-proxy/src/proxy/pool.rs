@@ -616,11 +616,6 @@ pub async fn send_via_wrapper(
         Ok(ferron_http::HttpResponse::Custom(
             http::Response::from_parts(parts, body.map_err(std::io::Error::other).boxed_unsync()),
         ))
-    } else if config.intercept_errors && status.as_u16() >= 400 {
-        Ok(ferron_http::HttpResponse::BuiltinError(
-            status.as_u16(),
-            None,
-        ))
     } else {
         // For keepalive, we extract the wrapper and create a PoolReturnInfo.
         // This prevents the PoolItem's Drop from running, and instead we manually
@@ -643,6 +638,13 @@ pub async fn send_via_wrapper(
             drop(item);
             (None, false)
         };
+
+        if config.intercept_errors && status.as_u16() >= 400 {
+            return Ok(ferron_http::HttpResponse::BuiltinError(
+                status.as_u16(),
+                None,
+            ));
+        }
 
         let expected_length = parts
             .headers
