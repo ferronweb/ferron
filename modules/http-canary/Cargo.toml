@@ -8,7 +8,7 @@ rustc-hash = "2.1"
 async-trait = "0.1"
 ahash = "0.8"
 http = "1"
-parking_lot = "0.12"
+parking_lot = "0.13"
 rand = "0.10"
 typemap_rev = "0.4"
 
