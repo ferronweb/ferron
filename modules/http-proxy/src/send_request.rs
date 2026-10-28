@@ -202,16 +202,17 @@ impl SendRequestWrapper {
         &mut self,
         req: Request<ProxyBody>,
     ) -> Result<Response<Incoming>, ProxyError> {
-        self.last_used = std::time::Instant::now();
         match self.inner.take() {
             Some(SendRequestInner::Http1(mut inner)) => {
                 let resp = inner.send_request(req).await?;
                 self.inner = Some(SendRequestInner::Http1(inner));
+                self.last_used = std::time::Instant::now();
                 Ok(resp)
             }
             Some(SendRequestInner::Http2(mut inner)) => {
                 let resp = inner.send_request(req).await?;
                 self.inner = Some(SendRequestInner::Http2(inner));
+                self.last_used = std::time::Instant::now();
                 Ok(resp)
             }
             None => Err(ProxyError::SendRequestError(
