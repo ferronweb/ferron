@@ -6,9 +6,15 @@
 
 ### Changed
 
-#### Reverse proxying
+#### Reverse proxy
 
 - **Improved keep-alive handling for intercepted responses**: when HTTP response status code interception is enabled, the backend server connection is now reused.
+
+### Fixed
+
+#### Forward proxy
+
+- **IP blocklist hardening**: IP addresses are now canonicalized before checking against the deny list, ensuring consistent matching across IPv4 and IPv6. Also, "current network" server addresses are now blocked by default.
 
 ## Ferron 3.0.0-rc.10
 

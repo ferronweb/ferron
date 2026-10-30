@@ -6,10 +6,12 @@ use std::str::FromStr;
 
 use ipnet::IpNet;
 
-/// Default denied IP ranges: loopback, RFC 1918, link-local, shared,
+/// Default denied IP ranges: current network, loopback, RFC 1918, link-local, shared,
 /// documentation, IPv6 ULA, and cloud metadata.
 fn default_denied_ips() -> Vec<IpNet> {
     [
+        "0.0.0.0/8",
+        "::/128",
         "127.0.0.0/8",
         "::1/128",
         "10.0.0.0/8",
@@ -155,6 +157,7 @@ fn parse_forward_proxy_block(
                             if let Ok(net) = IpNet::from_str(cidr) {
                                 cfg.deny_ips.push(net);
                             } else if let Ok(ip) = IpAddr::from_str(cidr) {
+                                let ip = ip.to_canonical();
                                 let prefix = if ip.is_ipv4() { 32 } else { 128 };
                                 cfg.deny_ips
                                     .push(IpNet::new(ip, prefix).map_err(|e| e.to_string())?);
@@ -222,7 +225,7 @@ pub fn port_allowed(allow_ports: &[u16], port: u16) -> bool {
 /// Check if an IP is in the denied IP list.
 #[inline]
 pub fn ip_denied(deny_ips: &[IpNet], ip: IpAddr) -> bool {
-    deny_ips.iter().any(|net| net.contains(&ip))
+    deny_ips.iter().any(|net| net.contains(&ip.to_canonical()))
 }
 
 #[cfg(test)]

@@ -37,6 +37,8 @@ When you specify no `deny_ips`, Ferron denies the following ranges by default:
 
 | Range                                               | Description                     |
 | --------------------------------------------------- | ------------------------------- |
+| `0.0.0.0/8`                                         | Current network                 |
+| `::/128`                                            | IPv6 unspecified address        |
 | `127.0.0.0/8`                                       | IPv4 loopback                   |
 | `::1/128`                                           | IPv6 loopback                   |
 | `10.0.0.0/8`                                        | RFC 1918 private network        |
