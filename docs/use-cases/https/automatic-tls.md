@@ -155,7 +155,7 @@ example.com {
         challenge http-01
         contact admin@example.com
         cache /var/cache/ferron-acme
-        
+
         key_algo PKCS_RSA_SHA256
         key_size 4096
     }

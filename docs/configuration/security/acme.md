@@ -94,7 +94,7 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 | `on_demand_ask_auth`            | `<string>`                         | none                                                                          | Authorization header for approval endpoint (optional) |
 | `on_demand_ask_no_verification` | `<bool>`                           | `false`                                                                       | Skip TLS verification for approval endpoint           |
 | `fallback`                      | `{ ... }`                          | none                                                                          | Fallback provider block (repeatable)                  |
-| `key_algo`                      | `<string>`                         | `PKCS_ECDSA_P256_SHA256` when `key_size` is not specified, otherwise `PKCS_RSA_SHA256`                                                 | Key algorithm to use for certificate signing         |'
+| `key_algo` | `<string>` | `PKCS_ECDSA_P256_SHA256` when `key_size` is not specified, otherwise `PKCS_RSA_SHA256` | Key algorithm to use for certificate signing |
 | `key_size`                      | `<int>`                           | none                                                                          | RSA key size in bits (optional). Supported values: `2048`, `3072`, `4096`. Not supported with non-RSA key algorithms                          |
 
 **Configuration example:**
@@ -114,7 +114,7 @@ example.com {
         post_obtain_command /var/lib/post_obtain_command.sh
 
         key_algo PKCS_ECDSA_P384_SHA384
-        
+
         ocsp
     }
 }
