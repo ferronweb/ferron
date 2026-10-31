@@ -928,6 +928,23 @@ impl ModuleLoader for TlsAcmeModuleLoader {
             tls,
         );
         register_acme_directive(registry, "fallback", "fallback { ... }", "This directive defines fallback ACME provider settings including directory, contact, profile, and eab.", tls);
+        register_acme_directive(
+            registry,
+            "key_algo",
+            "key_algo <key_algo>",
+            "This directive specifies the private key signature algorithm for the certificate \
+            signing request for ACME. Default is ECDSA, unless RSA key size is specified which \
+            would set the default to RSA",
+            tls,
+        );
+        register_acme_directive(
+            registry,
+            "key_size",
+            "key_size <key_size>",
+            "This directive specifies the RSA private key size for the certificate signing \
+            request for ACME. Not supported when using non-RSA key signature algorithms",
+            tls,
+        );
     }
 
     fn register_scoped_configuration_validators(

@@ -6,6 +6,7 @@
 mod account;
 pub(crate) mod cert_install;
 mod challenge;
+mod csr;
 pub mod dist_lock;
 mod validity;
 
@@ -26,6 +27,7 @@ use crate::{emit_log, emit_metric};
 use self::account::{create_new_account, HttpsClientForAcme};
 use self::cert_install::install_certified_key;
 use self::challenge::cleanup_challenge_data;
+use self::csr::generate_csr;
 use self::validity::check_certificate_validity_or_install_cached;
 
 /// Emits a lock lifecycle counter (`ferron.acme.lock_*_total`).
@@ -827,8 +829,45 @@ async fn provision_certificate_inner(
         }
     }
 
-    let private_key_pem = match order.finalize().await {
-        Ok(pem) => pem,
+    let (private_key, csr) = match generate_csr(
+        order.identifiers(),
+        config.cert_algo,
+        config.cert_key_size,
+    )
+    .await
+    {
+        Ok(csr) => csr,
+        Err(e) => {
+            emit_log(
+                event_sink,
+                ferron_observability::LogLevel::Error,
+                "ACME CSR generatation failed",
+                &format!(
+                    "Failed to generate a CSR for ACME order for {domains}, provider: {provider_name}: {e}",
+                ),
+                "ferron-tls-acme",
+                vec![
+                    (
+                        "ferron.acme.domains",
+                        ferron_observability::LogAttributeValue::String(domains.clone()),
+                    ),
+                    (
+                        "error.message",
+                        ferron_observability::LogAttributeValue::String(e.to_string()),
+                    ),
+                    (
+                        "ferron.acme.provider",
+                        ferron_observability::LogAttributeValue::StaticStr(provider_name),
+                    ),
+                ],
+            );
+            return Err(e);
+        }
+    };
+    let private_key_pem = private_key.serialize_pem();
+
+    match order.finalize_csr(csr.der()).await {
+        Ok(_) => {}
         Err(e) => {
             emit_log(
                 event_sink,

@@ -143,3 +143,24 @@ example.com {
     }
 }
 ```
+
+## RSA certificates
+
+By default, Ferron uses ECDSA (Elliptic Curve Digital Signature Algorithm) with P-256 curve and SHA-256 hash function for certificate signing. To use RSA instead, set `key_algo` to `PKCS_RSA_SHA256` and specify `key_size`:
+
+```ferron
+example.com {
+    tls {
+        provider acme
+        challenge http-01
+        contact admin@example.com
+        cache /var/cache/ferron-acme
+        
+        key_algo PKCS_RSA_SHA256
+        key_size 4096
+    }
+}
+```
+
+> [!info]
+> For the supported TLS certificate key algorithms, see the [configuration reference](/docs/configuration/security/acme#supported-key-algorithms).

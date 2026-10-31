@@ -94,6 +94,8 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 | `on_demand_ask_auth`            | `<string>`                         | none                                                                          | Authorization header for approval endpoint (optional) |
 | `on_demand_ask_no_verification` | `<bool>`                           | `false`                                                                       | Skip TLS verification for approval endpoint           |
 | `fallback`                      | `{ ... }`                          | none                                                                          | Fallback provider block (repeatable)                  |
+| `key_algo`                      | `<string>`                         | `PKCS_ECDSA_P256_SHA256` when `key_size` is not specified, otherwise `PKCS_RSA_SHA256`                                                 | Key algorithm to use for certificate signing         |'
+| `key_size`                      | `<int>`                           | none                                                                          | RSA key size in bits (optional). Supported values: `2048`, `3072`, `4096`. Not supported with non-RSA key algorithms                          |
 
 **Configuration example:**
 
@@ -111,10 +113,31 @@ example.com {
         # `post_obtain_command` arg is a script/binary name + args, separated by spaces.
         post_obtain_command /var/lib/post_obtain_command.sh
 
+        key_algo PKCS_ECDSA_P384_SHA384
+        
         ocsp
     }
 }
 ```
+
+### Supported key algorithms
+
+| Identifier | Description                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `PKCS_ECDSA_P256_SHA256`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-256 curve and SHA-256 hash function                                                           |
+| `PKCS_ECDSA_P384_SHA384`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-384 curve and SHA-384 hash function                                                           |
+| `PKCS_ECDSA_P521_SHA256`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-521 curve and SHA-256 hash function                                                           |
+| `PKCS_ECDSA_P521_SHA384`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-521 curve and SHA-384 hash function                                                           |
+| `PKCS_ECDSA_P521_SHA512`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-521 curve and SHA-512 hash function                                                           |
+| `PKCS_ED25519`   | ED25519 key algorithm                                   |
+| `PKCS_ML_DSA_44` | Post-quantum ML-DSA-44 (Module-Lattice-Based Digital Signature Algorithm) |
+| `PKCS_ML_DSA_65` | Post-quantum ML-DSA-65 (Module-Lattice-Based Digital Signature Algorithm) |
+| `PKCS_ML_DSA_87` | Post-quantum ML-DSA-87 (Module-Lattice-Based Digital Signature Algorithm) |
+| `PKCS_RSA_SHA256`   | RSA key algorithm with SHA-256 hash function                                   |
+| `PKCS_RSA_SHA384`   | RSA key algorithm with SHA-384 hash function                                   |
+| `PKCS_RSA_SHA512`   | RSA key algorithm with SHA-512 hash function                                   |
+| `ECDSA` | Alias for `PKCS_ECDSA_P256_SHA256` |
+| `RSA` | Alias for `PKCS_RSA_SHA256` |
 
 ## Eager mode (recommended for known domains)
 

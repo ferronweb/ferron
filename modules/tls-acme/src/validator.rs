@@ -39,6 +39,37 @@ impl ConfigurationValidator for TlsAcmeConfigurationValidator {
             validate_scoped_block(dns, validator_ctx, "provider", "dns", None)?;
         });
 
+        // TLS certificate params
+        validate_directive!(config, validator_ctx.used_directives, key_algo, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+        validate_directive!(config, validator_ctx.used_directives, key_size, optional args(1) => [ServerConfigurationValue::Number(_, _)], {});
+        let is_rsa = match crate::config::resolve_tls_cert_algo_config(config) {
+            Ok((_, is_rsa)) => is_rsa,
+            Err(e) => {
+                let span = config
+                    .directives
+                    .get("key_algo")
+                    .and_then(|e| e.first())
+                    .and_then(|e| e.span.clone());
+                return Err(
+                    ferron_core::config::validator::ConfigurationValidationError::from(
+                        e.to_string(),
+                    )
+                    .with_span(span),
+                );
+            }
+        };
+        if let Err(e) = crate::config::resolve_tls_cert_key_config(config, is_rsa) {
+            let span = config
+                .directives
+                .get("key_size")
+                .and_then(|e| e.first())
+                .and_then(|e| e.span.clone());
+            return Err(
+                ferron_core::config::validator::ConfigurationValidationError::from(e.to_string())
+                    .with_span(span),
+            );
+        }
+
         // Fallback ACME providers
         validate_directive!(config, validator_ctx.used_directives, fallback, no_args, {
             let mut local_ctx = ConfigurationValidatorContext {

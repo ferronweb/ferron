@@ -4,6 +4,7 @@ use std::time::Duration;
 use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{io::Write, net::IpAddr};
 
+use rsa::pkcs8::EncodePrivateKey;
 use rustls::client::danger::{ServerCertVerified, ServerCertVerifier};
 use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
 use testcontainers::{
@@ -23,6 +24,17 @@ struct DnsConfig {
     key_secret: String,
     /// Test domain(s) to be served by BIND 9 (e.g., "example.com")
     domains: Vec<String>,
+}
+
+/// Configuration for CSR key type.
+#[derive(Debug, Clone, Copy)]
+enum CsrConfig {
+    /// Unspecified key type
+    Unspecified,
+    /// RSA key type
+    Rsa,
+    /// ECDSA key type
+    Ecdsa,
 }
 
 /// A server certificate verifier that always returns a successful verification.
@@ -394,6 +406,7 @@ async fn test_acme_common(
     hostname: &str,
     extra_host_config: &str,
     dns_config: Option<DnsConfig>,
+    csr_config: CsrConfig,
 ) {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
@@ -475,13 +488,40 @@ async fn test_acme_common(
     let mut resolv_conf: Option<tempfile::NamedTempFile> = None;
 
     // 1. Generate CA for Pebble
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
-    std::fs::write(cert_dir.path().join("ca.crt"), cert.cert.pem()).unwrap();
-    std::fs::write(
-        cert_dir.path().join("ca.key"),
-        cert.signing_key.serialize_pem(),
-    )
-    .unwrap();
+    let (cert, key) = match csr_config {
+        CsrConfig::Unspecified => {
+            let cert_key =
+                rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+            (cert_key.cert, cert_key.signing_key)
+        }
+        CsrConfig::Rsa => {
+            // Since `ring` doesn't support RSA key generation, let's use RustCrypto instead
+            let mut rng = rand::thread_rng();
+            let private_key = rsa::RsaPrivateKey::new(&mut rng, 2048).unwrap();
+
+            let pem_string = private_key
+                .to_pkcs8_pem(rsa::pkcs8::LineEnding::LF)
+                .unwrap();
+
+            let key = rcgen::KeyPair::from_pem_and_sign_algo(&pem_string, &rcgen::PKCS_RSA_SHA256)
+                .unwrap();
+            let params = rcgen::CertificateParams::new(vec!["localhost".to_string()]).unwrap();
+
+            let cert = params.self_signed(&key).unwrap();
+            (cert, key)
+        }
+        CsrConfig::Ecdsa => {
+            let key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+            let cert = rcgen::CertificateParams::new(vec!["localhost".to_string()])
+                .unwrap()
+                .self_signed(&key)
+                .unwrap();
+            (cert, key)
+        }
+    };
+
+    std::fs::write(cert_dir.path().join("ca.crt"), cert.pem()).unwrap();
+    std::fs::write(cert_dir.path().join("ca.key"), key.serialize_pem()).unwrap();
 
     // 2. Write Pebble config
     pebble_config
@@ -553,6 +593,12 @@ async fn test_acme_common(
         String::new()
     };
 
+    let csr_ferron_config = match csr_config {
+        CsrConfig::Unspecified => "",
+        CsrConfig::Rsa => "key_algo PKCS_RSA_SHA256\nkey_size 2048",
+        CsrConfig::Ecdsa => "key_algo PKCS_ECDSA_P256_SHA256",
+    };
+
     ferron_config
         .as_file_mut()
         .write_all(
@@ -567,11 +613,12 @@ async fn test_acme_common(
     challenge "{}"
     {}
     {}
+    {}
   }}
   root "/var/www/ferron"
 }}
 "#,
-                hostname, challenge_type, extra_host_config, dns_provider_config
+                hostname, challenge_type, extra_host_config, csr_ferron_config, dns_provider_config
             )
             .as_bytes(),
         )
@@ -670,16 +717,136 @@ async fn test_acme_common(
         success,
         "Failed to connect to Ferron via HTTPS with auto-obtained certificate"
     );
+
+    // 9. If certificate type is specified, check it
+    if !matches!(csr_config, CsrConfig::Unspecified) {
+        #[derive(Debug)]
+        struct NoVerifier;
+
+        impl rustls::client::danger::ServerCertVerifier for NoVerifier {
+            fn verify_server_cert(
+                &self,
+                _end_entity: &rustls_pki_types::CertificateDer<'_>,
+                _intermediates: &[rustls_pki_types::CertificateDer<'_>],
+                _server_name: &rustls_pki_types::ServerName<'_>,
+                _ocsp_response: &[u8],
+                _now: rustls_pki_types::UnixTime,
+            ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+                Ok(rustls::client::danger::ServerCertVerified::assertion())
+            }
+
+            fn verify_tls12_signature(
+                &self,
+                _message: &[u8],
+                _cert: &rustls_pki_types::CertificateDer<'_>,
+                _dss: &rustls::DigitallySignedStruct,
+            ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+            {
+                Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+            }
+
+            fn verify_tls13_signature(
+                &self,
+                _message: &[u8],
+                _cert: &rustls_pki_types::CertificateDer<'_>,
+                _dss: &rustls::DigitallySignedStruct,
+            ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+            {
+                Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+            }
+
+            fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+                use rustls::SignatureScheme::*;
+                vec![
+                    ECDSA_NISTP384_SHA384,
+                    ECDSA_NISTP256_SHA256,
+                    ED25519,
+                    RSA_PSS_SHA512,
+                    RSA_PSS_SHA384,
+                    RSA_PSS_SHA256,
+                    RSA_PKCS1_SHA512,
+                    RSA_PKCS1_SHA384,
+                    RSA_PKCS1_SHA256,
+                ]
+            }
+        }
+
+        let tcp_socket = tokio::net::TcpStream::connect((
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+            port,
+        ))
+        .await
+        .unwrap();
+        let client = tokio_rustls::client::TlsConnector::from(std::sync::Arc::new(
+            rustls::ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(std::sync::Arc::new(NoVerifier))
+                .with_no_client_auth(),
+        ))
+        .connect(
+            rustls_pki_types::ServerName::try_from(hostname.to_owned()).unwrap(),
+            tcp_socket,
+        )
+        .await
+        .unwrap();
+
+        let peer_certificates = client.get_ref().1.peer_certificates().unwrap();
+        let leaf = peer_certificates.first().cloned().unwrap();
+        let leaf_asn = rasn::der::decode::<rasn_pkix::Certificate>(&leaf).unwrap();
+
+        match csr_config {
+            CsrConfig::Rsa => {
+                assert_eq!(
+                    &*leaf_asn
+                        .tbs_certificate
+                        .subject_public_key_info
+                        .algorithm
+                        .algorithm,
+                    &[1, 2, 840, 113549, 1, 1, 1],
+                    "Obtained TLS certificate doesn't use RSA public key algorithm"
+                );
+            }
+            CsrConfig::Ecdsa => {
+                assert_eq!(
+                    &*leaf_asn
+                        .tbs_certificate
+                        .subject_public_key_info
+                        .algorithm
+                        .algorithm,
+                    &[1, 2, 840, 10045, 2, 1],
+                    "Obtained TLS certificate doesn't use ECDSA public key algorithm"
+                );
+            }
+            _ => {}
+        }
+    }
 }
 
 #[tokio::test]
 async fn test_acme_http01() {
-    test_acme_common("http-01", "ferron-http01", "", None).await;
+    test_acme_common("http-01", "ferron-http01", "", None, CsrConfig::Unspecified).await;
+}
+
+#[tokio::test]
+async fn test_acme_http01_rsa() {
+    test_acme_common("http-01", "ferron-http01-rsa", "", None, CsrConfig::Rsa).await;
+}
+
+#[tokio::test]
+async fn test_acme_http01_ecdsa() {
+    test_acme_common("http-01", "ferron-http01-ecdsa", "", None, CsrConfig::Ecdsa).await;
 }
 
 #[tokio::test]
 async fn test_acme_tls_alpn_01() {
-    test_acme_common("tls-alpn-01", "ferron-tlsalpn01", "", None).await;
+    test_acme_common(
+        "tls-alpn-01",
+        "ferron-tlsalpn01",
+        "",
+        None,
+        CsrConfig::Unspecified,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -691,18 +858,33 @@ async fn test_acme_broken_cache() {
         "ferron-brokencache",
         "cache \"/root/cache\"",
         None,
+        CsrConfig::Unspecified,
     )
     .await;
 }
 
 #[tokio::test]
 async fn test_acme_ondemand() {
-    test_acme_common("tls-alpn-01", "ferron-ondemand", "on_demand", None).await;
+    test_acme_common(
+        "tls-alpn-01",
+        "ferron-ondemand",
+        "on_demand",
+        None,
+        CsrConfig::Unspecified,
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn test_acme_http01_ondemand() {
-    test_acme_common("http-01", "ferron-http01-ondemand", "on_demand", None).await;
+    test_acme_common(
+        "http-01",
+        "ferron-http01-ondemand",
+        "on_demand",
+        None,
+        CsrConfig::Unspecified,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -713,7 +895,14 @@ async fn test_acme_dns01_basic() {
         key_secret,
         domains: vec!["ferron-dns01".to_string()],
     };
-    test_acme_common("dns-01", "ferron-dns01", "", Some(dns_config)).await;
+    test_acme_common(
+        "dns-01",
+        "ferron-dns01",
+        "",
+        Some(dns_config),
+        CsrConfig::Unspecified,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -730,6 +919,7 @@ async fn test_acme_dns01_cache_persistence() {
         "ferron-dns01-cache",
         "cache \"/var/cache/ferron-acme-custom\"",
         Some(dns_config),
+        CsrConfig::Unspecified,
     )
     .await;
 }
@@ -748,6 +938,7 @@ async fn test_acme_dns01_on_demand() {
         "ferron-dns01-ondemand",
         "on_demand",
         Some(dns_config),
+        CsrConfig::Unspecified,
     )
     .await;
 }
@@ -762,7 +953,14 @@ async fn test_acme_dns01_rfc2136_updates() {
         key_secret,
         domains: vec!["ferron-dns01-rfc2136".to_string()],
     };
-    test_acme_common("dns-01", "ferron-dns01-rfc2136", "", Some(dns_config)).await;
+    test_acme_common(
+        "dns-01",
+        "ferron-dns01-rfc2136",
+        "",
+        Some(dns_config),
+        CsrConfig::Unspecified,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -775,7 +973,14 @@ async fn test_acme_dns01_dns_propagation() {
         key_secret,
         domains: vec!["ferron-dns01-propagation".to_string()],
     };
-    test_acme_common("dns-01", "ferron-dns01-propagation", "", Some(dns_config)).await;
+    test_acme_common(
+        "dns-01",
+        "ferron-dns01-propagation",
+        "",
+        Some(dns_config),
+        CsrConfig::Unspecified,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -788,7 +993,14 @@ async fn test_acme_dns01_custom_resolver() {
         key_secret,
         domains: vec!["ferron-dns01-resolver".to_string()],
     };
-    test_acme_common("dns-01", "ferron-dns01-resolver", "", Some(dns_config)).await;
+    test_acme_common(
+        "dns-01",
+        "ferron-dns01-resolver",
+        "",
+        Some(dns_config),
+        CsrConfig::Unspecified,
+    )
+    .await;
 }
 
 /// Tests that when the primary ACME provider fails, the fallback provider is used.
@@ -1141,19 +1353,19 @@ async fn test_acme_http01_shared_cache_two_nodes() {
                 .get(format!("https://{}:{}/", hostname, port1))
                 .send()
                 .await
-                && response.status().is_success()
-            {
-                success1 = true;
-            }
+            && response.status().is_success()
+        {
+            success1 = true;
+        }
         if !success2
             && let Ok(response) = client2
                 .get(format!("https://{}:{}/", hostname, port2))
                 .send()
                 .await
-                && response.status().is_success()
-            {
-                success2 = true;
-            }
+            && response.status().is_success()
+        {
+            success2 = true;
+        }
         if success1 && success2 {
             break;
         }

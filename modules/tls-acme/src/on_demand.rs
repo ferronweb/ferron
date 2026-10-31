@@ -168,6 +168,8 @@ pub async fn convert_on_demand_config(
         save_paths: None,
         post_obtain_command: None,
         error_message: data.error_message.clone(),
+        cert_algo: data.cert_algo,
+        cert_key_size: data.cert_key_size,
     }
 }
 
