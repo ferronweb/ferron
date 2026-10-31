@@ -90,6 +90,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             &config.upstreams,
             ctx.events.clone(),
             config.metrics_resolved_ip,
+            config.ca_bundle.as_ref(),
         );
 
         let (algorithm, ring) = if let Some(algo) = self.state.algorithms.load().get(&config_key) {

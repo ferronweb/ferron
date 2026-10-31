@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Added
+
+#### Reverse proxy
+
+- **Custom CA trust anchors**: added support for custom CA bundle paths (`ca`) in reverse proxy configurations for verifying TLS certificates not trusted by standard CA stores (which are often used in internal or private networks). ([GitHub issue](https://github.com/ferronweb/ferron/issues/978))
+
 ### Changed
 
 #### Reverse proxy

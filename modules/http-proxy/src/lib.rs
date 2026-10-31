@@ -163,6 +163,7 @@ impl ProxyState {
         upstreams: &[Upstream],
         event_sink: ferron_observability::CompositeEventSink,
         metrics_resolved_ip: bool,
+        ca_bundle: Option<&Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
     ) {
         if self.health_check_tasks.contains_key(config_keys) {
             return;
@@ -197,6 +198,7 @@ impl ProxyState {
                 &runtime_handle,
                 Arc::new(event_sink),
                 metrics_resolved_ip,
+                ca_bundle.cloned(),
             );
 
             task.abort_handle()
@@ -289,7 +291,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
             }
         }
 
-        self::config::MTLS_FILE_CACHE.clear();
+        self::config::TLS_FILE_CACHE.clear();
         self::proxy::clear_tls_client_config_cache();
 
         // Prevent load balancing state memory leaks on config reload

@@ -83,6 +83,7 @@ pub struct ProxyConfig {
     pub concurrent_conns: Option<usize>,
     pub affinity: Option<crate::types::affinity::AffinityConfig>,
     pub metrics_resolved_ip: bool,
+    pub ca_bundle: Option<std::sync::Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
 }
 
 impl Default for ProxyConfig {
@@ -108,6 +109,7 @@ impl Default for ProxyConfig {
             concurrent_conns: None,
             affinity: None,
             metrics_resolved_ip: false,
+            ca_bundle: None,
         }
     }
 }

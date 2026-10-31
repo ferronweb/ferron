@@ -372,6 +372,19 @@ example.com {
 }
 ```
 
+## Reverse proxy to an internal HTTPS backend
+
+Ferron supports reverse proxying to internal HTTPS backends, along with custom CA bundles for verifying their TLS certificates:
+
+```ferron
+example.com {
+    proxy {
+        upstream https://somehost.example:8443/
+        ca /etc/ferron/ca-bundle.pem
+    }
+}
+```
+
 ## Example: Ferron multiplexing to several backend servers
 
 In this example, the `example.com` and `bar.example.com` domains point to a server running Ferron.

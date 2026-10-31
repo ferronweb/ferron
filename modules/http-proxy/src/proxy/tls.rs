@@ -18,6 +18,7 @@ fn build_tls_config(
     http2_only: bool,
     no_verification: bool,
     mtls_credentials: Option<Arc<MtlsCredentials>>,
+    ca_bundle: Option<Arc<Vec<CertificateDer<'static>>>>,
 ) -> ClientConfig {
     let builder = rustls::ClientConfig::builder_with_provider(Arc::new(
         rustls::crypto::aws_lc_rs::default_provider(),
@@ -28,6 +29,12 @@ fn build_tls_config(
         builder
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
+    } else if let Some(bundle) = ca_bundle {
+        let mut root_store = rustls::RootCertStore::empty();
+        for cert in &*bundle {
+            let _ = root_store.add(cert.to_owned());
+        }
+        builder.with_root_certificates(root_store)
     } else {
         let mut root_store = rustls::RootCertStore::empty();
 
@@ -71,9 +78,10 @@ pub(crate) fn cached_tls_config(
     http2_only: bool,
     no_verification: bool,
     mtls_credentials: Option<Arc<MtlsCredentials>>,
+    ca_bundle: Option<Arc<Vec<CertificateDer<'static>>>>,
 ) -> Arc<ClientConfig> {
     let tls_client_config_cache =
-        (mtls_credentials.is_none()).then(|| TLS_CLIENT_CONFIG_CACHE.load());
+        (mtls_credentials.is_none() && ca_bundle.is_none()).then(|| TLS_CLIENT_CONFIG_CACHE.load());
     let cache_key = if let Some(tls_client_config_cache) = &tls_client_config_cache {
         let cache_key = (http2, http2_only, no_verification);
         {
@@ -92,6 +100,7 @@ pub(crate) fn cached_tls_config(
         http2_only,
         no_verification,
         mtls_credentials,
+        ca_bundle,
     ));
     if let (Some(tls_client_config_cache), Some(cache_key)) = (&tls_client_config_cache, cache_key)
     {

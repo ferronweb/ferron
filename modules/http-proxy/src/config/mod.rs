@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
+use rustls::pki_types::pem::PemObject;
 
 pub use self::types::{CircuitBreakerConfig, ProxyConfig, RetryBudgetConfig};
 pub use crate::types::affinity::{AffinityConfig, AffinityType};
@@ -26,7 +27,7 @@ pub(super) const DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS: u64 = 60_000;
 /// Default connection timeout in milliseconds.
 pub(super) const DEFAULT_CONNECTION_TIMEOUT_MS: u64 = 2_000;
 /// mTLS file cache
-pub static MTLS_FILE_CACHE: LazyLock<DashMap<String, std::sync::Arc<Vec<u8>>>> =
+pub static TLS_FILE_CACHE: LazyLock<DashMap<String, std::sync::Arc<Vec<u8>>>> =
     LazyLock::new(DashMap::new);
 
 /// Parse proxy configuration from a server configuration block.
@@ -199,6 +200,29 @@ fn parse_proxy_block(
             "no_verification" => {
                 if let Some(val) = entries.first().map(|e| e.get_flag()) {
                     cfg.no_verification = val;
+                }
+            }
+            "ca" => {
+                if let Some(val) = entries
+                    .first()
+                    .and_then(|e| e.args.first())
+                    .and_then(|v| v.as_string_with_interpolations(ctx))
+                {
+                    cfg.ca_bundle = Some(std::sync::Arc::new(
+                        rustls::pki_types::CertificateDer::pem_slice_iter(
+                            &self::upstream::read_tls_data(&val).map_err(|e| {
+                                let e: Box<dyn Error + Send + Sync> =
+                                    format!("Can't read CA bundle for reverse proxy: {e}").into();
+                                e
+                            })?,
+                        )
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|e| {
+                            let e: Box<dyn Error + Send + Sync> =
+                                format!("Can't read CA bundle for reverse proxy: {e}").into();
+                            e
+                        })?,
+                    ));
                 }
             }
             "proxy_header" => {

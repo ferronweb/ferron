@@ -411,6 +411,7 @@ where
             config.http2_only,
             config.no_verification,
             upstream.mtls.clone(),
+            config.ca_bundle.clone(),
         ));
         // Always use the original hostname for TLS SNI, not a pre-resolved IP.
         let host = proxy_url.host().ok_or("upstream URL has no host")?;

@@ -103,6 +103,7 @@ async fn probe_upstream(
     upstream: &Arc<ResolvedUpstream>,
     config: &UpstreamHealthCheckConfig,
     mtls: Option<Arc<MtlsCredentials>>,
+    ca_bundle: Option<Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
 ) -> ProbeResult {
     let start = SystemTime::now();
     let method = config.method.as_str();
@@ -123,6 +124,7 @@ async fn probe_upstream(
         config.body_match.as_deref(),
         mtls,
         upstream.connect_to,
+        ca_bundle,
     )
     .await;
 
@@ -150,6 +152,7 @@ async fn probe_upstream(
 ///
 /// Supports both HTTP and HTTPS with native certificate store and webpki-roots fallback.
 /// When `no_verification` is true, TLS certificate verification is disabled.
+#[allow(clippy::too_many_arguments)]
 #[inline]
 async fn execute_probe_request(
     url: &str,
@@ -159,6 +162,7 @@ async fn execute_probe_request(
     body_match: Option<&str>,
     mtls: Option<Arc<MtlsCredentials>>,
     pinned: Option<std::net::SocketAddr>,
+    ca_bundle: Option<Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
 ) -> Result<(u16, Option<Vec<u8>>), String> {
     use bytes::Bytes;
     use http_body_util::Full;
@@ -180,7 +184,7 @@ async fn execute_probe_request(
     };
 
     // Use cached client (the underlying connector supports both HTTP and HTTPS)
-    let client = health_check_client(no_verification, mtls, pinned);
+    let client = health_check_client(no_verification, mtls, pinned, ca_bundle);
     let req = Request::builder()
         .method(method.to_uppercase().as_str())
         .uri(url_parsed)
@@ -225,11 +229,12 @@ fn health_check_client(
     no_verification: bool,
     mtls: Option<Arc<MtlsCredentials>>,
     pinned: Option<std::net::SocketAddr>,
+    ca_bundle: Option<Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
 ) -> hyper_util::client::legacy::Client<HttpsConnector, http_body_util::Full<bytes::Bytes>> {
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
 
-    let tls_config = crate::proxy::cached_tls_config(true, false, no_verification, mtls);
+    let tls_config = crate::proxy::cached_tls_config(true, false, no_verification, mtls, ca_bundle);
 
     let connector = HttpsConnectorBuilder::new()
         .with_tls_config(tls_config.deref().to_owned())
@@ -475,6 +480,7 @@ pub fn spawn_health_check_task(
     runtime_handle: &tokio::runtime::Handle,
     event_sink: Arc<ferron_observability::CompositeEventSink>,
     metrics_resolved_ip: bool,
+    ca_bundle: Option<Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
 ) -> tokio::task::JoinHandle<()> {
     runtime_handle.spawn(async move {
         let mut probe_configs: Vec<(
@@ -643,8 +649,9 @@ pub fn spawn_health_check_task(
                     last_probe_times.insert(upstream, now);
 
                     let event_sink = event_sink.clone();
+                    let ca_bundle = ca_bundle.clone();
                     probe_tasks.push(tokio::spawn(async move {
-                        let result = probe_upstream(&probe_target, &config, mtls).await;
+                        let result = probe_upstream(&probe_target, &config, mtls, ca_bundle).await;
                         if metrics_resolved_ip {
                             process_probe_result(
                                 &probe_target,
