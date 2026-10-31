@@ -70,6 +70,19 @@ pub struct AcmeProviderList {
 }
 
 impl AcmeProviderList {
+    #[cfg(test)]
+    pub(crate) fn empty() -> Self {
+        Self {
+            primary: AcmeProviderConfig {
+                directory: "https://directory.placeholder.invalid".into(),
+                contact: vec![],
+                eab_key: None,
+                profile: None,
+            },
+            fallbacks: Vec::new(),
+        }
+    }
+
     /// Builds a provider list from a configuration block.
     ///
     /// The primary provider is extracted from the enclosing `tls { }` block,
@@ -133,6 +146,8 @@ pub struct AcmeConfig {
     pub cert_algo: &'static rcgen::SignatureAlgorithm,
     /// TLS certificate RSA key size
     pub cert_key_size: Option<rcgen::RsaKeySize>,
+    // Whether TLS certificate signature algortihm is implicit
+    pub cert_algo_default: bool,
 }
 
 /// On-demand ACME configuration for lazy certificate issuance.
@@ -173,6 +188,8 @@ pub struct AcmeOnDemandConfig {
     pub cert_algo: &'static rcgen::SignatureAlgorithm,
     /// TLS certificate RSA key size
     pub cert_key_size: Option<rcgen::RsaKeySize>,
+    // Whether TLS certificate signature algortihm is implicit
+    pub cert_algo_default: bool,
 }
 
 /// A cloneable subset of on-demand config data used by the background task.
@@ -215,6 +232,8 @@ pub struct AcmeOnDemandConfigData {
     pub cert_algo: &'static rcgen::SignatureAlgorithm,
     /// TLS certificate RSA key size
     pub cert_key_size: Option<rcgen::RsaKeySize>,
+    // Whether TLS certificate signature algortihm is implicit
+    pub cert_algo_default: bool,
 }
 
 impl AcmeOnDemandConfig {
@@ -240,6 +259,7 @@ impl AcmeOnDemandConfig {
             eab_key: primary.eab_key.clone(),
             cert_algo: self.cert_algo,
             cert_key_size: self.cert_key_size,
+            cert_algo_default: self.cert_algo_default,
         }
     }
 
@@ -269,6 +289,7 @@ impl AcmeOnDemandConfig {
             profile: data.profile,
             cert_algo: data.cert_algo,
             cert_key_size: data.cert_key_size,
+            cert_algo_default: data.cert_algo_default,
         }
     }
 }
@@ -443,40 +464,44 @@ fn resolve_tls_cert_config(
 ) -> Result<
     (
         &'static rcgen::SignatureAlgorithm,
+        bool,
         Option<rcgen::RsaKeySize>,
     ),
     Box<dyn std::error::Error + Send + Sync>,
 > {
-    let (algo, is_rsa) = resolve_tls_cert_algo_config(config)?;
+    let (algo, algo_default, is_rsa) = resolve_tls_cert_algo_config(config)?;
     let key_size = resolve_tls_cert_key_config(config, is_rsa)?;
-    Ok((algo, key_size))
+    Ok((algo, algo_default, key_size))
 }
 
 #[inline]
 pub(crate) fn resolve_tls_cert_algo_config(
     config: &ServerConfigurationBlock,
-) -> Result<(&'static rcgen::SignatureAlgorithm, bool), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<
+    (&'static rcgen::SignatureAlgorithm, bool, bool),
+    Box<dyn std::error::Error + Send + Sync>,
+> {
     match first_value(config, "key_algo")
         .map(|v| v.to_uppercase())
         .as_deref()
     {
         Some("PKCS_ECDSA_P256_SHA256") | Some("ECDSA") => {
-            Ok((&rcgen::PKCS_ECDSA_P256_SHA256, false))
+            Ok((&rcgen::PKCS_ECDSA_P256_SHA256, false, false))
         }
-        Some("PKCS_ECDSA_P384_SHA384") => Ok((&rcgen::PKCS_ECDSA_P384_SHA384, false)),
-        Some("PKCS_ECDSA_P521_SHA256") => Ok((&rcgen::PKCS_ECDSA_P521_SHA256, false)),
-        Some("PKCS_ECDSA_P521_SHA384") => Ok((&rcgen::PKCS_ECDSA_P521_SHA384, false)),
-        Some("PKCS_ECDSA_P521_SHA512") => Ok((&rcgen::PKCS_ECDSA_P521_SHA512, false)),
+        Some("PKCS_ECDSA_P384_SHA384") => Ok((&rcgen::PKCS_ECDSA_P384_SHA384, false, false)),
+        Some("PKCS_ECDSA_P521_SHA256") => Ok((&rcgen::PKCS_ECDSA_P521_SHA256, false, false)),
+        Some("PKCS_ECDSA_P521_SHA384") => Ok((&rcgen::PKCS_ECDSA_P521_SHA384, false, false)),
+        Some("PKCS_ECDSA_P521_SHA512") => Ok((&rcgen::PKCS_ECDSA_P521_SHA512, false, false)),
 
-        Some("PKCS_ED25519") => Ok((&rcgen::PKCS_ED25519, false)),
+        Some("PKCS_ED25519") => Ok((&rcgen::PKCS_ED25519, false, false)),
 
-        Some("PKCS_ML_DSA_44") => Ok((&rcgen::PKCS_ML_DSA_44, false)),
-        Some("PKCS_ML_DSA_65") => Ok((&rcgen::PKCS_ML_DSA_65, false)),
-        Some("PKCS_ML_DSA_87") => Ok((&rcgen::PKCS_ML_DSA_87, false)),
+        Some("PKCS_ML_DSA_44") => Ok((&rcgen::PKCS_ML_DSA_44, false, false)),
+        Some("PKCS_ML_DSA_65") => Ok((&rcgen::PKCS_ML_DSA_65, false, false)),
+        Some("PKCS_ML_DSA_87") => Ok((&rcgen::PKCS_ML_DSA_87, false, false)),
 
-        Some("PKCS_RSA_SHA256") | Some("RSA") => Ok((&rcgen::PKCS_RSA_SHA256, true)),
-        Some("PKCS_RSA_SHA384") => Ok((&rcgen::PKCS_RSA_SHA384, true)),
-        Some("PKCS_RSA_SHA512") => Ok((&rcgen::PKCS_RSA_SHA512, true)),
+        Some("PKCS_RSA_SHA256") | Some("RSA") => Ok((&rcgen::PKCS_RSA_SHA256, false, true)),
+        Some("PKCS_RSA_SHA384") => Ok((&rcgen::PKCS_RSA_SHA384, false, true)),
+        Some("PKCS_RSA_SHA512") => Ok((&rcgen::PKCS_RSA_SHA512, false, true)),
 
         None => {
             if config
@@ -485,10 +510,10 @@ pub(crate) fn resolve_tls_cert_algo_config(
                 .is_some()
             {
                 // Similar to rcgen defaults (SHA256 hash), but it's RSA
-                Ok((&rcgen::PKCS_RSA_SHA256, true))
+                Ok((&rcgen::PKCS_RSA_SHA256, true, true))
             } else {
                 // Same as rcgen defaults
-                Ok((&rcgen::PKCS_ECDSA_P256_SHA256, false))
+                Ok((&rcgen::PKCS_ECDSA_P256_SHA256, true, false))
             }
         }
         _ => Err(
@@ -617,7 +642,7 @@ pub fn parse_acme_config(
     let post_obtain_command = first_value(config, "post_obtain_command");
 
     let client_config = build_rustls_client_config(no_verification)?;
-    let (algo, key_size) = resolve_tls_cert_config(config)?;
+    let (algo, algo_default, key_size) = resolve_tls_cert_config(config)?;
 
     if on_demand {
         let cache_path = resolve_cache_path(config);
@@ -645,6 +670,7 @@ pub fn parse_acme_config(
             profile: None,
             cert_algo: algo,
             cert_key_size: key_size,
+            cert_algo_default: algo_default,
         }))
     } else {
         let certified_key_lock = Arc::new(RwLock::new(None));
@@ -701,6 +727,7 @@ pub fn parse_acme_config(
             error_message: Arc::new(parking_lot::RwLock::new(None)),
             cert_algo: algo,
             cert_key_size: key_size,
+            cert_algo_default: algo_default,
         }))
     }
 }

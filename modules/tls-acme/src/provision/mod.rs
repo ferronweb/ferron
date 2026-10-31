@@ -81,7 +81,7 @@ pub async fn provision_certificate(
         .or_else(|| config.certificate_cache.cache_dir());
     let domains_label = config.domains.join(", ");
     let guard = if let Some(ref dir) = lock_dir {
-        let lock_key = crate::cache::get_cert_lock_key(&config.domains, config.profile.as_deref());
+        let lock_key = crate::cache::get_cert_lock_key(config);
         match dist_lock::acquire_with_timeout(
             dir,
             &lock_key,
@@ -235,7 +235,7 @@ async fn provision_with_providers(
         let client_config = config.rustls_client_config.clone();
 
         let account_cache_key = get_account_cache_key(&contact, &directory);
-        let certificate_cache_key = get_certificate_cache_key(&config.domains, profile.as_deref());
+        let certificate_cache_key = get_certificate_cache_key(config);
 
         let account_builder = instant_acme::Account::builder_with_http(Box::new(
             HttpsClientForAcme::new(client_config),

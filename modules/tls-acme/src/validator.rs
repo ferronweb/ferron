@@ -43,7 +43,7 @@ impl ConfigurationValidator for TlsAcmeConfigurationValidator {
         validate_directive!(config, validator_ctx.used_directives, key_algo, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
         validate_directive!(config, validator_ctx.used_directives, key_size, optional args(1) => [ServerConfigurationValue::Number(_, _)], {});
         let is_rsa = match crate::config::resolve_tls_cert_algo_config(config) {
-            Ok((_, is_rsa)) => is_rsa,
+            Ok((_, _, is_rsa)) => is_rsa,
             Err(e) => {
                 let span = config
                     .directives

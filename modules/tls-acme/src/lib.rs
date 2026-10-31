@@ -494,8 +494,7 @@ async fn run_acme_background_task(
 
         for config in configs.read().await.iter() {
             // Install TLS certificates from cache early
-            let certificate_cache_key =
-                crate::cache::get_certificate_cache_key(&config.domains, config.profile.as_deref());
+            let certificate_cache_key = crate::cache::get_certificate_cache_key(config);
             if let Some(serialized_data) =
                 config.certificate_cache.get(&certificate_cache_key).await
             {

@@ -152,9 +152,9 @@ pub fn get_account_cache_key(contact: &[String], directory: &str) -> String {
     )
 }
 
-/// Generates a certificate cache key from sorted domains and optional profile.
-pub fn get_certificate_cache_key(domains: &[String], profile: Option<&str>) -> String {
-    let mut sorted_domains = domains.to_vec();
+/// Generates a certificate cache key from ACME configuration and optional profile.
+pub fn get_certificate_cache_key(config: &crate::config::AcmeConfig) -> String {
+    let mut sorted_domains = config.domains.to_vec();
     sorted_domains.sort_unstable();
     let domains_joined = sorted_domains.join(",");
     format!(
@@ -162,9 +162,23 @@ pub fn get_certificate_cache_key(domains: &[String], profile: Option<&str>) -> S
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
             xxh3_128(
                 format!(
-                    "{}{}",
+                    "{}{}{}{}",
                     domains_joined,
-                    profile.map_or("".to_string(), |p| format!(";{p}"))
+                    config
+                        .profile
+                        .as_deref()
+                        .map_or("".to_string(), |p| format!(";{p}")),
+                    if config.cert_algo_default {
+                        String::new()
+                    } else {
+                        format!("{:?}", config.cert_algo)
+                    },
+                    match config.cert_key_size {
+                        Some(rcgen::RsaKeySize::_2048) => "2048",
+                        Some(rcgen::RsaKeySize::_3072) => "3072",
+                        Some(rcgen::RsaKeySize::_4096) => "4096",
+                        _ => "",
+                    }
                 )
                 .as_bytes()
             )
@@ -218,8 +232,8 @@ pub fn get_challenge_tls_key(identifier: &str) -> String {
 /// `get_certificate_cache_key` returns `certificate_<hash>`; this returns
 /// `lock_certificate_<hash>` so `ls lock_*` groups all cert locks together
 /// while keeping the cert/lock pairing obvious.
-pub fn get_cert_lock_key(domains: &[String], profile: Option<&str>) -> String {
-    format!("lock_{}", get_certificate_cache_key(domains, profile))
+pub fn get_cert_lock_key(config: &crate::config::AcmeConfig) -> String {
+    format!("lock_{}", get_certificate_cache_key(config))
 }
 
 /// Generates the lockfile key paired with an account cache key.
@@ -238,8 +252,48 @@ mod tests {
 
     #[test]
     fn test_key_conventions_have_no_extension_and_grouped_prefixes() {
-        let cert_key = get_certificate_cache_key(&["example.com".to_string()], None);
-        let lock_key = get_cert_lock_key(&["example.com".to_string()], None);
+        let crypto_provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+        let cert_key_config = crate::config::AcmeConfig {
+            cert_algo: &rcgen::PKCS_ECDSA_P256_SHA256,
+            cert_algo_default: true,
+            cert_key_size: None,
+            domains: vec!["example.com".to_string()],
+            profile: None,
+
+            rustls_client_config: rustls::ClientConfig::builder_with_provider(
+                crypto_provider.clone(),
+            )
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_webpki_verifier(
+                rustls::client::WebPkiServerVerifier::builder_with_provider(
+                    Arc::new(rustls::RootCertStore::from_iter(
+                        webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
+                    )),
+                    crypto_provider,
+                )
+                .build()
+                .unwrap(),
+            )
+            .with_no_client_auth(),
+            challenge_type: instant_acme::ChallengeType::Http01,
+            contact: vec![],
+            directory: "https://directory.placeholder.invalid".into(),
+            eab_key: None,
+            provider_list: Arc::new(RwLock::new(crate::config::AcmeProviderList::empty())),
+            account_cache: AcmeCache::Memory(Arc::new(Default::default())),
+            certificate_cache: AcmeCache::Memory(Arc::new(Default::default())),
+            certified_key_lock: Arc::new(Default::default()),
+            tls_alpn_01_data_lock: Arc::new(Default::default()),
+            http_01_data_lock: Arc::new(Default::default()),
+            dns_client: None,
+            account: None,
+            save_paths: None,
+            post_obtain_command: None,
+            error_message: Arc::new(Default::default()),
+        };
+        let cert_key = get_certificate_cache_key(&cert_key_config);
+        let lock_key = get_cert_lock_key(&cert_key_config);
         assert!(cert_key.starts_with("certificate_"));
         assert_eq!(lock_key, format!("lock_{cert_key}"));
         assert!(lock_key.starts_with("lock_certificate_"));
@@ -262,14 +316,8 @@ mod tests {
         assert_ne!(get_challenge_http_key("abc"), get_challenge_http_key("abd"));
 
         // Certificate key is order-independent (sorted domains).
-        let a = get_certificate_cache_key(
-            &["b.example.com".to_string(), "a.example.com".to_string()],
-            None,
-        );
-        let b = get_certificate_cache_key(
-            &["a.example.com".to_string(), "b.example.com".to_string()],
-            None,
-        );
+        let a = get_certificate_cache_key(&cert_key_config);
+        let b = get_certificate_cache_key(&cert_key_config);
         assert_eq!(a, b);
     }
 
