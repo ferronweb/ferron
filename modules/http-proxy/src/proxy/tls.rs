@@ -9,9 +9,7 @@ use crate::types::upstream::MtlsCredentials;
 
 #[allow(clippy::type_complexity)]
 pub static TLS_CLIENT_CONFIG_CACHE: LazyLock<
-    arc_swap::ArcSwap<
-        parking_lot::RwLock<HashMap<(bool, bool, bool, Option<usize>), Arc<ClientConfig>>>,
-    >,
+    arc_swap::ArcSwap<parking_lot::RwLock<HashMap<(bool, bool, bool), Arc<ClientConfig>>>>,
 > = LazyLock::new(|| arc_swap::ArcSwap::from_pointee(parking_lot::RwLock::new(HashMap::new())));
 
 #[inline]
@@ -68,25 +66,26 @@ fn build_tls_config(
 }
 
 #[inline]
-pub(super) fn cached_tls_config(
+pub(crate) fn cached_tls_config(
     http2: bool,
     http2_only: bool,
     no_verification: bool,
     mtls_credentials: Option<Arc<MtlsCredentials>>,
 ) -> Arc<ClientConfig> {
-    let tls_client_config_cache = TLS_CLIENT_CONFIG_CACHE.load();
-    let cache_key = (
-        http2,
-        http2_only,
-        no_verification,
-        mtls_credentials.as_ref().map(|c| Arc::as_ptr(c) as usize),
-    );
-    {
-        let cache_read = tls_client_config_cache.read();
-        if let Some(config) = cache_read.get(&cache_key).cloned() {
-            return config;
+    let tls_client_config_cache =
+        (mtls_credentials.is_none()).then(|| TLS_CLIENT_CONFIG_CACHE.load());
+    let cache_key = if let Some(tls_client_config_cache) = &tls_client_config_cache {
+        let cache_key = (http2, http2_only, no_verification);
+        {
+            let cache_read = tls_client_config_cache.read();
+            if let Some(config) = cache_read.get(&cache_key).cloned() {
+                return config;
+            }
         }
-    }
+        Some(cache_key)
+    } else {
+        None
+    };
 
     let config = Arc::new(build_tls_config(
         http2,
@@ -94,8 +93,13 @@ pub(super) fn cached_tls_config(
         no_verification,
         mtls_credentials,
     ));
-    let mut cache_write = tls_client_config_cache.write();
-    Arc::clone(cache_write.entry(cache_key).or_insert(config))
+    if let (Some(tls_client_config_cache), Some(cache_key)) = (&tls_client_config_cache, cache_key)
+    {
+        let mut cache_write = tls_client_config_cache.write();
+        Arc::clone(cache_write.entry(cache_key).or_insert(config))
+    } else {
+        config
+    }
 }
 
 #[inline]
