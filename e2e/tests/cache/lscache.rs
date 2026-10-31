@@ -1093,7 +1093,10 @@ async fn test_lscache_purge_stale_flag() {
         .get_with_headers(
             "/stale-test",
             &[
-                ("X-Test-Upstream-Cache-Control", "public,max-age=60,stale-while-revalidate=120"),
+                (
+                    "X-Test-Upstream-Cache-Control",
+                    "public,max-age=60,stale-while-revalidate=120",
+                ),
                 ("X-Test-Tag", "StaleTag"),
                 ("X-Test-Body", "stale-v1"),
             ],
@@ -1120,7 +1123,10 @@ async fn test_lscache_purge_stale_flag() {
         .get_with_headers(
             "/stale-test",
             &[
-                ("X-Test-Upstream-Cache-Control", "public,max-age=60,stale-while-revalidate=120"),
+                (
+                    "X-Test-Upstream-Cache-Control",
+                    "public,max-age=60,stale-while-revalidate=120",
+                ),
                 ("X-Test-Tag", "StaleTag"),
                 ("X-Test-Body", "stale-v2"),
             ],

@@ -166,11 +166,7 @@ async fn test_half_open_trial_timeout_releases_slot() {
 
     // The first request trips the circuit: the backend answers 503 and
     // `record_5xx` counts it as a failure.
-    let tripped = client
-        .get(format!("{base}/unstable"))
-        .send()
-        .await
-        .unwrap();
+    let tripped = client.get(format!("{base}/unstable")).send().await.unwrap();
     assert_eq!(tripped.status(), reqwest::StatusCode::SERVICE_UNAVAILABLE);
 
     // Wait out `open_duration` so the next request may take the half-open slot.
