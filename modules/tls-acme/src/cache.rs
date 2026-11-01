@@ -171,12 +171,12 @@ pub fn get_certificate_cache_key(config: &crate::config::AcmeConfig) -> String {
                     if config.cert_algo_default {
                         String::new()
                     } else {
-                        format!("{:?}", config.cert_algo)
+                        format!(";{:?}", config.cert_algo)
                     },
                     match config.cert_key_size {
-                        Some(rcgen::RsaKeySize::_2048) => "2048",
-                        Some(rcgen::RsaKeySize::_3072) => "3072",
-                        Some(rcgen::RsaKeySize::_4096) => "4096",
+                        Some(rcgen::RsaKeySize::_2048) => ";2048",
+                        Some(rcgen::RsaKeySize::_3072) => ";3072",
+                        Some(rcgen::RsaKeySize::_4096) => ";4096",
                         _ => "",
                     }
                 )
