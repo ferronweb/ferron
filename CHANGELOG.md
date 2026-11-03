@@ -22,6 +22,10 @@
 
 ### Fixed
 
+#### OCSP stapling
+
+- **Android and old Firefox compatibility**: for improved compatibility with Android and old Firefox versions, OCSP stapling functionality now uses SHA-1 issuer name and key hashes instead of SHA-256 by default, if possible.
+
 #### Forward proxy
 
 - **IP blocklist hardening**: IP addresses are now canonicalized before checking against the deny list, ensuring consistent matching across IPv4 and IPv6. Also, "current network" server addresses are now blocked by default.

@@ -130,32 +130,26 @@ pub(crate) async fn fetch_ocsp_response(
     client: &OcspHttpClient,
     chain: &[CertificateDer<'_>],
 ) -> anyhow::Result<Option<(Vec<u8>, SystemTime, Option<rasn_ocsp::CertStatus>)>> {
-    // Try SHA-256 first (preferred algorithm)
-    let response = fetch_ocsp_response_inner(client, chain, true).await;
-
-    // If SHA-256 succeeded, return immediately (do not downgrade to SHA-1)
-    if response.is_ok() {
-        return response;
-    }
-
     #[cfg(not(feature = "fips"))]
     {
-        // Only try SHA-1 fallback for specific error types
-        let should_try_sha1 = response.as_ref().is_err_and(|e| {
+        // Try SHA-1 first
+        // Had to be SHA-1, because of older Firefox versions, and Android 16+?
+        let response = fetch_ocsp_response_inner(client, chain, true).await;
+
+        // If SHA-1 succeeded (or failed unrecoverably), return immediately
+        // (do not upgrade to SHA-256)
+        if !response.as_ref().is_err_and(|e| {
             let e_message = e.to_string();
             e_message.starts_with("OCSP request failed with status ")
                 || e_message.starts_with("Failed to decode OCSP response:")
                 || e_message.starts_with("OCSP response status unsuccessful:")
-        });
-
-        if should_try_sha1 {
-            if let Ok(sha1_response) = fetch_ocsp_response_inner(client, chain, false).await {
-                return Ok(sha1_response);
-            }
+        }) {
+            return response;
         }
     }
 
-    response
+    // Fallback to SHA-256
+    fetch_ocsp_response_inner(client, chain, false).await
 }
 
 async fn fetch_ocsp_response_inner(
