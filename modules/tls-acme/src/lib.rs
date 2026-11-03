@@ -56,9 +56,9 @@ use crate::resolver::{AcmeResolverInner, TlsAcmeResolver};
 /// Shared state for the ACME background task.
 pub struct AcmeTaskState {
     /// ACME configs of the current configuration generation (both eager and
-    /// dynamically added on-demand). A reload swaps in a fresh list, so the
+    /// dynamically added on-demand). A reload starts a fresh list, so the
     /// previous generation's in-flight orders can finish with their own.
-    configs: parking_lot::Mutex<Arc<RwLock<Vec<crate::config::AcmeConfig>>>>,
+    configs: parking_lot::Mutex<ConfigGeneration>,
     /// On-demand configurations for lazy certificate issuance.
     pub on_demand_configs: Arc<RwLock<Vec<crate::config::AcmeOnDemandConfigData>>>,
     /// Channel sender for on-demand certificate requests.
@@ -94,7 +94,7 @@ impl AcmeTaskState {
     pub fn new() -> Self {
         let (tx, rx) = async_channel::unbounded();
         Self {
-            configs: parking_lot::Mutex::new(Arc::new(RwLock::new(Vec::new()))),
+            configs: parking_lot::Mutex::new(ConfigGeneration::current()),
             on_demand_configs: Arc::new(RwLock::new(Vec::new())),
             on_demand_tx: tx,
             on_demand_rx: rx,
@@ -112,15 +112,22 @@ impl AcmeTaskState {
     }
 
     /// ACME configs of the current configuration generation.
+    ///
+    /// The first caller after a reload, whether loading the new configuration
+    /// or resetting the old generation, starts the next generation's list.
     pub fn configs(&self) -> Arc<RwLock<Vec<crate::config::AcmeConfig>>> {
-        self.configs.lock().clone()
+        let mut generation = self.configs.lock();
+        if generation.reload_token.is_cancelled() {
+            *generation = ConfigGeneration::current();
+        }
+        generation.configs.clone()
     }
 
     async fn reset(&self) {
         // Used on reload: the next configuration generation starts from fresh
         // state, while the previous one's in-flight orders keep their configs,
         // and with them their challenge data.
-        *self.configs.lock() = Arc::new(RwLock::new(Vec::new()));
+        self.configs();
         self.on_demand_configs.write().await.clear();
         self.prune_challenge_locks().await;
         self.sni_resolver_lock.write().await.clear();
@@ -144,6 +151,22 @@ impl AcmeTaskState {
         let mut dirs = self.challenge_cache_dirs.blocking_write();
         if !dirs.contains(&dir) {
             dirs.push(dir);
+        }
+    }
+}
+
+/// One configuration generation's ACME configs, with the reload token that ends it.
+struct ConfigGeneration {
+    configs: Arc<RwLock<Vec<crate::config::AcmeConfig>>>,
+    reload_token: Arc<CancellationToken>,
+}
+
+impl ConfigGeneration {
+    /// An empty list for the generation the current reload token belongs to.
+    fn current() -> Self {
+        Self {
+            configs: Arc::new(RwLock::new(Vec::new())),
+            reload_token: ferron_core::shutdown::RELOAD_TOKEN.load_full(),
         }
     }
 }
@@ -402,6 +425,8 @@ impl Module for TlsAcmeModule {
         let done_token2 = done_token.clone();
 
         runtime.spawn_secondary_task(async move {
+            // Tells the reload watcher the task has ended, even by panicking.
+            let _done = done_token.drop_guard();
             cancel_token
                 .run_until_cancelled(run_acme_background_task(
                     configs,
@@ -416,7 +441,6 @@ impl Module for TlsAcmeModule {
                     event_sink,
                 ))
                 .await;
-            done_token.cancel();
         });
 
         runtime.spawn_secondary_task(async move {
@@ -675,6 +699,13 @@ async fn run_acme_background_task(
                                         &sni_hostname,
                                     )
                                     .await;
+
+                                    // After a reload, leave the hostname to the next
+                                    // generation, which loads it from the domain cache
+                                    // or receives the next request for it.
+                                    if drain2.is_cancelled() {
+                                        break;
+                                    }
 
                                     let acme_config = crate::on_demand::convert_on_demand_config(
                                         on_demand_data,
@@ -1124,6 +1155,10 @@ mod tests {
     async fn test_reset_keeps_challenge_data_of_live_configs() {
         let state = AcmeTaskState::new();
         let previous_configs = state.configs();
+        // Request a reload the way the admin API and SIGHUP do.
+        ferron_core::shutdown::RELOAD_TOKEN
+            .swap(Arc::new(CancellationToken::new()))
+            .cancel();
         let live: crate::challenge::Http01DataLock = Arc::new(RwLock::new(None));
         state.http_01_resolvers.write().await.push(live.clone());
         state
@@ -1134,8 +1169,12 @@ mod tests {
 
         state.reset().await;
 
-        // The next generation gets a fresh config list; the previous one keeps its own.
-        assert!(!Arc::ptr_eq(&previous_configs, &state.configs()));
+        // The next generation gets a fresh config list once; the previous one
+        // keeps its own.
+        let next_configs = state.configs();
+        assert!(!Arc::ptr_eq(&previous_configs, &next_configs));
+        state.reset().await;
+        assert!(Arc::ptr_eq(&next_configs, &state.configs()));
         // Challenge data still referenced by a draining order survives the reset,
         // and orphaned entries are dropped.
         let resolvers = state.http_01_resolvers.read().await;

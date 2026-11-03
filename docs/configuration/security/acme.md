@@ -246,7 +246,7 @@ example.com {
 
 Ferron automatically renews certificates before expiration. The renewal check runs every 10 seconds in the background. Ferron uses the ACME `renewalInfo` endpoint (RFC 9773) when available. Otherwise it falls back to a heuristic of 50% of certificate lifetime, capped at 24 hours before expiry.
 
-A configuration reload doesn't cancel an order in progress. The order finishes under the previous configuration (or is cancelled after 5 minutes at most), and the reloaded configuration uses its certificate from the cache.
+A configuration reload doesn't cancel an order in progress. The order finishes under the previous configuration, or is cancelled if it's still running after 5 minutes. With a file-based `cache` (the default), the reloaded configuration then installs the certificate from the cache.
 
 ## External Account Binding (EAB)
 

@@ -22,7 +22,7 @@
 
 #### Automatic TLS
 
-- **Certificate orders survive reloads**: a configuration reload no longer cancels an ACME order in progress. The order finishes (for up to 5 minutes), and the reloaded configuration uses its certificate, so frequent reloads no longer stall certificate issuance. ([GitHub issue](https://github.com/ferronweb/ferron/issues/993))
+- **Certificate orders survive reloads**: a configuration reload no longer cancels an ACME order in progress. The order finishes (for up to 5 minutes), and with a file-based cache the reloaded configuration uses its certificate, so frequent reloads no longer stall certificate issuance. ([GitHub issue](https://github.com/ferronweb/ferron/issues/993))
 
 ### Fixed
 
