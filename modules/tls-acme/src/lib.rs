@@ -55,8 +55,10 @@ use crate::resolver::{AcmeResolverInner, TlsAcmeResolver};
 
 /// Shared state for the ACME background task.
 pub struct AcmeTaskState {
-    /// Shared list of ACME configs (both eager and dynamically added on-demand).
-    pub configs: Arc<RwLock<Vec<crate::config::AcmeConfig>>>,
+    /// ACME configs of the current configuration generation (both eager and
+    /// dynamically added on-demand). A reload swaps in a fresh list, so the
+    /// previous generation's in-flight orders can finish with their own.
+    configs: parking_lot::Mutex<Arc<RwLock<Vec<crate::config::AcmeConfig>>>>,
     /// On-demand configurations for lazy certificate issuance.
     pub on_demand_configs: Arc<RwLock<Vec<crate::config::AcmeOnDemandConfigData>>>,
     /// Channel sender for on-demand certificate requests.
@@ -92,7 +94,7 @@ impl AcmeTaskState {
     pub fn new() -> Self {
         let (tx, rx) = async_channel::unbounded();
         Self {
-            configs: Arc::new(RwLock::new(Vec::new())),
+            configs: parking_lot::Mutex::new(Arc::new(RwLock::new(Vec::new()))),
             on_demand_configs: Arc::new(RwLock::new(Vec::new())),
             on_demand_tx: tx,
             on_demand_rx: rx,
@@ -109,14 +111,32 @@ impl AcmeTaskState {
         *self.event_sink.write() = Some(event_sink);
     }
 
+    /// ACME configs of the current configuration generation.
+    pub fn configs(&self) -> Arc<RwLock<Vec<crate::config::AcmeConfig>>> {
+        self.configs.lock().clone()
+    }
+
     async fn reset(&self) {
-        // Used while shutting down the ACME module
-        self.configs.write().await.clear();
+        // Used on reload: the next configuration generation starts from fresh
+        // state, while the previous one's in-flight orders keep their configs,
+        // and with them their challenge data.
+        *self.configs.lock() = Arc::new(RwLock::new(Vec::new()));
         self.on_demand_configs.write().await.clear();
-        self.tls_alpn_01_resolvers.write().await.clear();
-        self.http_01_resolvers.write().await.clear();
+        self.prune_challenge_locks().await;
         self.sni_resolver_lock.write().await.clear();
         self.challenge_cache_dirs.write().await.clear();
+    }
+
+    /// Drops challenge data locks that no live config refers to any more.
+    async fn prune_challenge_locks(&self) {
+        self.tls_alpn_01_resolvers
+            .write()
+            .await
+            .retain(|lock| Arc::strong_count(lock) > 1);
+        self.http_01_resolvers
+            .write()
+            .await
+            .retain(|lock| Arc::strong_count(lock) > 1);
     }
 
     /// Registers a file cache directory for distributed challenge fallback (deduplicated).
@@ -222,7 +242,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                 }
 
                 // Add to configs list
-                task_state.configs.blocking_write().push(acme_config);
+                task_state.configs().blocking_write().push(acme_config);
 
                 let tls_alpn_resolvers = if challenge_type == ChallengeType::TlsAlpn01 {
                     Some(task_state.tls_alpn_01_resolvers.clone())
@@ -320,7 +340,8 @@ impl Module for TlsAcmeModule {
     }
 
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
-        let configs_guard = self.task_state.configs.blocking_read();
+        let configs = self.task_state.configs();
+        let configs_guard = configs.blocking_read();
         let configs_count = configs_guard.len();
         if configs_count == 0 && self.task_state.on_demand_configs.blocking_read().is_empty() {
             // No eager or on-demand configs, nothing to do
@@ -367,7 +388,6 @@ impl Module for TlsAcmeModule {
         let on_demand_configs = state.on_demand_configs.blocking_read().clone();
         let memory_account_cache = state.memory_account_cache.clone();
         let on_demand_rx = state.on_demand_rx.clone();
-        let configs = state.configs.clone();
         let sni_resolver_lock = state.sni_resolver_lock.clone();
         let tls_alpn_01_resolvers = state.tls_alpn_01_resolvers.clone();
         let http_01_resolvers = state.http_01_resolvers.clone();
@@ -376,6 +396,10 @@ impl Module for TlsAcmeModule {
 
         let cancel_token2 = cancel_token.clone();
         let state2 = state.clone();
+        let drain_token = CancellationToken::new();
+        let drain_token2 = drain_token.clone();
+        let done_token = CancellationToken::new();
+        let done_token2 = done_token.clone();
 
         runtime.spawn_secondary_task(async move {
             cancel_token
@@ -388,25 +412,45 @@ impl Module for TlsAcmeModule {
                     tls_alpn_01_resolvers,
                     http_01_resolvers,
                     challenge_cache_dirs,
+                    drain_token,
                     event_sink,
                 ))
                 .await;
+            done_token.cancel();
         });
 
         runtime.spawn_secondary_task(async move {
             // Wait until reload is requested
             ferron_core::shutdown::RELOAD_TOKEN.load().cancelled().await;
 
-            // Cancel the ACME background task and reset the state
-            cancel_token2.cancel();
+            // Give the next configuration generation fresh state, and let this
+            // generation's in-flight order finish instead of throwing away its
+            // progress. Its certificate reaches the next generation through the
+            // cache. A hung order is cancelled after `RELOAD_DRAIN_TIMEOUT`.
             state2.reset().await;
+            drain_token2.cancel();
+            if tokio::time::timeout(RELOAD_DRAIN_TIMEOUT, done_token2.cancelled())
+                .await
+                .is_err()
+            {
+                cancel_token2.cancel();
+                done_token2.cancelled().await;
+            }
+            // This generation's configs are gone, so drop their challenge data.
+            state2.prune_challenge_locks().await;
         });
 
         Ok(())
     }
 }
 
+/// How long an order in progress may run on after a reload before it's cancelled.
+const RELOAD_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// Runs the ACME provisioning loop for both eager and on-demand configs.
+///
+/// Once `drain` is cancelled (on reload), it starts no new orders and returns
+/// after the one in progress.
 #[allow(clippy::too_many_arguments)]
 async fn run_acme_background_task(
     configs: Arc<RwLock<Vec<crate::config::AcmeConfig>>>,
@@ -417,6 +461,7 @@ async fn run_acme_background_task(
     tls_alpn_01_resolvers: Arc<RwLock<Vec<crate::challenge::TlsAlpn01DataLock>>>,
     http_01_resolvers: Arc<RwLock<Vec<crate::challenge::Http01DataLock>>>,
     challenge_cache_dirs: Arc<RwLock<Vec<std::path::PathBuf>>>,
+    drain: CancellationToken,
     event_sink: Arc<ferron_observability::CompositeEventSink>,
 ) {
     // Track which (hostname, port) combinations we've already processed
@@ -530,9 +575,13 @@ async fn run_acme_background_task(
     if !on_demand_configs.is_empty() {
         let event_sink2 = event_sink.clone();
         let configs2 = configs.clone();
+        let drain2 = drain.clone();
         tokio::spawn(async move {
-            // On-demand request loop
-            while let Ok((sni_hostname, port)) = on_demand_rx.recv().await {
+            // On-demand request loop; after a reload, the next generation's
+            // loop receives the requests.
+            while let Some(Ok((sni_hostname, port))) =
+                drain2.run_until_cancelled(on_demand_rx.recv()).await
+            {
                 emit_log(
                     &event_sink2,
                     LogLevel::Info,
@@ -678,6 +727,9 @@ async fn run_acme_background_task(
             }
 
             for config in configs_guard.iter_mut() {
+                if drain.is_cancelled() {
+                    return;
+                }
                 if config.domains.is_empty() {
                     continue;
                 }
@@ -771,7 +823,14 @@ async fn run_acme_background_task(
             .unwrap_or(0) as u64
             + std::process::id() as u64)
             % 2000;
-        tokio::time::sleep(std::time::Duration::from_millis(10_000 + jitter_ms)).await;
+        let cycle_delay = std::time::Duration::from_millis(10_000 + jitter_ms);
+        if drain
+            .run_until_cancelled(tokio::time::sleep(cycle_delay))
+            .await
+            .is_none()
+        {
+            return;
+        }
     }
 }
 
@@ -1055,4 +1114,37 @@ fn resolve_dns_client_from_config(
     Ok(Some(dns_ctx.client.ok_or(anyhow::anyhow!(
         "No DNS client configured for ACME DNS-01 challenge (provider: {provider_name})."
     ))?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_reset_keeps_challenge_data_of_live_configs() {
+        let state = AcmeTaskState::new();
+        let previous_configs = state.configs();
+        let live: crate::challenge::Http01DataLock = Arc::new(RwLock::new(None));
+        state.http_01_resolvers.write().await.push(live.clone());
+        state
+            .http_01_resolvers
+            .write()
+            .await
+            .push(Arc::new(RwLock::new(None)));
+
+        state.reset().await;
+
+        // The next generation gets a fresh config list; the previous one keeps its own.
+        assert!(!Arc::ptr_eq(&previous_configs, &state.configs()));
+        // Challenge data still referenced by a draining order survives the reset,
+        // and orphaned entries are dropped.
+        let resolvers = state.http_01_resolvers.read().await;
+        assert_eq!(resolvers.len(), 1);
+        assert!(Arc::ptr_eq(&resolvers[0], &live));
+        drop(resolvers);
+
+        drop(live);
+        state.prune_challenge_locks().await;
+        assert!(state.http_01_resolvers.read().await.is_empty());
+    }
 }
