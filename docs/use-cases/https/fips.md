@@ -84,7 +84,7 @@ Session ticket encryption uses AES-256-CBC with HMAC-SHA256 authentication in En
 
 ### OCSP stapling
 
-FIPS builds use SHA-256 or stronger for OCSP request and response hashing. SHA-1 requests (which would be the default in non-FIPS builds) are disabled. OCSP response signatures must use RSA (2048-bit or larger) or ECDSA on NIST curves with SHA-256, SHA-384, or SHA-512. RSA-SHA1, Ed25519, and secp256k1 signatures are rejected. See [OCSP stapling](/docs/configuration/security/ocsp).
+FIPS builds use SHA-256 or stronger for OCSP request and response hashing. SHA-1 requests (which would be the default in non-FIPS builds) are disabled (this might cause compatibility issues with older Firefox and some Android devices, so disable OCSP stapling if such problems occur). OCSP response signatures must use RSA (2048-bit or larger) or ECDSA on NIST curves with SHA-256, SHA-384, or SHA-512. RSA-SHA1, Ed25519, and secp256k1 signatures are rejected. See [OCSP stapling](/docs/configuration/security/ocsp).
 
 ### Password hashing
 
