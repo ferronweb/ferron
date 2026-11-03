@@ -232,7 +232,7 @@ example.com {
 
 - **Challenge sync**: the node creating the order publishes `challenge_http_*` / `challenge_tls_*` files (15-minute TTL). Peers serve CA validation from these files when their in-memory locks miss, so validation succeeds no matter which node the CA reaches.
 - **One order at a time**: before ordering, a node takes the paired `lock_certificate_*` lockfile (atomic create). Peers skip that cycle and pick up the resulting `certificate_*` file later. On-demand `hostname_*` appends take `lock_hostname_*` the same way.
-- **Self-healing locks**: the holder refreshes a heartbeat every 30 seconds. A lock without heartbeat for 5 minutes is treated as stale (crashed holder) and broken by the next contender, which logs a warning. Releases only delete their own lock, never a peer's.
+- **Self-healing locks**: the holder refreshes a heartbeat every 30 seconds. A lock without heartbeat for 5 minutes is treated as stale (crashed holder) and broken by the next contender, which logs a warning. An order cancelled by a configuration reload removes its lock at once, so the next cycle can order again. Releases only delete their own lock, never a peer's.
 - **Herd damping**: skipped cycles return to the 10-second loop, and cycle sleeps include jitter so restarted nodes desynchronize.
 
 **Requirements and notes:**

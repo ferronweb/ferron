@@ -22,6 +22,10 @@
 
 ### Fixed
 
+#### Automatic TLS
+
+- **Orphaned provisioning locks after reloads**: when a configuration reload cancelled an ACME order in progress, its `lock_certificate_*` lockfile stayed in the cache, and the domain got no certificate until the 5-minute lock lease expired. The lockfile is now removed when the order is cancelled. ([GitHub issue](https://github.com/ferronweb/ferron/issues/987))
+
 #### OCSP stapling
 
 - **Android and old Firefox compatibility**: for improved compatibility with Android and old Firefox versions, OCSP stapling functionality now uses SHA-1 issuer name and key hashes instead of SHA-256 by default, if possible.
