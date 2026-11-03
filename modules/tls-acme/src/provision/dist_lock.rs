@@ -148,7 +148,7 @@ impl DistributedLockGuard {
 
     /// Releases the lock if it still holds our token. Always aborts the heartbeat.
     pub async fn release(mut self) {
-        if let Some(handle) = self.heartbeat.take() {
+        if let Some(handle) = &self.heartbeat {
             handle.abort();
         }
         let path = self.dir.join(&self.key);
@@ -156,17 +156,20 @@ impl DistributedLockGuard {
         let ours = tokio::fs::read(&path)
             .await
             .ok()
-            .is_some_and(|b| self.holds(&b));
+            .is_some_and(|b| holds(&b, &self.owner, self.started_at));
         if ours {
             let _ = tokio::fs::remove_file(&path).await;
         }
+        // Released: `Drop` has nothing left to do. Until here, a cancelled
+        // `release()` still leaves the handle for `Drop` to clean up after.
+        self.heartbeat = None;
     }
+}
 
-    /// Whether lockfile `bytes` still carry this guard's owner token.
-    fn holds(&self, bytes: &[u8]) -> bool {
-        serde_json::from_slice::<LockHeader>(bytes)
-            .is_ok_and(|h| h.owner == self.owner && h.started_at_unix == self.started_at)
-    }
+/// Whether lockfile `bytes` still carry the given owner token.
+fn holds(bytes: &[u8], owner: &str, started_at: u64) -> bool {
+    serde_json::from_slice::<LockHeader>(bytes)
+        .is_ok_and(|h| h.owner == owner && h.started_at_unix == started_at)
 }
 
 impl Drop for DistributedLockGuard {
@@ -176,13 +179,22 @@ impl Drop for DistributedLockGuard {
         if let Some(handle) = self.heartbeat.take() {
             handle.abort();
             // Dropped without `release()`, e.g. when a configuration reload
-            // cancels an in-flight order. Remove our lockfile synchronously, so
-            // it is gone before the restarted ACME task's first cycle; otherwise
-            // that task would treat it as a live peer's lock until the lease
-            // expires. The lease remains the backstop for crashed holders.
+            // cancels an in-flight order. Remove our lockfile, or the restarted
+            // ACME task would treat it as a live peer's lock until the lease
+            // expires; its acquire retries far longer than the removal takes.
+            // The lease remains the backstop for crashed holders.
             let path = self.dir.join(&self.key);
-            if std::fs::read(&path).is_ok_and(|b| self.holds(&b)) {
-                let _ = std::fs::remove_file(&path);
+            let owner = std::mem::take(&mut self.owner);
+            let started_at = self.started_at;
+            let remove = move || {
+                if std::fs::read(&path).is_ok_and(|b| holds(&b, &owner, started_at)) {
+                    let _ = std::fs::remove_file(&path);
+                }
+            };
+            // Off the async worker, so a hung cache filesystem can't stall it.
+            match tokio::runtime::Handle::try_current() {
+                Ok(runtime) => drop(runtime.spawn_blocking(remove)),
+                Err(_) => remove(),
             }
         }
     }
@@ -505,10 +517,10 @@ mod tests {
                 .unwrap();
         // A reload cancels the provisioning future, dropping the guard unreleased.
         drop(guard);
-        assert!(!tokio::fs::try_exists(dir.join(key)).await.unwrap());
-        // The next acquirer gets the lock at once instead of waiting for the lease.
+        // The next acquirer gets the lock within its retry window instead of
+        // waiting for the lease, without having to break a stale lock.
         let (next, stale_broken) =
-            acquire_with_timeout(&dir, key, "example.com", "dir", Duration::from_millis(100))
+            acquire_with_timeout(&dir, key, "example.com", "dir", Duration::from_secs(5))
                 .await
                 .unwrap();
         assert!(next.is_some());
@@ -536,6 +548,8 @@ mod tests {
             .await
             .unwrap();
         drop(guard);
+        // Give the background removal time to run before checking.
+        tokio::time::sleep(Duration::from_millis(200)).await;
         assert!(tokio::fs::try_exists(dir.join(key)).await.unwrap());
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }
