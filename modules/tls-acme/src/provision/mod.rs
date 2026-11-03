@@ -29,7 +29,7 @@ use self::account::{cached_credentials_unless, create_new_account, HttpsClientFo
 use self::cert_install::install_certified_key;
 use self::challenge::cleanup_challenge_data;
 use self::csr::generate_csr;
-use self::keyed_lock::{ACCOUNT_LOCKS, DNS_CHALLENGE_LOCKS};
+use self::keyed_lock::{ACCOUNT_LOCKS, NAME_LOCKS};
 use self::validity::check_certificate_validity_or_install_cached;
 
 /// Emits a lock lifecycle counter (`ferron.acme.lock_*_total`).
@@ -75,6 +75,12 @@ pub async fn provision_certificate(
     if check_certificate_validity_or_install_cached(config, event_sink).await? {
         return Ok(false);
     }
+
+    // Orders run concurrently. Orders sharing a name would collide on its
+    // challenge (a TLS-ALPN-01 certificate, a DNS-01 `_acme-challenge` record)
+    // or on its lockfile, so they take turns; the re-check below then finds a
+    // certificate the previous order obtained.
+    let _name_guards = lock_names(&config.domains).await;
 
     // Fast path found nothing valid; serialize orders across nodes sharing the cache.
     let lock_dir = config
@@ -501,14 +507,6 @@ async fn provision_certificate_inner(
         }
     };
 
-    // Orders whose names share an `_acme-challenge` record (such as
-    // example.com and *.example.com in separate host blocks) would overwrite
-    // each other's record, so they take turns, held until cleanup.
-    let _dns_challenge_guards = if config.challenge_type == instant_acme::ChallengeType::Dns01 {
-        lock_dns_challenge_names(&config.domains).await
-    } else {
-        Vec::new()
-    };
     let mut dns_01_domains = Vec::new();
     let mut authorizations = order.authorizations();
     while let Some(auth) = authorizations.next().await {
@@ -998,16 +996,22 @@ async fn provision_certificate_inner(
     Ok(())
 }
 
-/// Takes the DNS-01 record locks for `domains`, in a fixed order so that
-/// orders sharing several names can't deadlock.
-async fn lock_dns_challenge_names(domains: &[String]) -> Vec<tokio::sync::OwnedMutexGuard<()>> {
-    let names: std::collections::BTreeSet<&str> = domains
+/// Takes the locks for the names in `domains`, compared the way DNS compares
+/// them and taken in a fixed order, so orders sharing names can't deadlock.
+async fn lock_names(domains: &[String]) -> Vec<tokio::sync::OwnedMutexGuard<()>> {
+    let names: std::collections::BTreeSet<String> = domains
         .iter()
-        .map(|domain| domain.strip_prefix("*.").unwrap_or(domain))
+        .map(|domain| {
+            domain
+                .strip_prefix("*.")
+                .unwrap_or(domain)
+                .trim_end_matches('.')
+                .to_ascii_lowercase()
+        })
         .collect();
     let mut guards = Vec::with_capacity(names.len());
     for name in names {
-        guards.push(DNS_CHALLENGE_LOCKS.lock(name).await);
+        guards.push(NAME_LOCKS.lock(&name).await);
     }
     guards
 }

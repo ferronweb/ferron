@@ -246,7 +246,7 @@ example.com {
 
 Ferron automatically renews certificates before expiration. The renewal check runs every 10 seconds in the background. Ferron uses the ACME `renewalInfo` endpoint (RFC 9773) when available. Otherwise it falls back to a heuristic of 50% of certificate lifetime, capped at 24 hours before expiry.
 
-The background task obtains and renews up to 4 certificates at once. Orders that use the same ACME account create it only once, and DNS-01 orders that write the same `_acme-challenge` record (for example, for `example.com` and `*.example.com` in separate host blocks) run one after another.
+The background task obtains and renews up to 4 certificates at once. Within one Ferron instance, orders that use the same ACME account create it only once, and orders that share a name (for example, `example.com` and `*.example.com` in separate host blocks, which share an `_acme-challenge` record) run one after another.
 
 ## External Account Binding (EAB)
 

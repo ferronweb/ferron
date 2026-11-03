@@ -1,16 +1,16 @@
 //! Process-wide async locks keyed by name.
 //!
 //! Certificates are provisioned concurrently, so steps that touch state shared
-//! between orders (an ACME account, a DNS-01 `_acme-challenge` record) take the
-//! lock for that state's key first.
+//! between orders (an ACME account, the challenge for a name) take the lock for
+//! that state's key first. The locks work within one process only.
 
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 /// Serializes loading, creating, and recreating each cached ACME account.
 pub(crate) static ACCOUNT_LOCKS: LazyLock<KeyedLocks> = LazyLock::new(KeyedLocks::default);
-/// Serializes orders that write the same `_acme-challenge` TXT record.
-pub(crate) static DNS_CHALLENGE_LOCKS: LazyLock<KeyedLocks> = LazyLock::new(KeyedLocks::default);
+/// Serializes orders that share a name, whose challenges would collide.
+pub(crate) static NAME_LOCKS: LazyLock<KeyedLocks> = LazyLock::new(KeyedLocks::default);
 
 /// Async mutexes keyed by name, created on first use.
 #[derive(Default)]
