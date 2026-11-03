@@ -26,7 +26,7 @@ use crate::{emit_log, emit_metric};
 
 use self::account::{create_new_account, HttpsClientForAcme};
 use self::cert_install::install_certified_key;
-use self::challenge::cleanup_challenge_data;
+use self::challenge::{cleanup_challenge_data, wait_for_dns_propagation};
 use self::csr::generate_csr;
 use self::validity::check_certificate_validity_or_install_cached;
 
@@ -661,7 +661,7 @@ async fn provision_certificate_inner(
                         .update_record(&ferron_dns::DnsRecord {
                             name: challenge_domain,
                             record_type: ferron_dns::DnsRecordType::TXT,
-                            value: dns_value,
+                            value: dns_value.clone(),
                             ttl,
                         })
                         .await?;
@@ -676,7 +676,7 @@ async fn provision_certificate_inner(
                             (
                                 "ferron.acme.dns_challenge_domain",
                                 ferron_observability::LogAttributeValue::String(
-                                    challenge_domain_log,
+                                    challenge_domain_log.clone(),
                                 ),
                             ),
                             (
@@ -686,8 +686,7 @@ async fn provision_certificate_inner(
                         ],
                     );
 
-                    // Wait for DNS propagation
-                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    wait_for_dns_propagation(&challenge_domain_log, &dns_value, event_sink).await;
                     dns_01_domains.push(identifier.clone());
                 } else {
                     return Err(

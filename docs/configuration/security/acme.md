@@ -75,6 +75,8 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 
 **Requirements:** Configure a DNS provider module. The module supports wildcard domains. The `dns` block must specify the `provider` name and any provider-specific credentials. See [DNS providers](/docs/configuration/security/dns-providers) for the full list of supported providers and their directives.
 
+After creating the record, Ferron queries the zone's authoritative nameservers every 2 seconds. It asks the CA to validate as soon as all of them serve the record, or after 60 seconds at most. If Ferron can't resolve the zone's nameservers (for example, for a private zone), it waits the full 60 seconds.
+
 ### Configuration parameters
 
 | Parameter                       | Type                               | Default                                                                       | Description                                           |
@@ -345,7 +347,7 @@ Certificate issuance failed. The log message includes the affected domains. Chec
 
 - Make sure you configure the DNS provider correctly with valid credentials.
 - Check that the provider has permission to create TXT records for the domain.
-- DNS propagation may take longer than 60 seconds for some providers. In these cases, the ACME CA will retry validation.
+- If the log shows `DNS-01 record for ... isn't served by all authoritative nameservers after 60 seconds`, the provider is slow to publish records, and validation may fail. Ferron retries on later cycles.
 
 ### Verifying certificates
 
@@ -389,6 +391,9 @@ The ACME background task emits log events and metrics through the configured obs
 | `DEBUG` | `ACME <type> challenge initiated for ...`                                 | Challenge setup started                 |
 | `DEBUG` | `ACME <type> challenge solved for ...`                                    | Challenge ready for validation          |
 | `DEBUG` | `DNS-01 record created for _acme-challenge.<domain>, TTL <ttl>`           | DNS record published                    |
+| `DEBUG` | `DNS-01 record for _acme-challenge.<domain> is served by all authoritative nameservers` | DNS record propagated |
+| `DEBUG` | `Couldn't resolve the authoritative nameservers for _acme-challenge.<domain>, waiting 60 seconds for DNS propagation` | Propagation not checked, fixed wait |
+| `WARN`  | `DNS-01 record for _acme-challenge.<domain> isn't served by all authoritative nameservers after 60 seconds, requesting validation anyway` | Slow DNS propagation |
 | `DEBUG` | `DNS-01 record cleanup completed for _acme-challenge.<domain>`            | DNS record removed                      |
 | `DEBUG` | `Certificate installed for ..., chain length: N`                          | Certificate loaded into TLS config      |
 
@@ -418,6 +423,9 @@ In OTLP `log_style modern`, the `summary` field acts as the log body and Ferron 
 | ACME challenge initiated            | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string)                                                               |
 | ACME challenge solved               | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string)                                                               |
 | ACME DNS-01 record created          | DEBUG | `ferron.acme.dns_challenge_domain` (string), `ferron.acme.dns_ttl` (int)                                                            |
+| ACME DNS-01 record propagated       | DEBUG | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
+| ACME DNS-01 propagation unchecked   | DEBUG | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
+| ACME DNS-01 record not propagated   | WARN  | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
 | ACME DNS-01 record cleanup          | DEBUG | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
 | ACME lock stale, broken             | WARN  | `ferron.acme.domains` (string), `ferron.acme.lock_key` (string): stale lockfile cleared after heartbeat lease expiry                |
 | ACME provisioning skipped           | DEBUG | `ferron.acme.domains` (string): peer holds the provisioning lock; this cycle is skipped                                             |

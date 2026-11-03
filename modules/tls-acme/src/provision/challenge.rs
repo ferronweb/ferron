@@ -1,7 +1,87 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::config::AcmeConfig;
 use crate::emit_log;
+
+/// Longest wait for a DNS-01 record to propagate (the former fixed delay).
+const DNS_PROPAGATION_TIMEOUT: Duration = Duration::from_secs(60);
+/// How often the authoritative nameservers are queried while waiting.
+const DNS_PROPAGATION_POLL_INTERVAL: Duration = Duration::from_secs(2);
+
+/// Waits until the zone's authoritative nameservers serve a DNS-01 record.
+///
+/// Gives up after [`DNS_PROPAGATION_TIMEOUT`] and lets the CA validate anyway.
+/// When the nameservers can't be resolved (for example for a private zone),
+/// it waits the full timeout instead.
+pub(crate) async fn wait_for_dns_propagation(
+    challenge_domain: &str,
+    value: &str,
+    event_sink: &Arc<ferron_observability::CompositeEventSink>,
+) {
+    let deadline = tokio::time::Instant::now() + DNS_PROPAGATION_TIMEOUT;
+    let attributes = || {
+        vec![(
+            "ferron.acme.dns_challenge_domain",
+            ferron_observability::LogAttributeValue::String(challenge_domain.to_string()),
+        )]
+    };
+
+    let check = tokio::time::timeout_at(
+        deadline,
+        ferron_dns::AuthoritativeTxtCheck::new(challenge_domain),
+    )
+    .await;
+    let Ok(Some(check)) = check else {
+        emit_log(
+            event_sink,
+            ferron_observability::LogLevel::Debug,
+            "ACME DNS-01 propagation unchecked",
+            &format!(
+                "Couldn't resolve the authoritative nameservers for {challenge_domain}, \
+                 waiting {} seconds for DNS propagation",
+                DNS_PROPAGATION_TIMEOUT.as_secs()
+            ),
+            "ferron-tls-acme",
+            attributes(),
+        );
+        tokio::time::sleep_until(deadline).await;
+        return;
+    };
+
+    let served = tokio::time::timeout_at(deadline, async {
+        while !check.is_served(value).await {
+            tokio::time::sleep(DNS_PROPAGATION_POLL_INTERVAL).await;
+        }
+    })
+    .await
+    .is_ok();
+    if served {
+        emit_log(
+            event_sink,
+            ferron_observability::LogLevel::Debug,
+            "ACME DNS-01 record propagated",
+            &format!(
+                "DNS-01 record for {challenge_domain} is served by all authoritative nameservers"
+            ),
+            "ferron-tls-acme",
+            attributes(),
+        );
+    } else {
+        emit_log(
+            event_sink,
+            ferron_observability::LogLevel::Warn,
+            "ACME DNS-01 record not propagated",
+            &format!(
+                "DNS-01 record for {challenge_domain} isn't served by all authoritative \
+                 nameservers after {} seconds, requesting validation anyway",
+                DNS_PROPAGATION_TIMEOUT.as_secs()
+            ),
+            "ferron-tls-acme",
+            attributes(),
+        );
+    }
+}
 
 /// Cleans up challenge data after certificate issuance.
 ///

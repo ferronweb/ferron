@@ -167,13 +167,7 @@ pub async fn separate_subdomain_from_domain_name(domain_name: &str) -> (String, 
         .unwrap_or(domain_name)
         .split('.')
         .collect();
-    let Ok(resolver) = hickory_resolver::Resolver::builder_tokio()
-        .unwrap_or(hickory_resolver::Resolver::builder_with_config(
-            hickory_resolver::config::ResolverConfig::default(),
-            hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
-        ))
-        .build()
-    else {
+    let Some(resolver) = system_resolver() else {
         return ("".to_string(), parts.join("."));
     };
 
@@ -191,4 +185,93 @@ pub async fn separate_subdomain_from_domain_name(domain_name: &str) -> (String, 
     }
 
     ("".to_string(), parts.join("."))
+}
+
+/// Builds a resolver from the system configuration, or the default one.
+fn system_resolver() -> Option<hickory_resolver::TokioResolver> {
+    hickory_resolver::Resolver::builder_tokio()
+        .unwrap_or(hickory_resolver::Resolver::builder_with_config(
+            hickory_resolver::config::ResolverConfig::default(),
+            hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+        ))
+        .build()
+        .ok()
+}
+
+/// Checks a TXT record on every authoritative nameserver of its zone.
+///
+/// Confirms that a record created through a [`DnsClient`] (for example an
+/// ACME DNS-01 challenge) is visible to the servers that validators query.
+pub struct AuthoritativeTxtCheck {
+    /// Fully qualified record name.
+    name: String,
+    /// One uncached, non-recursive resolver per nameserver, over all of its addresses.
+    nameservers: Vec<hickory_resolver::TokioResolver>,
+}
+
+impl AuthoritativeTxtCheck {
+    /// Finds the authoritative nameservers of the zone that contains `name`.
+    ///
+    /// Returns `None` when the zone, its nameservers, or their addresses can't
+    /// be resolved, for example for private zones the system resolver can't see.
+    pub async fn new(name: &str) -> Option<Self> {
+        use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
+        use hickory_resolver::proto::rr::RData;
+
+        let name = format!("{}.", name.trim_end_matches('.'));
+        let resolver = system_resolver()?;
+        let (_, zone) = separate_subdomain_from_domain_name(&name).await;
+        let ns_lookup = resolver.ns_lookup(format!("{zone}.")).await.ok()?;
+
+        let mut options = ResolverOpts::default();
+        options.cache_size = 0;
+        options.recursion_desired = false;
+
+        let mut nameservers = Vec::new();
+        for record in ns_lookup.answers() {
+            let RData::NS(ns) = &record.data else {
+                continue;
+            };
+            let Ok(addresses) = resolver.lookup_ip(ns.0.clone()).await else {
+                continue;
+            };
+            let servers: Vec<_> = addresses
+                .iter()
+                .map(NameServerConfig::udp_and_tcp)
+                .collect();
+            if servers.is_empty() {
+                continue;
+            }
+            if let Ok(nameserver) = hickory_resolver::Resolver::builder_with_config(
+                ResolverConfig::from_parts(None, Vec::new(), servers),
+                hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+            )
+            .with_options(options.clone())
+            .build()
+            {
+                nameservers.push(nameserver);
+            }
+        }
+
+        (!nameservers.is_empty()).then_some(Self { name, nameservers })
+    }
+
+    /// Whether every nameserver serves a TXT record for the name with exactly `value`.
+    pub async fn is_served(&self, value: &str) -> bool {
+        use hickory_resolver::proto::rr::RData;
+
+        for nameserver in &self.nameservers {
+            let Ok(lookup) = nameserver.txt_lookup(self.name.as_str()).await else {
+                return false;
+            };
+            let served = lookup.answers().iter().any(|record| {
+                matches!(&record.data, RData::TXT(txt)
+                    if txt.txt_data.iter().flat_map(|part| part.iter()).copied().eq(value.bytes()))
+            });
+            if !served {
+                return false;
+            }
+        }
+        true
+    }
 }
