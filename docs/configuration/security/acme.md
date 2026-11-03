@@ -75,7 +75,7 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 
 **Requirements:** Configure a DNS provider module. The module supports wildcard domains. The `dns` block must specify the `provider` name and any provider-specific credentials. See [DNS providers](/docs/configuration/security/dns-providers) for the full list of supported providers and their directives.
 
-After creating the record, Ferron queries the zone's authoritative nameservers every 2 seconds. It asks the CA to validate as soon as all of them serve the record, or after 60 seconds at most. If Ferron can't resolve the zone's nameservers (for example, for a private zone), it waits the full 60 seconds.
+After creating the record, Ferron queries every address of the zone's authoritative nameservers every 2 seconds. It asks the CA to validate as soon as they all serve the record, or after 60 seconds at most. If Ferron can't resolve the zone's nameservers (for example, for a private zone), it waits the full 60 seconds. Ferron sends these queries from its own network, so for anycast nameservers it only sees the sites nearest to it.
 
 ### Configuration parameters
 
@@ -347,7 +347,7 @@ Certificate issuance failed. The log message includes the affected domains. Chec
 
 - Make sure you configure the DNS provider correctly with valid credentials.
 - Check that the provider has permission to create TXT records for the domain.
-- If the log shows `DNS-01 record for ... isn't served by all authoritative nameservers after 60 seconds`, the provider is slow to publish records, and validation may fail. Ferron retries on later cycles.
+- If the log shows `DNS-01 record for ... isn't served by all authoritative nameservers after 60 seconds`, either the provider is slow to publish records, or Ferron can't query the nameservers directly (for example, because outbound DNS is blocked). Ferron then requests validation anyway, as without the check. If validation fails, Ferron retries on later cycles.
 
 ### Verifying certificates
 
@@ -392,7 +392,7 @@ The ACME background task emits log events and metrics through the configured obs
 | `DEBUG` | `ACME <type> challenge solved for ...`                                    | Challenge ready for validation          |
 | `DEBUG` | `DNS-01 record created for _acme-challenge.<domain>, TTL <ttl>`           | DNS record published                    |
 | `DEBUG` | `DNS-01 record for _acme-challenge.<domain> is served by all authoritative nameservers` | DNS record propagated |
-| `DEBUG` | `Couldn't resolve the authoritative nameservers for _acme-challenge.<domain>, waiting 60 seconds for DNS propagation` | Propagation not checked, fixed wait |
+| `DEBUG` | `Couldn't resolve the authoritative nameservers for _acme-challenge.<domain>, waiting out the 60-second DNS propagation delay` | Propagation not checked, fixed wait |
 | `WARN`  | `DNS-01 record for _acme-challenge.<domain> isn't served by all authoritative nameservers after 60 seconds, requesting validation anyway` | Slow DNS propagation |
 | `DEBUG` | `DNS-01 record cleanup completed for _acme-challenge.<domain>`            | DNS record removed                      |
 | `DEBUG` | `Certificate installed for ..., chain length: N`                          | Certificate loaded into TLS config      |

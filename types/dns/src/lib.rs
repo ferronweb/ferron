@@ -202,18 +202,20 @@ fn system_resolver() -> Option<hickory_resolver::TokioResolver> {
 ///
 /// Confirms that a record created through a [`DnsClient`] (for example an
 /// ACME DNS-01 challenge) is visible to the servers that validators query.
+/// Queries go from this host, so they can't see anycast sites elsewhere.
 pub struct AuthoritativeTxtCheck {
     /// Fully qualified record name.
     name: String,
-    /// One uncached, non-recursive resolver per nameserver, over all of its addresses.
-    nameservers: Vec<hickory_resolver::TokioResolver>,
+    /// For each nameserver, one uncached, non-recursive resolver per address.
+    nameservers: Vec<Vec<hickory_resolver::TokioResolver>>,
 }
 
 impl AuthoritativeTxtCheck {
     /// Finds the authoritative nameservers of the zone that contains `name`.
     ///
-    /// Returns `None` when the zone, its nameservers, or their addresses can't
-    /// be resolved, for example for private zones the system resolver can't see.
+    /// Returns `None` when the zone, any of its nameservers, or their addresses
+    /// can't be resolved, for example for private zones the system resolver
+    /// can't see, so callers never check only some of the nameservers.
     pub async fn new(name: &str) -> Option<Self> {
         use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
         use hickory_resolver::proto::rr::RData;
@@ -226,49 +228,67 @@ impl AuthoritativeTxtCheck {
         let mut options = ResolverOpts::default();
         options.cache_size = 0;
         options.recursion_desired = false;
+        options.timeout = std::time::Duration::from_secs(2);
+        options.attempts = 1;
 
         let mut nameservers = Vec::new();
         for record in ns_lookup.answers() {
             let RData::NS(ns) = &record.data else {
                 continue;
             };
-            let Ok(addresses) = resolver.lookup_ip(ns.0.clone()).await else {
-                continue;
-            };
-            let servers: Vec<_> = addresses
+            let addresses = resolver.lookup_ip(ns.0.clone()).await.ok()?;
+            let resolvers = addresses
                 .iter()
-                .map(NameServerConfig::udp_and_tcp)
-                .collect();
-            if servers.is_empty() {
-                continue;
+                .map(|address| {
+                    hickory_resolver::Resolver::builder_with_config(
+                        ResolverConfig::from_parts(
+                            None,
+                            Vec::new(),
+                            vec![NameServerConfig::udp_and_tcp(address)],
+                        ),
+                        hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+                    )
+                    .with_options(options.clone())
+                    .build()
+                    .ok()
+                })
+                .collect::<Option<Vec<_>>>()?;
+            if resolvers.is_empty() {
+                return None;
             }
-            if let Ok(nameserver) = hickory_resolver::Resolver::builder_with_config(
-                ResolverConfig::from_parts(None, Vec::new(), servers),
-                hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
-            )
-            .with_options(options.clone())
-            .build()
-            {
-                nameservers.push(nameserver);
-            }
+            nameservers.push(resolvers);
         }
 
         (!nameservers.is_empty()).then_some(Self { name, nameservers })
     }
 
     /// Whether every nameserver serves a TXT record for the name with exactly `value`.
+    ///
+    /// Each address of a nameserver that answers must serve the value, and at
+    /// least one must answer; unreachable addresses (for example IPv6 ones on
+    /// an IPv4-only host) are skipped.
     pub async fn is_served(&self, value: &str) -> bool {
         use hickory_resolver::proto::rr::RData;
 
-        for nameserver in &self.nameservers {
-            let Ok(lookup) = nameserver.txt_lookup(self.name.as_str()).await else {
-                return false;
-            };
-            let served = lookup.answers().iter().any(|record| {
-                matches!(&record.data, RData::TXT(txt)
-                    if txt.txt_data.iter().flat_map(|part| part.iter()).copied().eq(value.bytes()))
-            });
-            if !served {
+        for addresses in &self.nameservers {
+            let mut answered = false;
+            for address in addresses {
+                match address.txt_lookup(self.name.as_str()).await {
+                    Ok(lookup) => {
+                        let served = lookup.answers().iter().any(|record| {
+                            matches!(&record.data, RData::TXT(txt)
+                                if txt.txt_data.iter().flat_map(|part| part.iter()).copied().eq(value.bytes()))
+                        });
+                        if !served {
+                            return false;
+                        }
+                        answered = true;
+                    }
+                    Err(error) if error.is_no_records_found() => return false,
+                    Err(_) => {}
+                }
+            }
+            if !answered {
                 return false;
             }
         }

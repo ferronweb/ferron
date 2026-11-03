@@ -39,7 +39,7 @@ pub(crate) async fn wait_for_dns_propagation(
             "ACME DNS-01 propagation unchecked",
             &format!(
                 "Couldn't resolve the authoritative nameservers for {challenge_domain}, \
-                 waiting {} seconds for DNS propagation",
+                 waiting out the {}-second DNS propagation delay",
                 DNS_PROPAGATION_TIMEOUT.as_secs()
             ),
             "ferron-tls-acme",

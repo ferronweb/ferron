@@ -22,7 +22,7 @@
 
 #### Automatic TLS
 
-- **Faster DNS-01 challenges**: instead of always waiting 60 seconds after creating each DNS-01 record, Ferron now asks the CA to validate as soon as all of the zone's authoritative nameservers serve the record, still waiting at most 60 seconds. With providers that publish records quickly, each challenge now takes a few seconds. ([GitHub issue](https://github.com/ferronweb/ferron/issues/989))
+- **Faster DNS-01 challenges**: instead of always waiting 60 seconds after creating each DNS-01 record, Ferron now asks the CA to validate as soon as the zone's authoritative nameservers serve the record when queried from Ferron, still waiting at most 60 seconds. With providers that publish records quickly, each challenge now takes a few seconds. ([GitHub issue](https://github.com/ferronweb/ferron/issues/989))
 
 ### Fixed
 
