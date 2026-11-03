@@ -15,6 +15,20 @@ use rustls::ClientConfig;
 use crate::config::AcmeConfig;
 use crate::emit_log;
 
+/// Cached credentials for `account_cache_key`, unless they're for the account `stale_id`.
+pub(crate) async fn cached_credentials_unless(
+    config: &AcmeConfig,
+    account_cache_key: &str,
+    stale_id: &str,
+) -> Option<instant_acme::AccountCredentials> {
+    let bytes = config.account_cache.get(account_cache_key).await?;
+    let cached: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    if cached.get("id")?.as_str()? == stale_id {
+        return None;
+    }
+    serde_json::from_value(cached).ok()
+}
+
 /// Creates a new ACME account and caches it.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn create_new_account(

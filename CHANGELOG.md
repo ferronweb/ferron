@@ -20,6 +20,10 @@
 
 - **Improved keep-alive handling for intercepted responses**: when HTTP response status code interception is enabled, the backend server connection is now reused.
 
+#### Automatic TLS
+
+- **Concurrent certificate provisioning**: the ACME background task now obtains and renews up to 4 certificates at once instead of one after another, so servers with many hosts get their certificates much sooner. ([GitHub issue](https://github.com/ferronweb/ferron/issues/991))
+
 ### Fixed
 
 #### OCSP stapling
