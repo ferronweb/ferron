@@ -134,7 +134,7 @@ pub(crate) async fn fetch_ocsp_response(
     {
         // Try SHA-1 first
         // Had to be SHA-1, because of older Firefox versions, and Android 16+?
-        let response = fetch_ocsp_response_inner(client, chain, true).await;
+        let response = fetch_ocsp_response_inner(client, chain, false).await;
 
         // If SHA-1 succeeded (or failed unrecoverably), return immediately
         // (do not upgrade to SHA-256)
@@ -149,7 +149,7 @@ pub(crate) async fn fetch_ocsp_response(
     }
 
     // Fallback to SHA-256
-    fetch_ocsp_response_inner(client, chain, false).await
+    fetch_ocsp_response_inner(client, chain, true).await
 }
 
 async fn fetch_ocsp_response_inner(
