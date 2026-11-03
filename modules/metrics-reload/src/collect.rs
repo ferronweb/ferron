@@ -22,29 +22,41 @@ pub async fn collect_reload_metrics(
             _ = reload_state.0.cancelled() => {}
         }
 
-        event_sink.emit(Event::Log(LogEvent {
-            level: ferron_observability::LogLevel::Info,
-            message: "Reloading configuration...".to_string(),
-            summary: "Configuration reload".into(),
-            target: "ferron-metrics-reload",
-            attributes: vec![],
-            trace_context: None,
-        }));
+        if event_sink.is_empty() {
+            ferron_core::log_info!("Reloading configuration...");
+        } else {
+            event_sink.emit(Event::Log(LogEvent {
+                level: ferron_observability::LogLevel::Info,
+                message: "Reloading configuration...".to_string(),
+                summary: "Configuration reload".into(),
+                target: "ferron-metrics-reload",
+                attributes: vec![],
+                trace_context: None,
+            }));
+        }
 
         reload_state = RELOAD_STATE.load_full();
         let error = reload_state.1.get_state().await;
 
         if let Some(error) = &error {
-            event_sink.emit(Event::Log(LogEvent {
-                level: ferron_observability::LogLevel::Warn,
-                message: format!("Can't reload the server, continuing to run with the previous configuration: {error}"),
-                summary: "Configuration reload error".into(),
-                target: "ferron-metrics-reload",
-                attributes: vec![
-                    ("error.message", LogAttributeValue::String(error.to_string()))
-                ],
-                trace_context: None,
-            }));
+            if event_sink.is_empty() {
+                ferron_core::log_warn!("Can't reload the server, continuing to run with the previous configuration: {error}");
+            } else {
+                event_sink.emit(Event::Log(LogEvent {
+                    level: ferron_observability::LogLevel::Warn,
+                    message: format!(
+                        "Can't reload the server, continuing to run with the previous \
+                    configuration: {error}"
+                    ),
+                    summary: "Configuration reload error".into(),
+                    target: "ferron-metrics-reload",
+                    attributes: vec![(
+                        "error.message",
+                        LogAttributeValue::String(error.to_string()),
+                    )],
+                    trace_context: None,
+                }));
+            }
         }
 
         let mut attributes = vec![(
