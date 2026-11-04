@@ -39,7 +39,7 @@ flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
 bytes = "1"
 http = "1"
 http-body-util = "0.1"
-lru = "0.18.0"
+lru = "0.19.0"
 prost = "0.14.4"
 tonic-prost = "0.14.4"
 pbjson = "0.9"
