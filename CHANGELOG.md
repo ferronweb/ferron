@@ -14,6 +14,10 @@
 
 - **Control over TLS certificate key algorithms**: added support for `key_algo` and `key_size` configuration options in ACME automatic TLS configurations. They can be used to configure TLS certificate key (for example, it could be set to RSA with 2048-bit keys or ECDSA). ([GitHub issue](https://github.com/ferronweb/ferron/issues/976))
 
+#### Configuration
+
+- **Strict host definitions**: added the global `strict_hosts` directive. When it's turned on, a host defined by host blocks in more than one configuration file fails validation instead of being merged. This is useful when each site lives in its own included file.
+
 ### Changed
 
 #### Reverse proxy

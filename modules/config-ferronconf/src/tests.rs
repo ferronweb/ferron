@@ -214,3 +214,157 @@ fn adapt_rejects_include_cycles() {
 
     assert!(error.to_string().contains("Include cycle detected"));
 }
+
+fn adapt_file_err(path: &Path) -> String {
+    let mut params = HashMap::new();
+    params.insert("file".to_string(), path.display().to_string());
+
+    match FerronConfConfigurationAdapter::new().adapt(&params) {
+        Ok(_) => panic!("configuration should fail to adapt"),
+        Err(error) => error.to_string(),
+    }
+}
+
+/// Write a main config that includes `sites/*.ferron` plus two site files
+/// that both claim `shop.example.com`.
+fn write_two_sites_claiming_same_host(dir: &TestDir, global: &str) -> PathBuf {
+    fs::create_dir_all(dir.path.join("sites")).expect("failed to create sites directory");
+    dir.write(
+        "sites/org-a.ferron",
+        r#"
+shop.example.com {
+    root /srv/org-a
+}
+"#,
+    );
+    dir.write(
+        "sites/org-b.ferron",
+        r#"
+shop.example.com {
+    root /srv/org-b
+}
+"#,
+    );
+    dir.write(
+        "main.conf",
+        &format!("{global}\ninclude \"sites/*.ferron\"\n"),
+    )
+}
+
+#[test]
+fn adapt_merges_same_host_across_files_by_default() {
+    let dir = TestDir::new();
+    let main = write_two_sites_claiming_same_host(&dir, "");
+
+    let config = adapt_file(&main);
+    let http_ports = config.ports.get("http").expect("http ports should exist");
+    let hosts = &http_ports
+        .iter()
+        .find(|port| port.port.is_none())
+        .expect("default http port should exist")
+        .hosts;
+
+    assert_eq!(hosts.len(), 1);
+    assert_eq!(hosts[0].1.directives.get("root").map(Vec::len), Some(2));
+}
+
+#[test]
+fn adapt_strict_hosts_rejects_same_host_across_files() {
+    let dir = TestDir::new();
+    let main = write_two_sites_claiming_same_host(&dir, "{\n    strict_hosts\n}\n");
+
+    let error = adapt_file_err(&main);
+
+    assert!(
+        error.contains("Host 'http shop.example.com' is defined in more than one file"),
+        "unexpected error: {error}"
+    );
+    assert!(error.contains("org-a.ferron"), "unexpected error: {error}");
+    assert!(error.contains("org-b.ferron"), "unexpected error: {error}");
+}
+
+#[test]
+fn adapt_strict_hosts_reports_first_definition_location() {
+    let dir = TestDir::new();
+    let main = write_two_sites_claiming_same_host(&dir, "strict_hosts true\n");
+
+    let error = adapt_file_err(&main);
+    let first = error.find("org-a.ferron").expect("org-a location missing");
+    let second = error.find("org-b.ferron").expect("org-b location missing");
+
+    assert!(
+        first < second,
+        "first definition should be reported first: {error}"
+    );
+    assert!(error.contains("line 2"), "unexpected error: {error}");
+}
+
+#[test]
+fn adapt_strict_hosts_false_keeps_merging() {
+    let dir = TestDir::new();
+    let main = write_two_sites_claiming_same_host(&dir, "{\n    strict_hosts false\n}\n");
+
+    let config = adapt_file(&main);
+    let http_ports = config.ports.get("http").expect("http ports should exist");
+    assert_eq!(http_ports[0].hosts.len(), 1);
+}
+
+#[test]
+fn adapt_strict_hosts_allows_same_host_twice_in_one_file() {
+    let dir = TestDir::new();
+    let main = dir.write(
+        "main.conf",
+        r#"
+{
+    strict_hosts
+}
+
+example.com {
+    root /srv/www
+}
+
+example.com {
+    header X-Test 1
+}
+"#,
+    );
+
+    let config = adapt_file(&main);
+    let http_ports = config.ports.get("http").expect("http ports should exist");
+    let host = &http_ports[0].hosts[0].1;
+
+    assert!(host.directives.contains_key("root"));
+    assert!(host.directives.contains_key("header"));
+}
+
+#[test]
+fn adapt_strict_hosts_allows_same_hostname_on_different_ports() {
+    let dir = TestDir::new();
+    fs::create_dir_all(dir.path.join("sites")).expect("failed to create sites directory");
+    dir.write("sites/a.ferron", "example.com:8080 {\n    root /srv/a\n}\n");
+    dir.write("sites/b.ferron", "example.com:8081 {\n    root /srv/b\n}\n");
+    let main = dir.write(
+        "main.conf",
+        "{\n    strict_hosts\n}\ninclude \"sites/*.ferron\"\n",
+    );
+
+    let config = adapt_file(&main);
+    let http_ports = config.ports.get("http").expect("http ports should exist");
+    assert_eq!(http_ports.len(), 2);
+}
+
+#[test]
+fn adapt_strict_hosts_rejects_wildcard_host_across_files() {
+    let dir = TestDir::new();
+    dir.write("other.conf", "*:8080 {\n    root /srv/b\n}\n");
+    let main = dir.write(
+        "main.conf",
+        "{\n    strict_hosts\n}\n*:8080 {\n    root /srv/a\n}\ninclude \"other.conf\"\n",
+    );
+
+    let error = adapt_file_err(&main);
+    assert!(
+        error.contains("Host 'http *:8080'"),
+        "unexpected error: {error}"
+    );
+}
