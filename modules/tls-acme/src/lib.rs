@@ -45,6 +45,7 @@ use ferron_observability::{
     MetricAttributeValue, MetricEvent, MetricType, MetricValue,
 };
 use ferron_tls::TlsContext;
+use futures_util::StreamExt;
 use instant_acme::ChallengeType;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -406,6 +407,9 @@ impl Module for TlsAcmeModule {
     }
 }
 
+/// How many certificates the background task provisions at once.
+const MAX_CONCURRENT_ORDERS: usize = 4;
+
 /// Runs the ACME provisioning loop for both eager and on-demand configs.
 #[allow(clippy::too_many_arguments)]
 async fn run_acme_background_task(
@@ -677,82 +681,15 @@ async fn run_acme_background_task(
                 );
             }
 
-            for config in configs_guard.iter_mut() {
-                if config.domains.is_empty() {
-                    continue;
-                }
-
-                let domains = config.domains.join(", ");
-                let challenge_type = format!("{:?}", config.challenge_type).to_lowercase();
-
-                match crate::provision::provision_certificate(config, &event_sink).await {
-                    Ok(true) => {
-                        emit_log(
-                            &event_sink,
-                            LogLevel::Info,
-                            "ACME certificate issued",
-                            &format!("ACME certificate issued for domains: {domains}"),
-                            "ferron-tls-acme",
-                            vec![("ferron.acme.domains", LogAttributeValue::String(domains))],
-                        );
-                        emit_metric(
-                            &event_sink,
-                            "ferron.acme.certificates_issued_total",
-                            MetricValue::U64(1),
-                            MetricType::Counter,
-                            Some("{certificate}"),
-                            Some("Total ACME certificate issuance outcomes"),
-                            vec![
-                                (
-                                    "ferron.acme.status",
-                                    MetricAttributeValue::StaticStr("success"),
-                                ),
-                                (
-                                    "ferron.acme.challenge_type",
-                                    MetricAttributeValue::String(challenge_type),
-                                ),
-                            ],
-                        );
-                    }
-                    Ok(false) => {
-                        // Certificate has been already provisioned, skipping
-                    }
-                    Err(e) => {
-                        *config.error_message.write() = Some(format!(
-                            "ACME certificate provisioning error for {domains}: {e}"
-                        ));
-                        emit_log(
-                            &event_sink,
-                            LogLevel::Warn,
-                            "ACME certificate provisioning error",
-                            &format!("ACME certificate provisioning error for {domains}: {e}"),
-                            "ferron-tls-acme",
-                            vec![
-                                ("ferron.acme.domains", LogAttributeValue::String(domains)),
-                                ("error.message", LogAttributeValue::String(e.to_string())),
-                            ],
-                        );
-                        emit_metric(
-                            &event_sink,
-                            "ferron.acme.certificates_issued_total",
-                            MetricValue::U64(1),
-                            MetricType::Counter,
-                            Some("{certificate}"),
-                            Some("Total ACME certificate issuance outcomes"),
-                            vec![
-                                (
-                                    "ferron.acme.status",
-                                    MetricAttributeValue::StaticStr("error"),
-                                ),
-                                (
-                                    "ferron.acme.challenge_type",
-                                    MetricAttributeValue::String(challenge_type),
-                                ),
-                            ],
-                        );
-                    }
-                }
-            }
+            futures_util::stream::iter(
+                configs_guard
+                    .iter_mut()
+                    .filter(|config| !config.domains.is_empty()),
+            )
+            .for_each_concurrent(MAX_CONCURRENT_ORDERS, |config| {
+                provision_and_report(config, &event_sink)
+            })
+            .await;
         }
 
         // Drop expired peer challenge files so the shared dir doesn't grow
@@ -772,6 +709,83 @@ async fn run_acme_background_task(
             + std::process::id() as u64)
             % 2000;
         tokio::time::sleep(std::time::Duration::from_millis(10_000 + jitter_ms)).await;
+    }
+}
+
+/// Provisions a certificate for one configuration and reports the outcome.
+async fn provision_and_report(
+    config: &mut crate::config::AcmeConfig,
+    event_sink: &Arc<ferron_observability::CompositeEventSink>,
+) {
+    let domains = config.domains.join(", ");
+    let challenge_type = format!("{:?}", config.challenge_type).to_lowercase();
+
+    match crate::provision::provision_certificate(config, event_sink).await {
+        Ok(true) => {
+            emit_log(
+                event_sink,
+                LogLevel::Info,
+                "ACME certificate issued",
+                &format!("ACME certificate issued for domains: {domains}"),
+                "ferron-tls-acme",
+                vec![("ferron.acme.domains", LogAttributeValue::String(domains))],
+            );
+            emit_metric(
+                event_sink,
+                "ferron.acme.certificates_issued_total",
+                MetricValue::U64(1),
+                MetricType::Counter,
+                Some("{certificate}"),
+                Some("Total ACME certificate issuance outcomes"),
+                vec![
+                    (
+                        "ferron.acme.status",
+                        MetricAttributeValue::StaticStr("success"),
+                    ),
+                    (
+                        "ferron.acme.challenge_type",
+                        MetricAttributeValue::String(challenge_type),
+                    ),
+                ],
+            );
+        }
+        Ok(false) => {
+            // Certificate has been already provisioned, skipping
+        }
+        Err(e) => {
+            *config.error_message.write() = Some(format!(
+                "ACME certificate provisioning error for {domains}: {e}"
+            ));
+            emit_log(
+                event_sink,
+                LogLevel::Warn,
+                "ACME certificate provisioning error",
+                &format!("ACME certificate provisioning error for {domains}: {e}"),
+                "ferron-tls-acme",
+                vec![
+                    ("ferron.acme.domains", LogAttributeValue::String(domains)),
+                    ("error.message", LogAttributeValue::String(e.to_string())),
+                ],
+            );
+            emit_metric(
+                event_sink,
+                "ferron.acme.certificates_issued_total",
+                MetricValue::U64(1),
+                MetricType::Counter,
+                Some("{certificate}"),
+                Some("Total ACME certificate issuance outcomes"),
+                vec![
+                    (
+                        "ferron.acme.status",
+                        MetricAttributeValue::StaticStr("error"),
+                    ),
+                    (
+                        "ferron.acme.challenge_type",
+                        MetricAttributeValue::String(challenge_type),
+                    ),
+                ],
+            );
+        }
     }
 }
 

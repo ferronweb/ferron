@@ -37,6 +37,7 @@ rcgen = { version = "0.14.1", default-features = false, features = [
 
 # Async
 async-trait = "0.1"
+futures-util = "0.3"
 tokio = { version = "1", features = ["fs", "sync", "time", "rt", "process"] }
 tokio-rustls = { version = "0.26.4", default-features = false }
 zincio = { version = "0.2", default-features = false, features = ["fs"] }
