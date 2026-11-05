@@ -37,7 +37,25 @@ impl ModuleLoader for BuiltinModuleLoader {
         register_unix_directives(registry);
         register_observability_directives(registry);
         register_control_plane_directives(registry);
+        register_configuration_directives(registry);
     }
+}
+
+fn register_configuration_directives(registry: &mut crate::directives::DirectiveRegistry) {
+    registry.register(
+        Directive {
+            name: "strict_hosts",
+            usage: "strict_hosts [bool]",
+            description: "This directive specifies whether a host defined by host blocks in \
+            more than one configuration file is rejected instead of merged. Use it when each \
+            site lives in its own file, so a second file claiming an existing host fails \
+            validation. Default: disabled",
+            applicable_protocols: None,
+            global_only: true,
+            subblock_link: None,
+        },
+        DirectiveSubblock::default(),
+    );
 }
 
 fn register_runtime_directives(registry: &mut crate::directives::DirectiveRegistry) {

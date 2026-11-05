@@ -240,6 +240,10 @@ pub(super) fn translate_configuration(
     };
 
     let mut hosts = BTreeMap::<HostMergeKey, MergedBlock>::new();
+    // First file (and position) that defined each host, used to detect the
+    // same host being claimed by host blocks in different files.
+    let mut host_origins = BTreeMap::<HostMergeKey, (&Path, usize, usize)>::new();
+    let mut cross_file_duplicates = Vec::new();
 
     for statement in statements {
         match &statement.statement {
@@ -282,6 +286,24 @@ pub(super) fn translate_configuration(
                         continue;
                     }
 
+                    let (line, column) = (host_block.span.line, host_block.span.column);
+                    match host_origins.entry(key.clone()) {
+                        std::collections::btree_map::Entry::Occupied(origin) => {
+                            let (first_file, first_line, first_column) = *origin.get();
+                            if first_file != statement.file.as_path() {
+                                cross_file_duplicates.push(format!(
+                                    "Host '{}' is defined in more than one file: first in {}, again in {}",
+                                    describe_host_key(&key),
+                                    format_source_location(first_file, first_line, first_column),
+                                    format_source_location(&statement.file, line, column)
+                                ));
+                            }
+                        }
+                        std::collections::btree_map::Entry::Vacant(origin) => {
+                            origin.insert((statement.file.as_path(), line, column));
+                        }
+                    }
+
                     match hosts.entry(key) {
                         std::collections::btree_map::Entry::Occupied(mut entry) => {
                             entry
@@ -296,6 +318,18 @@ pub(super) fn translate_configuration(
             }
             _ => {}
         }
+    }
+
+    let strict_hosts = global
+        .directives
+        .get("strict_hosts")
+        .and_then(|entries| entries.first())
+        .is_some_and(|entry| entry.get_flag());
+    if strict_hosts && !cross_file_duplicates.is_empty() {
+        anyhow::bail!(
+            "{} (`strict_hosts` is enabled)",
+            cross_file_duplicates.join("; ")
+        );
     }
 
     let mut grouped_ports: GroupedPorts = BTreeMap::new();
@@ -560,6 +594,20 @@ fn translate_host_pattern(
     };
 
     (protocol, filters, host_pattern.port)
+}
+
+/// Human-readable form of a host key, e.g. `http example.com:8080`.
+fn describe_host_key(key: &HostMergeKey) -> String {
+    let host = match (&key.host, &key.ip) {
+        (Some(host), _) => host.clone(),
+        (None, Some(IpAddr::V6(ip))) => format!("[{ip}]"),
+        (None, Some(ip)) => ip.to_string(),
+        (None, None) => "*".to_string(),
+    };
+    match key.port {
+        Some(port) => format!("{} {host}:{port}", key.protocol),
+        None => format!("{} {host}", key.protocol),
+    }
 }
 
 fn translate_match_block(

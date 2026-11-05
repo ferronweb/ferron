@@ -421,7 +421,7 @@ When the cache module runs, Ferron understands the following response headers fr
 > [!note]
 > `X-LiteSpeed-Vary: value=<name>` varies on the request variable `<name>`, resolved per request (empty when unset). Populate it with `set_var`, which runs before cache lookup:
 >
-> ```conf
+> ```ferron
 > *:80 {
 >   set_var request.header.user_agent r"Mobile|Android" device_class {
 >     value mobile

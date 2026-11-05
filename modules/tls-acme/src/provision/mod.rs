@@ -8,6 +8,7 @@ pub(crate) mod cert_install;
 mod challenge;
 mod csr;
 pub mod dist_lock;
+mod keyed_lock;
 mod validity;
 
 use std::net::IpAddr;
@@ -24,10 +25,11 @@ use crate::config::{build_rustls_client_config, AcmeConfig};
 use crate::errors::acme_error_to_string;
 use crate::{emit_log, emit_metric};
 
-use self::account::{create_new_account, HttpsClientForAcme};
+use self::account::{cached_credentials_unless, create_new_account, HttpsClientForAcme};
 use self::cert_install::install_certified_key;
-use self::challenge::cleanup_challenge_data;
+use self::challenge::{cleanup_challenge_data, wait_for_dns_propagation};
 use self::csr::generate_csr;
+use self::keyed_lock::{ACCOUNT_LOCKS, NAME_LOCKS};
 use self::validity::check_certificate_validity_or_install_cached;
 
 /// Emits a lock lifecycle counter (`ferron.acme.lock_*_total`).
@@ -73,6 +75,12 @@ pub async fn provision_certificate(
     if check_certificate_validity_or_install_cached(config, event_sink).await? {
         return Ok(false);
     }
+
+    // Orders run concurrently. Orders sharing a name would collide on its
+    // challenge (a TLS-ALPN-01 certificate, a DNS-01 `_acme-challenge` record)
+    // or on its lockfile, so they take turns; the re-check below then finds a
+    // certificate the previous order obtained.
+    let _name_guards = lock_names(&config.domains).await;
 
     // Fast path found nothing valid; serialize orders across nodes sharing the cache.
     let lock_dir = config
@@ -241,6 +249,8 @@ async fn provision_with_providers(
             HttpsClientForAcme::new(client_config),
         ));
 
+        // Orders run concurrently; only one may create a missing account.
+        let account_guard = ACCOUNT_LOCKS.lock(&account_cache_key).await;
         let account_result =
             if let Some(credentials_bytes) = config.account_cache.get(&account_cache_key).await {
                 if let Ok(credentials) =
@@ -298,6 +308,8 @@ async fn provision_with_providers(
                 )
                 .await
             };
+
+        drop(account_guard);
 
         match account_result {
             Ok(account) => {
@@ -414,42 +426,56 @@ async fn provision_certificate_inner(
             if problem.r#type.as_deref()
                 == Some("urn:ietf:params:acme:error:accountDoesNotExist") =>
         {
-            emit_log(
-                event_sink,
-                ferron_observability::LogLevel::Warn,
-                "ACME account recreated",
-                &format!(
-                    "ACME account not found on server for {directory}, recreating",
-                    directory = config.directory
-                ),
-                "ferron-tls-acme",
-                vec![
-                    (
-                        "ferron.acme.domains",
-                        ferron_observability::LogAttributeValue::String(domains.clone()),
-                    ),
-                    (
-                        "ferron.acme.directory",
-                        ferron_observability::LogAttributeValue::String(config.directory.clone()),
-                    ),
-                ],
-            );
-            config.account_cache.remove(account_cache_key).await;
+            // Concurrent orders on this account all get here: the first one
+            // recreates it, and the others use its replacement.
+            let _account_guard = ACCOUNT_LOCKS.lock(account_cache_key).await;
             let client_config = build_rustls_client_config(false)?;
             let account_builder = instant_acme::Account::builder_with_http(Box::new(
                 HttpsClientForAcme::new(client_config),
             ));
-            let new_account = create_new_account(
-                config,
-                &config.directory,
-                &config.contact,
-                config.eab_key.as_ref(),
-                config.profile.as_deref(),
-                account_builder,
-                account_cache_key,
-                event_sink,
-            )
-            .await?;
+            let new_account =
+                match cached_credentials_unless(config, account_cache_key, acme_account.id()).await
+                {
+                    Some(credentials) => account_builder.from_credentials(credentials).await?,
+                    None => {
+                        emit_log(
+                            event_sink,
+                            ferron_observability::LogLevel::Warn,
+                            "ACME account recreated",
+                            &format!(
+                                "ACME account not found on server for {directory}, recreating",
+                                directory = config.directory
+                            ),
+                            "ferron-tls-acme",
+                            vec![
+                                (
+                                    "ferron.acme.domains",
+                                    ferron_observability::LogAttributeValue::String(
+                                        domains.clone(),
+                                    ),
+                                ),
+                                (
+                                    "ferron.acme.directory",
+                                    ferron_observability::LogAttributeValue::String(
+                                        config.directory.clone(),
+                                    ),
+                                ),
+                            ],
+                        );
+                        config.account_cache.remove(account_cache_key).await;
+                        create_new_account(
+                            config,
+                            &config.directory,
+                            &config.contact,
+                            config.eab_key.as_ref(),
+                            config.profile.as_deref(),
+                            account_builder,
+                            account_cache_key,
+                            event_sink,
+                        )
+                        .await?
+                    }
+                };
             new_account.new_order(&new_order).await?
         }
         Err(e) => {
@@ -661,7 +687,7 @@ async fn provision_certificate_inner(
                         .update_record(&ferron_dns::DnsRecord {
                             name: challenge_domain,
                             record_type: ferron_dns::DnsRecordType::TXT,
-                            value: dns_value,
+                            value: dns_value.clone(),
                             ttl,
                         })
                         .await?;
@@ -676,7 +702,7 @@ async fn provision_certificate_inner(
                             (
                                 "ferron.acme.dns_challenge_domain",
                                 ferron_observability::LogAttributeValue::String(
-                                    challenge_domain_log,
+                                    challenge_domain_log.clone(),
                                 ),
                             ),
                             (
@@ -686,8 +712,7 @@ async fn provision_certificate_inner(
                         ],
                     );
 
-                    // Wait for DNS propagation
-                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    wait_for_dns_propagation(&challenge_domain_log, &dns_value, event_sink).await;
                     dns_01_domains.push(identifier.clone());
                 } else {
                     return Err(
@@ -968,6 +993,26 @@ async fn provision_certificate_inner(
     cleanup_challenge_data(config, &dns_01_domains, event_sink).await;
 
     Ok(())
+}
+
+/// Takes the locks for the names in `domains`, compared the way DNS compares
+/// them and taken in a fixed order, so orders sharing names can't deadlock.
+async fn lock_names(domains: &[String]) -> Vec<tokio::sync::OwnedMutexGuard<()>> {
+    let names: std::collections::BTreeSet<String> = domains
+        .iter()
+        .map(|domain| {
+            domain
+                .strip_prefix("*.")
+                .unwrap_or(domain)
+                .trim_end_matches('.')
+                .to_ascii_lowercase()
+        })
+        .collect();
+    let mut guards = Vec::with_capacity(names.len());
+    for name in names {
+        guards.push(NAME_LOCKS.lock(&name).await);
+    }
+    guards
 }
 
 #[cfg(test)]

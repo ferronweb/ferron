@@ -16,6 +16,8 @@
 //!   one lease instead of wedging forever.
 //! - Release only removes the file when it still holds our `owner` token, so a
 //!   node never deletes a peer's fresh lock (prevents stealing/deadlock).
+//! - Dropping a guard without releasing it (a cancelled order) removes the
+//!   file the same way, so a reload never leaves a lock to wait out.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -111,8 +113,9 @@ async fn file_age_secs(path: &Path) -> Option<u64> {
 
 /// RAII guard for a held distributed lock.
 ///
-/// The heartbeat task aborts on drop. Call [`DistributedLockGuard::release`]
-/// to also remove the lockfile (only if it still holds our token).
+/// Call [`DistributedLockGuard::release`] to stop the heartbeat and remove the
+/// lockfile (only if it still holds our token). Dropping the guard does the
+/// same synchronously, for orders cancelled before they could release.
 pub struct DistributedLockGuard {
     dir: PathBuf,
     key: String,
@@ -145,7 +148,7 @@ impl DistributedLockGuard {
 
     /// Releases the lock if it still holds our token. Always aborts the heartbeat.
     pub async fn release(mut self) {
-        if let Some(handle) = self.heartbeat.take() {
+        if let Some(handle) = &self.heartbeat {
             handle.abort();
         }
         let path = self.dir.join(&self.key);
@@ -153,22 +156,46 @@ impl DistributedLockGuard {
         let ours = tokio::fs::read(&path)
             .await
             .ok()
-            .and_then(|b| serde_json::from_slice::<LockHeader>(&b).ok())
-            .is_some_and(|h| h.owner == self.owner && h.started_at_unix == self.started_at);
+            .is_some_and(|b| holds(&b, &self.owner, self.started_at));
         if ours {
             let _ = tokio::fs::remove_file(&path).await;
         }
+        // Released: `Drop` has nothing left to do. Until here, a cancelled
+        // `release()` still leaves the handle for `Drop` to clean up after.
+        self.heartbeat = None;
     }
+}
+
+/// Whether lockfile `bytes` still carry the given owner token.
+fn holds(bytes: &[u8], owner: &str, started_at: u64) -> bool {
+    serde_json::from_slice::<LockHeader>(bytes)
+        .is_ok_and(|h| h.owner == owner && h.started_at_unix == started_at)
 }
 
 impl Drop for DistributedLockGuard {
     fn drop(&mut self) {
         // Stop heartbeating so a dropped guard can never overwrite a peer's
-        // lock taken over after our lease expired. File removal happens in
-        // `release()` (async, ownership-checked); the lease is the backstop
-        // if the holder crashes without releasing.
+        // lock taken over after our lease expired.
         if let Some(handle) = self.heartbeat.take() {
             handle.abort();
+            // Dropped without `release()`, e.g. when a configuration reload
+            // cancels an in-flight order. Remove our lockfile, or the restarted
+            // ACME task would treat it as a live peer's lock until the lease
+            // expires; its acquire retries far longer than the removal takes.
+            // The lease remains the backstop for crashed holders.
+            let path = self.dir.join(&self.key);
+            let owner = std::mem::take(&mut self.owner);
+            let started_at = self.started_at;
+            let remove = move || {
+                if std::fs::read(&path).is_ok_and(|b| holds(&b, &owner, started_at)) {
+                    let _ = std::fs::remove_file(&path);
+                }
+            };
+            // Off the async worker, so a hung cache filesystem can't stall it.
+            match tokio::runtime::Handle::try_current() {
+                Ok(runtime) => drop(runtime.spawn_blocking(remove)),
+                Err(_) => remove(),
+            }
         }
     }
 }
@@ -476,6 +503,53 @@ mod tests {
             .unwrap();
         guard.release().await;
         // Peer's lock must survive our release.
+        assert!(tokio::fs::try_exists(dir.join(key)).await.unwrap());
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn test_dropped_guard_removes_own_lock() {
+        let dir = unique_dir("drop");
+        let key = "lock_certificate_drop1";
+        let (guard, _) =
+            acquire_with_timeout(&dir, key, "example.com", "dir", Duration::from_secs(5))
+                .await
+                .unwrap();
+        // A reload cancels the provisioning future, dropping the guard unreleased.
+        drop(guard);
+        // The next acquirer gets the lock within its retry window instead of
+        // waiting for the lease, without having to break a stale lock.
+        let (next, stale_broken) =
+            acquire_with_timeout(&dir, key, "example.com", "dir", Duration::from_secs(5))
+                .await
+                .unwrap();
+        assert!(next.is_some());
+        assert!(!stale_broken);
+        next.unwrap().release().await;
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn test_dropped_guard_never_deletes_peer_lock() {
+        let dir = unique_dir("droppeer");
+        let key = "lock_certificate_droppeer1";
+        let (guard, _) =
+            acquire_with_timeout(&dir, key, "example.com", "dir", Duration::from_secs(5))
+                .await
+                .unwrap();
+        let peer = LockHeader {
+            owner: "peer-owner".into(),
+            started_at_unix: now_unix(),
+            heartbeat_at_unix: now_unix(),
+            label: "example.com".into(),
+            directory: "dir".into(),
+        };
+        tokio::fs::write(dir.join(key), serde_json::to_vec(&peer).unwrap())
+            .await
+            .unwrap();
+        drop(guard);
+        // Give the background removal time to run before checking.
+        tokio::time::sleep(Duration::from_millis(200)).await;
         assert!(tokio::fs::try_exists(dir.join(key)).await.unwrap());
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }
