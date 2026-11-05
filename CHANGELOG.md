@@ -16,7 +16,7 @@
 
 #### Configuration
 
-- **Strict host definitions**: added the global `strict_hosts` directive. When it's turned on, a host defined by host blocks in more than one configuration file fails validation instead of being merged. This is useful when each site lives in its own included file.
+- **Strict host definitions**: added the global `strict_hosts` directive. When it's turned on, a host defined by host blocks in more than one configuration file fails validation instead of being merged. This is useful when each site lives in its own included file. ([thank you, @SridharRG](https://github.com/ferronweb/ferron/pull/1004))
 
 ### Changed
 
