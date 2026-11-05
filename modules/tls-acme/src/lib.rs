@@ -766,11 +766,11 @@ async fn run_acme_background_task(
                     .iter_mut()
                     .filter(|config| !config.domains.is_empty()),
             )
-            .for_each_concurrent(MAX_CONCURRENT_ORDERS, |config| {
+            .for_each_concurrent(MAX_CONCURRENT_ORDERS, |config| async {
                 if drain.is_cancelled() {
                     return;
                 }
-                provision_and_report(config, &event_sink)
+                provision_and_report(config, &event_sink).await;
             })
             .await;
         }
