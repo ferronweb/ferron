@@ -63,6 +63,26 @@ This page documents directives that belong in top-level global blocks:
 }
 ```
 
+### Host definitions
+
+- `strict_hosts <bool>`
+  - This directive rejects a host that host blocks in more than one configuration file define. By default, Ferron merges all host blocks for the same host (same protocol, port, IP address and hostname), even when they come from different files. With `strict_hosts` turned on, a second file that defines an existing host makes validation, startup and reload fail. The error names both files. Host blocks for the same host within one file still merge. Default: disabled
+
+**Configuration example:**
+
+```ferron
+{
+    strict_hosts
+}
+
+include "sites/*.ferron"
+```
+
+> [!note]
+>
+> - Use `strict_hosts` when each site lives in its own file, for example on a server that hosts sites for several users or teams. Without it, a second file for an existing domain merges into the first: first-value directives such as `root` keep the value from the file loaded first, other directives such as `header` add to it, and `basic_auth` accepts users from both files.
+> - Ferron loads files matched by an `include` glob in alphabetical order.
+
 ### Runtime
 
 - `io_uring <bool>`

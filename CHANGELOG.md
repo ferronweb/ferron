@@ -14,6 +14,10 @@
 
 - **Control over TLS certificate key algorithms**: added support for `key_algo` and `key_size` configuration options in ACME automatic TLS configurations. They can be used to configure TLS certificate key (for example, it could be set to RSA with 2048-bit keys or ECDSA). ([GitHub issue](https://github.com/ferronweb/ferron/issues/976))
 
+#### Configuration
+
+- **Strict host definitions**: added the global `strict_hosts` directive. When it's turned on, a host defined by host blocks in more than one configuration file fails validation instead of being merged. This is useful when each site lives in its own included file. ([thank you, @SridharRG](https://github.com/ferronweb/ferron/pull/1004))
+
 ### Changed
 
 #### Reverse proxy
@@ -23,8 +27,13 @@
 #### Automatic TLS
 
 - **Concurrent certificate provisioning**: the ACME background task now obtains and renews up to 4 certificates at once instead of one after another, so servers with many hosts get their certificates much sooner. ([GitHub issue](https://github.com/ferronweb/ferron/issues/991))
+- **Faster DNS-01 challenges**: instead of always waiting 60 seconds after creating each DNS-01 record, Ferron now asks the CA to validate as soon as the zone's authoritative nameservers serve the record when queried from Ferron, still waiting at most 60 seconds. With providers that publish records quickly, each challenge now takes a few seconds. ([GitHub issue](https://github.com/ferronweb/ferron/issues/989))
 
 ### Fixed
+
+#### Automatic TLS
+
+- **Orphaned provisioning locks after reloads**: when a configuration reload cancelled an ACME order in progress, its `lock_certificate_*` lockfile stayed in the cache, and the domain got no certificate until the 5-minute lock lease expired. The lockfile is now removed when the order is cancelled. ([GitHub issue](https://github.com/ferronweb/ferron/issues/987))
 
 #### OCSP stapling
 

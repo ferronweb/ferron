@@ -1,7 +1,7 @@
 //! Built-in configuration validator for core directives.
 //!
-//! Validates runtime, TCP, Unix socket, observability, and control plane
-//! directives that are part of the core server.
+//! Validates runtime, `strict_hosts`, TCP, Unix socket, observability, and
+//! control plane directives that are part of the core server.
 
 use crate::config::validator::{validate_scoped_block, ConfigurationValidationError};
 use crate::config::{
@@ -37,6 +37,11 @@ impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationVa
                     &mut ctx.diagnostics,
                     ctx.scope.clone()
                 );
+            });
+
+            validate_directive!(config, used_directives, strict_hosts, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)], {
+                // Enforced by the configuration adapter while merging host blocks.
+                let _ = strict_hosts;
             });
 
             validate_directive!(config, used_directives, tcp, no_args, {
