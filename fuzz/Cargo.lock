@@ -89,9 +89,9 @@ dependencies = [
 
 [[package]]
 name = "async-lock"
-version = "3.4.2"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290f7f2596bd5b78a9fec8088ccd89180d7f9f55b94b0576823bbbdc72ee8311"
+checksum = "0876700b0d007ad25d5508865a4259c3af9af6d296bf663a0d586d0bc3369f6f"
 dependencies = [
  "event-listener",
  "event-listener-strategy",
@@ -240,9 +240,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cc"
-version = "1.10.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0"
+checksum = "375989decec1a0fa424442bed520fa12ede43a48475ce8c7417d2c69b32b5f6b"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -392,9 +392,9 @@ dependencies = [
 
 [[package]]
 name = "crc32fast"
-version = "1.5.3"
+version = "1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ba106e844045ddc02c20768ac4b0b7cb45f2cc2ecbd833ac9f5dacb183c2055"
+checksum = "5f97d3416d5337d15c4b0d78c8c91df922ca143f57ec20e2d1c188333047ef04"
 dependencies = [
  "cfg-if",
 ]
@@ -2236,9 +2236,9 @@ dependencies = [
 
 [[package]]
 name = "rasn"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c442ad572d02886fe3a24f770763cb39afb9b3dfe16e05fcdf133b3895e4a24"
+checksum = "8099261c639cababe4b27ab20fb3f9c7cef5e014a12bc63a0fc09a1b90d7751b"
 dependencies = [
  "bitvec",
  "bytes",
@@ -2258,9 +2258,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-derive"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "261556388c573dde262717e06ad2c9a9ed78405418f16f2789a0dd8004793fba"
+checksum = "ffcc5d3631747eae0d97d3444c479135c037de13f0701a7ea60732a25eb7ac97"
 dependencies = [
  "proc-macro2",
  "rasn-derive-impl",
@@ -2269,9 +2269,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-derive-impl"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e17b9360b511cde533e75baa711dc652f6f613457afe02a66c748ccd6c31ef7"
+checksum = "f55d80a38e4e6a8e435cf61e1144f62219fb7ea3c5bd682e216cb4c32c363114"
 dependencies = [
  "either",
  "itertools 0.13.0",
@@ -2283,9 +2283,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-pkix"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e0869fd5847184c93887f98eeb0aa2f70cc3f1eec1f0adf3ff8f0f867d60b4e"
+checksum = "19996a5f78f6a4196cbab57cc56cf8be96c6c8f0fb7ce4710c8e9f74b614e235"
 dependencies = [
  "rasn",
 ]
