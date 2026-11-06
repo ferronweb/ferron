@@ -26,15 +26,15 @@
 
 #### Automatic TLS
 
-- **Certificate orders survive reloads**: a configuration reload no longer cancels an ACME order in progress. The order finishes (for up to 5 minutes), and with a file-based cache the reloaded configuration uses its certificate, so frequent reloads no longer stall certificate issuance. ([GitHub issue](https://github.com/ferronweb/ferron/issues/993))
-- **Concurrent certificate provisioning**: the ACME background task now obtains and renews up to 4 certificates at once instead of one after another, so servers with many hosts get their certificates much sooner. ([GitHub issue](https://github.com/ferronweb/ferron/issues/991))
-- **Faster DNS-01 challenges**: instead of always waiting 60 seconds after creating each DNS-01 record, Ferron now asks the CA to validate as soon as the zone's authoritative nameservers serve the record when queried from Ferron, still waiting at most 60 seconds. With providers that publish records quickly, each challenge now takes a few seconds. ([GitHub issue](https://github.com/ferronweb/ferron/issues/989))
+- **Certificate orders survive reloads**: a configuration reload no longer cancels an ACME order in progress. The order finishes (for up to 5 minutes), and with a file-based cache the reloaded configuration uses its certificate, so frequent reloads no longer stall certificate issuance. ([thank you, @neurekadev](https://github.com/ferronweb/ferron/pull/994))
+- **Concurrent certificate provisioning**: the ACME background task now obtains and renews up to 4 certificates at once instead of one after another, so servers with many hosts get their certificates much sooner. ([thank you, @neurekadev](https://github.com/ferronweb/ferron/pull/992))
+- **Faster DNS-01 challenges**: instead of always waiting 60 seconds after creating each DNS-01 record, Ferron now asks the CA to validate as soon as the zone's authoritative nameservers serve the record when queried from Ferron, still waiting at most 60 seconds. With providers that publish records quickly, each challenge now takes a few seconds. ([thank you, @neurekadev](https://github.com/ferronweb/ferron/pull/990))
 
 ### Fixed
 
 #### Automatic TLS
 
-- **Orphaned provisioning locks after reloads**: when a configuration reload cancelled an ACME order in progress, its `lock_certificate_*` lockfile stayed in the cache, and the domain got no certificate until the 5-minute lock lease expired. The lockfile is now removed when the order is cancelled. ([GitHub issue](https://github.com/ferronweb/ferron/issues/987))
+- **Orphaned provisioning locks after reloads**: when a configuration reload cancelled an ACME order in progress, its `lock_certificate_*` lockfile stayed in the cache, and the domain got no certificate until the 5-minute lock lease expired. The lockfile is now removed when the order is cancelled. ([thank you, @neurekadev](https://github.com/ferronweb/ferron/pull/988))
 
 #### OCSP stapling
 
