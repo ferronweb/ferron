@@ -54,18 +54,19 @@ use crate::config::{parse_acme_config, AcmeConfigOrOnDemand, SniResolverLock};
 use crate::on_demand::{check_ask_endpoint, get_cached_domains, OnDemandRequest};
 use crate::resolver::{AcmeResolverInner, TlsAcmeResolver};
 
-/// Shared state for the ACME background task.
+/// Shared runtime state for the ACME module.
+///
+/// Configuration-scoped state lives in [`AcmeGeneration`]. A configuration
+/// load builds a staging generation; [`TlsAcmeModule::start`] promotes it and
+/// only then retires the previous generation. A failed load therefore leaves
+/// the active generation and its background task untouched.
 pub struct AcmeTaskState {
-    /// ACME configs of the current configuration generation (both eager and
-    /// dynamically added on-demand).
-    configs: arc_swap::ArcSwap<ConfigGeneration>,
-    /// ACME configs of the next configuration generation
-    staging_configs: arc_swap::ArcSwap<ConfigGeneration>,
-    /// A token for determining configuration generation.
-    /// If there is new configuration generation, the previous token is canceled.
-    generation_token: arc_swap::ArcSwap<CancellationToken>,
-    /// On-demand configurations for lazy certificate issuance.
-    pub on_demand_configs: Arc<RwLock<Vec<crate::config::AcmeOnDemandConfigData>>>,
+    /// Generation currently being built by the configuration loader.
+    staging: parking_lot::Mutex<Option<Arc<AcmeGeneration>>>,
+    /// Generation whose background task is currently running.
+    active: arc_swap::ArcSwapOption<AcmeGeneration>,
+    /// Handles of the running background task, used when it is retired.
+    active_task: parking_lot::Mutex<Option<ActiveTask>>,
     /// Channel sender for on-demand certificate requests.
     pub on_demand_tx: async_channel::Sender<OnDemandRequest>,
     /// Channel receiver for on-demand certificate requests.
@@ -76,17 +77,61 @@ pub struct AcmeTaskState {
     pub http_01_resolvers: Arc<RwLock<Vec<crate::challenge::Http01DataLock>>>,
     /// Shared memory account cache.
     pub memory_account_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
-    /// Shared SNI resolver lock.
-    pub sni_resolver_lock: SniResolverLock,
-    /// Shared challenge cache directories (file-backed `cache` paths).
+    /// Event sink for observability.
+    pub event_sink: Arc<parking_lot::RwLock<Option<Arc<ferron_observability::CompositeEventSink>>>>,
+}
+
+/// One configuration generation's ACME state.
+///
+/// A reload builds a new generation before the previous one is retired, so the
+/// two never share configuration-scoped state during the transition.
+struct AcmeGeneration {
+    /// Token identifying the configuration load this generation belongs to.
+    reload_token: Arc<CancellationToken>,
+    /// ACME configs (both eager and dynamically added on-demand).
+    configs: Arc<RwLock<Vec<crate::config::AcmeConfig>>>,
+    /// On-demand configurations for lazy certificate issuance.
+    on_demand_configs: Arc<RwLock<Vec<crate::config::AcmeOnDemandConfigData>>>,
+    /// SNI resolvers populated by on-demand issuance.
+    sni_resolver_lock: SniResolverLock,
+    /// Challenge cache directories (file-backed `cache` paths).
     ///
     /// Peers publish HTTP-01 / TLS-ALPN-01 challenge files here so any node
     /// behind a load balancer can answer CA validation. Populated from each
     /// config's file `cache` path (deduplicated). Empty when only in-memory
     /// caching is used.
-    pub challenge_cache_dirs: Arc<RwLock<Vec<std::path::PathBuf>>>,
-    /// Event sink for observability.
-    pub event_sink: Arc<parking_lot::RwLock<Option<Arc<ferron_observability::CompositeEventSink>>>>,
+    challenge_cache_dirs: Arc<RwLock<Vec<std::path::PathBuf>>>,
+}
+
+impl AcmeGeneration {
+    fn new(reload_token: Arc<CancellationToken>) -> Self {
+        Self {
+            reload_token,
+            configs: Arc::new(RwLock::new(Vec::new())),
+            on_demand_configs: Arc::new(RwLock::new(Vec::new())),
+            sni_resolver_lock: Arc::new(RwLock::new(HashMap::new())),
+            challenge_cache_dirs: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
+    /// Registers a file cache directory for distributed challenge fallback (deduplicated).
+    fn register_challenge_cache_dir(&self, dir: std::path::PathBuf) {
+        let mut dirs = self.challenge_cache_dirs.blocking_write();
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+}
+
+/// Handles for one running ACME background task.
+struct ActiveTask {
+    generation: Arc<AcmeGeneration>,
+    /// Hard cancel, used when draining takes too long.
+    cancel: CancellationToken,
+    /// Graceful drain: stop starting new orders.
+    drain: CancellationToken,
+    /// Cancelled when the background task exits.
+    done: CancellationToken,
 }
 
 impl Default for AcmeTaskState {
@@ -98,21 +143,15 @@ impl Default for AcmeTaskState {
 impl AcmeTaskState {
     pub fn new() -> Self {
         let (tx, rx) = async_channel::unbounded();
-        let generation_token = arc_swap::ArcSwap::from_pointee(CancellationToken::new());
         Self {
-            configs: arc_swap::ArcSwap::from_pointee(ConfigGeneration::with_reload_token(
-                generation_token.load_full(),
-            )),
-            staging_configs: arc_swap::ArcSwap::from_pointee(ConfigGeneration::current()),
-            generation_token,
-            on_demand_configs: Arc::new(RwLock::new(Vec::new())),
+            staging: parking_lot::Mutex::new(None),
+            active: arc_swap::ArcSwapOption::empty(),
+            active_task: parking_lot::Mutex::new(None),
             on_demand_tx: tx,
             on_demand_rx: rx,
             tls_alpn_01_resolvers: Arc::new(RwLock::new(Vec::new())),
             http_01_resolvers: Arc::new(RwLock::new(Vec::new())),
             memory_account_cache: Arc::new(RwLock::new(HashMap::new())),
-            sni_resolver_lock: Arc::new(RwLock::new(HashMap::new())),
-            challenge_cache_dirs: Arc::new(RwLock::new(Vec::new())),
             event_sink: Arc::new(parking_lot::RwLock::new(None)),
         }
     }
@@ -121,46 +160,60 @@ impl AcmeTaskState {
         *self.event_sink.write() = Some(event_sink);
     }
 
-    /// ACME configs of the current configuration generation.
+    /// The generation for the configuration load currently in progress.
+    fn staging_generation(&self) -> Arc<AcmeGeneration> {
+        self.staging_generation_for(ferron_core::shutdown::RELOAD_TOKEN.load_full())
+    }
+
+    fn staging_generation_for(&self, reload_token: Arc<CancellationToken>) -> Arc<AcmeGeneration> {
+        let mut staging = self.staging.lock();
+        if let Some(generation) = staging.as_ref() {
+            if Arc::ptr_eq(&generation.reload_token, &reload_token) {
+                return generation.clone();
+            }
+        }
+
+        let generation = Arc::new(AcmeGeneration::new(reload_token));
+        *staging = Some(generation.clone());
+        generation
+    }
+
+    /// Promotes the staging generation of the current load attempt.
     ///
-    /// The first caller after a reload, whether loading the new configuration
-    /// or resetting the old generation, starts the next generation's list.
-    pub fn configs(&self) -> Arc<RwLock<Vec<crate::config::AcmeConfig>>> {
-        if self.configs.load().reload_token.is_cancelled() {
-            self.configs.store(Arc::new(
-                self.staging_configs
-                    .load()
-                    .new_reload_token(self.generation_token.load_full()),
-            ));
+    /// If no staging generation was built for this attempt (for example because
+    /// all ACME configuration was removed), an empty generation is promoted.
+    fn promote_generation(&self) -> Arc<AcmeGeneration> {
+        self.promote_generation_for(ferron_core::shutdown::RELOAD_TOKEN.load_full())
+    }
+
+    fn promote_generation_for(&self, reload_token: Arc<CancellationToken>) -> Arc<AcmeGeneration> {
+        let mut staging = self.staging.lock();
+        match staging.take() {
+            Some(generation) if Arc::ptr_eq(&generation.reload_token, &reload_token) => generation,
+            _ => Arc::new(AcmeGeneration::new(reload_token)),
         }
-        self.configs.load().configs.clone()
     }
 
-    pub fn staging_configs(&self) -> Arc<RwLock<Vec<crate::config::AcmeConfig>>> {
-        if self.staging_configs.load().reload_token.is_cancelled() {
-            self.staging_configs
-                .store(Arc::new(ConfigGeneration::current()));
+    /// Installs a new active generation and returns the previous task, if any.
+    fn install_active(&self, task: ActiveTask) -> Option<ActiveTask> {
+        let mut slot = self.active_task.lock();
+        self.active.store(Some(task.generation.clone()));
+        slot.replace(task)
+    }
 
-            // Had to use this, because Tokio's blocking mutex functions would
-            // panic if run in Tokio asynchronous context
-            futures_executor::block_on(self.reset_staging());
+    /// Installs an active generation without a background task.
+    fn install_empty_active(&self, generation: Arc<AcmeGeneration>) -> Option<ActiveTask> {
+        let mut slot = self.active_task.lock();
+        self.active.store(Some(generation));
+        slot.take()
+    }
+
+    /// Challenge cache directories of the active generation.
+    async fn active_challenge_cache_dirs(&self) -> Vec<std::path::PathBuf> {
+        match self.active.load_full() {
+            Some(generation) => generation.challenge_cache_dirs.read().await.clone(),
+            None => Vec::new(),
         }
-        self.staging_configs.load().configs.clone()
-    }
-
-    async fn reset(&self) {
-        // Used on reload: the next configuration generation starts from fresh
-        // state, while the previous one's in-flight orders keep their configs,
-        // and with them their challenge data.
-        self.staging_configs();
-        self.configs();
-        self.prune_challenge_locks().await;
-    }
-
-    async fn reset_staging(&self) {
-        self.on_demand_configs.write().await.clear();
-        self.sni_resolver_lock.write().await.clear();
-        self.challenge_cache_dirs.write().await.clear();
     }
 
     /// Drops challenge data locks that no live config refers to any more.
@@ -174,45 +227,27 @@ impl AcmeTaskState {
             .await
             .retain(|lock| Arc::strong_count(lock) > 1);
     }
-
-    /// Registers a file cache directory for distributed challenge fallback (deduplicated).
-    pub fn register_challenge_cache_dir(&self, dir: std::path::PathBuf) {
-        let mut dirs = self.challenge_cache_dirs.blocking_write();
-        if !dirs.contains(&dir) {
-            dirs.push(dir);
-        }
-    }
 }
 
-/// One configuration generation's ACME configs, with the reload token that ends it.
-struct ConfigGeneration {
-    configs: Arc<RwLock<Vec<crate::config::AcmeConfig>>>,
-    reload_token: Arc<CancellationToken>,
-}
-
-impl ConfigGeneration {
-    /// An empty list for the generation the current reload token belongs to.
-    fn current() -> Self {
-        Self {
-            configs: Arc::new(RwLock::new(Vec::new())),
-            reload_token: ferron_core::shutdown::RELOAD_TOKEN.load_full(),
+/// Retires a previous generation's background task without blocking the caller.
+fn spawn_retirement(runtime: &Runtime, state: Arc<AcmeTaskState>, previous: ActiveTask) {
+    runtime.spawn_secondary_task(async move {
+        // Give the previous generation's in-flight order a chance to finish.
+        // A hung order is cancelled after `RELOAD_DRAIN_TIMEOUT`.
+        previous.drain.cancel();
+        if tokio::time::timeout(RELOAD_DRAIN_TIMEOUT, previous.done.cancelled())
+            .await
+            .is_err()
+        {
+            previous.cancel.cancel();
+            previous.done.cancelled().await;
         }
-    }
 
-    /// An empty list for the generation the specified reload token belongs to.
-    fn with_reload_token(reload_token: Arc<CancellationToken>) -> Self {
-        Self {
-            configs: Arc::new(RwLock::new(Vec::new())),
-            reload_token,
-        }
-    }
-
-    fn new_reload_token(&self, reload_token: Arc<CancellationToken>) -> Self {
-        Self {
-            configs: self.configs.clone(),
-            reload_token,
-        }
-    }
+        // Drop the generation before pruning so only challenge data still
+        // referenced by live configs survives.
+        drop(previous.generation);
+        state.prune_challenge_locks().await;
+    });
 }
 
 /// Global AcmeTaskState holder with interior mutability for the event sink.
@@ -281,7 +316,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
         let dns_client = resolve_dns_client_from_config(ctx.config)?;
 
         let task_state = get_or_init_task_state();
-        let staging_configs = task_state.staging_configs();
+        let generation = task_state.staging_generation();
 
         let acme_result = parse_acme_config(
             ctx.config,
@@ -290,7 +325,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
             task_state.memory_account_cache.clone(),
             task_state.tls_alpn_01_resolvers.clone(),
             task_state.http_01_resolvers.clone(),
-            task_state.sni_resolver_lock.clone(),
+            generation.sni_resolver_lock.clone(),
             dns_client,
         )
         .map_err(|e| format!("Failed to parse ACME config: {e}"))?;
@@ -306,11 +341,11 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                     .cache_dir()
                     .or_else(|| acme_config.certificate_cache.cache_dir())
                 {
-                    task_state.register_challenge_cache_dir(dir);
+                    generation.register_challenge_cache_dir(dir);
                 }
 
                 // Add to configs list
-                staging_configs.blocking_write().push(acme_config);
+                generation.configs.blocking_write().push(acme_config);
 
                 let tls_alpn_resolvers = if challenge_type == ChallengeType::TlsAlpn01 {
                     Some(task_state.tls_alpn_01_resolvers.clone())
@@ -333,7 +368,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                     ticketer,
                     None,
                     error_message,
-                    task_state.challenge_cache_dirs.clone(),
+                    generation.challenge_cache_dirs.clone(),
                 );
 
                 ctx.resolver = Some(Arc::new(acme_resolver));
@@ -343,11 +378,11 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                 let challenge_type = on_demand_config.challenge_type.clone();
                 let error_message = on_demand_config.error_message.clone();
                 if let Some(ref dir) = on_demand_config.cache_path {
-                    task_state.register_challenge_cache_dir(dir.clone());
+                    generation.register_challenge_cache_dir(dir.clone());
                 }
 
                 // Store on-demand config for later use by the background task
-                task_state
+                generation
                     .on_demand_configs
                     .blocking_write()
                     .push(on_demand_config.clone_for_state());
@@ -373,7 +408,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                     ticketer,
                     Some((task_state.on_demand_tx.clone(), on_demand_config.port)),
                     error_message,
-                    task_state.challenge_cache_dirs.clone(),
+                    generation.challenge_cache_dirs.clone(),
                 );
                 ctx.resolver = Some(Arc::new(acme_resolver));
             }
@@ -386,15 +421,11 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
 /// The ACME TLS module that spawns the background provisioning task.
 pub struct TlsAcmeModule {
     task_state: Arc<AcmeTaskState>,
-    cancel_token: CancellationToken,
 }
 
 impl TlsAcmeModule {
     fn new(task_state: Arc<AcmeTaskState>) -> Self {
-        Self {
-            task_state,
-            cancel_token: CancellationToken::new(),
-        }
+        Self { task_state }
     }
 }
 
@@ -408,25 +439,27 @@ impl Module for TlsAcmeModule {
     }
 
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
-        // Instantly cancel previous config
-        self.task_state
-            .generation_token
-            .swap(Arc::new(CancellationToken::new()))
-            .cancel();
-        let configs = self.task_state.configs();
+        let generation = self.task_state.promote_generation();
+        let configs = generation.configs.clone();
         let configs_guard = configs.blocking_read();
         let configs_count = configs_guard.len();
-        if configs_count == 0 && self.task_state.on_demand_configs.blocking_read().is_empty() {
-            // No eager or on-demand configs, nothing to do
-            return Ok(());
-        }
-
+        let on_demand_empty = generation.on_demand_configs.blocking_read().is_empty();
         let domains: Vec<_> = configs_guard
             .iter()
             .flat_map(|c| c.domains.iter())
             .cloned()
             .collect();
         drop(configs_guard);
+
+        if configs_count == 0 && on_demand_empty {
+            // No eager or on-demand configs. Retire any task left over from the
+            // previous generation and make the empty generation visible to
+            // challenge handling.
+            if let Some(previous) = self.task_state.install_empty_active(generation) {
+                spawn_retirement(runtime, self.task_state.clone(), previous);
+            }
+            return Ok(());
+        }
 
         let event_sink = self
             .task_state
@@ -457,27 +490,33 @@ impl Module for TlsAcmeModule {
         );
 
         // Clone all state needed for the background task
-        let state = self.task_state.clone();
-        let on_demand_configs = state.on_demand_configs.blocking_read().clone();
-        let memory_account_cache = state.memory_account_cache.clone();
-        let on_demand_rx = state.on_demand_rx.clone();
-        let sni_resolver_lock = state.sni_resolver_lock.clone();
-        let tls_alpn_01_resolvers = state.tls_alpn_01_resolvers.clone();
-        let http_01_resolvers = state.http_01_resolvers.clone();
-        let challenge_cache_dirs = state.challenge_cache_dirs.clone();
-        let cancel_token = self.cancel_token.clone();
+        let on_demand_configs = generation.on_demand_configs.blocking_read().clone();
+        let memory_account_cache = self.task_state.memory_account_cache.clone();
+        let on_demand_rx = self.task_state.on_demand_rx.clone();
+        let sni_resolver_lock = generation.sni_resolver_lock.clone();
+        let tls_alpn_01_resolvers = self.task_state.tls_alpn_01_resolvers.clone();
+        let http_01_resolvers = self.task_state.http_01_resolvers.clone();
+        let challenge_cache_dirs = generation.challenge_cache_dirs.clone();
 
-        let cancel_token2 = cancel_token.clone();
-        let state2 = state.clone();
+        let cancel_token = CancellationToken::new();
         let drain_token = CancellationToken::new();
-        let drain_token2 = drain_token.clone();
         let done_token = CancellationToken::new();
-        let done_token2 = done_token.clone();
+        let done_guard = done_token.clone();
+        let task_cancel = cancel_token.clone();
+
+        // Install the new generation before retiring the old one, so the old
+        // generation stays fully functional if the reload failed.
+        let previous = self.task_state.install_active(ActiveTask {
+            generation,
+            cancel: cancel_token,
+            drain: drain_token.clone(),
+            done: done_token,
+        });
 
         runtime.spawn_secondary_task(async move {
-            // Tells the reload watcher the task has ended, even by panicking.
-            let _done = done_token.drop_guard();
-            cancel_token
+            // Tells the retirement watcher the task has ended, even by panicking.
+            let _done = done_guard.drop_guard();
+            task_cancel
                 .run_until_cancelled(run_acme_background_task(
                     configs,
                     on_demand_rx,
@@ -493,30 +532,9 @@ impl Module for TlsAcmeModule {
                 .await;
         });
 
-        runtime.spawn_secondary_task(async move {
-            // Wait until reload is requested
-            state2.generation_token.load().cancelled().await;
-            state2
-                .generation_token
-                .swap(Arc::new(CancellationToken::new()))
-                .cancel();
-
-            // Give the next configuration generation fresh state, and let this
-            // generation's in-flight order finish instead of throwing away its
-            // progress. Its certificate reaches the next generation through the
-            // cache. A hung order is cancelled after `RELOAD_DRAIN_TIMEOUT`.
-            state2.reset().await;
-            drain_token2.cancel();
-            if tokio::time::timeout(RELOAD_DRAIN_TIMEOUT, done_token2.cancelled())
-                .await
-                .is_err()
-            {
-                cancel_token2.cancel();
-                done_token2.cancelled().await;
-            }
-            // This generation's configs are gone, so drop their challenge data.
-            state2.prune_challenge_locks().await;
-        });
+        if let Some(previous) = previous {
+            spawn_retirement(runtime, self.task_state.clone(), previous);
+        }
 
         Ok(())
     }
@@ -1218,18 +1236,107 @@ fn resolve_dns_client_from_config(
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_reset_keeps_challenge_data_of_live_configs() {
+    fn token() -> Arc<CancellationToken> {
+        Arc::new(CancellationToken::new())
+    }
+
+    #[test]
+    fn staging_generation_is_reused_within_one_load_attempt() {
         let state = AcmeTaskState::new();
-        let previous_configs = state.configs();
-        // Request a reload the way the ACME module does
-        ferron_core::shutdown::RELOAD_TOKEN
-            .swap(Arc::new(CancellationToken::new()))
-            .cancel();
-        state
-            .generation_token
-            .swap(Arc::new(CancellationToken::new()))
-            .cancel();
+        let reload_token = token();
+
+        let first = state.staging_generation_for(reload_token.clone());
+        let second = state.staging_generation_for(reload_token);
+
+        assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn staging_generation_rotates_for_a_new_load_attempt() {
+        let state = AcmeTaskState::new();
+
+        let first = state.staging_generation_for(token());
+        let second = state.staging_generation_for(token());
+
+        assert!(!Arc::ptr_eq(&first, &second));
+        assert!(!Arc::ptr_eq(&first.configs, &second.configs));
+        assert!(!Arc::ptr_eq(
+            &first.on_demand_configs,
+            &second.on_demand_configs
+        ));
+        assert!(!Arc::ptr_eq(
+            &first.sni_resolver_lock,
+            &second.sni_resolver_lock
+        ));
+        assert!(!Arc::ptr_eq(
+            &first.challenge_cache_dirs,
+            &second.challenge_cache_dirs
+        ));
+    }
+
+    #[test]
+    fn promotion_takes_the_staging_generation() {
+        let state = AcmeTaskState::new();
+        let reload_token = token();
+
+        let staging = state.staging_generation_for(reload_token.clone());
+        let active = state.promote_generation_for(reload_token);
+
+        assert!(Arc::ptr_eq(&staging, &active));
+    }
+
+    #[test]
+    fn failed_load_does_not_touch_the_active_generation() {
+        let state = AcmeTaskState::new();
+        let active = state.promote_generation_for(token());
+        state.active.store(Some(active.clone()));
+
+        // A failed load only builds a staging generation. It must not reach the
+        // generation whose background task is still running.
+        let failed = state.staging_generation_for(token());
+        failed.register_challenge_cache_dir(std::path::PathBuf::from("/tmp/failed"));
+        assert!(active.challenge_cache_dirs.blocking_read().is_empty());
+
+        let current = state.active.load_full().expect("active generation");
+        assert!(Arc::ptr_eq(&current, &active));
+    }
+
+    #[test]
+    fn promotion_without_staging_yields_an_empty_generation() {
+        let state = AcmeTaskState::new();
+
+        // A previous load attempt left a staging generation behind.
+        let stale = state.staging_generation_for(token());
+        stale.register_challenge_cache_dir(std::path::PathBuf::from("/tmp/stale"));
+
+        // The next attempt removed all ACME configuration, so no provider built
+        // a staging generation for its token.
+        let promoted = state.promote_generation_for(token());
+
+        assert!(!Arc::ptr_eq(&stale, &promoted));
+        assert!(promoted.configs.blocking_read().is_empty());
+        assert!(promoted.on_demand_configs.blocking_read().is_empty());
+        assert!(promoted.challenge_cache_dirs.blocking_read().is_empty());
+    }
+
+    #[test]
+    fn installing_a_new_active_task_returns_the_previous_one() {
+        let state = AcmeTaskState::new();
+
+        let task = |generation_token| ActiveTask {
+            generation: Arc::new(AcmeGeneration::new(generation_token)),
+            cancel: CancellationToken::new(),
+            drain: CancellationToken::new(),
+            done: CancellationToken::new(),
+        };
+
+        assert!(state.install_active(task(token())).is_none());
+        assert!(state.install_active(task(token())).is_some());
+    }
+
+    #[tokio::test]
+    async fn prune_challenge_locks_keeps_data_referenced_by_live_configs() {
+        let state = AcmeTaskState::new();
         let live: crate::challenge::Http01DataLock = Arc::new(RwLock::new(None));
         state.http_01_resolvers.write().await.push(live.clone());
         state
@@ -1238,16 +1345,8 @@ mod tests {
             .await
             .push(Arc::new(RwLock::new(None)));
 
-        state.reset().await;
+        state.prune_challenge_locks().await;
 
-        // The next generation gets a fresh config list once; the previous one
-        // keeps its own.
-        let next_configs = state.configs();
-        assert!(!Arc::ptr_eq(&previous_configs, &next_configs));
-        state.reset().await;
-        assert!(Arc::ptr_eq(&next_configs, &state.configs()));
-        // Challenge data still referenced by a draining order survives the reset,
-        // and orphaned entries are dropped.
         let resolvers = state.http_01_resolvers.read().await;
         assert_eq!(resolvers.len(), 1);
         assert!(Arc::ptr_eq(&resolvers[0], &live));

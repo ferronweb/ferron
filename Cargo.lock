@@ -2136,7 +2136,6 @@ dependencies = [
  "ferron-observability",
  "ferron-ocsp",
  "ferron-tls",
- "futures-executor",
  "futures-util",
  "http",
  "http-body-util",

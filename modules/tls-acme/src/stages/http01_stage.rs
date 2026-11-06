@@ -65,7 +65,7 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
                 let token = path
                     .strip_prefix(crate::challenge::http01::ACME_CHALLENGE_PATH_PREFIX)
                     .unwrap_or("");
-                let dirs = task_state.challenge_cache_dirs.read().await.clone();
+                let dirs = task_state.active_challenge_cache_dirs().await;
                 let mut found = None;
                 for dir in &dirs {
                     if let Some(ka) =
