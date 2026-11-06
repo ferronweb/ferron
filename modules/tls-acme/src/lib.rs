@@ -57,9 +57,13 @@ use crate::resolver::{AcmeResolverInner, TlsAcmeResolver};
 /// Shared state for the ACME background task.
 pub struct AcmeTaskState {
     /// ACME configs of the current configuration generation (both eager and
-    /// dynamically added on-demand). A reload starts a fresh list, so the
-    /// previous generation's in-flight orders can finish with their own.
-    configs: parking_lot::Mutex<ConfigGeneration>,
+    /// dynamically added on-demand).
+    configs: arc_swap::ArcSwap<ConfigGeneration>,
+    /// ACME configs of the next configuration generation
+    staging_configs: arc_swap::ArcSwap<ConfigGeneration>,
+    /// A token for determining configuration generation.
+    /// If there is new configuration generation, the previous token is canceled.
+    generation_token: arc_swap::ArcSwap<CancellationToken>,
     /// On-demand configurations for lazy certificate issuance.
     pub on_demand_configs: Arc<RwLock<Vec<crate::config::AcmeOnDemandConfigData>>>,
     /// Channel sender for on-demand certificate requests.
@@ -94,8 +98,13 @@ impl Default for AcmeTaskState {
 impl AcmeTaskState {
     pub fn new() -> Self {
         let (tx, rx) = async_channel::unbounded();
+        let generation_token = arc_swap::ArcSwap::from_pointee(CancellationToken::new());
         Self {
-            configs: parking_lot::Mutex::new(ConfigGeneration::current()),
+            configs: arc_swap::ArcSwap::from_pointee(ConfigGeneration::with_reload_token(
+                generation_token.load_full(),
+            )),
+            staging_configs: arc_swap::ArcSwap::from_pointee(ConfigGeneration::current()),
+            generation_token,
             on_demand_configs: Arc::new(RwLock::new(Vec::new())),
             on_demand_tx: tx,
             on_demand_rx: rx,
@@ -117,20 +126,39 @@ impl AcmeTaskState {
     /// The first caller after a reload, whether loading the new configuration
     /// or resetting the old generation, starts the next generation's list.
     pub fn configs(&self) -> Arc<RwLock<Vec<crate::config::AcmeConfig>>> {
-        let mut generation = self.configs.lock();
-        if generation.reload_token.is_cancelled() {
-            *generation = ConfigGeneration::current();
+        if self.configs.load().reload_token.is_cancelled() {
+            self.configs.store(Arc::new(
+                self.staging_configs
+                    .load()
+                    .new_reload_token(self.generation_token.load_full()),
+            ));
         }
-        generation.configs.clone()
+        self.configs.load().configs.clone()
+    }
+
+    pub fn staging_configs(&self) -> Arc<RwLock<Vec<crate::config::AcmeConfig>>> {
+        if self.staging_configs.load().reload_token.is_cancelled() {
+            self.staging_configs
+                .store(Arc::new(ConfigGeneration::current()));
+
+            // Had to use this, because Tokio's blocking mutex functions would
+            // panic if run in Tokio asynchronous context
+            futures_executor::block_on(self.reset_staging());
+        }
+        self.staging_configs.load().configs.clone()
     }
 
     async fn reset(&self) {
         // Used on reload: the next configuration generation starts from fresh
         // state, while the previous one's in-flight orders keep their configs,
         // and with them their challenge data.
+        self.staging_configs();
         self.configs();
-        self.on_demand_configs.write().await.clear();
         self.prune_challenge_locks().await;
+    }
+
+    async fn reset_staging(&self) {
+        self.on_demand_configs.write().await.clear();
         self.sni_resolver_lock.write().await.clear();
         self.challenge_cache_dirs.write().await.clear();
     }
@@ -168,6 +196,21 @@ impl ConfigGeneration {
         Self {
             configs: Arc::new(RwLock::new(Vec::new())),
             reload_token: ferron_core::shutdown::RELOAD_TOKEN.load_full(),
+        }
+    }
+
+    /// An empty list for the generation the specified reload token belongs to.
+    fn with_reload_token(reload_token: Arc<CancellationToken>) -> Self {
+        Self {
+            configs: Arc::new(RwLock::new(Vec::new())),
+            reload_token,
+        }
+    }
+
+    fn new_reload_token(&self, reload_token: Arc<CancellationToken>) -> Self {
+        Self {
+            configs: self.configs.clone(),
+            reload_token,
         }
     }
 }
@@ -238,6 +281,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
         let dns_client = resolve_dns_client_from_config(ctx.config)?;
 
         let task_state = get_or_init_task_state();
+        let staging_configs = task_state.staging_configs();
 
         let acme_result = parse_acme_config(
             ctx.config,
@@ -266,7 +310,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                 }
 
                 // Add to configs list
-                task_state.configs().blocking_write().push(acme_config);
+                staging_configs.blocking_write().push(acme_config);
 
                 let tls_alpn_resolvers = if challenge_type == ChallengeType::TlsAlpn01 {
                     Some(task_state.tls_alpn_01_resolvers.clone())
@@ -364,6 +408,11 @@ impl Module for TlsAcmeModule {
     }
 
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
+        // Instantly cancel previous config
+        self.task_state
+            .generation_token
+            .swap(Arc::new(CancellationToken::new()))
+            .cancel();
         let configs = self.task_state.configs();
         let configs_guard = configs.blocking_read();
         let configs_count = configs_guard.len();
@@ -446,7 +495,11 @@ impl Module for TlsAcmeModule {
 
         runtime.spawn_secondary_task(async move {
             // Wait until reload is requested
-            ferron_core::shutdown::RELOAD_TOKEN.load().cancelled().await;
+            state2.generation_token.load().cancelled().await;
+            state2
+                .generation_token
+                .swap(Arc::new(CancellationToken::new()))
+                .cancel();
 
             // Give the next configuration generation fresh state, and let this
             // generation's in-flight order finish instead of throwing away its
@@ -1169,8 +1222,12 @@ mod tests {
     async fn test_reset_keeps_challenge_data_of_live_configs() {
         let state = AcmeTaskState::new();
         let previous_configs = state.configs();
-        // Request a reload the way the admin API and SIGHUP do.
+        // Request a reload the way the ACME module does
         ferron_core::shutdown::RELOAD_TOKEN
+            .swap(Arc::new(CancellationToken::new()))
+            .cancel();
+        state
+            .generation_token
             .swap(Arc::new(CancellationToken::new()))
             .cancel();
         let live: crate::challenge::Http01DataLock = Arc::new(RwLock::new(None));

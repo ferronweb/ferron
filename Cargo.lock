@@ -2123,6 +2123,7 @@ name = "ferron-tls-acme"
 version = "3.0.0-rc.10"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-channel",
  "async-trait",
  "base64 0.23.1",
@@ -2135,6 +2136,7 @@ dependencies = [
  "ferron-observability",
  "ferron-ocsp",
  "ferron-tls",
+ "futures-executor",
  "futures-util",
  "http",
  "http-body-util",
