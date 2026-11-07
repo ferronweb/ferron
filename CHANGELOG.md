@@ -36,6 +36,10 @@
 
 ### Fixed
 
+#### HTTP server core
+
+- **Many HTTP correctness improvements**: improved HTTP/3 correctness, as well as fixed HTTP/2 graceful shutdown stall bug, and more (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0415)).
+
 #### Automatic TLS
 
 - **Fixed TLS parameter support for ACME**: the server now accepts TLS cryptographic parameters and client certificate authentication settings for ACME TLS provider. ([GitHub issue](https://github.com/ferronweb/ferron/issues/986))
