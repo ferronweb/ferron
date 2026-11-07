@@ -106,7 +106,9 @@ If you omit both, Ferron uses the safe default range (TLS 1.2 to 1.3). Setting o
 ### Client certificate authentication (mTLS)
 
 - `client_auth [bool: boolean]`
-  - This directive turns client certificate authentication on or off. When `true`, clients must present a valid certificate. Default: `client_auth false`
+  - This directive turns client certificate authentication on or off. Default: `client_auth false`
+- `client_auth_required [bool: boolean]`
+  - This directive specifies whether clients must present a valid certificate if mTLS is enabled. Default: `client_auth_required true`
 - `client_auth_ca <source: string>`
   - This directive specifies the source of trusted CA certificates for verifying client certificates. Supported values: a file path (`"/path/ca-cert.pem"`), `system` (OS native root store, requires `native-certs` feature), `webpki` (Mozilla root bundle). Default: `client_auth_ca webpki`
 
@@ -169,6 +171,7 @@ api.example.com {
 
 - **`max_version TLSv1.2`**: Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
 - **`client_auth` with public trust store**: Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS instead.
+- **`client_auth_required false`**: This directive setting allows unauthenticated connections. If possible, prefer denying unauthenticated connections for better access control.
 - **`ocsp` disabled**: OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
 - **`ticket_keys` without `auto_rotate`**: Session ticket keys should rotate automatically in production to limit the impact of key compromise.
 - **`ticket_keys.max_keys` outside 2–5**: The optimal range keeps enough old keys for rotation without interruption and without excessive retention.

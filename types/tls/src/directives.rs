@@ -51,8 +51,19 @@ pub fn register_tls_common_directives(
                 name: "client_auth",
                 usage: "client_auth [bool]",
                 description: "This directive specifies whether client certificate \
-            authentication (mTLS) is enabled. When true, clients must present a valid \
-            certificate. Default: disabled",
+            authentication (mTLS) is enabled. Default: disabled",
+                applicable_protocols,
+                global_only: false,
+                subblock_link: None,
+            },
+            subblock,
+        )
+        .register(
+            Directive {
+                name: "client_auth_required",
+                usage: "client_auth_required [bool]",
+                description: "This directive specifies whether clients must present \
+                a valid certificate if mTLS is enabled. Default: enabled",
                 applicable_protocols,
                 global_only: false,
                 subblock_link: None,

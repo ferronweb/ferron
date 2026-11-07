@@ -10,6 +10,10 @@
 
 - **Custom CA trust anchors**: added support for custom CA bundle paths (`ca`) in reverse proxy configurations for verifying TLS certificates not trusted by standard CA stores (which are often used in internal or private networks). ([GitHub issue](https://github.com/ferronweb/ferron/issues/978))
 
+#### TLS
+
+- **Support for unauthenticated requests for mTLS**: added `client_auth_required` subdirective for `tls` block, which can allow unauthenticated connections even if mTLS is enabled.
+
 #### Automatic TLS
 
 - **Control over TLS certificate key algorithms**: added support for `key_algo` and `key_size` configuration options in ACME automatic TLS configurations. They can be used to configure TLS certificate key (for example, it could be set to RSA with 2048-bit keys or ECDSA). ([GitHub issue](https://github.com/ferronweb/ferron/issues/976))
