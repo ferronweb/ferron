@@ -330,6 +330,13 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
         )
         .map_err(|e| format!("Failed to parse ACME config: {e}"))?;
 
+        let tls_config = ferron_tls::config::TlsServerConfig::from_config(ctx.config)
+            .map_err(|e| std::io::Error::other(format!("Invalid TLS configuration: {e}")))?;
+        let tls_config_builder = ferron_tls::builder::build_server_config_builder(
+            &tls_config.crypto,
+            &tls_config.client_auth,
+        )?;
+
         match acme_result {
             AcmeConfigOrOnDemand::Eager(acme_config) => {
                 let certified_key_lock = acme_config.certified_key_lock.clone();
@@ -360,6 +367,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                 let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
 
                 let acme_resolver = TlsAcmeResolver::new(
+                    tls_config_builder,
                     AcmeResolverInner::Eager(certified_key_lock),
                     tls_alpn_resolvers,
                     alpn_protocols,
@@ -400,6 +408,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
                 let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
 
                 let acme_resolver = TlsAcmeResolver::new(
+                    tls_config_builder,
                     AcmeResolverInner::OnDemand(sni_resolver_lock),
                     tls_alpn_resolvers,
                     alpn_protocols,

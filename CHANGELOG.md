@@ -38,6 +38,7 @@
 
 #### Automatic TLS
 
+- **Fixed TLS parameter support for ACME**: the server now accepts TLS cryptographic parameters and client certificate authentication settings for ACME TLS provider. ([GitHub issue](https://github.com/ferronweb/ferron/issues/986))
 - **Orphaned provisioning locks after reloads**: when a configuration reload cancelled an ACME order in progress, its `lock_certificate_*` lockfile stayed in the cache, and the domain got no certificate until the 5-minute lock lease expired. The lockfile is now removed when the order is cancelled. ([thank you, @neurekadev](https://github.com/ferronweb/ferron/pull/988))
 
 #### OCSP stapling

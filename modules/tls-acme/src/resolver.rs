@@ -82,6 +82,9 @@ use ferron_tls::config::OcspConfig;
 /// `ServerConfig`. If the client sends the `acme-tls/1` ALPN, the resolver looks
 /// up the matching challenge certificate from the shared TLS-ALPN-01 locks.
 pub struct TlsAcmeResolver {
+    /// TLS configuration builder used for constructing server configs
+    tls_config_builder:
+        rustls::ConfigBuilder<rustls::ServerConfig, rustls::server::WantsServerCert>,
     /// The main resolver for the ACME-obtained certificate.
     acme_resolver: Arc<AcmeResolver>,
     /// Optional shared list of TLS-ALPN-01 data locks.
@@ -116,6 +119,10 @@ impl TlsAcmeResolver {
     /// * `error_message` - Lock for provisioning error message
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        tls_config_builder: rustls::ConfigBuilder<
+            rustls::ServerConfig,
+            rustls::server::WantsServerCert,
+        >,
         certified_key_lock: AcmeResolverInner,
         tls_alpn_01_resolvers: Option<Arc<RwLock<Vec<crate::challenge::TlsAlpn01DataLock>>>>,
         alpn_protocols: Vec<Vec<u8>>,
@@ -129,6 +136,7 @@ impl TlsAcmeResolver {
         let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock, on_demand_tx));
 
         Self {
+            tls_config_builder,
             acme_resolver,
             tls_alpn_01_resolvers,
             alpn_protocols,
@@ -184,11 +192,9 @@ impl TlsAcmeResolver {
 
     /// Builds a ServerConfig for normal ACME certificate serving.
     fn build_normal_config(&self) -> ServerConfig {
-        let provider = rustls::crypto::aws_lc_rs::default_provider();
-        let mut config = ServerConfig::builder_with_provider(Arc::new(provider))
-            .with_safe_default_protocol_versions()
-            .expect("valid protocol versions")
-            .with_no_client_auth()
+        let mut config = self
+            .tls_config_builder
+            .clone()
             .with_cert_resolver(self.acme_resolver.clone());
         config.alpn_protocols.clone_from(&self.alpn_protocols);
 
