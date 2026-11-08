@@ -15,7 +15,7 @@ zincio-http = { version = "0.4.2", default-features = false, features = [
     "h3-quinn",
 ] }
 zincio-quinn = { version = "0.2.22" }
-parking_lot = "0.12"
+parking_lot = "0.13"
 arc-swap = "1.7"
 http = "1"
 http-body-util = "0.1.3"

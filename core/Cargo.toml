@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
-parking_lot = "0.12"
+parking_lot = "0.13"
 tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 arc-swap = "1.9.0"
