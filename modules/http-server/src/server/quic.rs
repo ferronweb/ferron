@@ -473,7 +473,7 @@ async fn handle_http3_connection(
         hinted_hostname.as_deref(),
     );
     let connection_trace_sampler = connection_observability.trace_sampler().cloned();
-    let handler_state = Arc::new(RequestHandlerState {
+    let handler_state = std::rc::Rc::new(RequestHandlerState {
         pipeline,
         file_pipeline,
         error_pipeline,

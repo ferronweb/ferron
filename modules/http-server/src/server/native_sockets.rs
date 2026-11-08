@@ -115,10 +115,10 @@ pub(crate) fn build_http2_options(connection_options: &HttpConnectionOptions) ->
 
 #[inline]
 pub(crate) fn build_bad_request_handler(
-    state: Arc<RequestHandlerState>,
+    state: std::rc::Rc<RequestHandlerState>,
 ) -> impl Fn(bool) -> RequestHandlerFuture {
     move |is_timeout: bool| {
-        let state = Arc::clone(&state);
+        let state = std::rc::Rc::clone(&state);
         Box::pin(async move {
             let request_observability = state.connection_observability.clone();
             crate::handler::bad_request_handler(
@@ -126,7 +126,7 @@ pub(crate) fn build_bad_request_handler(
                 state.local_address,
                 state.remote_address,
                 state.unix_socket_path.clone(),
-                state.error_pipeline.clone(),
+                &state.error_pipeline,
                 request_observability,
                 state.host_control_plane_metadata.clone(),
                 state.host_control_plane_span_links.clone(),
@@ -154,7 +154,7 @@ pub(crate) fn build_request_handler_state(
     connection_options: &HttpConnectionOptions,
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
     tls_params: Option<TlsConnectionParams>,
-) -> Arc<RequestHandlerState> {
+) -> std::rc::Rc<RequestHandlerState> {
     let (local_address, remote_address, unix_socket_path) = match conn_addr {
         ConnectionAddr::Tcp {
             remote_address,
@@ -173,7 +173,7 @@ pub(crate) fn build_request_handler_state(
         hinted_hostname.as_deref(),
     );
     let connection_trace_sampler = connection_observability.trace_sampler().cloned();
-    Arc::new(RequestHandlerState {
+    std::rc::Rc::new(RequestHandlerState {
         pipeline,
         file_pipeline,
         error_pipeline,

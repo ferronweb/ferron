@@ -203,9 +203,11 @@ example.com {
 
 - `no_verification [bool: boolean]` (`http-proxy`)
   - This directive specifies whether to disable TLS certificate checks for HTTPS upstreams. Default: `no_verification false`
+- `ca <path: string>` (`http-proxy`)
+  - This directive sets the CA bundle path for upstream connections for TLS certificate verification. Default: none (uses system or Mozilla's CA roots)
 
 > [!warning]
-> Only use `no_verification true` in testing or trusted internal networks.
+> Only use `no_verification true` in testing or trusted internal networks. For trusted internal networks, you can use `ca` subdirective with a path to a CA bundle to check TLS certificates against own certificate authorities.
 
 ### Client certificate authentication (mTLS)
 

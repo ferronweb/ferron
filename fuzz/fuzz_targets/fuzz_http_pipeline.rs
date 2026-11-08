@@ -85,14 +85,12 @@ fuzz_target!(|input: &[u8]| {
         return;
     };
 
-    let pipeline: Arc<Pipeline<HttpContext>> = Arc::new(
-        Pipeline::new()
-            .add_stage(Arc::new(ClientIpFromHeaderStage))
-            .add_stage(Arc::new(HttpsRedirectStage)),
-    );
-    let file_pipeline: Arc<Pipeline<HttpFileContext>> = Arc::new(Pipeline::new());
-    let error_pipeline: Arc<Pipeline<HttpErrorContext>> = Arc::new(Pipeline::new());
-    let resolver: Arc<ThreeStageResolver> = Arc::new(ThreeStageResolver::new());
+    let pipeline: Pipeline<HttpContext> = Pipeline::new()
+        .add_stage(Arc::new(ClientIpFromHeaderStage))
+        .add_stage(Arc::new(HttpsRedirectStage));
+    let file_pipeline: Pipeline<HttpFileContext> = Pipeline::new();
+    let error_pipeline: Pipeline<HttpErrorContext> = Pipeline::new();
+    let resolver: ThreeStageResolver = ThreeStageResolver::new();
     let events = CompositeEventSink::new(vec![]);
 
     let local_address: SocketAddr = "127.0.0.1:80".parse().expect("hardcoded local address");
@@ -107,10 +105,10 @@ fuzz_target!(|input: &[u8]| {
     rt.block_on(async {
         let _result = request_handler(
             request,
-            pipeline,
-            file_pipeline,
-            error_pipeline,
-            resolver,
+            &pipeline,
+            &file_pipeline,
+            &error_pipeline,
+            &resolver,
             Some(local_address),
             Some(remote_address),
             None,

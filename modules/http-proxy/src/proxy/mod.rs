@@ -27,8 +27,8 @@ use crate::upstream::{record_backend_response, record_backend_transport_failure,
 use crate::ProxyMetrics;
 
 use self::affinity::maybe_set_affinity_cookie;
-use self::tls::cached_tls_config;
 
+pub(crate) use self::tls::cached_tls_config;
 pub(crate) use self::tls::clear_tls_client_config_cache;
 
 const LOG_TARGET: &str = "ferron-http-proxy";

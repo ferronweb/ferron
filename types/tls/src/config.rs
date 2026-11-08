@@ -183,7 +183,8 @@ impl TlsClientAuthConfig {
     ///
     /// Recognized directives:
     /// - `client_auth true|false`: enables/disables mTLS (default: `false`).
-    ///   When `true`, client certs are required.
+    /// - `client_auth true|false`: enables/disables mTLS authenticated requirement
+    ///   (default: `true`).
     /// - `client_auth_ca <path|system|webpki>`: CA certificate source:
     ///   - A file path: load a single CA cert
     ///   - `system`: native OS trust store
@@ -191,23 +192,12 @@ impl TlsClientAuthConfig {
     ///
     /// If `client_auth_ca` is omitted, defaults to `webpki`.
     pub fn from_config(config: &ServerConfigurationBlock) -> Self {
-        let enabled = config
-            .get_value("client_auth")
-            .map(|v| {
-                // Accept both boolean and string "true"/"false"
-                if let Some(b) = v.as_boolean() {
-                    b
-                } else if let Some(s) = v.as_str() {
-                    s.eq_ignore_ascii_case("true")
-                } else {
-                    false
-                }
-            })
-            .unwrap_or(false);
-
-        // client_auth as a boolean: true => required, false => disabled
-        // We keep it simple: enabled=true means required=true
-        let required = enabled;
+        let enabled = config.get_flag("client_auth");
+        let required = enabled
+            && config
+                .get_value("client_auth_required")
+                .and_then(|v| v.as_boolean())
+                .unwrap_or(true);
 
         let ca_source = match collect_first_string(config, "client_auth_ca").as_deref() {
             Some("system") => TlsClientAuthCaSource::SystemRoots,
@@ -470,6 +460,14 @@ pub fn add_tls_common_best_practice_diagnostics(
     }
 
     if config.get_flag("client_auth") {
+        if let Some((ServerConfigurationValue::Boolean(false, _), span)) =
+            directive_value(config, "client_auth_required")
+        {
+            validator_ctx.add_best_practice_violation(
+                "`client_auth_required false` allows unauthenticated connections; if possible, prefer denying unauthenticated connections",
+                span,
+            );
+        }
         match directive_value(config, "client_auth_ca") {
             Some((ServerConfigurationValue::String(source, _), span))
                 if source == "system" || source == "webpki" =>
@@ -564,7 +562,8 @@ macro_rules! validate_tls_common {
            validate_directive!($config, used, key, optional args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
 
            // mTLS configuration
-           validate_directive!($config, used, client_auth, optional args(1) => [ServerConfigurationValue::Boolean(_, _) | ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
+           validate_directive!($config, used, client_auth, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {});
+           validate_directive!($config, used, client_auth_required, optional args(1) => [ServerConfigurationValue::Boolean(_, _)], {});
            validate_directive!($config, used, client_auth_ca, optional args(*) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)], {});
 
            // TLS protocol configuration

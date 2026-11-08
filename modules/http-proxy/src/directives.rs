@@ -164,6 +164,13 @@ pub(crate) fn register_upstream_connection_directives(
         "This directive sets custom DNS servers for upstream backend resolution.",
         subblock("http_proxy_upstream"),
     );
+    register_directive(
+        registry,
+        "ca",
+        "ca <path>",
+        "This directive sets the CA bundle path for upstream connections for TLS certificate verification.",
+        subblock("http_proxy_upstream"),
+    );
 }
 
 #[inline]

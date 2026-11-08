@@ -28,7 +28,7 @@ pub async fn bad_request_handler(
     local_address: Option<SocketAddr>,
     remote_address: Option<SocketAddr>,
     unix_socket_path: Option<PathBuf>,
-    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
+    error_pipeline: &Pipeline<HttpErrorContext>,
     events: CompositeEventSink,
     control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
     control_plane_span_links: Option<Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>>,
@@ -102,7 +102,7 @@ pub async fn bad_request_handler(
         trace_context: None,
     }));
     let mut response = if let Some(response) = execute_error_pipeline(
-        error_pipeline.as_ref(),
+        error_pipeline,
         status_code,
         None,
         LayeredConfiguration::default(),

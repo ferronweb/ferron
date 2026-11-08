@@ -30,9 +30,11 @@ else:
     OCSP_CRT = CA_CRT
     OCSP_KEY = CA_KEY
 
+
 def write_pem(path, data):
     with open(path, "wb") as f:
         f.write(data)
+
 
 def generate():
     # If certs already present, skip generation
@@ -145,6 +147,7 @@ def generate():
             ),
         )
 
+
 def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
     ocsp_cert = x509.load_pem_x509_certificate(open(OCSP_CRT, "rb").read())
     ocsp_key = serialization.load_pem_private_key(
@@ -209,6 +212,7 @@ def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
 
     return ocsp_resp.public_bytes(serialization.Encoding.DER)
 
+
 def parse_ocsp_request(data):
     # data is raw DER
     req = x509_ocsp.load_der_ocsp_request(data)
@@ -219,11 +223,14 @@ def parse_ocsp_request(data):
     serial_number = req.serial_number
     return hash, issuer_name_hash, issuer_key_hash, serial_number
 
+
 app = Flask(__name__)
+
 
 @app.route("/ready", methods=["GET"])
 def ready():
     return "OK\n", 200
+
 
 @app.route("/", methods=["POST"])
 def ocsp():
@@ -257,10 +264,10 @@ def ocsp():
             key_hash = hashlib.sha1(pubkey_bitstring).digest()
             algo = hashes.SHA1()
         else:
-            # default to sha256
-            name_hash = hashlib.sha256(issuer_name_der).digest()
-            key_hash = hashlib.sha256(pubkey_bitstring).digest()
-            algo = hashes.SHA256()
+            # default to sha1
+            name_hash = hashlib.sha1(issuer_name_der).digest()
+            key_hash = hashlib.sha1(pubkey_bitstring).digest()
+            algo = hashes.SHA1()
 
         # Ensure issuer binding matches
         if name_hash != issuer_name_hash or key_hash != issuer_key_hash:
@@ -292,6 +299,7 @@ def ocsp():
     except Exception as e:
         print("ocsp error:", e)
         return ("", 500)
+
 
 if __name__ == "__main__":
     os.makedirs(CERT_DIR, exist_ok=True)

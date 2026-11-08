@@ -73,8 +73,7 @@ pub async fn check_certificate_validity_or_install_cached(
         }
     }
 
-    let certificate_cache_key =
-        get_certificate_cache_key(&config.domains, config.profile.as_deref());
+    let certificate_cache_key = get_certificate_cache_key(config);
     if let Some(serialized_data) = config.certificate_cache.get(&certificate_cache_key).await {
         if let Ok(data) = serde_json::from_slice::<CertificateCacheData>(&serialized_data) {
             if let Ok(certs) = CertificateDer::pem_slice_iter(data.certificate_chain_pem.as_bytes())

@@ -102,7 +102,7 @@ pub fn scale_delta(max_size: i32, bin: i32, start_bin: i32, length: i32) -> u32 
         high = start_bin + length - 1;
     }
     let mut count = 0u32;
-    while high - low >= max_size {
+    while high.saturating_sub(low) >= max_size {
         low >>= 1;
         high >>= 1;
         count += 1;

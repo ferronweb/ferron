@@ -367,10 +367,10 @@ pub fn normalize_host_for_lookup(host: &str) -> Option<String> {
 
 #[inline]
 pub fn build_request_handler(
-    state: Arc<RequestHandlerState>,
+    state: std::rc::Rc<RequestHandlerState>,
 ) -> impl Fn(Request<zincio_http::Incoming>) -> RequestHandlerFuture {
     move |request: Request<zincio_http::Incoming>| {
-        let state = Arc::clone(&state);
+        let state = std::rc::Rc::clone(&state);
         Box::pin(async move {
             let hostname = request_hostname_for_lookup(&request, state.hinted_hostname.as_deref());
             // Reuse the connection-level observability sink; only re-resolve if the request
@@ -405,10 +405,10 @@ pub fn build_request_handler(
             let request = Request::from_parts(parts, body.boxed_unsync());
             request_handler(
                 request,
-                state.pipeline.clone(),
-                state.file_pipeline.clone(),
-                state.error_pipeline.clone(),
-                state.config_resolver.clone(),
+                &state.pipeline,
+                &state.file_pipeline,
+                &state.error_pipeline,
+                &state.config_resolver,
                 state.local_address,
                 state.remote_address,
                 state.unix_socket_path.clone(),
@@ -419,7 +419,7 @@ pub fn build_request_handler(
                 request_observability,
                 state.timeout_duration,
                 state.peer_identity.clone(),
-                state.tls_params.clone(),
+                state.tls_params.as_ref(),
                 state.host_control_plane_metadata.clone(),
                 state.host_control_plane_span_links.clone(),
                 trace_settings,

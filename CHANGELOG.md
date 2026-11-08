@@ -1,5 +1,58 @@
 # Ferron 3 change log
 
+## Ferron 3.0.0-rc.11
+
+**Released in November 8, 2026**
+
+### Added
+
+#### Reverse proxy
+
+- **Custom CA trust anchors**: added support for custom CA bundle paths (`ca`) in reverse proxy configurations for verifying TLS certificates not trusted by standard CA stores (which are often used in internal or private networks). ([GitHub issue](https://github.com/ferronweb/ferron/issues/978))
+
+#### TLS
+
+- **Support for unauthenticated requests for mTLS**: added `client_auth_required` subdirective for `tls` block, which can allow unauthenticated connections even if mTLS is enabled.
+
+#### Automatic TLS
+
+- **Control over TLS certificate key algorithms**: added support for `key_algo` and `key_size` configuration options in ACME automatic TLS configurations. They can be used to configure TLS certificate key (for example, it could be set to RSA with 2048-bit keys or ECDSA). ([GitHub issue](https://github.com/ferronweb/ferron/issues/976))
+
+#### Configuration
+
+- **Strict host definitions**: added the global `strict_hosts` directive. When it's turned on, a host defined by host blocks in more than one configuration file fails validation instead of being merged. This is useful when each site lives in its own included file. ([thank you, @SridharRG](https://github.com/ferronweb/ferron/pull/1004))
+
+### Changed
+
+#### Reverse proxy
+
+- **Improved keep-alive handling for intercepted responses**: when HTTP response status code interception is enabled, the backend server connection is now reused.
+
+#### Automatic TLS
+
+- **Certificate orders survive reloads**: a configuration reload no longer cancels an ACME order in progress. The order finishes (for up to 5 minutes), and with a file-based cache the reloaded configuration uses its certificate, so frequent reloads no longer stall certificate issuance. ([thank you, @neurekadev](https://github.com/ferronweb/ferron/pull/994))
+- **Concurrent certificate provisioning**: the ACME background task now obtains and renews up to 4 certificates at once instead of one after another, so servers with many hosts get their certificates much sooner. ([thank you, @neurekadev](https://github.com/ferronweb/ferron/pull/992))
+- **Faster DNS-01 challenges**: instead of always waiting 60 seconds after creating each DNS-01 record, Ferron now asks the CA to validate as soon as the zone's authoritative nameservers serve the record when queried from Ferron, still waiting at most 60 seconds. With providers that publish records quickly, each challenge now takes a few seconds. ([thank you, @neurekadev](https://github.com/ferronweb/ferron/pull/990))
+
+### Fixed
+
+#### HTTP server core
+
+- **Many HTTP correctness improvements**: improved HTTP/3 correctness, as well as fixed HTTP/2 graceful shutdown stall bug, and more (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0415)).
+
+#### Automatic TLS
+
+- **Fixed TLS parameter support for ACME**: the server now accepts TLS cryptographic parameters and client certificate authentication settings for ACME TLS provider. ([GitHub issue](https://github.com/ferronweb/ferron/issues/986))
+- **Orphaned provisioning locks after reloads**: when a configuration reload cancelled an ACME order in progress, its `lock_certificate_*` lockfile stayed in the cache, and the domain got no certificate until the 5-minute lock lease expired. The lockfile is now removed when the order is cancelled. ([thank you, @neurekadev](https://github.com/ferronweb/ferron/pull/988))
+
+#### OCSP stapling
+
+- **Android and old Firefox compatibility**: for improved compatibility with Android and old Firefox versions, OCSP stapling functionality now uses SHA-1 issuer name and key hashes instead of SHA-256 by default, if possible.
+
+#### Forward proxy
+
+- **IP blocklist hardening**: IP addresses are now canonicalized before checking against the deny list, ensuring consistent matching across IPv4 and IPv6. Also, "current network" server addresses are now blocked by default.
+
 ## Ferron 3.0.0-rc.10
 
 **Released in October 23, 2026**

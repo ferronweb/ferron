@@ -75,6 +75,8 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 
 **Requirements:** Configure a DNS provider module. The module supports wildcard domains. The `dns` block must specify the `provider` name and any provider-specific credentials. See [DNS providers](/docs/configuration/security/dns-providers) for the full list of supported providers and their directives.
 
+After creating the record, Ferron queries every address of the zone's authoritative nameservers every 2 seconds. It asks the CA to validate as soon as they all serve the record, or after 60 seconds at most. If Ferron can't resolve the zone's nameservers (for example, for a private zone), it waits the full 60 seconds. Ferron sends these queries from its own network, so for anycast nameservers it only sees the sites nearest to it.
+
 ### Configuration parameters
 
 | Parameter                       | Type                               | Default                                                                       | Description                                           |
@@ -94,6 +96,8 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 | `on_demand_ask_auth`            | `<string>`                         | none                                                                          | Authorization header for approval endpoint (optional) |
 | `on_demand_ask_no_verification` | `<bool>`                           | `false`                                                                       | Skip TLS verification for approval endpoint           |
 | `fallback`                      | `{ ... }`                          | none                                                                          | Fallback provider block (repeatable)                  |
+| `key_algo` | `<string>` | `PKCS_ECDSA_P256_SHA256` when `key_size` is not specified, otherwise `PKCS_RSA_SHA256` | Key algorithm to use for certificate signing |
+| `key_size`                      | `<int>`                           | none                                                                          | RSA key size in bits (optional). Supported values: `2048`, `3072`, `4096`. Not supported with non-RSA key algorithms                          |
 
 **Configuration example:**
 
@@ -111,10 +115,31 @@ example.com {
         # `post_obtain_command` arg is a script/binary name + args, separated by spaces.
         post_obtain_command /var/lib/post_obtain_command.sh
 
+        key_algo PKCS_ECDSA_P384_SHA384
+
         ocsp
     }
 }
 ```
+
+### Supported key algorithms
+
+| Identifier | Description                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `PKCS_ECDSA_P256_SHA256`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-256 curve and SHA-256 hash function                                                           |
+| `PKCS_ECDSA_P384_SHA384`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-384 curve and SHA-384 hash function                                                           |
+| `PKCS_ECDSA_P521_SHA256`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-521 curve and SHA-256 hash function                                                           |
+| `PKCS_ECDSA_P521_SHA384`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-521 curve and SHA-384 hash function                                                           |
+| `PKCS_ECDSA_P521_SHA512`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-521 curve and SHA-512 hash function                                                           |
+| `PKCS_ED25519`   | ED25519 key algorithm                                   |
+| `PKCS_ML_DSA_44` | Post-quantum ML-DSA-44 (Module-Lattice-Based Digital Signature Algorithm) |
+| `PKCS_ML_DSA_65` | Post-quantum ML-DSA-65 (Module-Lattice-Based Digital Signature Algorithm) |
+| `PKCS_ML_DSA_87` | Post-quantum ML-DSA-87 (Module-Lattice-Based Digital Signature Algorithm) |
+| `PKCS_RSA_SHA256`   | RSA key algorithm with SHA-256 hash function                                   |
+| `PKCS_RSA_SHA384`   | RSA key algorithm with SHA-384 hash function                                   |
+| `PKCS_RSA_SHA512`   | RSA key algorithm with SHA-512 hash function                                   |
+| `ECDSA` | Alias for `PKCS_ECDSA_P256_SHA256` |
+| `RSA` | Alias for `PKCS_RSA_SHA256` |
 
 ## Eager mode (recommended for known domains)
 
@@ -209,7 +234,7 @@ example.com {
 
 - **Challenge sync**: the node creating the order publishes `challenge_http_*` / `challenge_tls_*` files (15-minute TTL). Peers serve CA validation from these files when their in-memory locks miss, so validation succeeds no matter which node the CA reaches.
 - **One order at a time**: before ordering, a node takes the paired `lock_certificate_*` lockfile (atomic create). Peers skip that cycle and pick up the resulting `certificate_*` file later. On-demand `hostname_*` appends take `lock_hostname_*` the same way.
-- **Self-healing locks**: the holder refreshes a heartbeat every 30 seconds. A lock without heartbeat for 5 minutes is treated as stale (crashed holder) and broken by the next contender, which logs a warning. Releases only delete their own lock, never a peer's.
+- **Self-healing locks**: the holder refreshes a heartbeat every 30 seconds. A lock without heartbeat for 5 minutes is treated as stale (crashed holder) and broken by the next contender, which logs a warning. An order cancelled by a configuration reload removes its lock at once, so the next cycle can order again. Releases only delete their own lock, never a peer's.
 - **Herd damping**: skipped cycles return to the 10-second loop, and cycle sleeps include jitter so restarted nodes desynchronize.
 
 **Requirements and notes:**
@@ -222,6 +247,10 @@ example.com {
 ## Certificate renewal
 
 Ferron automatically renews certificates before expiration. The renewal check runs every 10 seconds in the background. Ferron uses the ACME `renewalInfo` endpoint (RFC 9773) when available. Otherwise it falls back to a heuristic of 50% of certificate lifetime, capped at 24 hours before expiry.
+
+A configuration reload doesn't cancel an order in progress. The order finishes under the previous configuration, or is cancelled if it's still running after 5 minutes. With a file-based `cache` (the default), the reloaded configuration then installs the certificate from the cache.
+
+The background task obtains and renews up to 4 certificates at once. Within one Ferron instance, orders that use the same ACME account create it only once, and orders that share a name (for example, `example.com` and `*.example.com` in separate host blocks, which share an `_acme-challenge` record) run one after another.
 
 ## External Account Binding (EAB)
 
@@ -322,7 +351,7 @@ Certificate issuance failed. The log message includes the affected domains. Chec
 
 - Make sure you configure the DNS provider correctly with valid credentials.
 - Check that the provider has permission to create TXT records for the domain.
-- DNS propagation may take longer than 60 seconds for some providers. In these cases, the ACME CA will retry validation.
+- If the log shows `DNS-01 record for ... isn't served by all authoritative nameservers after 60 seconds`, either the provider is slow to publish records, or Ferron can't query the nameservers directly (for example, because outbound DNS is blocked). Ferron then requests validation anyway, as without the check. If validation fails, Ferron retries on later cycles.
 
 ### Verifying certificates
 
@@ -366,6 +395,9 @@ The ACME background task emits log events and metrics through the configured obs
 | `DEBUG` | `ACME <type> challenge initiated for ...`                                 | Challenge setup started                 |
 | `DEBUG` | `ACME <type> challenge solved for ...`                                    | Challenge ready for validation          |
 | `DEBUG` | `DNS-01 record created for _acme-challenge.<domain>, TTL <ttl>`           | DNS record published                    |
+| `DEBUG` | `DNS-01 record for _acme-challenge.<domain> is served by all authoritative nameservers` | DNS record propagated |
+| `DEBUG` | `Couldn't resolve the authoritative nameservers for _acme-challenge.<domain>, waiting out the 60-second DNS propagation delay` | Propagation not checked, fixed wait |
+| `WARN`  | `DNS-01 record for _acme-challenge.<domain> isn't served by all authoritative nameservers after 60 seconds, requesting validation anyway` | Slow DNS propagation |
 | `DEBUG` | `DNS-01 record cleanup completed for _acme-challenge.<domain>`            | DNS record removed                      |
 | `DEBUG` | `Certificate installed for ..., chain length: N`                          | Certificate loaded into TLS config      |
 
@@ -395,6 +427,9 @@ In OTLP `log_style modern`, the `summary` field acts as the log body and Ferron 
 | ACME challenge initiated            | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string)                                                               |
 | ACME challenge solved               | DEBUG | `ferron.acme.domains` (string), `ferron.acme.challenge_type` (string)                                                               |
 | ACME DNS-01 record created          | DEBUG | `ferron.acme.dns_challenge_domain` (string), `ferron.acme.dns_ttl` (int)                                                            |
+| ACME DNS-01 record propagated       | DEBUG | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
+| ACME DNS-01 propagation unchecked   | DEBUG | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
+| ACME DNS-01 record not propagated   | WARN  | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
 | ACME DNS-01 record cleanup          | DEBUG | `ferron.acme.dns_challenge_domain` (string)                                                                                         |
 | ACME lock stale, broken             | WARN  | `ferron.acme.domains` (string), `ferron.acme.lock_key` (string): stale lockfile cleared after heartbeat lease expiry                |
 | ACME provisioning skipped           | DEBUG | `ferron.acme.domains` (string): peer holds the provisioning lock; this cycle is skipped                                             |

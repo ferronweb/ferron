@@ -60,10 +60,10 @@ pub use bad_request::bad_request_handler;
 #[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
     mut request: HttpRequest,
-    pipeline: Arc<Pipeline<HttpContext>>,
-    file_pipeline: Arc<Pipeline<HttpFileContext>>,
-    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
-    config_resolver: Arc<ThreeStageResolver>,
+    pipeline: &Pipeline<HttpContext>,
+    file_pipeline: &Pipeline<HttpFileContext>,
+    error_pipeline: &Pipeline<HttpErrorContext>,
+    config_resolver: &ThreeStageResolver,
     local_address: Option<SocketAddr>,
     remote_address: Option<SocketAddr>,
     unix_socket_path: Option<PathBuf>,
@@ -74,7 +74,7 @@ pub async fn request_handler(
     events: CompositeEventSink,
     timeout_duration: Option<std::time::Duration>,
     peer_identity: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
-    tls_params: Option<ferron_tls::TlsConnectionParams>,
+    tls_params: Option<&ferron_tls::TlsConnectionParams>,
     host_control_plane_metadata: Option<Arc<std::collections::BTreeMap<String, String>>>,
     host_control_plane_span_links: Option<
         Arc<Vec<ferron_observability::control_plane::SpanLinkConfig>>,
@@ -168,7 +168,7 @@ pub async fn request_handler(
                     TraceAttributeValue::String(initial_client_ip_canonical.clone()),
                 ));
             }
-            if let Some(ref tls) = tls_params {
+            if let Some(tls) = tls_params {
                 builder_attributes.push((
                     Cow::Borrowed("tls.protocol.version"),
                     TraceAttributeValue::String(tls.protocol_version.clone()),
@@ -265,7 +265,7 @@ pub async fn request_handler(
         local_address,
         remote_address,
         unix_socket_path,
-        hostname.clone(),
+        hostname,
         encrypted,
         https_port,
         request_trace_context.clone(),
@@ -273,7 +273,7 @@ pub async fn request_handler(
         events.clone(),
         timeout_duration,
         peer_identity,
-        host_control_plane_metadata.clone(),
+        host_control_plane_metadata,
     )
     .await;
 
@@ -442,10 +442,10 @@ pub async fn request_handler(
 #[allow(clippy::too_many_arguments)]
 async fn request_handler_inner(
     mut request: HttpRequest,
-    pipeline: Arc<Pipeline<HttpContext>>,
-    file_pipeline: Arc<Pipeline<HttpFileContext>>,
-    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
-    config_resolver: Arc<ThreeStageResolver>,
+    pipeline: &Pipeline<HttpContext>,
+    file_pipeline: &Pipeline<HttpFileContext>,
+    error_pipeline: &Pipeline<HttpErrorContext>,
+    config_resolver: &ThreeStageResolver,
     local_address: Option<SocketAddr>,
     remote_address: Option<SocketAddr>,
     unix_socket_path: Option<PathBuf>,
@@ -488,7 +488,7 @@ async fn request_handler_inner(
             ),
         );
         if let Some(response) = execute_error_pipeline(
-            error_pipeline.as_ref(),
+            error_pipeline,
             400,
             None,
             LayeredConfiguration::default(),
@@ -591,7 +591,7 @@ async fn request_handler_inner(
                 ),
             );
             if let Some(response) = execute_error_pipeline(
-                error_pipeline.as_ref(),
+                error_pipeline,
                 400,
                 None,
                 LayeredConfiguration::default(),
@@ -648,7 +648,7 @@ async fn request_handler_inner(
                                 ),
                             );
                             if let Some(response) = execute_error_pipeline(
-                                error_pipeline.as_ref(),
+                                error_pipeline,
                                 400,
                                 None,
                                 LayeredConfiguration::default(),
@@ -703,7 +703,7 @@ async fn request_handler_inner(
                     ),
                 );
                 if let Some(response) = execute_error_pipeline(
-                    error_pipeline.as_ref(),
+                    error_pipeline,
                     400,
                     None,
                     LayeredConfiguration::default(),
@@ -774,7 +774,7 @@ async fn request_handler_inner(
 
     let Some(resolution) = resolution else {
         if let Some(response) = execute_error_pipeline(
-            error_pipeline.as_ref(),
+            error_pipeline,
             404,
             None,
             LayeredConfiguration::default(),
@@ -871,8 +871,8 @@ async fn request_handler_inner(
 
     execute_pipeline_stages(
         &mut ctx,
-        pipeline.as_ref(),
-        file_pipeline.as_ref(),
+        pipeline,
+        file_pipeline,
         &events,
         "",
         &resolution.location_path.path_segments,
@@ -920,8 +920,8 @@ async fn request_handler_inner(
 
                         execute_pipeline_stages(
                             &mut ctx,
-                            pipeline.as_ref(),
-                            file_pipeline.as_ref(),
+                            pipeline,
+                            file_pipeline,
                             &events,
                             "Error ",
                             &resolution.location_path.path_segments,
@@ -949,7 +949,7 @@ async fn request_handler_inner(
             HttpResponse::Custom(response) => Ok(response),
             HttpResponse::BuiltinError(status, headers) => {
                 if let Some(response) = execute_error_pipeline(
-                    error_pipeline.as_ref(),
+                    error_pipeline,
                     status,
                     headers.clone(),
                     ctx.configuration.clone(),

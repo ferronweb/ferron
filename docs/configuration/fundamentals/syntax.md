@@ -187,6 +187,7 @@ If you specify a hostname (for example, a domain name) and give no explicit port
 > - Top-level file includes and snippet expansion work differently.
 > - `Parse error` rejects include cycles and snippet cycles.
 > - A snippets block may span a set of hosts.
+> - Ferron merges host blocks for the same host, including blocks from different included files. To reject a host defined in more than one file, turn on [`strict_hosts`](/docs/configuration/server/core-directives#host-definitions).
 
 ## Configuration model
 

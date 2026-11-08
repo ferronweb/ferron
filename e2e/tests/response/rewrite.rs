@@ -2,9 +2,9 @@
 use std::{io::Write, path::Path};
 
 use testcontainers::{
-    core::{wait::HttpWaitStrategy, ContainerPort, Mount, WaitFor},
-    runners::AsyncRunner,
     ContainerAsync, GenericImage, ImageExt, TestcontainersError,
+    core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
+    runners::AsyncRunner,
 };
 
 async fn create_ferron_container(

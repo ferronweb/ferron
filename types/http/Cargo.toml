@@ -1,6 +1,6 @@
 [package]
 name = "ferron-http"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 edition = "2021"
 
 [dependencies]
@@ -14,8 +14,8 @@ rand = "0.10"
 cidr = "0.3"
 rustls-pki-types = { version = "1.14.1", optional = true }
 hex = "0.4.3"
-rasn = "0.29"
-rasn-pkix = "0.29"
+rasn = "0.30"
+rasn-pkix = "0.30"
 urlencoding = "2.1.3"
 
 ferron-observability = { path = "../../types/observability" }

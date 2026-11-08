@@ -947,7 +947,14 @@ fn load_modules(
                     Ok(false)
                 }
                 res = watcher_obtained.watch() => {
-                    res.map(|_| false)
+                    let res = res.map(|_| false);
+                    if res.as_ref().is_ok_and(|r| !r) {
+                        // Notify modules the configuration is reloaded
+                        RELOAD_TOKEN
+                            .swap(Arc::new(CancellationToken::new()))
+                            .cancel();
+                    }
+                    res
                 }
             };
             watcher.borrow_mut().replace(watcher_obtained);

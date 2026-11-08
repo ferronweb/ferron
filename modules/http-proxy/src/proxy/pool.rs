@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use ferron_http::trace_context::current_event_trace_context;
 use http_body_util::BodyExt;
+use hyper::body::Body;
 use rustls::pki_types::ServerName;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
@@ -410,6 +411,7 @@ where
             config.http2_only,
             config.no_verification,
             upstream.mtls.clone(),
+            config.ca_bundle.clone(),
         ));
         // Always use the original hostname for TLS SNI, not a pre-resolved IP.
         let host = proxy_url.host().ok_or("upstream URL has no host")?;
@@ -616,11 +618,6 @@ pub async fn send_via_wrapper(
         Ok(ferron_http::HttpResponse::Custom(
             http::Response::from_parts(parts, body.map_err(std::io::Error::other).boxed_unsync()),
         ))
-    } else if config.intercept_errors && status.as_u16() >= 400 {
-        Ok(ferron_http::HttpResponse::BuiltinError(
-            status.as_u16(),
-            None,
-        ))
     } else {
         // For keepalive, we extract the wrapper and create a PoolReturnInfo.
         // This prevents the PoolItem's Drop from running, and instead we manually
@@ -643,6 +640,26 @@ pub async fn send_via_wrapper(
             drop(item);
             (None, false)
         };
+
+        if config.intercept_errors && status.as_u16() >= 400 {
+            if return_later && pool_return_info.is_some() && !body.is_end_stream() {
+                // If there's a body and an HTTP/1.x connection would be returned,
+                // drain the response body.
+                //
+                // This is needed because HTTP/1.x does not support multiplexing.
+                zincio::spawn(async move {
+                    let _pool_return_info = pool_return_info;
+                    let mut body = body;
+                    while body.frame().await.is_some_and(|f| f.is_ok()) {
+                        // Just discard the body...
+                    }
+                });
+            }
+            return Ok(ferron_http::HttpResponse::BuiltinError(
+                status.as_u16(),
+                None,
+            ));
+        }
 
         let expected_length = parts
             .headers

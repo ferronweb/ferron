@@ -1,6 +1,7 @@
 //! Active health check task for probing upstream backends.
 
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -12,8 +13,6 @@ use crate::types::health::{
 use crate::types::upstream::{MtlsCredentials, ResolvedUpstream, Upstream};
 
 use hyper_rustls::HttpsConnectorBuilder;
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 
 /// Resolver that sends every connection to one address when it is pinned.
 ///
@@ -86,161 +85,6 @@ type HttpsConnector = hyper_rustls::HttpsConnector<
     hyper_util::client::legacy::connect::HttpConnector<PinnedResolver>,
 >;
 
-#[inline]
-fn build_default_https_connector(
-    mtls: Option<Arc<MtlsCredentials>>,
-    pinned: Option<std::net::SocketAddr>,
-) -> HttpsConnector {
-    let mut root_store = rustls::RootCertStore::empty();
-    let mut found_any = false;
-
-    match rustls_native_certs::load_native_certs() {
-        cert_result if !cert_result.errors.is_empty() => {
-            ferron_core::log_debug!(
-                "Health check: native root CA loading errors: {:?}",
-                cert_result.errors
-            );
-        }
-        cert_result if cert_result.certs.is_empty() => {
-            ferron_core::log_debug!("Health check: no native root CA certificates found");
-        }
-        cert_result => {
-            for cert in cert_result.certs {
-                if let Err(err) = root_store.add(cert) {
-                    ferron_core::log_debug!("Health check: certificate parsing failed: {:?}", err);
-                } else {
-                    found_any = true;
-                }
-            }
-        }
-    }
-
-    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-
-    if !found_any {
-        ferron_core::log_debug!(
-            "Health check: using webpki-roots as fallback (no native root CAs available)"
-        );
-    }
-
-    let builder = if root_store.is_empty() {
-        rustls::ClientConfig::builder_with_provider(Arc::new(
-            rustls::crypto::aws_lc_rs::default_provider(),
-        ))
-        .with_safe_default_protocol_versions()
-        .expect("failed to initialize Rustls client builder")
-        .with_root_certificates(rustls::RootCertStore::empty())
-    } else {
-        rustls::ClientConfig::builder_with_provider(Arc::new(
-            rustls::crypto::aws_lc_rs::default_provider(),
-        ))
-        .with_safe_default_protocol_versions()
-        .expect("failed to initialize Rustls client builder")
-        .with_root_certificates(root_store)
-    };
-    let tls_config = if let Some(mtls) = mtls {
-        builder
-            .clone()
-            .with_client_auth_cert(mtls.certs.clone(), mtls.key.clone_key())
-            .unwrap_or_else(|_| builder.with_no_client_auth())
-    } else {
-        builder.with_no_client_auth()
-    };
-
-    HttpsConnectorBuilder::new()
-        .with_tls_config(tls_config)
-        .https_or_http()
-        .enable_http1()
-        .enable_http2()
-        .wrap_connector(
-            hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
-                PinnedResolver::pinned(pinned),
-            ),
-        )
-}
-
-#[inline]
-fn build_no_verify_https_connector(
-    mtls: Option<Arc<MtlsCredentials>>,
-    pinned: Option<std::net::SocketAddr>,
-) -> HttpsConnector {
-    #[derive(Debug)]
-    struct NoServerVerifier;
-    impl ServerCertVerifier for NoServerVerifier {
-        #[inline]
-        fn verify_server_cert(
-            &self,
-            _end_entity: &CertificateDer<'_>,
-            _intermediates: &[CertificateDer<'_>],
-            _server_name: &ServerName<'_>,
-            _ocsp_response: &[u8],
-            _now: UnixTime,
-        ) -> Result<ServerCertVerified, rustls::Error> {
-            Ok(ServerCertVerified::assertion())
-        }
-        #[inline]
-        fn verify_tls12_signature(
-            &self,
-            _message: &[u8],
-            _cert: &CertificateDer<'_>,
-            _dss: &rustls::DigitallySignedStruct,
-        ) -> Result<HandshakeSignatureValid, rustls::Error> {
-            Ok(HandshakeSignatureValid::assertion())
-        }
-        #[inline]
-        fn verify_tls13_signature(
-            &self,
-            _message: &[u8],
-            _cert: &CertificateDer<'_>,
-            _dss: &rustls::DigitallySignedStruct,
-        ) -> Result<HandshakeSignatureValid, rustls::Error> {
-            Ok(HandshakeSignatureValid::assertion())
-        }
-        #[inline]
-        fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-            use rustls::SignatureScheme::*;
-            vec![
-                ECDSA_NISTP384_SHA384,
-                ECDSA_NISTP256_SHA256,
-                ED25519,
-                RSA_PSS_SHA512,
-                RSA_PSS_SHA384,
-                RSA_PSS_SHA256,
-                RSA_PKCS1_SHA512,
-                RSA_PKCS1_SHA384,
-                RSA_PKCS1_SHA256,
-            ]
-        }
-    }
-
-    let builder = rustls::ClientConfig::builder_with_provider(Arc::new(
-        rustls::crypto::aws_lc_rs::default_provider(),
-    ))
-    .with_safe_default_protocol_versions()
-    .expect("failed to initialize Rustls client builder")
-    .dangerous()
-    .with_custom_certificate_verifier(std::sync::Arc::new(NoServerVerifier));
-    let tls_config = if let Some(mtls) = mtls {
-        builder
-            .clone()
-            .with_client_auth_cert(mtls.certs.clone(), mtls.key.clone_key())
-            .unwrap_or_else(|_| builder.with_no_client_auth())
-    } else {
-        builder.with_no_client_auth()
-    };
-
-    HttpsConnectorBuilder::new()
-        .with_tls_config(tls_config)
-        .https_or_http()
-        .enable_http1()
-        .enable_http2()
-        .wrap_connector(
-            hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
-                PinnedResolver::pinned(pinned),
-            ),
-        )
-}
-
 /// Health check probe result.
 #[derive(Clone, Debug)]
 struct ProbeResult {
@@ -259,6 +103,7 @@ async fn probe_upstream(
     upstream: &Arc<ResolvedUpstream>,
     config: &UpstreamHealthCheckConfig,
     mtls: Option<Arc<MtlsCredentials>>,
+    ca_bundle: Option<Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
 ) -> ProbeResult {
     let start = SystemTime::now();
     let method = config.method.as_str();
@@ -279,6 +124,7 @@ async fn probe_upstream(
         config.body_match.as_deref(),
         mtls,
         upstream.connect_to,
+        ca_bundle,
     )
     .await;
 
@@ -306,6 +152,7 @@ async fn probe_upstream(
 ///
 /// Supports both HTTP and HTTPS with native certificate store and webpki-roots fallback.
 /// When `no_verification` is true, TLS certificate verification is disabled.
+#[allow(clippy::too_many_arguments)]
 #[inline]
 async fn execute_probe_request(
     url: &str,
@@ -315,6 +162,7 @@ async fn execute_probe_request(
     body_match: Option<&str>,
     mtls: Option<Arc<MtlsCredentials>>,
     pinned: Option<std::net::SocketAddr>,
+    ca_bundle: Option<Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
 ) -> Result<(u16, Option<Vec<u8>>), String> {
     use bytes::Bytes;
     use http_body_util::Full;
@@ -336,7 +184,7 @@ async fn execute_probe_request(
     };
 
     // Use cached client (the underlying connector supports both HTTP and HTTPS)
-    let client = health_check_client(no_verification, mtls, pinned);
+    let client = health_check_client(no_verification, mtls, pinned, ca_bundle);
     let req = Request::builder()
         .method(method.to_uppercase().as_str())
         .uri(url_parsed)
@@ -381,15 +229,24 @@ fn health_check_client(
     no_verification: bool,
     mtls: Option<Arc<MtlsCredentials>>,
     pinned: Option<std::net::SocketAddr>,
+    ca_bundle: Option<Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
 ) -> hyper_util::client::legacy::Client<HttpsConnector, http_body_util::Full<bytes::Bytes>> {
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
 
-    if no_verification {
-        Client::builder(TokioExecutor::new()).build(build_no_verify_https_connector(mtls, pinned))
-    } else {
-        Client::builder(TokioExecutor::new()).build(build_default_https_connector(mtls, pinned))
-    }
+    let tls_config = crate::proxy::cached_tls_config(true, false, no_verification, mtls, ca_bundle);
+
+    let connector = HttpsConnectorBuilder::new()
+        .with_tls_config(tls_config.deref().to_owned())
+        .https_or_http()
+        .enable_http1()
+        .enable_http2()
+        .wrap_connector(
+            hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
+                PinnedResolver::pinned(pinned),
+            ),
+        );
+    Client::builder(TokioExecutor::new()).build(connector)
 }
 
 /// Process a probe result and update health check state.
@@ -623,6 +480,7 @@ pub fn spawn_health_check_task(
     runtime_handle: &tokio::runtime::Handle,
     event_sink: Arc<ferron_observability::CompositeEventSink>,
     metrics_resolved_ip: bool,
+    ca_bundle: Option<Arc<Vec<rustls::pki_types::CertificateDer<'static>>>>,
 ) -> tokio::task::JoinHandle<()> {
     runtime_handle.spawn(async move {
         let mut probe_configs: Vec<(
@@ -791,8 +649,9 @@ pub fn spawn_health_check_task(
                     last_probe_times.insert(upstream, now);
 
                     let event_sink = event_sink.clone();
+                    let ca_bundle = ca_bundle.clone();
                     probe_tasks.push(tokio::spawn(async move {
-                        let result = probe_upstream(&probe_target, &config, mtls).await;
+                        let result = probe_upstream(&probe_target, &config, mtls, ca_bundle).await;
                         if metrics_resolved_ip {
                             process_probe_result(
                                 &probe_target,

@@ -1,6 +1,6 @@
 [package]
 name = "ferron-passwd"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 edition = "2021"
 
 [package.metadata.winresource]
@@ -8,7 +8,7 @@ ProductName = "Ferron password utility"
 
 [dependencies]
 clap = { version = "4.5.28", features = ["derive"] }
-password-auth = "1.0.0"
+password-auth = "2.0.0"
 rpassword = "7.4.0"
 
 # These are used instead of password-auth when FIPS is enabled.

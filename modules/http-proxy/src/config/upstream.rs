@@ -7,7 +7,7 @@ use rustls::pki_types::pem::PemObject;
 
 use super::resilience::parse_active_health_check;
 use super::types::ProxyConfig;
-use super::{DEFAULT_CONNECTION_TIMEOUT_MS, DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS, MTLS_FILE_CACHE};
+use super::{DEFAULT_CONNECTION_TIMEOUT_MS, DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS, TLS_FILE_CACHE};
 use crate::types::health::UpstreamHealthCheckConfig;
 use crate::types::upstream::SrvUpstream;
 use crate::types::upstream::{MtlsCredentials, StaticUpstream, Upstream};
@@ -48,7 +48,7 @@ pub(super) fn parse_upstream_entry(
                     {
                         mtls_cert = Some(
                             rustls::pki_types::CertificateDer::pem_slice_iter(
-                                &read_mtls_data(&val).map_err(|e| {
+                                &read_tls_data(&val).map_err(|e| {
                                     let e: Box<dyn Error + Send + Sync> = format!(
                                         "Can't read mTLS certificate for reverse proxy: {e}"
                                     )
@@ -72,7 +72,7 @@ pub(super) fn parse_upstream_entry(
                     ) {
                         mtls_key = Some(
                             rustls::pki_types::PrivateKeyDer::from_pem_slice(
-                                &read_mtls_data(&val).map_err(|e| {
+                                &read_tls_data(&val).map_err(|e| {
                                     let e: Box<dyn Error + Send + Sync> = format!(
                                         "Can't read mTLS private key for reverse proxy: {e}"
                                     )
@@ -248,7 +248,7 @@ pub(super) fn parse_srv_entry(
                     {
                         mtls_cert = Some(
                             rustls::pki_types::CertificateDer::pem_slice_iter(
-                                &read_mtls_data(&val).map_err(|e| {
+                                &read_tls_data(&val).map_err(|e| {
                                     let e: Box<dyn Error + Send + Sync> = format!(
                                         "Can't read mTLS certificate for reverse proxy: {e}"
                                     )
@@ -272,7 +272,7 @@ pub(super) fn parse_srv_entry(
                     ) {
                         mtls_key = Some(
                             rustls::pki_types::PrivateKeyDer::from_pem_slice(
-                                &read_mtls_data(&val).map_err(|e| {
+                                &read_tls_data(&val).map_err(|e| {
                                     let e: Box<dyn Error + Send + Sync> = format!(
                                         "Can't read mTLS private key for reverse proxy: {e}"
                                     )
@@ -399,12 +399,12 @@ pub(super) fn parse_srv_entry(
 }
 
 #[inline]
-pub(super) fn read_mtls_data(path: &str) -> Result<std::sync::Arc<Vec<u8>>, std::io::Error> {
-    if let Some(cached) = MTLS_FILE_CACHE.get(path) {
+pub(super) fn read_tls_data(path: &str) -> Result<std::sync::Arc<Vec<u8>>, std::io::Error> {
+    if let Some(cached) = TLS_FILE_CACHE.get(path) {
         return Ok(cached.clone());
     }
 
-    Ok(MTLS_FILE_CACHE
+    Ok(TLS_FILE_CACHE
         .entry(path.to_string())
         .or_try_insert_with(|| std::fs::read(path).map(std::sync::Arc::new))?
         .downgrade()
