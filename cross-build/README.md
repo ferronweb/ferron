@@ -33,14 +33,14 @@ Cross-compilation build files for Linux targets, runnable on Linux hosts of any 
 - **openssl** — for self-signed TLS certificates
 - **Python 3** — for the reverse proxy backend server
 - **llvm-profdata** — for merging PGO profiles
-- **qemu-user-static** — for running cross-compiled binaries
+- **qemu-user** — for running cross-compiled binaries
 
 ### Install by distro
 
 **Arch Linux:**
 
 ```bash
-sudo pacman -S lld clang openssl python llvm qemu-user-static qemu-user-static-binfmt curl
+sudo pacman -S lld clang openssl python llvm qemu-user qemu-user-binfmt curl
 # h2load and wrk are in AUR if not found:
 yay -S nghttp2 wrk
 ```
@@ -48,13 +48,13 @@ yay -S nghttp2 wrk
 **Debian/Ubuntu:**
 
 ```bash
-sudo apt install lld clang libclang-dev wrk nghttp2-client openssl python3 llvm curl qemu-user-static
+sudo apt install lld clang libclang-dev wrk nghttp2-client openssl python3 llvm curl qemu-user
 ```
 
 **Fedora:**
 
 ```bash
-sudo dnf install lld clang clang-devel wrk nghttp2-client openssl python3 llvm curl qemu-user-static
+sudo dnf install lld clang clang-devel wrk nghttp2-client openssl python3 llvm curl qemu-user
 ```
 
 ## Target Matrix
@@ -225,7 +225,7 @@ RUSTFLAGS="-Cprofile-use=merged.profdata" cargo build -r --target <target>
 
 ### Cross-compiled PGO
 
-For cross-compiled targets, the benchmark script uses `qemu-user-static` to run the binary on the host. It will be installed automatically if missing.
+For cross-compiled targets, the benchmark script uses `qemu-user` to run the binary on the host. It will be installed automatically if missing.
 
 ### Custom benchmark duration
 
@@ -245,15 +245,15 @@ Prepare the sysroot first:
 ./cross-build/sysroots/prepare-musl.sh <target>
 ```
 
-### "qemu-user-static not found"
+### "qemu-user not found"
 
 Install it:
 
 ```bash
 # Arch
-sudo pacman -S qemu-user-static qemu-user-static-binfmt
+sudo pacman -S qemu-user qemu-user-binfmt
 # Debian/Ubuntu
-sudo apt install qemu-user-static
+sudo apt install qemu-user
 ```
 
 ### "clang not found"

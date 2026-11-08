@@ -78,14 +78,14 @@ cleanup() {
 target_to_qemu_binary() {
 	local target="$1"
 	case "${target}" in
-		x86_64-unknown-linux-gnu | x86_64-unknown-linux-musl) echo "qemu-x86_64-static" ;;
-		i686-unknown-linux-gnu | i686-unknown-linux-musl) echo "qemu-i386-static" ;;
-		aarch64-unknown-linux-gnu | aarch64-unknown-linux-musl) echo "qemu-aarch64-static" ;;
-		armv7-unknown-linux-gnueabihf | armv7-unknown-linux-musleabihf) echo "qemu-arm-static" ;;
-		riscv64gc-unknown-linux-gnu | riscv64gc-unknown-linux-musl) echo "qemu-riscv64-static" ;;
-		loongarch64-unknown-linux-gnu | loongarch64-unknown-linux-musl) echo "qemu-loongarch64-static" ;;
-		s390x-unknown-linux-gnu) echo "qemu-s390x-static" ;;
-		powerpc64le-unknown-linux-gnu) echo "qemu-ppc64le-static" ;;
+		x86_64-unknown-linux-gnu | x86_64-unknown-linux-musl) echo "qemu-x86_64" ;;
+		i686-unknown-linux-gnu | i686-unknown-linux-musl) echo "qemu-i386" ;;
+		aarch64-unknown-linux-gnu | aarch64-unknown-linux-musl) echo "qemu-aarch64" ;;
+		armv7-unknown-linux-gnueabihf | armv7-unknown-linux-musleabihf) echo "qemu-arm" ;;
+		riscv64gc-unknown-linux-gnu | riscv64gc-unknown-linux-musl) echo "qemu-riscv64" ;;
+		loongarch64-unknown-linux-gnu | loongarch64-unknown-linux-musl) echo "qemu-loongarch64" ;;
+		s390x-unknown-linux-gnu) echo "qemu-s390x" ;;
+		powerpc64le-unknown-linux-gnu) echo "qemu-ppc64le" ;;
 		*) echo "" ;;
 	esac
 }
@@ -444,8 +444,8 @@ main() {
 			exit 1
 		fi
 		if ! command -v "${qemu_binary}" &>/dev/null; then
-			log_error "QEMU user-static not found: ${qemu_binary}"
-			log_error "Install with: sudo pacman -S qemu-user-static qemu-user-static-binfmt"
+			log_error "QEMU user not found: ${qemu_binary}"
+			log_error "Install with: sudo pacman -S qemu-user qemu-user-binfmt"
 			exit 1
 		fi
 		binary="${qemu_binary} ${binary}"
