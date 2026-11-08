@@ -16,14 +16,14 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
     --mount=type=cache,sharing=locked,target=/usr/local/cargo/registry \
     # Install packages for cross-compiling software
     wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
-      > /etc/apt/trusted.gpg.d/apt.llvm.org.asc && \
+    > /etc/apt/trusted.gpg.d/apt.llvm.org.asc && \
     echo "deb http://apt.llvm.org/trixie/ llvm-toolchain-trixie-23 main" \
-      > /etc/apt/sources.list.d/llvm.list && \
+    > /etc/apt/sources.list.d/llvm.list && \
     echo "deb-src http://apt.llvm.org/trixie/ llvm-toolchain-trixie-23 main" \
-      >> /etc/apt/sources.list.d/llvm.list && \
+    >> /etc/apt/sources.list.d/llvm.list && \
     apt update && DEBIAN_FRONTEND=noninteractive \
     apt install -y debootstrap clang-23 lld-23 libclang-23-dev wrk \
-    nghttp2-client openssl python3 llvm-23 qemu-user-static cmake curl \
+    nghttp2-client openssl python3 llvm-23 qemu-user cmake curl \
     clang lld libclang-dev llvm && \
     cargo install bindgen-cli
 
@@ -74,22 +74,22 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && \
     # Prepare the sysroot with lockfile protection
     flock -x /usr/src/ferron/cross-build/sysroots/prepared/prepare.lock \
-      ./cross-build/sysroots/prepare-gnu.sh $TARGET_TRIPLE && \
+    ./cross-build/sysroots/prepare-gnu.sh $TARGET_TRIPLE && \
     # FIPS compliance check
     FIPS_ADD_ARG="" && \
     if [ "${FIPS}" == "1" ]; then \
-      FIPS_ADD_ARG="--fips"; \
+    FIPS_ADD_ARG="--fips"; \
     fi && \
     # Build Ferron binaries
     if [ "${NOPGO}" != "1" ]; then \
-      BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
-      CLANG="clang-23" CLANGXX="clang++-23" LLVM_PROFDATA="llvm-profdata-23" \
-      ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG --pgo; \
+    BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
+    CLANG="clang-23" CLANGXX="clang++-23" LLVM_PROFDATA="llvm-profdata-23" \
+    ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG --pgo; \
     else \
-      # These targets would fail with PGO, due to missing libprofiler_builtins
-      BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
-      CLANG="clang-23" CLANGXX="clang++-23" LLVM_PROFDATA="llvm-profdata-23" \
-      ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG; \
+    # These targets would fail with PGO, due to missing libprofiler_builtins
+    BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
+    CLANG="clang-23" CLANGXX="clang++-23" LLVM_PROFDATA="llvm-profdata-23" \
+    ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG; \
     fi && \
     # Copy executables out of the cache
     mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-fmt $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-precompress $TARGET_PATH/ferron-kdl2ferron $TARGET_PATH/ferron-serve .dist

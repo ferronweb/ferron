@@ -176,14 +176,14 @@ target_to_gnu_arch() {
 target_to_qemu_binary() {
 	local target="$1"
 	case "${target}" in
-		x86_64-unknown-linux-gnu | x86_64-unknown-linux-musl) echo "qemu-x86_64-static" ;;
-		i686-unknown-linux-gnu | i686-unknown-linux-musl) echo "qemu-i386-static" ;;
-		aarch64-unknown-linux-gnu | aarch64-unknown-linux-musl) echo "qemu-aarch64-static" ;;
-		armv7-unknown-linux-gnueabihf | armv7-unknown-linux-musleabihf) echo "qemu-arm-static" ;;
-		riscv64gc-unknown-linux-gnu | riscv64gc-unknown-linux-musl) echo "qemu-riscv64-static" ;;
-		loongarch64-unknown-linux-gnu | loongarch64-unknown-linux-musl) echo "qemu-loongarch64-static" ;;
-		s390x-unknown-linux-gnu) echo "qemu-s390x-static" ;;
-		powerpc64le-unknown-linux-gnu) echo "qemu-ppc64le-static" ;;
+		x86_64-unknown-linux-gnu | x86_64-unknown-linux-musl) echo "qemu-x86_64" ;;
+		i686-unknown-linux-gnu | i686-unknown-linux-musl) echo "qemu-i386" ;;
+		aarch64-unknown-linux-gnu | aarch64-unknown-linux-musl) echo "qemu-aarch64" ;;
+		armv7-unknown-linux-gnueabihf | armv7-unknown-linux-musleabihf) echo "qemu-arm" ;;
+		riscv64gc-unknown-linux-gnu | riscv64gc-unknown-linux-musl) echo "qemu-riscv64" ;;
+		loongarch64-unknown-linux-gnu | loongarch64-unknown-linux-musl) echo "qemu-loongarch64" ;;
+		s390x-unknown-linux-gnu) echo "qemu-s390x" ;;
+		powerpc64le-unknown-linux-gnu) echo "qemu-ppc64le" ;;
 		*) echo "" ;;
 	esac
 }
@@ -201,43 +201,43 @@ ensure_qemu_user() {
 		return 0
 	fi
 
-	log_info "qemu-user-static not found, attempting to install..."
+	log_info "qemu-user not found, attempting to install..."
 
 	# Detect distro and install
 	if command -v pacman &>/dev/null; then
 		# Arch Linux
 		if command -v sudo &>/dev/null; then
-			sudo pacman -S --noconfirm qemu-user-static qemu-user-static-binfmt
+			sudo pacman -S --noconfirm qemu-user qemu-user-binfmt
 		else
-			pacman -S --noconfirm qemu-user-static qemu-user-static-binfmt
+			pacman -S --noconfirm qemu-user qemu-user-binfmt
 		fi
 	elif command -v apt-get &>/dev/null; then
 		# Debian/Ubuntu
 		sudo apt-get update -qq
-		sudo apt-get install -y -qq qemu-user-static
+		sudo apt-get install -y -qq qemu-user
 	elif command -v dnf &>/dev/null; then
 		# Fedora
-		sudo dnf install -y qemu-user-static
+		sudo dnf install -y qemu-user
 	elif command -v apk &>/dev/null; then
 		# Alpine
-		sudo apk add --no-cache qemu-user-static
+		sudo apk add --no-cache qemu-user
 	else
-		log_error "Cannot auto-install qemu-user-static for your distro"
+		log_error "Cannot auto-install qemu-user for your distro"
 		log_error "Please install manually:"
-		log_error "  Arch:       sudo pacman -S qemu-user-static qemu-user-static-binfmt"
-		log_error "  Debian/Ubuntu: sudo apt install qemu-user-static"
-		log_error "  Fedora:     sudo dnf install qemu-user-static"
-		log_error "  Alpine:     sudo apk add qemu-user-static"
+		log_error "  Arch:       sudo pacman -S qemu-user qemu-user-binfmt"
+		log_error "  Debian/Ubuntu: sudo apt install qemu-user"
+		log_error "  Fedora:     sudo dnf install qemu-user"
+		log_error "  Alpine:     sudo apk add qemu-user"
 		return 1
 	fi
 
 	# Verify installation
 	if ! command -v "${qemu_binary}" &>/dev/null; then
-		log_error "qemu-user-static installed but ${qemu_binary} not found in PATH"
+		log_error "qemu-user installed but ${qemu_binary} not found in PATH"
 		return 1
 	fi
 
-	log_info "qemu-user-static installed successfully"
+	log_info "qemu-user installed successfully"
 }
 
 setup_env_gnu() {
