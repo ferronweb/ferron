@@ -913,37 +913,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
-name = "defmt"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4a0795ac740cb54d7b3775c9c17345f6aaecf884c01733b39d6017738e0e3e1"
-dependencies = [
- "bitflags 1.3.2",
- "defmt-macros",
-]
-
-[[package]]
-name = "defmt-macros"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "840bb056bd99c495c9188198a258ab787c79f306d864db3e6e8451442d6d8366"
-dependencies = [
- "defmt-parser",
- "proc-macro2",
- "quote",
- "syn 3.0.9",
-]
-
-[[package]]
-name = "defmt-parser"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71958f69fb2de856c5dd51ac9377e986ca1aa5919f931bf5395a807277f889a0"
-dependencies = [
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "der-parser"
 version = "10.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1097,7 +1066,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "ferron"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "ferron-entrypoint",
  "winresource",
@@ -1105,7 +1074,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-admin-api"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "arc-swap",
  "chrono",
@@ -1123,7 +1092,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-config-ferronconf"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1139,7 +1108,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-config-json"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1153,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-core"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1171,7 +1140,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "ferron-core",
@@ -1180,7 +1149,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns-command"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1192,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns-stalwartlite"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1206,7 +1175,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-entrypoint"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "clap",
@@ -1268,7 +1237,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-fmt"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "clap",
  "ferronconf",
@@ -1277,7 +1246,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "bytes",
  "cidr",
@@ -1299,7 +1268,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-abuseban"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1317,7 +1286,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-basicauth"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "argon2",
  "async-trait",
@@ -1342,7 +1311,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-buffer"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1360,7 +1329,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-cache"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "ahash",
  "async-trait",
@@ -1394,7 +1363,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-canary"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "ahash",
  "async-trait",
@@ -1413,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-cgi"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1436,7 +1405,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-compression"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-compression",
  "async-trait",
@@ -1455,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-fauth"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1478,7 +1447,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-fcgi"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1501,7 +1470,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-fproxy"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1522,7 +1491,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-headers"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1536,7 +1505,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-jsonerror"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1549,7 +1518,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-map"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1565,7 +1534,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-proxy"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -1603,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-ratelimit"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1623,7 +1592,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-replace"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1643,7 +1612,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-response"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1662,7 +1631,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-rewrite"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1680,7 +1649,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-scgi"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "cegla-scgi",
@@ -1699,7 +1668,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-server"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1737,7 +1706,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-static"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-compression",
  "async-trait",
@@ -1767,7 +1736,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-traceid"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "ferron-core",
@@ -1779,7 +1748,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-variables"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1795,7 +1764,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-kdl2ferron"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "clap",
@@ -1809,7 +1778,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-logformat-json"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "ferron-core",
  "ferron-observability",
@@ -1818,7 +1787,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-logformat-text"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "chrono",
  "ferron-core",
@@ -1829,7 +1798,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-metrics-admin"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "ferron-core",
  "ferron-observability",
@@ -1839,7 +1808,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-metrics-process"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "ferron-core",
  "ferron-observability",
@@ -1852,7 +1821,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-metrics-reload"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "ferron-core",
  "ferron-observability",
@@ -1862,7 +1831,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-channel",
  "ferron-core",
@@ -1873,7 +1842,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-consolelog"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-channel",
  "ferron-core",
@@ -1884,7 +1853,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-logfile"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-channel",
  "ferron-core",
@@ -1896,7 +1865,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-otlp"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-channel",
  "base64 0.23.1",
@@ -1935,7 +1904,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-prometheus"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1953,7 +1922,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-statsd"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-channel",
  "ferron-core",
@@ -1965,7 +1934,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-ocsp"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "ferron-observability",
  "parking_lot",
@@ -1976,7 +1945,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-ocsp-stapler"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "aws-lc-rs",
@@ -2004,7 +1973,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "aws-lc-rs",
  "base64 0.23.1",
@@ -2017,7 +1986,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-precompress"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "brotli",
  "clap",
@@ -2029,7 +1998,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-serve"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "clap",
  "tempfile",
@@ -2038,7 +2007,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
@@ -2060,7 +2029,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls-acme"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -2106,7 +2075,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls-http"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2134,7 +2103,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls-local"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2155,7 +2124,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-tls-manual"
-version = "3.0.0-rc.10"
+version = "3.0.0-rc.11"
 dependencies = [
  "async-trait",
  "ferron-core",
@@ -2964,11 +2933,10 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jiff"
-version = "0.2.39"
+version = "0.2.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ac703058abac89e5c39b0b879dce2b6b14a4ba36600c7e7e3d0c60a6883ef3c"
+checksum = "14ed8250fe4472173a765b89fea4b46f2c4aa12adc12a3e310f1dc6c108e041b"
 dependencies = [
- "defmt",
  "jiff-core",
  "jiff-static",
  "jiff-tzdb-platform",
@@ -2981,19 +2949,18 @@ dependencies = [
 
 [[package]]
 name = "jiff-core"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aee43309eb53bafb8c36d35d6e444769c8f8e6206a9fbf7546f5db9d7d4a0e93"
+checksum = "ecfc96f3a325d3a9b0ee6db9a81a83b40b94e781021c044a0a7f4c4630a1e482"
 dependencies = [
- "defmt",
  "log",
 ]
 
 [[package]]
 name = "jiff-static"
-version = "0.2.39"
+version = "0.2.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dc32470c67eb7d0e9ccb74303fa925313dc04cecb1aa048beaa6f391e36a93d"
+checksum = "e9522de39a5298859d9e844b660eb7d5e6fd1b63b9953f51535408a62f2d31b3"
 dependencies = [
  "jiff-core",
  "proc-macro2",
@@ -6006,9 +5973,9 @@ dependencies = [
 
 [[package]]
 name = "zincio"
-version = "0.2.26"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbd6e56dbfea5515cc6ae2fad1d0453eee81a8f2c217c9c35a368f258573d4c9"
+checksum = "71b00cea80541e803735b76b2bbe626783e3db9bc3b871cadf093486faed9e4d"
 dependencies = [
  "async-channel",
  "crossbeam-queue",
@@ -6069,9 +6036,9 @@ dependencies = [
 
 [[package]]
 name = "zincio-hyper"
-version = "0.2.26"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a8e6337b3e96963e493bb18cfed1cb950c564a940f029d3343bda6ca5d31542"
+checksum = "92207b2a02bf60c02dc63e47eae65855d5c5870958bcc5b647fa638c85fed1c2"
 dependencies = [
  "hyper",
  "tokio",
@@ -6080,9 +6047,9 @@ dependencies = [
 
 [[package]]
 name = "zincio-quinn"
-version = "0.2.26"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e9a3268ebb66a8d2e93edf2737999a0f97ee23e72e1dcb43ee78f261145549e"
+checksum = "766ae03a2b1e91cce2443107e9f81eb6086fd1857cdc02c12983ed3b661bf893"
 dependencies = [
  "quinn",
  "zincio",
