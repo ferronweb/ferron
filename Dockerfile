@@ -85,12 +85,14 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     if [ "${NOPGO}" != "1" ] && ([ "$TARGET_TRIPLE" = "x86_64-unknown-linux-musl" ] \
     || [ "$TARGET_TRIPLE" = "aarch64-unknown-linux-musl" ]); then \
     BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
-    CLANG="clang-23" CLANGXX="clang++-23" LLVM_PROFDATA="llvm-profdata-23" \
+    CLANG="clang-23" CLANGXX="clang++-23" \
+    LLVM_PROFDATA="llvm-profdata-23" LLVM_AR="llvm-ar-23" LLVM_RANLIB="llvm-ranlib-23" \
     ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG --pgo; \
     else \
     # These targets would fail with PGO, due to missing libprofiler_builtins
     BENCH_BASE_PORT="$(cat /tmp/cross_build_baseport)" \
-    CLANG="clang-23" CLANGXX="clang++-23" LLVM_PROFDATA="llvm-profdata-23" \
+    CLANG="clang-23" CLANGXX="clang++-23" \
+    LLVM_PROFDATA="llvm-profdata-23" LLVM_AR="llvm-ar-23" LLVM_RANLIB="llvm-ranlib-23" \
     ./cross-build/build.sh $TARGET_TRIPLE $FIPS_ADD_ARG; \
     fi && \
     # Copy executables out of the cache

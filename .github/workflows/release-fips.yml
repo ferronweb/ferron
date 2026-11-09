@@ -173,6 +173,8 @@ jobs:
           export CLANG=clang-23
           export CLANGXX=clang++-23
           export LLVM_PROFDATA=llvm-profdata-23
+          export LLVM_AR=llvm-ar-23
+          export LLVM_RANLIB=llvm-ranlib-23
           if [ "${{ matrix.pgo }}" = "true" ]; then
             ./cross-build/build.sh ${{ matrix.target }} --pgo --fips
           else

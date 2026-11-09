@@ -169,6 +169,8 @@ jobs:
           export CLANG=/usr/bin/clang-20
           export CLANGXX=/usr/bin/clang++-20
           export LLVM_PROFDATA=/usr/bin/llvm-profdata-20
+          export LLVM_AR=llvm-ar-23
+          export LLVM_RANLIB=llvm-ranlib-23
           ./cross-build/build.sh ${{ matrix.target }} --debug
 
       - name: Build binaries (cross-rs)

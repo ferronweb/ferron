@@ -60,6 +60,8 @@ Environment variables:
   CLANG                    Override clang compiler (default: auto-detect)
   CLANGXX                  Override clang++ compiler (default: auto-detect)
   LLVM_PROFDATA            Override llvm-profdata tool (default: auto-detect)
+  LLVM_AR                  Override llvm-ar tool (default: auto-detect)
+  LLVM_RANLIB              Override llvm-ranlib tool (default: auto-detect)
   BENCH_BASE_PORT          Override base port for benchmarking (default: 8080)
 EOF
 }
@@ -253,6 +255,8 @@ setup_env_gnu() {
 	llvm_target=$(rust_to_llvm_target "${target}")
 	local clang="${CLANG:-clang}"
 	local clangxx="${CLANGXX:-clang++}"
+	local llvm_ar="${LLVM_AR:-llvm-ar}"
+	local llvm_ranlib="${LLVM_RANLIB:-llvm-ranlib}"
 
 	log_info "Setting up GNU build environment"
 	log_info "  Sysroot: ${sysroot}"
@@ -355,11 +359,11 @@ WRAPPER
 		# AR/RANLIB wrappers
 		cat > "${ar_wrapper}" <<WRAPPER
 #!/bin/bash
-exec llvm-ar "\$@"
+exec ${llvm_ar} "\$@"
 WRAPPER
 		cat > "${ranlib_wrapper}" <<WRAPPER
 #!/bin/bash
-exec llvm-ranlib "\$@"
+exec ${llvm_ranlib} "\$@"
 WRAPPER
 		chmod +x "${cc_wrapper}" "${cxx_wrapper}" "${ar_wrapper}" "${ranlib_wrapper}"
 
@@ -435,6 +439,8 @@ setup_env_musl() {
 	llvm_target=$(rust_to_llvm_target "${target}")
 	local clang="${CLANG:-clang}"
 	local clangxx="${CLANGXX:-clang++}"
+	local llvm_ar="${LLVM_AR:-llvm-ar}"
+	local llvm_ranlib="${LLVM_RANLIB:-llvm-ranlib}"
 
 	log_info "Setting up musl build environment"
 	log_info "  Sysroot: ${sysroot}"
@@ -478,8 +484,8 @@ setup_env_musl() {
 	fi
 
 	# Use clang with explicit sysroot and target for musl
-	export AR_${target//-/_}="llvm-ar"
-	export RANLIB_${target//-/_}="llvm-ranlib"
+	export AR_${target//-/_}="${llvm_ar}"
+	export RANLIB_${target//-/_}="${llvm_ranlib}"
 
 	# Create CC/CXX wrapper scripts for build scripts (aws-lc-sys, etc.)
 	# that parse CC as a single binary path
