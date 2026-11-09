@@ -140,6 +140,12 @@ jobs:
         with:
           packages: debootstrap clang-20 lld-20 libclang-20-dev wrk nghttp2-client openssl python3 llvm qemu-user cmake curl
 
+      - name: Setup LLVM
+        if: matrix.cross-build == true
+        uses: ZhongRuoyu/setup-llvm@v0
+        with:
+          llvm-version: 23
+
       - name: Install Cross
         if: matrix.cross-rs == true
         shell: bash
@@ -166,9 +172,9 @@ jobs:
             # Sysroot doesn't exist, prepare it
             ./cross-build/sysroots/prepare-${LIBC}.sh ${{ matrix.target }}
           fi
-          export CLANG=/usr/bin/clang-20
-          export CLANGXX=/usr/bin/clang++-20
-          export LLVM_PROFDATA=/usr/bin/llvm-profdata-20
+          export CLANG=clang-23
+          export CLANGXX=clang++-23
+          export LLVM_PROFDATA=llvm-profdata-23
           export LLVM_AR=llvm-ar-23
           export LLVM_RANLIB=llvm-ranlib-23
           ./cross-build/build.sh ${{ matrix.target }} --debug
