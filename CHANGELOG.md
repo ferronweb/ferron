@@ -1,5 +1,15 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+#### HTTP server core
+
+- **Many HTTP correctness improvements**: improved overall HTTP protocol correctness (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0416)).
+
 ## Ferron 3.0.0-rc.11
 
 **Released in November 8, 2026**
