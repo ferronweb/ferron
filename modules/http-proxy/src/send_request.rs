@@ -230,6 +230,16 @@ impl SendRequestWrapper {
             None => false,
         }
     }
+
+    /// Check if the connection would utilize extended CONNECT instead of HTTP upgrade.
+    #[inline]
+    pub fn extended_connect(&self) -> bool {
+        match &self.inner {
+            Some(SendRequestInner::Http1(_)) => false,
+            Some(SendRequestInner::Http2(_)) => true,
+            None => false,
+        }
+    }
 }
 
 /// HTTP/1.x handshake using zincio executor.

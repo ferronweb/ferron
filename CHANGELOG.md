@@ -4,6 +4,12 @@
 
 **Not yet released**
 
+### Changed
+
+#### Reverse proxy
+
+- **Extended CONNECT support for HTTP/2 backends**: the reverse proxy now "upgrades" HTTP/2 requests via extended CONNECT, if the request specifies an HTTP upgrade.
+
 ### Fixed
 
 #### HTTP server core

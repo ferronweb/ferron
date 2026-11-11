@@ -2,6 +2,7 @@
 
 mod affinity;
 mod connect;
+mod ext_connect;
 mod pool;
 mod request;
 mod response;

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferron_http::trace_context::current_event_trace_context;
+use ferron_http::HttpContext;
 use http_body_util::BodyExt;
 use hyper::body::Body;
 use rustls::pki_types::ServerName;
@@ -27,7 +28,8 @@ use crate::types::error::ProxyError;
 use crate::types::upstream::ResolvedUpstream;
 use crate::types::ConnectionsTrackState;
 use crate::ProxyMetrics;
-use ferron_http::HttpContext;
+
+use super::ext_connect::*;
 
 /// Try to send a request using the connection pool.
 ///
@@ -562,6 +564,7 @@ pub async fn send_via_wrapper(
     _local_limit: Option<usize>,
     metrics: &mut ProxyMetrics,
 ) -> Result<ferron_http::HttpResponse, ProxyError> {
+    let extended_connect = wrapper.extended_connect();
     let parts_cloned = {
         let req = ctx.req.take();
         if let Some(req) = req {
@@ -578,8 +581,19 @@ pub async fn send_via_wrapper(
             None
         }
     };
-    let request = crate::proxy::request::construct_proxy_request(ctx, config, proxy_url)?;
-    let body_cloned = request.body().clone();
+    let mut request =
+        crate::proxy::request::construct_proxy_request(ctx, config, proxy_url, extended_connect)?;
+    let extended_connect_request = extended_connect
+        && request.method() == http::Method::CONNECT
+        && request.extensions().get::<hyper::ext::Protocol>().is_some();
+    let (body_cloned, ext_req_data) = if extended_connect_request {
+        let (tx, body) = ExtendedConnectRequestBody::new();
+        let mut proxy_body = crate::send_request::ProxyBody::new(body.boxed_unsync());
+        std::mem::swap(&mut proxy_body, request.body_mut());
+        (proxy_body, Some(tx))
+    } else {
+        (request.body().clone(), None)
+    };
     let extensions = request.extensions().clone();
 
     let start = std::time::Instant::now();
@@ -609,7 +623,23 @@ pub async fn send_via_wrapper(
 
     let (mut parts, body) = response.into_parts();
 
-    if status == http::StatusCode::SWITCHING_PROTOCOLS {
+    if let Some(ext_req_data) = (extended_connect_request && status == http::StatusCode::OK)
+        .then_some(ext_req_data)
+        .flatten()
+    {
+        handle_extended_connect(body, ext_req_data, extensions, ctx, item, is_unix).await?;
+
+        crate::proxy::response::remove_headers_rfc7230(&mut parts);
+
+        Ok(ferron_http::HttpResponse::Custom(
+            http::Response::from_parts(
+                parts,
+                http_body_util::Empty::new()
+                    .map_err(std::io::Error::other)
+                    .boxed_unsync(),
+            ),
+        ))
+    } else if status == http::StatusCode::SWITCHING_PROTOCOLS {
         let response_upgrade = http::Response::from_parts(parts.clone(), ());
         handle_upgrade(response_upgrade, extensions, ctx, item).await?;
 

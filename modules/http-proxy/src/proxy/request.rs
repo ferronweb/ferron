@@ -17,6 +17,7 @@ pub(super) fn construct_proxy_request(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     proxy_request_url: &Uri,
+    extended_connect: bool,
 ) -> Result<Request<ProxyBody>, ProxyError> {
     let req_ref = ctx.req.as_ref().ok_or(ProxyError::RequestConstructError(
         "no request in context".to_string(),
@@ -93,7 +94,9 @@ pub(super) fn construct_proxy_request(
     if let Some(c) = parts.headers.remove(http::header::CONNECTION) {
         // If the connection header contains "upgrade",
         // preserve it to avoid breaking the upgrade connection.
-        if str::from_utf8(c.as_bytes()).is_ok_and(|s| s.to_lowercase().contains("upgrade")) {
+        if !extended_connect
+            && str::from_utf8(c.as_bytes()).is_ok_and(|s| s.to_lowercase().contains("upgrade"))
+        {
             parts.headers.insert(
                 http::header::CONNECTION,
                 HeaderValue::from_static("upgrade"),
@@ -105,6 +108,21 @@ pub(super) fn construct_proxy_request(
     parts.headers.remove(http::header::TRAILER);
     parts.headers.remove("proxy-authorization");
     parts.headers.remove("proxy-authenticate");
+
+    if extended_connect {
+        if let Some(upgraded) = parts
+            .headers
+            .remove(http::header::UPGRADE)
+            .as_ref()
+            .and_then(|hv| hv.to_str().ok())
+        {
+            // Convert to HTTP/1.x upgrade to HTTP/2 extended CONNECT
+            parts
+                .extensions
+                .insert(hyper::ext::Protocol::from(upgraded));
+            parts.method = http::Method::CONNECT;
+        }
+    }
 
     let client_ip = ctx.remote_address.map(|a| a.ip());
     let local_ip = ctx.local_address.map(|a| a.ip());
