@@ -55,6 +55,19 @@ pub(super) fn normalize_http2_http3_request(request: &mut HttpRequest) {
             headers.insert(http::header::COOKIE, cookie_value);
         }
     }
+
+    // HTTP/2 and HTTP/3 extended CONNECT would be converted to HTTP/1.x Upgrade as well
+    let ext_connect_protocol = request.extensions().get::<zincio_http::Protocol>().cloned();
+    if let Some(proto) = ext_connect_protocol.and_then(|p| HeaderValue::from_str(p.as_str()).ok()) {
+        if request.method() == http::Method::CONNECT {
+            request.headers_mut().insert(
+                http::header::CONNECTION,
+                HeaderValue::from_static("upgrade"),
+            );
+            request.headers_mut().insert(http::header::UPGRADE, proto);
+            *request.method_mut() = http::Method::GET; // HTTP/1.x upgrades would be GET...
+        }
+    }
 }
 
 #[inline]

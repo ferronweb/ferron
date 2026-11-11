@@ -9,6 +9,7 @@
 #### HTTP server core
 
 - **Many HTTP correctness improvements**: improved overall HTTP protocol correctness (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0416)).
+- **Proper extended CONNECT support**: previously, extended CONNECT requests for HTTP/2 and HTTP/3 were not handled correctly, which could lead to connection stalls or dropped connections. This has been fixed.
 
 ## Ferron 3.0.0-rc.11
 
