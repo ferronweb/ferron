@@ -5771,9 +5771,9 @@ dependencies = [
 
 [[package]]
 name = "zincio"
-version = "0.2.26"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbd6e56dbfea5515cc6ae2fad1d0453eee81a8f2c217c9c35a368f258573d4c9"
+checksum = "71b00cea80541e803735b76b2bbe626783e3db9bc3b871cadf093486faed9e4d"
 dependencies = [
  "async-channel",
  "crossbeam-queue",
@@ -5823,9 +5823,9 @@ dependencies = [
 
 [[package]]
 name = "zincio-hyper"
-version = "0.2.26"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a8e6337b3e96963e493bb18cfed1cb950c564a940f029d3343bda6ca5d31542"
+checksum = "92207b2a02bf60c02dc63e47eae65855d5c5870958bcc5b647fa638c85fed1c2"
 dependencies = [
  "hyper",
  "tokio",
