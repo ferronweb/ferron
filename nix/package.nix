@@ -39,13 +39,10 @@ rustPlatform.buildRustPackage {
   pname = "ferron";
   version = manifest.package.version;
 
-  # Plain `../.` is the flake's git-tracked tree: untracked/ignored files
-  # (target/, dist/, .git/) are already excluded, so no filter needed.
-  # What the tracked tree lacks is git submodule contents (only gitlinks),
-  # which the two build scripts need — hence the stitching below. Keeping
-  # submodules as explicit fetches (rather than builtins.path disk copies)
-  # makes the package build from any clean checkout, lockfile, or tarball
-  # without requiring --recurse-submodules on disk.
+  # Plain `../.` is the flake's git-tracked tree, so target/, dist/, .git/ are
+  # already excluded, so no need for a filter.
+  # 
+  # BUT, replace Git submodules with fetched replacements
   src = stdenv.mkDerivation {
     name = "ferron-source";
     src = ../.;
@@ -83,9 +80,7 @@ rustPlatform.buildRustPackage {
     rustPlatform.bindgenHook
   ];
 
-  # Build the main binary plus the CLI utilities shipped in release
-  # archives (packaging/README.md): ferron-fmt, ferron-kdl2ferron,
-  # ferron-passwd, ferron-precompress, ferron-serve.
+  # Main `ferron` binary + utilities
   cargoBuildFlags = [
     "-p"
     "ferron"
@@ -101,9 +96,7 @@ rustPlatform.buildRustPackage {
     "ferron-serve"
   ];
 
-  # Tests need network / Docker in places; skip `cargo test` here.
-  # Unit tests run via `cargo test --workspace`, E2E via `cd e2e && cargo test`
-  # (see CONTRIBUTING.md).
+  # Tests need network / Docker in places, so skip `cargo test`.
   doCheck = false;
 
   postInstall = ''

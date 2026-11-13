@@ -1,20 +1,16 @@
 #!/usr/bin/env bash
 
 # Refresh pinned external inputs used by the Nix packaging:
-#   1. `nix/package-bin.nix`: latest published release (`version` default
-#      plus per-system hashes), following the installer's `latest3.ferron`
-#      channel (see installer/src/steps/10_download.sh).
-#   2. `nix/package.nix`: git submodule pins (`rev` + `hash` for the two
-#      build-time submodules; compare with `git submodule status`).
+#   - `nix/package-bin.nix`: latest published release, following the
+#      installer's `latest3.ferron` channel
+#      (see installer/src/steps/10_download.sh).
+#   - `nix/package.nix`: git submodule pins.
 #
-# Idempotent: files are only rewritten when values actually change.
+# Files are only rewritten when values actually change.
+#
 # Runnable locally and in CI (needs: bash, curl, git, sed, awk, nix with
 # the `nix-command` experimental feature for `nix hash convert`, and
-# `nix-prefetch-url`). Run from anywhere; the repository root is detected
-# via git.
-#
-# NOTE: `#!/usr/bin/env bash` (not `#!/bin/bash` like packaging/*.sh)
-# because NixOS has no /bin/bash and this script must run there too.
+# `nix-prefetch-url`).
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -88,6 +84,7 @@ if [ "$CUR_VERSION" != "$LATEST_VERSION" ] || [ "$CUR_X86" != "$WANT_X86" ] || [
   echo "patched $PACKAGE_BIN"
 fi
 
+# When adding new Git submodules, update that file too
 echo "==> checking git submodules..."
 while IFS='|' read -r subpath owner repo; do
   [ -n "$subpath" ] || continue

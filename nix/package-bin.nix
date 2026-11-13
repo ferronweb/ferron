@@ -1,24 +1,25 @@
 # Binary-download variant of the Ferron package.
 #
-# Fetches the release archive produced by `just package` (see
-# packaging/archive/package.sh) from dl.ferron.sh, mirroring what the
-# installer's 10_download.sh step does:
+# Fetches the release archive from the Ferron download server, with this
+# URL:
 #   https://dl.ferron.sh/{version}/ferron-{version}-{triple}.tar.gz
-# with checksums published at https://dl.ferron.sh/{version}/SHA256SUMS
+# where `version` would be the latest published release (fetched from
+# https://dl.ferron.sh/latest3.ferron) and `triple` would be the target
+# triple of the host (like `x86_64-unknown-linux-gnu` for 64-bit x86
+# Linux)
 #
-# `version` tracks the latest *published* release (like the installer's
-# `latest3.ferron` channel), deliberately decoupled from the checkout's
-# Cargo.toml version so the default stays installable between version
-# bumps and publishes. Refresh via `nix/update-pins.sh` (also wired to a
-# scheduled GitHub Actions workflow) — never by hand.
+# Checksums are published at https://dl.ferron.sh/{version}/SHA256SUMS
+#
+# Refresh hashes using `nix/update-pins.sh` (which is run automatically
+# when Ferron is released).
 {
   lib,
   stdenv,
   fetchurl,
   autoPatchelfHook,
   version ? "3.0.0-rc.10",
-  # NOTE: named `releaseHashes` (not `hashes`) because `pkgs.hashes`
-  # exists -- `callPackage` would inject it over a `hashes` default.
+
+  # `releaseHashes`, not `hashes` because `pkgs.hashes` exists.
   releaseHashes ? {
     x86_64-linux = "sha256-GqAO4/NYnm2lB+TuzWyDywVneNw8ag4vgs07+U0FXII=";
     aarch64-linux = "sha256-folfK/X5jHHK1KzGgtHVn5yi/gjhuE4ObmiZ3CxD3fQ=";
@@ -44,17 +45,12 @@ stdenv.mkDerivation {
     sha256 = releaseHashes.${stdenv.hostPlatform.system};
   };
 
-  # Prebuilt binaries target generic Linux (dynamic glibc). Patch the
-  # interpreter/RPATH so they run on NixOS without a manual loader;
-  # required for `services.ferron.package = ...ferron-bin` to work.
+  # Search for dynamically-linked dependencies and patch them
+  # (pre-built Ferron uses only GNU libc and companions anyway)
   nativeBuildInputs = [ autoPatchelfHook ];
-
-  # Runtime libs for autoPatchelf to link (the release binaries need
-  # libgcc_s; glibc comes from stdenv).
   buildInputs = [ stdenv.cc.cc.lib ];
 
-  # The archive is flat (binaries + ferron.conf at top level, plus a
-  # wwwroot/ dir). Without this, stdenv's unpackPhase would pick wwwroot/
+  # Without this, stdenv's unpackPhase would pick wwwroot/ (a webroot!)
   # as sourceRoot and installPhase would run in the wrong directory.
   sourceRoot = ".";
 

@@ -1,6 +1,6 @@
 # NixOS module for Ferron.
 #
-# Importable as `inputs.ferron.nixosModules.default` (see flake.nix), e.g.:
+# Importable as `inputs.ferron.nixosModules.default` (see flake.nix):
 #
 #   inputs.ferron.url = "github:ferronweb/ferron/3.x"; # release branch
 #   modules = [ inputs.ferron.nixosModules.default ];
@@ -13,9 +13,8 @@
 #     };
 #   };
 #
-# Config model: typed Nix options generate ferron.conf text
-# (readable/auditable, checked by `ferron validate`), with `config` and
-# `extraConfig` as verbatim escape hatches.
+# This module uses typed Nix options, which generate ferron.conf text,
+# with custom configuration via `config` and `extraConfig`.
 {
   config,
   lib,
@@ -467,16 +466,18 @@ in
         Type = "simple";
         User = cfg.user;
         Group = cfg.group;
-        # Validate before (re)start. NOTE: not `preStart`, which only takes
-        # effect combined with `script`; with a raw `ExecStart` it is
-        # silently ignored. ExecStartPre always lands in the unit.
+
+        # Validate before (re)start.
+        #
+        # Not `preStart`, which only takes effect combined with `script`.
+        # With a raw `ExecStart` it would be silently ignored, so use
+        # ExecStartPre.
         ExecStartPre = "${lib.getExe cfg.package} validate -c ${confFile}";
         ExecStart = "${lib.getExe cfg.package} run -c ${confFile}";
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
         Restart = "on-failure";
 
-        # NixOS-native state handling (replaces installer 30_dirs.sh /
-        # deb postinst imperatives): /run/ferron, /var/lib/ferron,
+        # NixOS-native state handling: /run/ferron, /var/lib/ferron,
         # /var/log/ferron are managed by systemd.
         RuntimeDirectory = "ferron";
         StateDirectory = "ferron";
