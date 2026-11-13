@@ -1,9 +1,9 @@
 # Source build of Ferron from this repository.
 #
-# Version is read from entrypoint/Cargo.toml (same source of truth as
-# packaging/archive/package.sh and packaging/deb|rpm/package.sh).
-# Dependencies come from Cargo.lock at the repository root — no separate
-# vendor hash is maintained (see the NOTE at `cargoLock` below).
+# Version is read from entrypoint/Cargo.toml.
+#
+# Dependencies come from Cargo.lock at the repository root, so no need
+# for a separate vendor hash.
 {
   lib,
   rustPlatform,
@@ -41,7 +41,7 @@ rustPlatform.buildRustPackage {
 
   # Plain `../.` is the flake's git-tracked tree, so target/, dist/, .git/ are
   # already excluded, so no need for a filter.
-  # 
+  #
   # BUT, replace Git submodules with fetched replacements
   src = stdenv.mkDerivation {
     name = "ferron-source";
@@ -63,14 +63,9 @@ rustPlatform.buildRustPackage {
     lockFile = ../Cargo.lock;
   };
 
-  # NOTE: no `cargoHash` here on purpose. With `cargoLock.lockFile` set and
-  # no git dependencies in Cargo.lock (all 500+ deps are registry sources),
-  # nixpkgs vendors purely from the lockfile, reproducible without a
-  # separate vendor hash to maintain. Dependency changes flow through
-  # Cargo.lock alone, so Ferron version bumps never touch this file.
-
-  # aws-lc-rs uses the `bindgen` feature (see types/tls/Cargo.toml and
-  # modules using aws-lc-rs), so libclang must be available at build time.
+  # aws-lc-rs uses the `bindgen` feature, so libclang must be available at
+  # build time.
+  #
   # bindgenHook sets LIBCLANG_PATH automatically. aws-lc-sys also needs
   # cmake (and perl) to configure its C build.
   nativeBuildInputs = [
