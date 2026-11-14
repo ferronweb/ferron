@@ -176,6 +176,44 @@ To prevent abuse, you can configure an approval endpoint. Before issuing a certi
 }
 ```
 
+### Catch-all on-demand issuance
+
+Some hosts serve customer domains that you do not know in advance and that do not share a suffix. To issue certificates for these domains, put the `tls` block in a host block without a hostname, such as `*:443`. Ferron uses this catch-all block for every TLS handshake whose SNI hostname does not match another host block.
+
+```ferron
+*:443 {
+    tls {
+        provider acme
+        challenge tls-alpn-01
+        contact admin@example.com
+        cache /var/cache/ferron-acme
+        on_demand
+        on_demand_ask http://127.0.0.1:8081/check-cert
+    }
+
+    proxy http://127.0.0.1:8080
+}
+```
+
+> [!important]
+> A catch-all on-demand block must set `on_demand_ask`. Without an approval endpoint, any client could make Ferron request a certificate for any hostname. `ferron validate` and server startup reject this configuration:
+>
+> ```ferron
+> # INVALID: catch-all on-demand block without an approval endpoint
+> *:443 {
+>     tls {
+>         provider acme
+>         on_demand
+>     }
+> }
+> ```
+
+Ferron uses the catch-all block only for hostnames that no other host block matches. If a host block with a hostname or a wildcard matches and its approval endpoint denies the hostname, the catch-all block does not issue a certificate for it.
+
+If the approval endpoint does not return a `2xx` response within 10 seconds, Ferron asks again for the same hostname after 60 seconds. A hostname that the endpoint approves later gets a certificate without a configuration reload. Ferron remembers at most 10,000 denied hostnames at a time, and a configuration reload clears them.
+
+After Ferron issues a certificate for a hostname, it renews the certificate without asking the approval endpoint again.
+
 ## Certificate caching
 
 ### In-memory cache (default)

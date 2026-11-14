@@ -96,6 +96,25 @@ impl ConfigurationValidator for TlsAcmeConfigurationValidator {
             }
         });
 
+        // A host block without a hostname matches every SNI name, so on-demand
+        // issuance there must be gated by an approval endpoint. The provider
+        // enforces this at startup as well.
+        if flag_enabled(config, "on_demand")
+            && !has_non_empty_string_value(config, "on_demand_ask")
+            && validator_ctx
+                .scope
+                .as_deref()
+                .is_some_and(scope_is_catch_all_host)
+        {
+            return Err(
+                ferron_core::config::validator::ConfigurationValidationError::from(
+                    "On-demand ACME in a host block without a hostname requires `on_demand_ask`"
+                        .to_string(),
+                )
+                .with_span(directive_span(config, "on_demand")),
+            );
+        }
+
         add_acme_best_practice_diagnostics(config, validator_ctx);
 
         Ok(())
@@ -223,6 +242,13 @@ fn add_non_public_domain_diagnostics(
     }
 }
 
+/// Whether a scope string such as "http port 443" names a host block without a
+/// hostname or IP address.
+fn scope_is_catch_all_host(scope: &str) -> bool {
+    let mut tokens = scope.split_whitespace();
+    tokens.any(|token| token == "port") && !tokens.any(|token| token == "host" || token == "ip")
+}
+
 /// Extract hostname from a scope string like "http port 80 host example.com".
 fn extract_hostname_from_scope(scope: &str) -> Option<String> {
     let (_, rest) = scope.split_once(' ')?; // for example, "http ..."
@@ -236,4 +262,20 @@ fn extract_hostname_from_scope(scope: &str) -> Option<String> {
     let hostname = after_port.strip_prefix("host ")?;
     // Take until the next space (there might be "ip ..." after)
     Some(hostname.split_whitespace().next()?.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scope_is_catch_all_host;
+
+    #[test]
+    fn scope_without_host_or_ip_is_catch_all() {
+        assert!(scope_is_catch_all_host("http port 443"));
+        assert!(!scope_is_catch_all_host("http port 443 host example.com"));
+        assert!(!scope_is_catch_all_host("http port 443 ip 192.0.2.1"));
+        assert!(!scope_is_catch_all_host(
+            "http port 443 host example.com ip 192.0.2.1"
+        ));
+        assert!(!scope_is_catch_all_host("global"));
+    }
 }
