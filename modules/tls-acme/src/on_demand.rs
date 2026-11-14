@@ -193,6 +193,104 @@ pub fn match_hostname(pattern: &str, hostname: &str) -> bool {
     false
 }
 
+/// Returns the indices of the on-demand configs that apply to `hostname` on
+/// `port`, in the order they should be tried.
+///
+/// Each item is a config's SNI pattern and port. A `None` pattern comes from a
+/// host block without a hostname and matches every hostname. Configs with a
+/// pattern are tried first, in configuration order, so a specific or wildcard
+/// host block wins over the catch-all block.
+pub fn matching_config_indices<'a>(
+    configs: impl IntoIterator<Item = (Option<&'a str>, u16)>,
+    hostname: &str,
+    port: u16,
+) -> Vec<usize> {
+    let mut specific = Vec::new();
+    let mut catch_all = Vec::new();
+    for (index, (pattern, config_port)) in configs.into_iter().enumerate() {
+        if config_port != port {
+            continue;
+        }
+        match pattern {
+            Some(pattern) if match_hostname(pattern, hostname) => specific.push(index),
+            Some(_) => {}
+            None => catch_all.push(index),
+        }
+    }
+    specific.extend(catch_all);
+    specific
+}
+
+/// How long a hostname that was not approved waits before Ferron asks again.
+pub const DENIED_RETRY_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Maximum number of denied hostnames remembered at once.
+pub const DENIED_CAPACITY: usize = 10_000;
+
+/// Remembers hostnames whose issuance was not approved, so that repeated
+/// handshakes don't flood the approval endpoint, while still letting a
+/// hostname that is approved later get a certificate without a reload.
+///
+/// The map is bounded because, with a catch-all host block, any client can
+/// send arbitrary SNI hostnames.
+pub struct DeniedHostnames {
+    entries: HashMap<(String, u16), std::time::Instant>,
+    retry_after: std::time::Duration,
+    capacity: usize,
+}
+
+impl DeniedHostnames {
+    pub fn new(retry_after: std::time::Duration, capacity: usize) -> Self {
+        Self {
+            entries: HashMap::new(),
+            retry_after,
+            capacity,
+        }
+    }
+
+    /// Returns `true` while a recent denial for this hostname is still in effect.
+    pub fn is_denied(&mut self, hostname: &str, port: u16, now: std::time::Instant) -> bool {
+        let key = (hostname.to_string(), port);
+        match self.entries.get(&key) {
+            Some(denied_at) if now.duration_since(*denied_at) < self.retry_after => true,
+            Some(_) => {
+                self.entries.remove(&key);
+                false
+            }
+            None => false,
+        }
+    }
+
+    /// Records a denial. When the map is full, expired entries are dropped
+    /// first, then the oldest entry.
+    pub fn record(&mut self, hostname: &str, port: u16, now: std::time::Instant) {
+        if self.entries.len() >= self.capacity {
+            let retry_after = self.retry_after;
+            self.entries
+                .retain(|_, denied_at| now.duration_since(*denied_at) < retry_after);
+        }
+        if self.entries.len() >= self.capacity {
+            if let Some(oldest) = self
+                .entries
+                .iter()
+                .min_by_key(|(_, denied_at)| **denied_at)
+                .map(|(key, _)| key.clone())
+            {
+                self.entries.remove(&oldest);
+            }
+        }
+        self.entries.insert((hostname.to_string(), port), now);
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
 pub async fn check_ask_endpoint(
     domain: &str,
     on_demand_ask: Option<&str>,
@@ -260,6 +358,74 @@ mod tests {
     fn test_match_hostname_exact() {
         assert!(match_hostname("example.com", "example.com"));
         assert!(!match_hostname("example.com", "www.example.com"));
+    }
+
+    #[test]
+    fn test_matching_config_indices_prefers_patterns_over_catch_all() {
+        let configs = [
+            (None, 443),
+            (Some("*.example.com"), 443),
+            (Some("api.example.com"), 443),
+            (Some("other.test"), 443),
+            (None, 8443),
+        ];
+        assert_eq!(
+            matching_config_indices(configs, "api.example.com", 443),
+            vec![1, 2, 0]
+        );
+        assert_eq!(
+            matching_config_indices(configs, "tenant.example.net", 443),
+            vec![0]
+        );
+        assert_eq!(
+            matching_config_indices(configs, "tenant.example.net", 8443),
+            vec![4]
+        );
+        assert!(matching_config_indices(configs, "tenant.example.net", 80).is_empty());
+    }
+
+    #[test]
+    fn test_matching_config_indices_without_catch_all() {
+        let configs = [(Some("*.example.com"), 443)];
+        assert!(matching_config_indices(configs, "tenant.example.net", 443).is_empty());
+    }
+
+    #[test]
+    fn test_denied_hostnames_retry_after_expiry() {
+        let start = std::time::Instant::now();
+        let mut denied = DeniedHostnames::new(std::time::Duration::from_secs(60), 10);
+        assert!(!denied.is_denied("a.test", 443, start));
+        denied.record("a.test", 443, start);
+        assert!(denied.is_denied("a.test", 443, start + std::time::Duration::from_secs(59)));
+        assert!(!denied.is_denied("a.test", 8443, start));
+        assert!(!denied.is_denied("a.test", 443, start + std::time::Duration::from_secs(60)));
+        assert!(denied.is_empty());
+    }
+
+    #[test]
+    fn test_denied_hostnames_is_bounded() {
+        let start = std::time::Instant::now();
+        let mut denied = DeniedHostnames::new(std::time::Duration::from_secs(60), 3);
+        for (offset, name) in ["a.test", "b.test", "c.test", "d.test"].iter().enumerate() {
+            denied.record(
+                name,
+                443,
+                start + std::time::Duration::from_secs(offset as u64),
+            );
+        }
+        assert_eq!(denied.len(), 3);
+        let now = start + std::time::Duration::from_secs(4);
+        assert!(
+            !denied.is_denied("a.test", 443, now),
+            "oldest entry is evicted"
+        );
+        assert!(denied.is_denied("d.test", 443, now));
+
+        // Expired entries are dropped before the oldest live entry.
+        let later = start + std::time::Duration::from_secs(62);
+        denied.record("e.test", 443, later);
+        assert!(denied.is_denied("d.test", 443, later));
+        assert!(denied.is_denied("e.test", 443, later));
     }
 
     #[test]

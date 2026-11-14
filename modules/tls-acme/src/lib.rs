@@ -304,12 +304,13 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
     }
 
     fn execute(&self, ctx: &mut TlsContext) -> Result<(), Box<dyn std::error::Error>> {
+        // `None` means a host block without a hostname or IP address. Only
+        // on-demand issuance accepts it; `parse_acme_config` enforces that.
         let domain = ctx
             .domain
             .host
             .clone()
-            .or_else(|| ctx.domain.ip.map(|i| i.to_canonical().to_string()))
-            .ok_or("ACME TLS provider requires a domain name or IP address")?;
+            .or_else(|| ctx.domain.ip.map(|i| i.to_canonical().to_string()));
         let port: u16 = ctx.port;
 
         // Resolve DNS client from nested dns { } block if present
@@ -320,7 +321,7 @@ impl Provider<TlsContext<'_>> for TlsAcmeProvider {
 
         let acme_result = parse_acme_config(
             ctx.config,
-            &domain,
+            domain.as_deref(),
             port,
             task_state.memory_account_cache.clone(),
             task_state.tls_alpn_01_resolvers.clone(),
@@ -687,6 +688,10 @@ async fn run_acme_background_task(
         tokio::spawn(async move {
             // On-demand request loop; after a reload, the next generation's
             // loop receives the requests.
+            let mut denied_hostnames = crate::on_demand::DeniedHostnames::new(
+                crate::on_demand::DENIED_RETRY_AFTER,
+                crate::on_demand::DENIED_CAPACITY,
+            );
             while let Some(Ok((sni_hostname, port))) =
                 drain2.run_until_cancelled(on_demand_rx.recv()).await
             {
@@ -711,102 +716,108 @@ async fn run_acme_background_task(
                     vec![],
                 );
 
-                if !existing_combinations.contains(&(sni_hostname.clone(), port)) {
-                    existing_combinations.insert((sni_hostname.clone(), port));
+                let key = (sni_hostname.clone(), port);
+                if existing_combinations.contains(&key)
+                    || denied_hostnames.is_denied(&sni_hostname, port, std::time::Instant::now())
+                {
+                    continue;
+                }
 
-                    // Find matching on-demand config and convert to eager config
-                    for on_demand_data in &on_demand_configs {
-                        if on_demand_data.port == port {
-                            if let Some(ref pattern) = on_demand_data.sni_hostname {
-                                if crate::on_demand::match_hostname(pattern, &sni_hostname) {
-                                    match check_ask_endpoint(
-                                        &sni_hostname,
-                                        on_demand_data.on_demand_ask.as_deref(),
-                                        on_demand_data.on_demand_ask_auth.as_deref(),
-                                        on_demand_data.on_demand_ask_no_verification,
-                                    )
-                                    .await
-                                    {
-                                        Ok(true) => (),
-                                        Ok(false) => {
-                                            emit_log(
-                                                &event_sink2,
-                                                LogLevel::Error,
-                                                "Certificate issuance denied",
-                                                &format!(
-                                                "The TLS certificate cannot be issued for \"{}\" \
-                                                hostname",
-                                                sni_hostname
-                                            ),
-                                                "ferron-tls-acme",
-                                                vec![(
-                                                    "tls.sni",
-                                                    LogAttributeValue::String(sni_hostname.clone()),
-                                                )],
-                                            );
+                // Specific and wildcard host blocks come first; a host block
+                // without a hostname is the catch-all and is tried last.
+                let candidates = crate::on_demand::matching_config_indices(
+                    on_demand_configs
+                        .iter()
+                        .map(|c| (c.sni_hostname.as_deref(), c.port)),
+                    &sni_hostname,
+                    port,
+                );
 
-                                            continue;
-                                        }
-                                        Err(err) => {
-                                            emit_log(
-                                                &event_sink2,
-                                                LogLevel::Error,
-                                                "Ask endpoint error",
-                                                &format!(
-                                                "Error while determining if the TLS certificate \
-                                                can be issued for \"{}\" hostname: {err}",
-                                                sni_hostname
-                                            ),
-                                                "ferron-tls-acme",
-                                                vec![
-                                                    (
-                                                        "tls.sni",
-                                                        LogAttributeValue::String(
-                                                            sni_hostname.clone(),
-                                                        ),
-                                                    ),
-                                                    (
-                                                        "error.message",
-                                                        LogAttributeValue::String(err.to_string()),
-                                                    ),
-                                                ],
-                                            );
+                let mut approved = false;
+                for index in candidates {
+                    let on_demand_data = &on_demand_configs[index];
+                    match check_ask_endpoint(
+                        &sni_hostname,
+                        on_demand_data.on_demand_ask.as_deref(),
+                        on_demand_data.on_demand_ask_auth.as_deref(),
+                        on_demand_data.on_demand_ask_no_verification,
+                    )
+                    .await
+                    {
+                        Ok(true) => (),
+                        Ok(false) => {
+                            emit_log(
+                                &event_sink2,
+                                LogLevel::Error,
+                                "Certificate issuance denied",
+                                &format!(
+                                    "The TLS certificate cannot be issued for \"{}\" hostname",
+                                    sni_hostname
+                                ),
+                                "ferron-tls-acme",
+                                vec![("tls.sni", LogAttributeValue::String(sni_hostname.clone()))],
+                            );
 
-                                            continue;
-                                        }
-                                    }
+                            continue;
+                        }
+                        Err(err) => {
+                            emit_log(
+                                &event_sink2,
+                                LogLevel::Error,
+                                "Ask endpoint error",
+                                &format!(
+                                    "Error while determining if the TLS certificate can be \
+                                    issued for \"{}\" hostname: {err}",
+                                    sni_hostname
+                                ),
+                                "ferron-tls-acme",
+                                vec![
+                                    ("tls.sni", LogAttributeValue::String(sni_hostname.clone())),
+                                    ("error.message", LogAttributeValue::String(err.to_string())),
+                                ],
+                            );
 
-                                    let _ = crate::on_demand::add_domain_to_cache(
-                                        port,
-                                        Some(pattern),
-                                        &on_demand_data.cache_path,
-                                        &sni_hostname,
-                                    )
-                                    .await;
-
-                                    // After a reload, leave the hostname to the next
-                                    // generation, which loads it from the domain cache
-                                    // or receives the next request for it.
-                                    if drain2.is_cancelled() {
-                                        break;
-                                    }
-
-                                    let acme_config = crate::on_demand::convert_on_demand_config(
-                                        on_demand_data,
-                                        sni_hostname.clone(),
-                                        memory_account_cache.clone(),
-                                        &sni_resolver_lock,
-                                        &tls_alpn_01_resolvers,
-                                        &http_01_resolvers,
-                                    )
-                                    .await;
-
-                                    configs2.write().await.push(acme_config);
-                                    break;
-                                }
-                            }
+                            continue;
                         }
                     }
+
+                    approved = true;
+                    existing_combinations.insert(key.clone());
+
+                    let _ = crate::on_demand::add_domain_to_cache(
+                        port,
+                        on_demand_data.sni_hostname.as_deref(),
+                        &on_demand_data.cache_path,
+                        &sni_hostname,
+                    )
+                    .await;
+
+                    // After a reload, leave the hostname to the next
+                    // generation, which loads it from the domain cache
+                    // or receives the next request for it.
+                    if drain2.is_cancelled() {
+                        break;
+                    }
+
+                    let acme_config = crate::on_demand::convert_on_demand_config(
+                        on_demand_data,
+                        sni_hostname.clone(),
+                        memory_account_cache.clone(),
+                        &sni_resolver_lock,
+                        &tls_alpn_01_resolvers,
+                        &http_01_resolvers,
+                    )
+                    .await;
+
+                    configs2.write().await.push(acme_config);
+                    break;
+                }
+
+                // A hostname that no config approved may be approved later, for
+                // example after its owner proves control of it. Ask again after
+                // a delay instead of refusing it until the next reload.
+                if !approved {
+                    denied_hostnames.record(&sni_hostname, port, std::time::Instant::now());
                 }
             }
         });

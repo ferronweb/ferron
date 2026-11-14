@@ -4,7 +4,17 @@
 
 **Not yet released**
 
+### Added
+
+#### Automatic TLS
+
+- **Catch-all on-demand TLS**: a host block without a hostname (for example `*:443`) can now use on-demand ACME issuance, so Ferron can get certificates for customer domains that aren't known in advance. Such a block requires `on_demand_ask`. Host blocks with a hostname or wildcard still take precedence.
+
 ### Changed
+
+#### Automatic TLS
+
+- **Denied on-demand hostnames are asked again**: when the approval endpoint denies a hostname or can't be reached, Ferron now asks again after 60 seconds instead of refusing the hostname until the next reload. Ferron remembers at most 10,000 denied hostnames at a time.
 
 #### Reverse proxy
 
