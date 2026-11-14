@@ -23,6 +23,10 @@
 
 ### Fixed
 
+#### Automatic TLS
+
+- **Cached on-demand certificates on ports other than 443**: after a restart, Ferron no longer asks the approval endpoint again and orders a second certificate for a cached on-demand hostname on a port other than 443.
+
 #### HTTP server core
 
 - **Many HTTP correctness improvements**: improved overall HTTP protocol correctness (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0416)).

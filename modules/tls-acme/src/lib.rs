@@ -610,6 +610,11 @@ async fn run_acme_background_task(
                 vec![],
             );
 
+            // Record the hostname under this config's port. The eager
+            // pre-population below assumes port 443, so a cached hostname on
+            // another port would otherwise be approved and ordered again.
+            existing_combinations.insert((domain.clone(), config.port));
+
             let acme_config = crate::on_demand::convert_on_demand_config(
                 config,
                 domain,
