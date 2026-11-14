@@ -408,6 +408,30 @@ async fn test_acme_common(
     dns_config: Option<DnsConfig>,
     csr_config: CsrConfig,
 ) {
+    test_acme_with_host_block(
+        hostname,
+        "",
+        challenge_type,
+        hostname,
+        extra_host_config,
+        dns_config,
+        csr_config,
+    )
+    .await;
+}
+
+/// Like `test_acme_common`, but the TLS host block is declared as `host_block`
+/// (for example `*:443`) and `extra_blocks` is appended to the configuration.
+/// Clients still connect using `hostname` as the SNI name.
+async fn test_acme_with_host_block(
+    host_block: &str,
+    extra_blocks: &str,
+    challenge_type: &str,
+    hostname: &str,
+    extra_host_config: &str,
+    dns_config: Option<DnsConfig>,
+    csr_config: CsrConfig,
+) {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     #[cfg(unix)]
@@ -617,8 +641,14 @@ async fn test_acme_common(
   }}
   root "/var/www/ferron"
 }}
+{}
 "#,
-                hostname, challenge_type, extra_host_config, csr_ferron_config, dns_provider_config
+                host_block,
+                challenge_type,
+                extra_host_config,
+                csr_ferron_config,
+                dns_provider_config,
+                extra_blocks
             )
             .as_bytes(),
         )
@@ -869,6 +899,22 @@ async fn test_acme_ondemand() {
         "tls-alpn-01",
         "ferron-ondemand",
         "on_demand",
+        None,
+        CsrConfig::Unspecified,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_acme_ondemand_catch_all() {
+    // A host block without a hostname issues certificates for any SNI name the
+    // approval endpoint allows. The endpoint here is a second Ferron block.
+    test_acme_with_host_block(
+        "*:443",
+        "*:8081 {\n  status 200 {\n    regex \"^/ask\"\n  }\n}",
+        "tls-alpn-01",
+        "ferron-ondemand-catch-all",
+        "on_demand\n    on_demand_ask \"http://127.0.0.1:8081/ask\"",
         None,
         CsrConfig::Unspecified,
     )
