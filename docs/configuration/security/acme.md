@@ -208,7 +208,7 @@ Some hosts serve customer domains that you do not know in advance and that do no
 > }
 > ```
 
-Ferron uses the catch-all block only for hostnames that no other host block matches. If a host block with a hostname or a wildcard matches and its approval endpoint denies the hostname, the catch-all block does not issue a certificate for it.
+Ferron uses the catch-all block only for hostnames that TLS routes to no other host block. A wildcard host block such as `*.example.com` routes every name below `example.com`, including names more than one label deep. It issues certificates only for names one label deep. Ferron does not use the catch-all block for any name that a wildcard block routes. If a host block with a hostname or a wildcard matches and its approval endpoint denies the hostname, the catch-all block does not issue a certificate for it.
 
 If the approval endpoint does not return a `2xx` response within 10 seconds, Ferron asks again for the same hostname after 60 seconds. A hostname that the endpoint approves later gets a certificate without a configuration reload. Ferron remembers at most 10,000 denied hostnames at a time, and a configuration reload clears them.
 

@@ -197,9 +197,10 @@ pub fn match_hostname(pattern: &str, hostname: &str) -> bool {
 /// `port`, in the order they should be tried.
 ///
 /// Each item is a config's SNI pattern and port. A `None` pattern comes from a
-/// host block without a hostname. That catch-all block applies only when no
-/// host block with a hostname or wildcard matches, so it cannot approve a
-/// hostname that a more specific block's approval endpoint denied.
+/// host block without a hostname. That catch-all block applies only when TLS
+/// routes the hostname to no other host block on the port, so it cannot issue
+/// a certificate that a more specific block would then serve without its own
+/// approval endpoint being asked.
 pub fn matching_config_indices<'a>(
     configs: impl IntoIterator<Item = (Option<&'a str>, u16)>,
     hostname: &str,
@@ -207,20 +208,40 @@ pub fn matching_config_indices<'a>(
 ) -> Vec<usize> {
     let mut specific = Vec::new();
     let mut catch_all = Vec::new();
+    let mut routed_elsewhere = false;
     for (index, (pattern, config_port)) in configs.into_iter().enumerate() {
         if config_port != port {
             continue;
         }
         match pattern {
-            Some(pattern) if match_hostname(pattern, hostname) => specific.push(index),
-            Some(_) => {}
+            Some(pattern) => {
+                if match_hostname(pattern, hostname) {
+                    specific.push(index);
+                }
+                routed_elsewhere |= tls_routes_hostname(pattern, hostname);
+            }
             None => catch_all.push(index),
         }
     }
-    if specific.is_empty() {
-        catch_all
-    } else {
+    if routed_elsewhere {
         specific
+    } else {
+        catch_all
+    }
+}
+
+/// Whether TLS routes `hostname` to a host block named `pattern`. This follows
+/// the SNI lookup in `ferron-http-server` (`HostnameRadixTree::get`), where a
+/// wildcard covers names any number of labels below its suffix, but not the
+/// suffix itself. Issuance stays limited to `match_hostname`, which accepts one
+/// label.
+fn tls_routes_hostname(pattern: &str, hostname: &str) -> bool {
+    match pattern.strip_prefix("*.") {
+        Some(suffix) => hostname
+            .strip_suffix(suffix)
+            .and_then(|rest| rest.strip_suffix('.'))
+            .is_some_and(|label| !label.is_empty()),
+        None => pattern == hostname,
     }
 }
 
@@ -407,6 +428,29 @@ mod tests {
             vec![4]
         );
         assert!(matching_config_indices(configs, "tenant.example.net", 80).is_empty());
+    }
+
+    #[test]
+    fn test_matching_config_indices_skips_catch_all_for_names_a_wildcard_routes() {
+        // TLS routes any name below `example.com` to the wildcard block, even
+        // one that is several labels deep, so the catch-all must not issue it.
+        let configs = [(None, 443), (Some("*.example.com"), 443)];
+        assert!(matching_config_indices(configs, "a.b.example.com", 443).is_empty());
+        assert_eq!(
+            matching_config_indices(configs, "a.example.com", 443),
+            vec![1]
+        );
+        // The wildcard does not route the bare domain.
+        assert_eq!(
+            matching_config_indices(configs, "example.com", 443),
+            vec![0]
+        );
+        // A wildcard on another port does not hide this port's catch-all.
+        let other_port = [(None, 443), (Some("*.example.com"), 8443)];
+        assert_eq!(
+            matching_config_indices(other_port, "a.b.example.com", 443),
+            vec![0]
+        );
     }
 
     #[test]
