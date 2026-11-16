@@ -7,7 +7,7 @@ edition = "2021"
 ProductName = "Ferron precompression utility"
 
 [dependencies]
-brotli = "8.0.2"
+brotli = "9.0.0"
 clap = { version = "4.5.38", features = ["cargo"] }
 flate2 = { version = "1.1.4", default-features = false, features = ["zlib-rs"] }
 rayon = "1.11.0"
