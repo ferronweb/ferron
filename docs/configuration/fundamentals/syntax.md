@@ -212,9 +212,7 @@ Directives inherit from outer blocks to inner blocks. A `location` block starts 
 - When a directive appears in both a parent block and a child block, the child value wins for that block.
 - When a directive appears only in the parent block, the child block inherits it.
 - Some directives accumulate across layers instead of overriding, for example `rewrite` rules and `map` entries. Their reference pages state the behavior.
-- Handler and backend selectors are host-isolated, meaning directives like `proxy`, `fcgi`, `cgi`, `scgi`, `forward_proxy`, `root`, `index`, `basic_auth`, and related static-file tunables do not inherit from the wildcard `*` host into a named host, but they still inherit from global defaults and a `location` block still inherits them from its own host.
-
-  For example, `* { proxy ... }` does not cause a named host that only sets `root` to reverse-proxy. Each directive page states its exact behavior.
+- Handler and backend selectors are host-isolated, meaning directives like `proxy`, `fcgi`, `cgi`, `scgi`, `forward_proxy`, `root`, `index`, `basic_auth`, and related static-file tunables do not inherit from the wildcard `*` host into a named host, but they still inherit from global defaults and a `location` block still inherits them from its own host. Each directive page states its exact behavior.
 
 > [!note]
 > When validation and runtime behavior differ, the directive pages explain that.
@@ -234,7 +232,7 @@ ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferroncon
 
 When hot reload is off (the default), Ferron still detects a changed config source file that has not loaded. This is configuration drift. It signals that the running configuration may not match the file on disk.
 
-Ferron detects drift with periodic modification time checks, without re-parsing the configuration file. It emits a WARN log and sets the `ferron.admin.config_drift` gauge to a value of `1`. When the configuration reloads and drift resolves, Ferron emits an INFO log and resets the metric to `0`.
+Ferron detects drift with periodic file modification time checks, without re-parsing the entire configuration file. It emits a WARN log and sets the `ferron.admin.config_drift` gauge to a value of `1`. When the configuration reloads and drift resolves, Ferron emits an INFO log and resets the metric to `0`.
 
 Ferron enables drift hints by default. To disable:
 

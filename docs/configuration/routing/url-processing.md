@@ -36,7 +36,7 @@ example.com {
 
 A `location` block inherits directives from the enclosing host block and from global defaults. When the same directive appears at both levels, the value in the `location` block wins for requests in that block. The same rule applies to `if` and `if_not` blocks nested in a host or `location` block.
 
-Handler and backend selectors (such as `proxy`, `fcgi`, `cgi`, `scgi`, `forward_proxy`, `root`, `index`, `basic_auth`, and related static-file tunables) are host-isolated: they inherit from global defaults and from the enclosing named host into its `location` blocks, but a named host does not inherit them from the wildcard `*` host.
+Handler and backend selectors (such as `proxy`, `fcgi`, `cgi`, `scgi`, `forward_proxy`, `root`, `index`, `basic_auth`, and related static-file tunables) are host-isolated, meaning they inherit from global defaults and from the enclosing named host into its `location` blocks, but a named host does not inherit them from the wildcard `*` host.
 
 ### Conditional matching
 
