@@ -2,15 +2,6 @@
 
 User-facing documentation for Ferron 3. Synced to the documentation website on pushes to `3.x`.
 
-## Structure
-
-Two tiers of documentation:
-
-- **Use-case guides** (`use-cases/`): task-oriented walkthroughs that show how to accomplish a goal (for example, "set up automatic TLS").
-- **Configuration reference** (`configuration/`): exhaustive directive-level pages organized by functional area. Expects the reader to already know what they need.
-
-The `getting-started.md` and `index.md` pages bridge the two tiers with recommended reading paths.
-
 ## Style guide
 
 ### Frontmatter
@@ -62,6 +53,8 @@ example.com {
 }
 ```
 
+This allows the doctest setup (run on CI/CD workflows) to skip the configuration block.
+
 ### Callouts
 
 Use GFM alert syntax inline with the relevant content. Do not gather callouts into a separate section at the end of the page.
@@ -85,15 +78,15 @@ See [Reverse proxying](/docs/use-cases/traffic/reverse-proxy).
 ### Writing principles
 
 - **Describe behavior, not labels**: explain what the system actually does, not just what the feature is called.
-- **Documentation scope**: treat the documentation as a user-facing manual. Do not include internal implementation details. Do not quote specifications directly.
-- **Short paragraphs**: write short paragraphs. Keep each paragraph easy to scan. Cover one topic per paragraph with a maximum of six sentences.
+- **Documentation scope**: treat the documentation as a user-facing manual. Do not include irrelevant internal implementation details (readers do not need them anyway). Do not quote specifications directly. Describe only what could be useful for the reader to help while using the system.
+- **Short paragraphs**: write short paragraphs. Keep each paragraph easy to read and scan. Cover one topic per paragraph with a maximum of 5-6 (preferably short) sentences.
 - **Simple English**: write in clear, straightforward language. Use [ASD-STE100](https://asd-ste100.org/) as a reference for simplified English.
 - **Functional precision first**: prefer clear, explicit descriptions over clever phrasing.
 - **Consistency over novelty**: if a term comes from an upstream API, a legacy config, or a widely adopted standard, keep it.
 - **Inline callouts**: no separate notes section at the end of a page.
 - **No emojis** unless the content explicitly calls for them.
 - **Linters are guidance**: do not let `woke` or other terminology linters override clarity or consistency.
-- **STE rules for docs prose**: Apply these Simplified Technical English rules to all documentation (headings, paragraphs, list items, callout text — not code blocks, inline code, directive names, or URLs):
+- **STE rules for docs prose**: Apply these Simplified Technical English rules to all documentation (headings, paragraphs, list items, callout text, **not** code blocks, inline code, directive names, or URLs):
   - **Active voice**: "Ferron reads the file", not "the file is read by the parser". Use "Ferron" or "the server" as the subject when the actor is the software.
   - **No contractions**: Write "do not", "cannot", "will not", "it is".
   - **Sentence length**: Max 20 words for instructions, max 25 for descriptive sentences. Split longer sentences.
@@ -131,7 +124,7 @@ cargo run -p ferron -- validate -c ferron.conf
 cargo run --manifest-path doctest/Cargo.toml
 ```
 
-Ferron validates the sample config. The doctest harness runs doc examples against the built binary.
+Ferron validates the sample config. The doctest setup runs doc examples against the built binary.
 
 ## Sidebar
 
