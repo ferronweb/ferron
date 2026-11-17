@@ -68,11 +68,13 @@ sudo dnf install lld clang clang-devel wrk nghttp2-client openssl python3 llvm c
 | `riscv64gc-unknown-linux-gnu`    | glibc | Supported |
 | `s390x-unknown-linux-gnu`        | glibc | Supported |
 | `powerpc64le-unknown-linux-gnu`  | glibc | Supported |
+| `loongarch64-unknown-linux-gnu`  | glibc | Supported |
 | `x86_64-unknown-linux-musl`      | musl  | Supported |
 | `i686-unknown-linux-musl`        | musl  | Supported |
 | `aarch64-unknown-linux-musl`     | musl  | Supported |
 | `armv7-unknown-linux-musleabihf` | musl  | Supported |
 | `riscv64gc-unknown-linux-musl`   | musl  | Supported |
+| `loongarch64-unknown-linux-musl` | musl  | Supported |
 
 ## Directory Structure
 
