@@ -36,10 +36,10 @@ When you configure `allow`, only the listed IPs/CIDRs receive permission. All ot
 
 When you configure both `block` and `allow`:
 
-1. If the IP matches an `allow` entry and a `block` entry → blocked (block takes precedence)
-2. If the IP matches only an `allow` entry → allowed
-3. If the IP matches only a `block` entry → blocked
-4. If the IP matches neither → allowed (unless the allow list is non-empty)
+- **If the IP matches an `allow` entry and a `block` entry**: blocked (block takes precedence)
+- **If the IP matches only an `allow` entry**: allowed
+- **If the IP matches only a `block` entry**: blocked
+- **If the IP matches neither**: allowed (unless the allow list is not empty, in which case Ferron denies non-listed IPs)
 
 ```ferron
 example.com {
@@ -50,7 +50,7 @@ example.com {
 }
 ```
 
-In this example: `192.168.1.50` → allowed, `192.168.1.100` → blocked, `10.0.0.1` → denied.
+In this example, `192.168.1.50` would be allowed, while `192.168.1.100` and `10.0.0.1` would be denied access.
 
 ### Block sensitive paths globally
 

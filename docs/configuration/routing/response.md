@@ -20,12 +20,12 @@ This page documents directives for returning custom status codes, aborting conne
 
 #### Block form options
 
-| Nested directive | Arguments  | Description                                                                                   | Default      |
-| ---------------- | ---------- | --------------------------------------------------------------------------------------------- | ------------ |
-| `url`            | `<string>` | Only apply this status to requests matching this exact path.                                  | all requests |
-| `regex`          | `<string>` | Only apply this status to requests matching this regular expression.                          | all requests |
-| `body`           | `<string>` | Response body to include.                                                                     | empty body   |
-| `location`       | `<string>` | Redirect destination for 3xx responses.                                                       | no redirect  |
+| Nested directive | Arguments  | Description                                                                                                                | Default                                    |
+| ---------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `url`            | `<string>` | Only apply this status to requests matching this exact path.                                                               | all requests                               |
+| `regex`          | `<string>` | Only apply this status to requests matching this regular expression.                                                       | all requests                               |
+| `body`           | `<string>` | Response body to include.                                                                                                  | empty body                                 |
+| `location`       | `<string>` | Redirect destination for 3xx responses.                                                                                    | no redirect                                |
 | `name`           | `<string>` | Operator-chosen rule identifier, surfaced as the `ferron.rule_id` metric label. Must be a plain string (no interpolation). | derived from status code and rule position |
 
 **Configuration example:**
@@ -98,10 +98,10 @@ example.com {
 
 When you set both `block` and `allow`:
 
-1. If the IP matches an `allow` entry and a `block` entry → blocked (block takes precedence)
-2. If the IP matches only an `allow` entry → allowed
-3. If the IP matches only a `block` entry → blocked
-4. If the IP matches neither → allowed (unless the allow list is not empty, in which case Ferron denies non-listed IPs)
+- **If the IP matches an `allow` entry and a `block` entry**: blocked (block takes precedence)
+- **If the IP matches only an `allow` entry**: allowed
+- **If the IP matches only a `block` entry**: blocked
+- **If the IP matches neither**: allowed (unless the allow list is not empty, in which case Ferron denies non-listed IPs)
 
 ```ferron
 example.com {
@@ -110,7 +110,7 @@ example.com {
 }
 ```
 
-In this example: `192.168.1.50` → allowed, `192.168.1.100` → blocked, `10.0.0.1` → denied.
+In this example, `192.168.1.50` would be allowed, while `192.168.1.100` and `10.0.0.1` would be denied access.
 
 ### 103 Early Hints
 
@@ -158,10 +158,10 @@ Without this option, Ferron silently skips 103 Early Hints on HTTP/1.1 connectio
 
 ### Metrics
 
-| Metric                                | Type    | Attributes                                    | Description                                                                           |
-| ------------------------------------- | ------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `ferron.response.aborted`             | Counter | None                                          | Connections aborted via the `abort` directive                                         |
-| `ferron.response.ip_blocked`          | Counter | None                                          | Connections blocked via `block`/`allow` directives. Does not include raw IP addresses |
+| Metric                                | Type    | Attributes                                    | Description                                                                                                                                                                                                                             |
+| ------------------------------------- | ------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ferron.response.aborted`             | Counter | None                                          | Connections aborted via the `abort` directive                                                                                                                                                                                           |
+| `ferron.response.ip_blocked`          | Counter | None                                          | Connections blocked via `block`/`allow` directives. Does not include raw IP addresses                                                                                                                                                   |
 | `ferron.response.status_rule_matched` | Counter | `http.response.status_code`, `ferron.rule_id` | Custom status codes returned via `status` directives. `ferron.rule_id` is the rule's `name` when set; otherwise it is `status-<code>-rule-<n>`, where `<n>` is the 1-based position of the rule among the evaluated `status` directives |
 
 ### Access log fields

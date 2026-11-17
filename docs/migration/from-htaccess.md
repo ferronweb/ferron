@@ -47,7 +47,7 @@ Then reference it from Ferron with `fcgi_php unix:///run/php/php8.4-fpm.sock`.
 
 ## A complete WordPress example
 
-Here is a full Ferron 3 configuration that reproduces the typical `WordPress` `.htaccess` + Apache vhost setup. It covers PHP-FPM execution, the front-controller rewrite, and HTTPS enforcement. It also covers a www→non-www canonical redirect, custom error pages, IP-based admin protection, and baseline security headers.
+Here is a full Ferron 3 configuration that reproduces the typical `WordPress` `.htaccess` + Apache vhost setup. It covers PHP-FPM execution, the front-controller rewrite, and HTTPS enforcement. It also covers a www-into-non-www canonical redirect, custom error pages, IP-based admin protection, and baseline security headers.
 
 ```ferron
 example.com {
@@ -197,7 +197,7 @@ example.com {
 
 The `{{request.uri}}` placeholder expands to the original path and query string, so `/about?ref=newsletter` on `www.example.com` becomes `https://example.com/about?ref=newsletter`.
 
-To redirect the other way (non-www → www), swap the host names in the two blocks.
+To redirect the other way (non-www into www), swap the host names in the two blocks.
 
 ## HTTPS redirect
 

@@ -80,7 +80,7 @@ The SSH connection gives you encryption and authentication. This compensates for
 For more complex setups, you can front the admin API with an authenticating reverse proxy:
 
 ```text
-Remote user → Reverse Proxy (basic auth / OAuth) → 127.0.0.1:8081 (admin API)
+Remote user -> Reverse proxy (basic auth / OAuth) -> 127.0.0.1:8081 (admin API)
 ```
 
 Example proxy configuration (Ferron):

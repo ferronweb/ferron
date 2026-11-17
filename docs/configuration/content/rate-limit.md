@@ -31,17 +31,17 @@ example.com {
 
 You can define multiple `rate_limit` blocks to apply different rules simultaneously (for example, one per IP and one per API key).
 
-| Nested directive | Arguments  | Description                                                                                                     | Default          |
-| ---------------- | ---------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `rate`           | `<int>`    | Sustained requests per second (required).                                                                       | none             |
-| `burst`          | `<int>`    | Extra tokens above `rate` (bucket capacity = `rate + burst`).                                                   | `0`              |
-| `key`            | `<string>` | What to key buckets on. See key types below.                                                                    | `remote_address` |
-| `deny_status`    | `<int>`    | HTTP status code when a client exceeds the rate limit.                                                          | `429`            |
-| `bucket_ttl`     | `<int>`    | Seconds before Ferron removes an unused bucket.                                                                 | `600`            |
-| `max_buckets`    | `<int>`    | Maximum buckets per rule (prevents memory exhaustion).                                                          | `100000`         |
-| `zone`           | `<string>` | Named zone for sharing rate limit buckets across hosts.                                                         | none             |
-| `throttle`       | `<bool>`   | If `true`, Ferron delays requests instead of rejecting them when the bucket is empty.                           | `false`          |
-| `log_rejections` | `[bool]`   | Re-enable per-request rejection debug logs for forensics. Off by default; only the first rejection per key per minute is logged. | `false` |
+| Nested directive | Arguments  | Description                                                                                                                      | Default          |
+| ---------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `rate`           | `<int>`    | Sustained requests per second (required).                                                                                        | none             |
+| `burst`          | `<int>`    | Extra tokens above `rate` (bucket capacity = `rate + burst`).                                                                    | `0`              |
+| `key`            | `<string>` | What to key buckets on. See key types below.                                                                                     | `remote_address` |
+| `deny_status`    | `<int>`    | HTTP status code when a client exceeds the rate limit.                                                                           | `429`            |
+| `bucket_ttl`     | `<int>`    | Seconds before Ferron removes an unused bucket.                                                                                  | `600`            |
+| `max_buckets`    | `<int>`    | Maximum buckets per rule (prevents memory exhaustion).                                                                           | `100000`         |
+| `zone`           | `<string>` | Named zone for sharing rate limit buckets across hosts.                                                                          | none             |
+| `throttle`       | `<bool>`   | If `true`, Ferron delays requests instead of rejecting them when the bucket is empty.                                            | `false`          |
+| `log_rejections` | `[bool]`   | Re-enable per-request rejection debug logs for forensics. Off by default; only the first rejection per key per minute is logged. | `false`          |
 
 ### Key types
 
@@ -234,7 +234,7 @@ internal.example.com {
         burst 20
         key remote_address
     }
-    # Has its own rate_limit block → per-host zone (opts out of global)
+    # Has its own rate_limit block, which uses per-host zone (opting out of global)
 }
 ```
 
@@ -315,10 +315,10 @@ The `ferron.ratelimit.zone` attribute identifies which rate limit zone the reque
 
 ### Structured logs
 
-| Description (summary)       | Level | Attributes                                                                                                                                                                   |
-| --------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Description (summary)       | Level | Attributes                                                                                                                                                                                                                                    |
+| --------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Rate limit rejecting key    | INFO  | `ferron.ratelimit.zone` (string). Zone identifier. `ferron.ratelimit.key_type` (string). Key type (`"ip"`, `"uri"`, or `"header"`). `ferron.ratelimit.backend` (string). Backend type. `ferron.ratelimit.limit` (int). Configured rate limit. |
-| Rate limit bucket exhausted | DEBUG | Only emitted when `log_rejections` is set. `ferron.ratelimit.zone` (string). Zone identifier. `ferron.ratelimit.key` (string). The rate limit key value. `ferron.ratelimit.key_type` (string). Key type (`"ip"`, `"uri"`, or `"header"`). |
+| Rate limit bucket exhausted | DEBUG | Only emitted when `log_rejections` is set. `ferron.ratelimit.zone` (string). Zone identifier. `ferron.ratelimit.key` (string). The rate limit key value. `ferron.ratelimit.key_type` (string). Key type (`"ip"`, `"uri"`, or `"header"`).     |
 
 ### Access log fields
 

@@ -99,5 +99,5 @@ example.com {
 > Notes for `trailing_slash_redirect`:
 >
 > - Only applies when the resolved request path maps to a directory on the filesystem.
-> - Ferron preserves query strings in the redirect (for example `/blog?foo=bar` → `/blog/?foo=bar`).
+> - Ferron preserves query strings in the redirect (for example, `/blog?foo=bar` would rewritten to `/blog/?foo=bar`).
 > - This is useful for SEO consistency and for making sure relative links within directory-served pages resolve correctly.

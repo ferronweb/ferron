@@ -110,20 +110,20 @@ This reads `input.kdl` and writes the converted Ferron 3 configuration to `outpu
 
 The tool handles these conversions automatically:
 
-- `*` global block → bare `{ }` global block
-- `auto_tls` → `tls { provider acme }`
-- `auto_tls_contact` → `tls { contact ... }`
-- `tls cert key` → `tls { provider manual cert ... key ... }`
-- `log` / `error_log` → `observability { provider file ... }`
-- `otlp_logs` / `otlp_metrics` / `otlp_traces` → `observability { provider otlp ... }`
-- `location` blocks → `location` blocks (without `remove_base`)
-- `proxy` directives → `proxy { upstream ... }` blocks
-- `proxy_request_header` → `request_header` with `+`/`-` prefix
-- `user` directives → `basic_auth { users { ... } }`
-- `limit` → `rate_limit`
-- `block` / `allow` → preserved as-is
-- `snippet` / `use` → `snippet` / `use` preserved
-- `include` → `include` preserved
+- `*` global block, into bare `{ }` global block
+- `auto_tls`, into `tls { provider acme }`
+- `auto_tls_contact`, into `tls { contact ... }`
+- `tls cert key`, into `tls { provider manual cert ... key ... }`
+- `log` / `error_log`, into `observability { provider file ... }`
+- `otlp_logs` / `otlp_metrics` / `otlp_traces`, into `observability { provider otlp ... }`
+- `location` blocks, into `location` blocks (without `remove_base`)
+- `proxy` directives, into `proxy { upstream ... }` blocks
+- `proxy_request_header`, into `request_header` with `+`/`-` prefix
+- `user` directives, into `basic_auth { users { ... } }`
+- `limit`, into `rate_limit`
+- `block` / `allow`, into preserved as-is
+- `snippet` / `use`, into `snippet` / `use` preserved
+- `include`, into `include` preserved
 
 ### Known limitations
 
@@ -203,7 +203,7 @@ example.com {
 
 If you had `remove_base=#false` in Ferron 2 (keeping the base path), you need to handle this differently in Ferron 3. The matched prefix is always stripped. To preserve the path, you would need to use URL rewriting or adjust your backend accordingly.
 
-### Conditionals: `condition` → `match`
+### Conditionals: `condition` into `match`
 
 Ferron 2 used `condition` to define named checks and `if`/`if_not` to apply them. Ferron 3 uses `match` for the same purpose, but with a different syntax for subconditions:
 
@@ -542,7 +542,7 @@ example.com {
 
 ### Placeholders in conditionals
 
-Even if you migrate `condition` → `match`, you must also migrate the placeholder syntax used inside subconditions. Ferron 2 used `{path}`, `{client_ip}`, `{header:name}` and so on inside `condition` blocks. Ferron 3 uses `request.uri.path`, `remote.ip`, `request.header.name` and so on inside `match` blocks.
+Even if you migrate `condition` into `match`, you must also migrate the placeholder syntax used inside subconditions. Ferron 2 used `{path}`, `{client_ip}`, `{header:name}` and so on inside `condition` blocks. Ferron 3 uses `request.uri.path`, `remote.ip`, `request.header.name` and so on inside `match` blocks.
 
 **Example of the pitfall. This will not** work:
 

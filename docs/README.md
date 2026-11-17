@@ -98,10 +98,26 @@ See [Reverse proxying](/docs/use-cases/traffic/reverse-proxy).
   - **No contractions**: Write "do not", "cannot", "will not", "it is".
   - **Sentence length**: Max 20 words for instructions, max 25 for descriptive sentences. Split longer sentences.
   - **No semicolons**: Use a period and split into two sentences.
-  - **Replace banned words**: begin→start, ensure→make sure, utilize→use, "prior to"→before, "subsequent to"→after, obtain→get, demonstrate→show, additionally→also, "in order to"→to, "a variety of"→various, "it is important to note"→delete/restate, "due to the fact that"→because.
+  - **Replace banned words**:
+    - **start** (instead of _begin_)
+    - **make sure** (instead of _ensure_)
+    - **use** (instead of _utilize_)
+    - **before** (instead of _prior to_)
+    - **after** (instead of _subsequent to_)
+    - **get** (instead of _obtain_)
+    - **show** (instead of _demonstrate_)
+    - **also** (instead of _additionally_)
+    - **to** (instead of _in order to_)
+    - **various** (instead of _a variety of_)
+    - Delete/restate _it is important to note_
+    - **because** (instead of _due to the fact that_)
   - **No marketing adjectives**: seamless, robust, powerful, effortless, and so on.
-  - **No nominalizations**: "perform an analysis"→"analyze", "provide documentation"→"document".
-  - **No "-ing" main verbs**: "is creating"→"creates", "is running"→"runs".
+  - **No nominalizations**:
+    - **analyze** (instead of _perform an analysis_)
+    - **document** (instead of _provide documentation_)
+  - **No "-ing" main verbs**:
+    - **creates** (instead of _is creating_)
+    - **runs** (instead of _is running_)
   - **One topic per paragraph**, max six sentences per paragraph.
   - **No em dashes as separators**: Use a period, comma, or restructure instead. Keep numeric ranges (1-2).
   - **American spelling**.

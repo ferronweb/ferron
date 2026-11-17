@@ -118,28 +118,20 @@ chown ferron:ferron session_tickets.keys
 
 ## How rotation works
 
-When you enable `auto_rotate`:
+When you enable `auto_rotate`, Ferron automatically generates and rotates session ticket keys. Session ticket keys must have their sizes being multiple of 80 bytes (80 bytes would be the size of one session ticket key).
 
-1. **Initial setup**: If the key file does not exist, Ferron generates `max_keys` random keys
-2. **Validation**: Ferron validates the existing file (size must be a multiple of 80 bytes)
-3. **Runtime**: Ferron loads the keys and creates a `TicketKeyRotator`
-4. **Rotation trigger**: When `rotation_interval` elapses
-5. **Key generation**: Ferron generates a new cryptographically secure key
-6. **File update**: Ferron prepends the new key, trims the file to `max_keys`, and writes atomically
-7. **Memory update**: Current → previous, new key becomes current
+The newest key would be used for encryption, while the other keys (including older ones) could only be used for decryption.
 
-### Example: 12-hour rotation
+When a configured `rotation_interval` elapses, the keys are rotated (the oldest key is discarded, while the newest key is generated, added, and used for encryption). The maximum amount of keys that can be used is configured by `max_keys`.
 
-With `rotation_interval = "12h"` and `max_keys = 3`:
+This feature also saves session ticket keys to a file, so they can be reused across server restarts.
 
-```text
-T=0h:   [Key_A, Key_B, Key_C]     ← Encrypt with Key_A
-T=12h:  [Key_D, Key_A, Key_B]     ← Encrypt with Key_D, decrypt with A/B
-T=24h:  [Key_E, Key_D, Key_A]     ← Encrypt with Key_E, decrypt with A/D/E
-T=36h:  [Key_F, Key_E, Key_D]     ← Key_A removed (expired)
-```
+The process can be described like this (with `rotation_interval` being 12 hours and `max_keys` being set to 3):
 
-Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
+- **Right after initialization**: keys A, B and C are present in session ticket key file. Since the key A is the newest, it will be used for encrypting new session tickets.
+- **12 hours after initialization**: a new key D is generated, and the oldest key C is discarded. Keys D, A and B are now present in session ticket key file. Since the key D is the newest, it will be used for encrypting sesion tickets instead of the key A.
+- **24 hours after initialization**: same as before, but a new key E is generated and the oldest key B is discarded.
+- **36 hours after initialization**: same as before, but a new key F is generated and the oldest key A is discarded. The key A is no longer used for decryption session tickets, and old session tickets encrypted with that key cannot be used anymore.
 
 ## Security considerations
 

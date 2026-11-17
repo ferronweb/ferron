@@ -92,7 +92,7 @@ When the 4xx ratio spikes, check this row first: if the spike is fully explained
 
 ### Import the JSON
 
-1. In Grafana, Dashboards → New → Import, then upload `dashboards/ferron-3-reference.json`.
+1. In Grafana, Dashboards > New > Import, then upload `dashboards/ferron-3-reference.json`.
 2. Pick your Prometheus/Mimir datasource.
 
 ### Or provision it
