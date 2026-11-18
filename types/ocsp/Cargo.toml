@@ -12,7 +12,7 @@ rustls = { version = "0.23", default-features = false, features = [
     "std",
     "aws_lc_rs",
 ] }
-parking_lot = "0.12"
+parking_lot = "0.13"
 tokio-util = "0.7"
 
 [lints]
