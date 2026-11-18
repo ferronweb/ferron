@@ -3,7 +3,7 @@ title: "Migrating from NGINX to Ferron 3"
 description: "A practical guide for moving NGINX server blocks to Ferron 3, with directive mappings and known differences."
 ---
 
-This guide helps you move an NGINX setup to Ferron 3. It maps the NGINX directives you know to Ferron 3 directives. It also flags behavior differences that surprise NGINX users.
+The mapping below covers the NGINX directives you know, translated to Ferron 3, and the behavior differences that surprise NGINX users.
 
 The examples assume a host that serves static files and proxies API traffic to a local backend. The patterns apply to single-page apps, PHP front controllers, and multi-service hosts.
 

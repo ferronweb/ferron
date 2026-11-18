@@ -1,13 +1,13 @@
 ---
 title: HTTP caching
-description: "Use the Ferron HTTP response cache to improve performance for frequently accessed content with minimal backend load."
+description: "Cache GET responses in memory, vary entries by request headers, and control stale content during backend failures."
 ---
 
-The Ferron HTTP response cache stores complete `GET` response representations in memory and serves them directly to clients. This reduces backend load and improves response times. It is especially useful for frequently accessed content like HTML pages, API responses, and static assets.
+Ferron stores complete `GET` response representations in memory and serves them directly to clients. `HEAD` requests reuse the cached `GET` metadata. This reduces backend load for HTML pages, API responses, and static assets.
 
-## Basic HTTP caching
+## Enable caching
 
-To enable caching for an entire host, use the `cache` directive at the HTTP host level:
+Set a `cache` block at the host level:
 
 ```ferron
 example.com {
@@ -17,18 +17,21 @@ example.com {
 }
 ```
 
-This configuration caches responses up to 1MB in size. The default `max_response_size` is 2MB, and the global default `max_entries` is 1024.
+This caches responses up to 1 MB. The default `max_response_size` is 2 MB. The global default `max_entries` is 1024.
+
+The cache has these limits:
+
+- It stores only `GET` and `HEAD` requests.
+- It never stores responses with `Vary: *`.
+- It does not store public responses that contain `Set-Cookie`.
+- It clears on server restart.
 
 > [!important]
->
-> - The cache stores only `GET` and `HEAD` requests, and `HEAD` requests reuse cached `GET` representations.
-> - The cache never stores responses with `Vary: *`.
-> - The cache does not store public responses containing `Set-Cookie`.
-> - The in-memory cache clears on server restart, so use an external cache like Redis for persistent caching.
+> The in-memory cache does not survive a restart. For persistent caching, see [Disk persistence](/docs/configuration/content/cache#disk-persistence).
 
-## Caching with Vary headers
+## Vary by request headers
 
-The `vary` directive makes sure Ferron caches responses separately based on request headers. This is crucial for content that varies by `Accept-Encoding`, `Accept-Language`, or other headers:
+Use `vary` to keep separate entries for request headers such as `Accept-Encoding` and `Accept-Language`:
 
 ```ferron
 example.com {
@@ -38,14 +41,14 @@ example.com {
 }
 ```
 
-Without `vary`, Ferron could cache responses with different headers together and serve the wrong content to clients.
+Without `vary`, Ferron can store a response for one header combination and serve it to a client that sent different headers.
 
 > [!tip]
-> If you see unexpected cache misses, check that the `vary` headers match your use case. If the cache size keeps growing, check for frequently accessed large responses and consider reducing `max_response_size`.
+> If you see unexpected cache misses, check that the `vary` headers match the responses. If the cache grows without limit, lower `max_response_size` or inspect large responses.
 
-## Excluding sensitive responses from cache
+## Remove headers from cached responses
 
-Use the `ignore` directive to remove headers from cached responses while keeping them in live responses. This is useful for removing `Set-Cookie` from cached content:
+Use `ignore` to remove a header from cached responses while keeping it in live responses:
 
 ```ferron
 example.com {
@@ -55,9 +58,11 @@ example.com {
 }
 ```
 
-## Disabling cache for specific paths
+This is useful when the backend sends `Set-Cookie` on content that should still be cacheable.
 
-Override inherited caching settings for specific paths using `location` blocks:
+## Disable caching for a path
+
+Override the host cache in a `location` block:
 
 ```ferron
 example.com {
@@ -75,29 +80,24 @@ example.com {
 }
 ```
 
-This disables caching for `/admin` and `/api/private` paths while keeping caching enabled for the rest of the host.
+## LiteSpeed Cache applications
 
-## LSCache-compatible applications
-
-If your upstream application uses LiteSpeed Cache-style headers, enable override mode:
+If the upstream sends `X-LiteSpeed-Cache-Control`, enable LSCache override mode:
 
 ```ferron
 example.com {
     cache {
-        max_response_size 1048576
         litespeed_override_cache_control
-
-        # Also, emit X-LiteSpeed-Cache response header
         emit_litespeed_headers
     }
 }
 ```
 
-This tells Ferron to prioritize `X-LiteSpeed-Cache-Control` headers over standard `Cache-Control` and `Expires` headers. Ferron uses this when deciding whether to store a response and what TTL to use.
+Ferron then gives `X-LiteSpeed-Cache-Control` priority over `Cache-Control` and `Expires` when it decides whether to store a response and which TTL to use. `emit_litespeed_headers` adds `X-LiteSpeed-Cache` to the response.
 
-## Caching with authentication
+## Authenticated responses
 
-Ferron partitions private responses by client context using the client IP, authenticated username, and detected private cookies. This means authenticated users get personalized cached responses:
+Ferron partitions private responses by client context. The partition uses the client IP, the authenticated username, and detected private cookies. Authenticated users receive their own cached responses.
 
 ```ferron
 example.com {
@@ -107,18 +107,13 @@ example.com {
 
     location /dashboard {
         basic_auth
-        cache {
-            max_response_size 1048576
-        }
     }
 }
 ```
 
-Each authenticated user has their own cached dashboard pages based on their credentials.
+## Cache proxied responses
 
-## Caching with reverse proxying
-
-Combine reverse proxying with caching to cache backend responses:
+Put `cache` in the same scope as `proxy`:
 
 ```ferron
 example.com {
@@ -132,34 +127,23 @@ example.com {
 }
 ```
 
-This caches API responses from the backend, reducing load during traffic spikes.
+This stores backend responses and reduces load during traffic spikes.
 
 ## Stale-while-revalidate
 
-Stale-while-revalidate allows Ferron to serve a cached response after its `max-age` has expired. This works as long as the response falls within the `stale-while-revalidate` window set by the origin. This avoids latency spikes when the cache entry expires and concurrent requests arrive:
-
-```ferron
-example.com {
-    location /api {
-        proxy http://localhost:3000
-        cache {
-            max_response_size 524288
-        }
-    }
-}
-```
-
-The backend controls the stale window with `Cache-Control`:
+A cached response can be served after `max-age` expires, while one request revalidates it. The backend sets the window with `Cache-Control`:
 
 ```http
 Cache-Control: public, max-age=10, stale-while-revalidate=300
 ```
 
-With this configuration:
+With this header:
 
-- The cache stores responses for 10 seconds.
-- After 10 seconds, the first request revalidates with the backend and gets fresh content.
-- Concurrent requests during revalidation receive the stale response immediately.
+1. Ferron stores the response for 10 seconds.
+2. After 10 seconds, the first request revalidates with the backend.
+3. Concurrent requests receive the stale response until revalidation finishes.
+
+To disable the behavior:
 
 ```ferron
 example.com {
@@ -173,17 +157,17 @@ example.com {
 ```
 
 > [!note]
-> Ferron 3 does not support background revalidation. Stale-while-revalidate always involves a synchronous upstream request for one request (the leader). Other concurrent requests see the stale content. This is a known limitation stemming from the absence of internal route invocation in Ferron 3.
+> Ferron 3 revalidates synchronously. One request acts as the leader and contacts the upstream. Other concurrent requests receive the stale response. Ferron 3 has no background revalidation.
 
 ## Stale-if-error
 
-Stale-if-error falls back to stale cached content when revalidation encounters a 5xx error. This protects the service against transient backend failures:
+Stale-if-error serves a stale cached response when revalidation returns a 5xx error. The backend sets the window:
 
 ```http
 Cache-Control: public, max-age=60, stale-if-error=3600
 ```
 
-If the backend returns a 5xx error during revalidation, Ferron serves the stale cached response. It does not forward the error to the client. This keeps your application running during brief backend outages.
+Ferron then serves the stale response instead of the error. To disable the behavior:
 
 ```ferron
 example.com {
@@ -198,12 +182,12 @@ example.com {
 
 ## Caching with rate limiting
 
-Use caching alongside rate limiting to protect backend services:
+A cache hit does not reach the rate limiter or the backend. Put both directives in the same scope:
 
 ```ferron
 example.com {
     location /api {
-        ratelimit {
+        rate_limit {
             rate 100
             burst 50
         }
@@ -215,13 +199,9 @@ example.com {
 }
 ```
 
-Cached responses bypass the rate limiter and backend entirely, providing maximum protection.
+## Purge propagation across instances
 
-## Multi-instance cache purge propagation
-
-Multiple Ferron instances may run behind a load balancer. In that case, a cache purge on one instance does not invalidate entries on other instances. The `purge_propagation` directive solves this. It sends purge events to an external control-plane service. That service broadcasts them to all other registered edge instances.
-
-**Edge instance configuration:**
+When several Ferron instances run behind a load balancer, a local purge does not invalidate the other instances. `purge_propagation` sends purge events to an external control-plane service. That service broadcasts the purge to the other edge instances.
 
 ```ferron
 example.com {
@@ -238,19 +218,19 @@ example.com {
 }
 ```
 
-**How it works:**
+The flow is:
 
-1. A `PURGE` request or an `X-LiteSpeed-Purge` header triggers a local cache purge on edge-1.
-2. Edge-1 sends a `POST` to the control-plane with the purged path and `origin: "edge-1"`.
-3. The control-plane sends `PURGE` requests to edge-2 and edge-3 (skipping edge-1).
+1. A `PURGE` request or an `X-LiteSpeed-Purge` header purges the local cache on `edge-1`.
+2. `edge-1` sends a `POST` to the control plane with the purged path and `origin: "edge-1"`.
+3. The control plane sends `PURGE` requests to `edge-2` and `edge-3`, but not to `edge-1`.
 4. Each edge purges its local cache and returns `200 OK`.
 
-**Loop prevention:**
+Loop prevention:
 
-- Edges receiving `PURGE` requests with `X-Purge-Source: propagation` execute the purge locally but do not re-propagate.
-- The control-plane excludes the origin node from its broadcast list.
+- An edge that receives `X-Purge-Source: propagation` purges locally and does not propagate again.
+- The control plane excludes the origin node from its broadcast list.
 
-**Control-plane webhook protocol:**
+The control-plane webhook looks like this:
 
 ```http
 POST /cache/purge HTTP/1.1
@@ -264,4 +244,10 @@ X-Purge-Secret: edge-to-plane-secret
 }
 ```
 
-The control-plane must accept this POST, authenticate via `X-Purge-Secret`, and fan out `PURGE` requests to all registered edges except the origin. Ferron does not include a built-in control-plane. Operators can implement one with any HTTP framework.
+The control plane must authenticate the request with `X-Purge-Secret` and send `PURGE` requests to all registered edges except the origin. Ferron does not include a control plane. You can implement one with any HTTP framework.
+
+## See also
+
+- [Configuration: cache](/docs/configuration/content/cache)
+- [Edge caching](/docs/use-cases/content/edge-caching)
+- [PHP edge caching](/docs/use-cases/content/php-edge-cache)

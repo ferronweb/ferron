@@ -1,9 +1,9 @@
 ---
 title: Security headers
-description: "Harden Ferron responses with common security headers, CORS configuration, and header cleanup."
+description: "Add, remove, and replace response headers for browser hardening, CORS, and fingerprint cleanup."
 ---
 
-Ferron can add, remove, and replace response headers. This is useful for baseline browser hardening, CORS handling, and hiding framework/server fingerprints.
+Ferron can add, remove, and replace response headers. Use it for baseline browser hardening, CORS, and hiding framework or server details.
 
 ## Baseline hardening
 
@@ -21,28 +21,27 @@ example.com {
 ```
 
 > [!warning]
-> Keep `Strict-Transport-Security` only on HTTPS hosts you intend to keep on HTTPS permanently.
+> Add `Strict-Transport-Security` only to HTTPS hosts that will stay on HTTPS.
 
 > [!tip]
-> Treat `Content-Security-Policy` as application-specific. Start simple, then tighten based on real asset/script needs.
+> A Content Security Policy is specific to the application. Start with a small policy and add sources as the application needs them.
 
-## Remove or replace unwanted headers
+## Remove or replace headers
 
 ```ferron
 app.example.com {
     proxy http://127.0.0.1:3000
 
-    # Remove or normalize headers from upstream responses.
     header -X-Powered-By
     header Server "Ferron"
 }
 ```
 
-The `header` directive supports three forms:
+The `header` directive has three forms:
 
-- `header +Name "value"`: add header (appends, allows duplicates)
-- `header -Name`: remove all instances of the header
-- `header Name "value"`: replace header (removes existing, sets new value)
+- `header +Name "value"` adds a header. Duplicates are allowed.
+- `header -Name` removes all instances of the header.
+- `header Name "value"` replaces the header value.
 
 ## Per-path policies
 
@@ -57,9 +56,9 @@ example.com {
 }
 ```
 
-## CORS configuration
+## CORS
 
-For APIs that need cross-origin access, use the `cors` directive:
+For an API with known clients, list the origins:
 
 ```ferron
 api.example.com {
@@ -76,7 +75,7 @@ api.example.com {
 }
 ```
 
-To allow all origins (use with caution for public APIs):
+To allow all origins:
 
 ```ferron
 api.example.com {
@@ -92,11 +91,11 @@ api.example.com {
 ```
 
 > [!warning]
-> Allowing all origins is risky for public APIs. Restrict `origins` to specific trusted domains when possible.
+> Allowing all origins lets any site call the API. Restrict `origins` to trusted domains when possible.
 
-## Header interpolation
+## Interpolate values
 
-Header values support interpolation with `{{...}}` syntax:
+Header values support `{{...}}` interpolation:
 
 ```ferron
 example.com {
@@ -107,4 +106,4 @@ example.com {
 }
 ```
 
-Available variables include `{{remote.ip}}`, `{{server.ip}}`, `{{request.host}}`, and `{{env.NAME}}` for environment variables. For the complete reference, see [Conditionals and variables](/docs/configuration/fundamentals/conditionals).
+Available variables include `{{remote.ip}}`, `{{server.ip}}`, `{{request.host}}`, and `{{env.NAME}}`. For the complete reference, see [Conditionals and variables](/docs/configuration/fundamentals/conditionals).

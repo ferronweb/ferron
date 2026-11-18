@@ -1,17 +1,17 @@
 ---
 title: Automatic TLS
-description: "Set up automatic TLS with ACME challenges (HTTP-01, TLS-ALPN-01, DNS-01)."
+description: "Get and renew certificates with ACME, using HTTP-01, TLS-ALPN-01, or DNS-01 challenges."
 ---
 
-Ferron supports automatic TLS via ACME-compatible Certificate Authorities such as Let's Encrypt. It supports three challenge types:
+Ferron gets certificates from an ACME certificate authority such as Let's Encrypt. It caches the certificates and renews them before expiry.
 
-- **HTTP-01** (default): serves a token at `/.well-known/acme-challenge/`
-- **TLS-ALPN-01**: responds with a self-signed cert during the TLS handshake
-- **DNS-01**: creates a TXT record at `_acme-challenge.<domain>` (required for wildcard domains)
+| Challenge      | How it works                                                        | Use it when                          |
+| -------------- | ------------------------------------------------------------------- | ------------------------------------ |
+| `http-01`      | Serves a token at `/.well-known/acme-challenge/`.                   | Port 80 is reachable. This is the default. |
+| `tls-alpn-01`  | Answers the challenge during the TLS handshake.                     | Only port 443 is reachable.          |
+| `dns-01`       | Creates a TXT record at `_acme-challenge.<domain>`.                 | You need a wildcard certificate.     |
 
-Ferron caches certificates and renews them automatically before expiration.
-
-Below is the example Ferron configuration for automatic TLS with the production ACME directory:
+## Basic configuration
 
 ```ferron
 example.com {
@@ -25,24 +25,20 @@ example.com {
 }
 ```
 
-Or simply (Ferron enables automatic TLS via ACME by default for public hosts):
+For a public host, you can omit the `tls` block. Ferron enables automatic TLS through ACME by default:
 
 ```ferron
 example.com {
-    # Automatic TLS is enabled by default, no explicit TLS directive needed
-
     root /var/www/html
 }
 ```
 
 > [!important]
-> Keep `cache` on persistent storage and make sure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
+> Keep the ACME cache on persistent storage. Ferron must read and write the cache directory. Without persistent storage, renewals can fail or repeat after a restart.
 
-## Note about Cloudflare proxies (and other HTTPS proxies)
+## Behind a TLS-terminating proxy
 
-Ferron uses the HTTP-01 ACME challenge by default. The challenge requires the server to be reachable on port 80. If your website is behind a TLS-terminating proxy, the HTTP-01 challenge may not work unless port 80 is accessible. Cloudflare in proxy mode is such a case.
-
-You can use the TLS-ALPN-01 challenge instead. It works at the TLS handshake level and only requires port 443:
+HTTP-01 needs port 80. When a proxy such as Cloudflare terminates TLS, port 80 can be unreachable. Use TLS-ALPN-01 instead. It needs only port 443.
 
 ```ferron
 example.com {
@@ -56,9 +52,9 @@ example.com {
 }
 ```
 
-## Using Ferron as an ACME client for other servers
+## Get certificates for other servers
 
-If you run other servers alongside Ferron that support TLS but not automatic TLS, use Ferron as an ACME client. It gets TLS certificates for those servers:
+Ferron can act as an ACME client for another server that supports TLS but not ACME. Set `save` to write the certificate and key:
 
 ```ferron
 example.com {
@@ -69,7 +65,7 @@ example.com {
 
         save /tmp/server.crt /tmp/server.key
 
-        # Optionally, run a command after obtaining the certificate:
+        # Optional: run a command after issuance
         # post_obtain_command "/etc/reload-server.sh"
     }
 
@@ -77,13 +73,13 @@ example.com {
 }
 ```
 
-If you give only one path for `save`, the key path defaults to the certificate path with a `.key` extension. After Ferron gets a certificate, it writes the private key with `0600` permissions on Unix.
+If you give one path to `save`, the key path is the certificate path with a `.key` extension. On Unix, Ferron writes the private key with mode `0600`.
 
-## Automatic TLS on demand
+## Issue certificates on demand
 
-Ferron can also get certificates on demand after a client accesses a hostname for the first time (`on_demand`). This helps multi-tenant setups where hostnames are not fully known in advance.
+Ferron can get a certificate when a client first requests a hostname. This fits multi-tenant setups where you do not know every hostname in advance.
 
-When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferron calls the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
+Set `on_demand_ask` to an authorization endpoint. Ferron calls it with the `domain` query parameter. The endpoint must allow or deny issuance for that domain.
 
 ```ferron
 *.example.com {
@@ -100,11 +96,9 @@ When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferr
 }
 ```
 
-## DNS providers (DNS-01 challenge)
+## Wildcard certificates with DNS-01
 
-Ferron supports the DNS-01 ACME challenge for automatic TLS. Wildcard certificates require this challenge. The DNS-01 challenge needs a DNS provider inside the `tls` block.
-
-Below is an example configuration for DNS-01 with Cloudflare:
+A wildcard certificate needs the DNS-01 challenge. Add a `dns` block with the provider and its credentials:
 
 ```ferron
 *.example.com {
@@ -124,14 +118,14 @@ Below is an example configuration for DNS-01 with Cloudflare:
 ```
 
 > [!important]
-> Before you request certificates, make sure your public DNS records point to the Ferron server. The ACME challenges fail if traffic goes elsewhere.
+> Point the public DNS records at the Ferron server before you request certificates. ACME validation fails when traffic goes elsewhere.
 
 > [!info]
-> For the DNS providers Ferron supports and their configuration properties, see the [configuration reference](/docs/configuration/security/acme).
+> See [DNS providers](/docs/configuration/security/dns-providers) for the supported providers and their options.
 
-## Certificate caching
+## Certificate cache
 
-Ferron caches certificates both in-memory and on disk (when you configure a `cache` path). This makes sure certificates survive restarts and renew automatically.
+Set `cache` to keep certificates on disk across restarts:
 
 ```ferron
 example.com {
@@ -144,9 +138,11 @@ example.com {
 }
 ```
 
+Ferron caches certificates in memory and on disk. A disk cache also lets several nodes share one ACME setup.
+
 ## RSA certificates
 
-By default, Ferron uses ECDSA (Elliptic Curve Digital Signature Algorithm) with P-256 curve and SHA-256 hash function for certificate signing. To use RSA instead, set `key_algo` to `PKCS_RSA_SHA256` and specify `key_size`:
+Ferron uses ECDSA with P-256 and SHA-256 by default. To use RSA, set `key_algo` and `key_size`:
 
 ```ferron
 example.com {
@@ -163,4 +159,4 @@ example.com {
 ```
 
 > [!info]
-> For the supported TLS certificate key algorithms, see the [configuration reference](/docs/configuration/security/acme#supported-key-algorithms).
+> For all ACME options, see [Configuration: ACME](/docs/configuration/security/acme). To share one ACME cache across nodes, see [Distributed TLS](/docs/use-cases/https/distributed-tls).

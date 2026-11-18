@@ -3,7 +3,7 @@ title: "Migrating from Ferron 2 to Ferron 3"
 description: "Step-by-step guide for migrating a Ferron 2 KDL config to Ferron 3, including the migration tool, rollback, and verification checklist."
 ---
 
-This guide shows how to migrate your Ferron 2 configuration (`.kdl`) to Ferron 3 (`.conf`).
+Ferron 2 uses the `.kdl` configuration format. The migration below moves a Ferron 2 configuration to the Ferron 3 `.conf` format.
 
 Ferron 3 uses a new configuration format, updated observability, and a more explicit routing model. Most Ferron 2 configs need only a few manual changes. The safest path keeps the original Ferron 2 config unchanged. Generate the new Ferron 3 config beside it, and validate it before switching traffic.
 
@@ -129,11 +129,11 @@ The tool handles these conversions automatically:
 
 The migration tool gives you a starting point, not a perfect conversion. Keep these limitations in mind:
 
-1. **`location` with `remove_base=#false`** - the tool generates `match` + `if` blocks that may need manual adjustment.
-2. **Match names** - generated `match` block names may be verbose. You should rename them for clarity.
-3. **Complex `log_format`** - custom log format strings may need manual review to make sure placeholder names are correct.
-4. **`fcgi_php`** - the `fcgi_php` directive stays the same but may need adjustment depending on your FastCGI setup.
-5. **Rego subconditions** - Rego-based conditions are not migrated. You need to rewrite them using standard match expressions.
+1. **`location` with `remove_base=#false`**: the tool generates `match` and `if` blocks that may need manual adjustment.
+2. **Match names**: generated `match` block names can be verbose. Rename them for clarity.
+3. **Complex `log_format`**: custom log format strings may need a manual review of the placeholder names.
+4. **`fcgi_php`**: the directive stays the same but may need adjustment for the FastCGI setup.
+5. **Rego subconditions**: Rego-based conditions are not migrated. Rewrite them with standard match expressions.
 
 ## What has changed
 
@@ -436,7 +436,7 @@ Ferron 2 used `include "/path/to/*.kdl"`. Ferron 3 uses `include "/path/to/*.con
 
 ### Static file serving
 
-Ferron 2 always followed symlinks in webroots by default. Ferron 3 however does not, but you can change that using `disable_symlinks false` directive in a host block.
+Ferron 2 followed symlinks in webroots by default. Ferron 3 does not. Set `disable_symlinks false` in a host block to restore the old behavior.
 
 ## Known pitfalls
 
@@ -444,7 +444,7 @@ Ferron 2 always followed symlinks in webroots by default. Ferron 3 however does 
 
 In Ferron 2, `location "/api" remove_base=#false` kept `/api` in the forwarded URL. In Ferron 3, the base path is always stripped. If your backend expects the full path, adjust the backend URL or use a rewrite rule.
 
-**Example**: If you had `location "/api" { proxy "http://backend" }` with `remove_base=#false`, the Ferron 3 equivalent is simply:
+For example, `location "/api" { proxy "http://backend" }` with `remove_base=#false` becomes:
 
 ```ferron
 example.com {

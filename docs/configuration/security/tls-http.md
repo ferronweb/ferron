@@ -1,16 +1,14 @@
 ---
 title: "Configuration: HTTP TLS provider"
-description: "Fetch TLS certificates from a remote HTTP endpoint, with automatic refresh and observability."
+description: "Fetch TLS certificates from a remote HTTP endpoint, with polling, on-demand fetching, and observability."
 ---
 
-This page documents the `http` TLS provider (`tls-http` module), which fetches TLS certificates from a remote HTTP API. It supports two modes:
+The `http` provider fetches a certificate chain and private key from a remote HTTP API. It does not issue certificates or solve ACME challenges. Use it when an external service, such as HashiCorp Vault, a custom PKI, or a cloud certificate manager, exposes certificates through a REST API.
 
-- **Polling mode** (default): Polls a single endpoint at a configurable interval, suitable for known domains.
-- **On-demand mode** (`on_demand true`): Fetches certificates lazily on first TLS handshake for each SNI hostname, with optional approval endpoint, suitable for wildcard domains.
-
-Unlike the ACME provider, this module does not issue certificates or validate challenges. It simply fetches a certificate chain and private key in JSON format from a configured endpoint.
-
-This is useful when you have an external certificate management service that exposes certificates via a REST API. For example, HashiCorp Vault, a custom PKI, or a cloud certificate manager.
+| Mode                  | Behavior                                                        | Use it for                        |
+| --------------------- | --------------------------------------------------------------- | --------------------------------- |
+| Polling (default)     | Fetches one URL at a fixed interval.                            | Known domains.                    |
+| On-demand             | Fetches on the first TLS handshake for each SNI hostname.       | Wildcards and multi-tenant hosts. |
 
 ```ferron
 example.com {
@@ -21,22 +19,18 @@ example.com {
 }
 ```
 
-## Directives
-
-### Configuration parameters
+## Options
 
 | Parameter                       | Type         | Default | Description                                        |
 | ------------------------------- | ------------ | ------- | -------------------------------------------------- |
-| `provider`                      | `http`       | none    | Must be `"http"`                                   |
-| `url`                           | `<string>`   | none    | URL to fetch the certificate from (required)       |
-| `refresh_interval`              | `<duration>` | `1h`    | How often to poll or refresh certificates          |
-| `no_verification`               | `<bool>`     | `false` | Skip TLS verification for the certificate endpoint |
-| `on_demand`                     | `<bool>`     | `false` | Enable on-demand (lazy) certificate fetching       |
-| `on_demand_ask`                 | `<string>`   | none    | Approval endpoint URL for on-demand requests       |
-| `on_demand_ask_auth`            | `<string>`   | none    | Authorization header for the approval endpoint     |
-| `on_demand_ask_no_verification` | `<bool>`     | `false` | Skip TLS verification for the approval endpoint    |
-
-**Polling mode configuration example:**
+| `provider`                      | `http`       | none    | Must be `http`.                                    |
+| `url`                           | `<string>`   | none    | URL to fetch the certificate from (required).      |
+| `refresh_interval`              | `<duration>` | `1h`    | How often to poll or refresh certificates.         |
+| `no_verification`               | `<bool>`     | `false` | Skip TLS verification for the certificate endpoint. |
+| `on_demand`                     | `<bool>`     | `false` | Fetch certificates lazily on the first handshake.  |
+| `on_demand_ask`                 | `<string>`   | none    | Approval endpoint URL for on-demand requests.      |
+| `on_demand_ask_auth`            | `<string>`   | none    | Authorization header for the approval endpoint.    |
+| `on_demand_ask_no_verification` | `<bool>`     | `false` | Skip TLS verification for the approval endpoint.   |
 
 ```ferron
 example.com {
@@ -52,11 +46,13 @@ example.com {
 
 ## Polling mode
 
-Polling mode is the default behavior. The module fetches the certificate from the configured `url` at startup and then at every `refresh_interval`. If the certificate has changed, the module updates the in-memory TLS configuration. This mode works with a known domain in the host block.
+The provider fetches the certificate at startup and then at every `refresh_interval`. When the certificate changes, Ferron updates the in-memory TLS configuration. Polling continues until the server shuts down.
+
+The HTTP client supports HTTP/1.1 and HTTP/2. TLS verification is enabled by default.
 
 ## On-demand mode
 
-On-demand mode defers certificate fetching until the first TLS handshake for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when domains are not known at startup.
+On-demand mode defers fetching until the first TLS handshake for a hostname. Use it for wildcard domains, multi-tenant hosting, or domains that are unknown at startup.
 
 ```ferron
 *.example.com {
@@ -68,102 +64,17 @@ On-demand mode defers certificate fetching until the first TLS handshake for a h
 }
 ```
 
-When a TLS handshake arrives for a hostname without a cached certificate:
+When a handshake arrives for a hostname without a cached certificate:
 
 1. The module sends an on-demand request to the background listener.
-2. If you configure `on_demand_ask`, the module calls the approval endpoint with `?domain=<encoded>` as a query parameter. A `200` response authorizes the fetch.
-3. The module fetches the certificate from `url` with `?domain=<encoded>` appended to the URL.
-4. The module caches the certificate per SNI hostname in memory.
-5. The module spawns a per-SNI refresh task to re-fetch the certificate at the configured `refresh_interval`.
+2. If `on_demand_ask` is set, the module calls the approval endpoint with `?domain=<encoded>`.
+3. A `200` response authorizes the fetch.
+4. The module fetches `url` with `?domain=<encoded>` appended.
+5. The module caches the certificate per SNI hostname in memory and starts a per-SNI refresh task.
 
-### On-demand approval endpoint
+### Approval endpoint
 
-To prevent abuse, you can configure an approval endpoint. Before fetching a certificate, Ferron sends an HTTP GET request to the endpoint with `?domain=<sni>` as a query parameter. If the response is `200`, Ferron fetches the certificate.
-
-```ferron
-*.example.com {
-    tls {
-        provider http
-        url https://cert-manager.internal.example.com/api/cert
-        on_demand
-        on_demand_ask https://internal-api.example.com/check-cert
-    }
-}
-```
-
-## How it works
-
-The `tls-http` module runs background tasks depending on the mode:
-
-### Polling mode
-
-1. Polls the configured URL at the specified `refresh_interval`
-2. Parses the JSON response expecting `certificate` (PEM-encoded chain) and `private_key` (PEM-encoded key) fields
-3. Replaces the current TLS certified key if the certificate has changed
-4. Continues polling indefinitely until the server shuts down
-
-### On-demand mode
-
-1. Listens for on-demand requests triggered by TLS handshakes for unknown SNI hostnames
-2. Checks the approval endpoint (if configured) to authorize the fetch
-3. Fetches the certificate from the configured `url` with `?domain=<encoded>` appended
-4. Caches the certificate per SNI hostname in the in-memory resolver
-5. Refreshes each certificate independently at the configured `refresh_interval`
-
-The HTTP client supports both HTTP/1.1 and HTTP/2. Ferron enables TLS verification by default. Use `no_verification` only for internal endpoints with self-signed certificates.
-
-### Response format
-
-The endpoint must return a JSON object with the following structure:
-
-```json
-{
-  "private_key": "-----BEGIN PRIVATE KEY-----\n...",
-  "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
-}
-```
-
-- `private_key`: PEM-encoded private key (any supported format)
-- `certificate`: PEM-encoded certificate chain, with the leaf certificate first, followed by intermediates
-
-## Configuration examples
-
-### Basic polling usage
-
-```ferron
-example.com {
-    tls {
-        provider http
-        url https://cert-manager.internal.example.com/api/cert/example.com
-    }
-}
-```
-
-### With custom refresh interval
-
-```ferron
-example.com {
-    tls {
-        provider http
-        url https://cert-manager.internal.example.com/api/cert/example.com
-        refresh_interval "15m"
-    }
-}
-```
-
-### With TLS verification disabled (internal endpoints)
-
-```ferron
-example.com {
-    tls {
-        provider http
-        url https://cert-manager.internal.example.com/api/cert/example.com
-        no_verification
-    }
-}
-```
-
-### On-demand with approval endpoint
+An approval endpoint prevents certificate fetching for arbitrary hostnames. Ferron sends an HTTP GET request to the endpoint with `?domain=<sni>`. A `200` response authorizes the fetch.
 
 ```ferron
 *.example.com {
@@ -177,36 +88,56 @@ example.com {
 }
 ```
 
-### With OCSP stapling
+## Response format
 
-```ferron
-example.com {
-    tls {
-        provider http
-        url https://cert-manager.internal.example.com/api/cert/example.com
+The endpoint must return a JSON object:
 
-        ocsp
-    }
+```json
+{
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...",
+  "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
 }
 ```
 
-## Certificate refresh behavior
+- `private_key`: PEM-encoded private key. RSA, EC, and Ed25519 keys are supported.
+- `certificate`: PEM-encoded certificate chain, with the leaf certificate first and intermediates after it.
 
-### Change detection
+> [!warning]
+> A response that is not valid JSON, or PEM data that does not parse, makes the refresh fail. Check that the endpoint returns `application/json` without a BOM, that the chain starts with `-----BEGIN CERTIFICATE-----`, and that the key starts with `-----BEGIN PRIVATE KEY-----` or a supported equivalent.
 
-The module compares the newly fetched certificate chain against the currently loaded one. If the certificates are identical, the TLS configuration is not updated, avoiding unnecessary client reconnections.
+## Refresh behavior
 
-### Refresh interval
+Ferron compares each newly fetched chain with the loaded one. Identical certificates do not update the TLS configuration, so clients are not disconnected unnecessarily.
 
-The `refresh_interval` directive controls how often Ferron refreshes certificates. The default is 1 hour. Shorter intervals mean faster certificate updates but more HTTP requests. Longer intervals reduce load on the certificate service but delay certificate rotation.
+A shorter `refresh_interval` applies certificate changes sooner but sends more requests. A longer interval reduces load on the certificate service but delays rotation.
 
-### Continuous operation
+If a fetch fails, Ferron logs a warning and retries at the next interval. The loaded certificate stays in effect until a fetch succeeds.
 
-The refresh loops run indefinitely. If a request fails (network error, parse error, and so on), the module logs a warning and retries on the next interval. The currently loaded certificate remains in effect until the module receives a successful response.
+### Certificate not updating
+
+1. Look for `TLS certificate refreshed successfully` in the logs. If it is absent, the fetch is failing.
+2. Check that the endpoint URL is correct and reachable.
+3. Read `ferron.tls.certificate_not_after` with `ferron.tls.provider="http"` to see when the loaded certificate expires.
+4. Check that `refresh_interval` is not too long for your rotation schedule.
+
+### On-demand fetch not triggered
+
+1. Check that the TLS block sets `on_demand`.
+2. Look for `On-demand certificate requested` in the logs. If it is absent, the resolver may not receive handshakes.
+3. If `on_demand_ask` is set, check that the endpoint returns `200` for the hostname.
+4. Check that the host block uses a wildcard pattern, for example `*:443`.
+
+## Security considerations
+
+- Ferron never logs private keys or exposes them in error messages.
+- The provider loads the private key into memory for TLS only. It never writes the key to disk.
+- Protect the certificate endpoint with authentication, such as API keys or mTLS.
+- Use `no_verification` only for internal endpoints with self-signed certificates.
+- Ferron uses a fetched chain even when it is not trusted. Make sure the endpoint returns certificates from trusted CAs.
+- In on-demand mode, always configure `on_demand_ask` in production.
+- The endpoint receives the domain in `?domain=`. It must validate and authenticate requests.
 
 ## Observability
-
-The `tls-http` module emits log events and metrics through the configured observability pipeline for troubleshooting and monitoring.
 
 ### Log events
 
@@ -229,7 +160,7 @@ The `tls-http` module emits log events and metrics through the configured observ
 
 ### Structured logs
 
-In OTLP `log_style modern`, the `summary` field becomes the log body. The `attributes` become typed OpenTelemetry log record attributes.
+In OTLP `log_style modern`, the `summary` field becomes the log body. The `attributes` are typed OpenTelemetry log record attributes.
 
 | Summary                                 | Level | Attributes                                                        |
 | --------------------------------------- | ----- | ----------------------------------------------------------------- |
@@ -261,61 +192,7 @@ In OTLP `log_style modern`, the `summary` field becomes the log body. The `attri
 | `ferron.tls.certificate_not_after`             | Gauge     | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds    |
 | `ferron.tls_http.next_refresh_seconds`         | Gauge     | None                                                                              | Seconds until next certificate refresh          |
 
-All TLS providers share the certificate expiration gauge (manual, ACME, HTTP, local). Ferron emits the gauge every time it mounts a certificate into the in-memory context.
-
-## Security considerations
-
-- **Private keys are never logged** or exposed in error messages.
-- The module loads the private key into memory and uses it only for TLS. It never writes the key to disk.
-- Protect the certificate endpoint URL with authentication (for example, API keys, mTLS) in production.
-- Use `no_verification` only for internal endpoints with self-signed certificates. Do not use it for public endpoints.
-- If the certificate endpoint returns a valid but untrusted certificate chain, Ferron will still use it. Make sure your endpoint only returns certificates from trusted CAs.
-- When using on-demand mode, always configure an `on_demand_ask` endpoint in production to prevent certificate fetching for arbitrary hostnames.
-- The `url` endpoint receives the domain in the `?domain=` query parameter. Make sure it validates and authenticates requests.
-
-## Troubleshooting
-
-### "Failed to parse the HTTP response from TLS certificate endpoint: ..."
-
-The endpoint returned a response that was not valid JSON. Check that:
-
-- The endpoint returns valid JSON with `private_key` and `certificate` fields
-- The response content type is `application/json`
-- There are no encoding issues (for example, BOM characters)
-
-### "Failed to parse the TLS certificate chain from TLS endpoint response: ..."
-
-The `certificate` field is not valid PEM. Check that:
-
-- The certificate is in PEM format (starts with `-----BEGIN CERTIFICATE-----`)
-- The chain includes the leaf certificate first, followed by intermediates
-- There are no extra whitespace or encoding issues
-
-### "Failed to parse the TLS private key from TLS endpoint response: ..."
-
-The `private_key` field is not valid PEM. Check that:
-
-- The key is in PEM format (starts with `-----BEGIN PRIVATE KEY-----` or similar)
-- The key format is RSA, EC, or Ed25519
-- There are no extra whitespace or encoding issues
-
-### Certificate not updating
-
-If the certificate is not updating despite changes on the server side:
-
-1. Check the logs for `TLS certificate refreshed successfully`. If the log line does not appear, the fetch may fail
-2. Verify the endpoint URL is correct and reachable
-3. Check `ferron.tls.certificate_not_after` (with `ferron.tls.provider="http"`) to see when the loaded certificate actually expires
-4. Make sure the `refresh_interval` is not too long for your use case
-
-### On-demand certificates not being fetched
-
-If on-demand certificates are not fetched for new hostnames:
-
-1. Verify that the TLS block sets `on_demand true`
-2. Check the logs for `On-demand certificate requested`. If the log line does not appear, the resolver may not receive handshakes
-3. If you configure `on_demand_ask`, verify that the endpoint returns `200` for the requested hostname
-4. Check that the host block uses a wildcard pattern (for example, `*:443`)
+All TLS providers share the certificate expiration gauge (manual, ACME, HTTP, and local). Ferron emits the gauge each time it mounts a certificate into the in-memory context.
 
 ## See also
 
@@ -329,7 +206,7 @@ If on-demand certificates are not fetched for new hostnames:
 
 `ferron doctor` reports the following best-practice checks for directives on this page.
 
-- **`url` with plain HTTP**: Certificate endpoints returning private keys should use HTTPS with authentication.
-- **`no_verification` for certificate endpoint**: Use it to disable TLS verification for the certificate endpoint only when the endpoint is strictly internal and otherwise authenticated.
-- **`on_demand` without `on_demand_ask`**: On-demand certificate fetching without an approval endpoint allows certificate fetching for arbitrary hostnames. Configure `on_demand_ask` to approve requests.
-- **`on_demand_ask_no_verification`**: Use it to disable TLS verification for the approval endpoint only when the endpoint is strictly internal and otherwise authenticated.
+- `url` with plain HTTP: Certificate endpoints that return private keys should use HTTPS with authentication.
+- `no_verification` for the certificate endpoint: Disable TLS verification only when the endpoint is strictly internal and otherwise authenticated.
+- `on_demand` without `on_demand_ask`: On-demand certificate fetching without an approval endpoint allows fetching for arbitrary hostnames. Configure `on_demand_ask` to approve requests.
+- `on_demand_ask_no_verification`: Disable TLS verification for the approval endpoint only when the endpoint is strictly internal and otherwise authenticated.

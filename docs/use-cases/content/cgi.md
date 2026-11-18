@@ -1,15 +1,13 @@
 ---
 title: "CGI applications"
-description: "Host legacy CGI applications on Ferron, including extension mapping, interpreters, environment variables, and security considerations."
+description: "Host legacy CGI applications on Ferron with extension mapping, interpreters, environment variables, and safe upload paths."
 ---
 
-Ferron supports classic CGI (Common Gateway Interface) applications through the `http-cgi` module. This is useful for legacy stacks and script-based workflows.
+Ferron runs classic CGI (Common Gateway Interface) applications through the `http-cgi` module. Use it for legacy stacks and script-based workflows. For new deployments, prefer reverse proxying or FastCGI. Both avoid a new process for each request.
 
-For new deployments, prefer HTTP reverse proxying or FastCGI when possible, because it avoids starting a new process per request and usually performs better.
+## Basic setup
 
-## Basic CGI setup
-
-To run CGI programs, enable `cgi` at the HTTP host scope:
+Enable CGI at the host scope:
 
 ```ferron
 example.com {
@@ -18,9 +16,7 @@ example.com {
 }
 ```
 
-Ferron automatically treats scripts inside a `cgi-bin` directory as CGI programs. The directory must carry the exact name `cgi-bin` (case-insensitive) and must sit directly under the document root.
-
-Example directory structure:
+Ferron treats scripts inside a `cgi-bin` directory as CGI programs. The directory name must be exactly `cgi-bin` (case-insensitive). It must sit directly under the document root.
 
 ```text
 /var/www/html/
@@ -30,15 +26,16 @@ Example directory structure:
     └── script.py
 ```
 
-> [!note]
->
-> - Ferron always removes the `Proxy` header to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
-> - If a CGI script exits with a non-zero status, Ferron logs a `WARN` message and returns a `500 Internal Server Error` response. Ferron logs stderr output from the script as a warning, trimmed before logging.
-> - Ferron sets the working directory to the directory containing the script file.
+Ferron does the following for CGI requests:
 
-## Executing scripts by extension
+- Removes the `Proxy` header to prevent the [httpoxy](https://httpoxy.org/) vulnerability.
+- Sets the working directory to the directory that contains the script.
+- Returns `500 Internal Server Error` and logs a `WARN` message when a script exits with a non-zero status.
+- Logs stderr output from the script as a warning, trimmed before logging.
 
-You can also execute CGI scripts outside `cgi-bin` by registering additional file extensions:
+## Execute by extension
+
+To run CGI scripts outside `cgi-bin`, register their extensions:
 
 ```ferron
 example.com {
@@ -51,21 +48,13 @@ example.com {
 }
 ```
 
-With this configuration:
+Ferron then treats `/var/www/html/scripts/process.php` and `/var/www/html/scripts/convert.py` as CGI scripts. It still serves `/var/www/html/static/style.css` as a static file.
 
-- Ferron treats `/var/www/html/scripts/process.php` as a CGI script
-- Ferron treats `/var/www/html/scripts/convert.py` as a CGI script
-- Ferron serves `/var/www/html/static/style.css` as a static file
+Extension matching is case-insensitive, so `.PHP` matches `.php`. Extension matching is complementary to `cgi-bin` matching. A file can be CGI because it sits in `cgi-bin`, because it has a registered extension, or both.
 
-> [!note]
->
-> - Ferron matches extensions case-insensitively (`.PHP` matches `.php`).
-> - Ferron executes files with registered extensions as CGI scripts regardless of their location.
-> - This is complementary to `cgi-bin` directory matching. A file can be CGI either by being in `cgi-bin` or by having a registered extension.
+## Custom interpreters
 
-## Custom CGI interpreters
-
-Define explicit interpreters for specific file extensions:
+Set an interpreter for a specific extension:
 
 ```ferron
 example.com {
@@ -78,15 +67,13 @@ example.com {
 }
 ```
 
-Ferron automatically appends the file path as the final argument to the interpreter command. A request to `/cgi-bin/handler.php` with the above configuration runs:
+Ferron appends the file path as the last argument. A request to `/cgi-bin/handler.php` runs:
 
 ```bash
 php-cgi -c /etc/php/8.2/cgi/php.ini /var/www/html/cgi-bin/handler.php
 ```
 
-### Disabling default interpreters
-
-Pass `false` as the second argument to `interpreter` to disable the default interpreter for that extension:
+To disable the default interpreter for an extension, pass `false`:
 
 ```ferron
 example.com {
@@ -97,30 +84,30 @@ example.com {
 }
 ```
 
-This allows Ferron to handle PHP files via shebang lines (`#!/usr/bin/env php`) or direct execution instead of the default `php-cgi` interpreter.
+Ferron then handles PHP files through a shebang line, such as `#!/usr/bin/env php`, or executes them directly.
 
-### Built-in default interpreters
+### Default interpreters
 
-When no custom `interpreter` directive matches, Ferron uses these built-in defaults:
+When no custom `interpreter` matches, Ferron uses these defaults:
 
-| Extension        | Default interpreter  |
-| ---------------- | -------------------- |
-| `.pl`            | `perl`               |
-| `.py`            | `python`             |
-| `.sh`            | `bash`               |
-| `.ksh`           | `ksh`                |
-| `.csh`           | `csh`                |
-| `.rb`            | `ruby`               |
-| `.php`           | `php-cgi`            |
-| `.exe` (Windows) | _(direct execution)_ |
-| `.bat` (Windows) | `cmd /c`             |
-| `.vbs` (Windows) | `cscript`            |
+| Extension        | Default interpreter |
+| ---------------- | ------------------- |
+| `.pl`            | `perl`              |
+| `.py`            | `python`            |
+| `.sh`            | `bash`              |
+| `.ksh`           | `ksh`               |
+| `.csh`           | `csh`               |
+| `.rb`            | `ruby`              |
+| `.php`           | `php-cgi`           |
+| `.exe` (Windows) | direct execution    |
+| `.bat` (Windows) | `cmd /c`            |
+| `.vbs` (Windows) | `cscript`           |
 
-On Unix systems, Ferron parses scripts with a shebang line (for example `#!/usr/bin/env python3`) and derives the interpreter from the shebang. On Windows, Ferron executes `.exe` files directly.
+On Unix, Ferron reads a shebang line such as `#!/usr/bin/env python3` and uses that interpreter. On Windows, Ferron executes `.exe` files directly.
 
 ## Environment variables
 
-Set CGI environment variables that Ferron passes to the interpreter process:
+Set environment variables for the interpreter process:
 
 ```ferron
 example.com {
@@ -133,11 +120,9 @@ example.com {
 }
 ```
 
-> [!note]
->
-> - Environment variables take precedence over any existing variables with the same name.
-> - Values support interpolation (for example `{{env.VAR}}` for environment variable substitution).
-> - Ferron always sets the following CGI environment variables automatically:
+Environment variables take precedence over existing variables with the same name. Values support interpolation, for example `{{env.VAR}}`.
+
+Ferron also sets these CGI environment variables:
 
 | Variable          | Description                                                    |
 | ----------------- | -------------------------------------------------------------- |
@@ -147,32 +132,28 @@ example.com {
 | `SERVER_PORT`     | Server port.                                                   |
 | `REQUEST_METHOD`  | HTTP method.                                                   |
 | `REQUEST_URI`     | Original request URI.                                          |
-| `QUERY_STRING`    | Query string (empty string if none).                           |
+| `QUERY_STRING`    | Query string. Empty when the request has none.                 |
 | `PATH_INFO`       | Path info extracted from the request.                          |
-| `SCRIPT_NAME`     | The script path relative to the document root.                 |
+| `SCRIPT_NAME`     | Script path relative to the document root.                     |
 | `AUTH_TYPE`       | Authentication type from the `Authorization` header.           |
-| `REMOTE_USER`     | Authenticated username, if available.                          |
-| `SERVER_ADMIN`    | Server administrator email (from `admin_email` configuration). |
-| `HTTPS`           | Ferron sets this to `on` when the connection uses encryption.  |
+| `REMOTE_USER`     | Authenticated username, when available.                        |
+| `SERVER_ADMIN`    | Server administrator email from the `admin_email` setting.     |
+| `HTTPS`           | `on` when the connection uses encryption.                      |
 
-## Security considerations
+## Security
 
-### File upload safety
+### Upload paths
 
-Keep upload and download directories outside `cgi-bin` and outside any extension-registered directories. Otherwise, a user could upload a malicious script and execute it as CGI.
-
-Example safe configuration:
+Keep upload and download directories outside `cgi-bin` and outside extension-registered paths. Otherwise, a user can upload a script and execute it as CGI.
 
 ```ferron
 example.com {
     root /var/www/html
 
-    # CGI is only enabled for cgi-bin and .php scripts
     cgi {
         extension ".php"
     }
 
-    # Upload directory is safe (no CGI execution)
     location /uploads {
         root /var/www/html/uploads
         cgi false
@@ -182,85 +163,36 @@ example.com {
 
 ### Interpreter permissions
 
-On Unix systems, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`). On Windows, Ferron executes `.exe` files directly and parses scripts with shebangs like Unix.
+On Unix, a script without a matching `interpreter` directive must have the executable bit set (`chmod +x`). On Windows, Ferron executes `.exe` files directly and reads shebang lines like Unix.
 
-### Distributed tracing
+### Trace context
 
-When you enable tracing in Ferron, CGI scripts automatically receive W3C Trace Context headers (`traceparent`, `tracestate`, `baggage`) as CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`). This enables end-to-end distributed tracing without any CGI-side configuration.
+When tracing is enabled, CGI scripts receive W3C Trace Context headers as environment variables:
+
+- `HTTP_TRACEPARENT`
+- `HTTP_TRACESTATE`
+- `HTTP_BAGGAGE`
 
 > [!info]
-> See [Tracing configuration](/docs/configuration/observability/tracing) for details on enabling trace generation and sampling.
+> See [Tracing configuration](/docs/configuration/observability/tracing) to enable trace generation and sampling.
 
 ## Default index files
 
-When you enable CGI and you do not configure an explicit `index` directive, Ferron automatically injects default index file names. Ferron checks these files in order: `index.html`, `index.htm`, `index.xhtml`.
+When CGI is enabled and no `index` directive is set, Ferron injects these index names in order: `index.html`, `index.htm`, `index.xhtml`.
 
-If you register additional extensions via the `extension` directive, Ferron also prepends corresponding index files to the front of the list:
+For each registered extension, Ferron adds a matching index file to the front of the list:
 
-| Registered extension | Prepend to index list |
-| -------------------- | --------------------- |
-| `.cgi`               | `index.cgi`           |
-| `.php`               | `index.php`           |
+| Registered extension | Prepended index |
+| -------------------- | --------------- |
+| `.cgi`               | `index.cgi`     |
+| `.php`               | `index.php`     |
 
-For example, with `extension ".php"` configured, the injection order becomes: `index.php`, `index.html`, `index.htm`, `index.xhtml`.
+With `extension ".php"`, the order becomes `index.php`, `index.html`, `index.htm`, `index.xhtml`.
 
-This injection only applies when you do not set an explicit `index` directive. If you configure your own `index` directive, Ferron uses that instead.
+An explicit `index` directive replaces the injected list.
 
-## Examples
+## See also
 
-### PHP with a custom PHP-CGI binary
-
-```ferron
-example.com {
-    root /srv/www/example
-    cgi {
-        extension ".php"
-        interpreter ".php" php-cgi -c /etc/php/8.2/cgi/php.ini
-    }
-}
-```
-
-### Multiple interpreters with environment variables
-
-```ferron
-example.com {
-    root /srv/www/app
-    cgi {
-        extension ".rb"
-        interpreter ".rb" ruby
-        interpreter ".py" python3
-        environment RUBY_VERSION "3.3"
-        environment PYTHONUNBUFFERED "1"
-    }
-}
-```
-
-### Disabling the default PHP interpreter
-
-```ferron
-example.com {
-    root /srv/www/example
-    cgi {
-        interpreter ".php" false
-    }
-}
-```
-
-This allows Ferron to handle PHP files via shebang lines or direct execution instead.
-
-### Using `cgi-bin` with additional extensions
-
-```ferron
-example.com {
-    root /srv/www/example
-
-    cgi {
-        extension ".php"
-        environment APP_ENV "production"
-    }
-
-    # /srv/www/example/cgi-bin/handler.py is treated as CGI
-    # /srv/www/example/scripts/script.php is also treated as CGI
-    # (because of the ".php" extension directive)
-}
-```
+- [PHP hosting](/docs/use-cases/content/php)
+- [Configuration: CGI](/docs/configuration/content/cgi)
+- [Configuration: FastCGI](/docs/configuration/content/fastcgi)

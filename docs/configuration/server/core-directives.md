@@ -3,7 +3,7 @@ title: "Configuration: core directives"
 description: "Top-level directives for runtime, networking, admin API, observability, and reverse proxy connection limits."
 ---
 
-This page documents directives that belong in top-level global blocks:
+These directives belong in top-level global blocks:
 
 ```ferron
 {
@@ -13,24 +13,18 @@ This page documents directives that belong in top-level global blocks:
 ```
 
 > [!note]
+> These directives affect startup and listener construction, not per-request routing.
 >
-> - These directives affect startup and listener construction, not per-request routing.
-> - The `config-ferronconf` module (for `.conf` files) or the `config-json` module (for `.json` files) handles configuration file parsing.
+> The `config-ferronconf` module parses `.conf` files and the `config-json` module parses `.json` files.
 
 > [!info]
-> For observability-specific configuration, see [Observability and logging](/docs/configuration/observability/logging). For per-host HTTP settings, see [HTTP host directives](/docs/configuration/server/host). For admin API security hardening, see [Security considerations](#security-considerations).
+> For observability settings, see [Observability and logging](/docs/configuration/observability/logging). For per-host HTTP settings, see [HTTP host directives](/docs/configuration/server/host). For admin API hardening, see [Admin API security](#admin-api-security).
 
-## Directives
+## Default ports
 
-### Default ports
+`default_http_port <port: integer | false>` sets the HTTP port for a host block without an explicit port. The value must be a positive integer no larger than `65535`, or `false` to disable the default HTTP listener. Default: `80`.
 
-- `default_http_port <port: integer | false>`
-  - This directive sets the default HTTP port when a host block does not specify a port. The value must be a positive integer ≤ 65535, or `false` to disable the default HTTP listener. Default: `default_http_port 80`
-
-- `default_https_port <port: integer | false>`
-  - This directive sets the default HTTPS port used for HTTP-to-HTTPS redirects and URL generation. The value must be a positive integer ≤ 65535, or `false` to disable the default HTTPS listener. Default: `default_https_port 443`
-
-**Configuration example:**
+`default_https_port <port: integer | false>` sets the HTTPS port for HTTP-to-HTTPS redirects and URL generation. The value must be a positive integer no larger than `65535`, or `false` to disable the default HTTPS listener. Default: `443`.
 
 ```ferron
 {
@@ -40,13 +34,15 @@ This page documents directives that belong in top-level global blocks:
 ```
 
 > [!note]
+> A host without an explicit port starts an HTTP listener on `default_http_port` and an HTTPS listener on `default_https_port`.
 >
-> - When a host does not specify an explicit port, Ferron starts an HTTP listener on `default_http_port` and an HTTPS listener on `default_https_port`.
-> - The redirect stage constructs `https://` URLs using this port (omitting it when the value is `443`).
-> - Setting `default_http_port false` disables the automatic HTTP listener, and `default_https_port false` disables the automatic HTTPS listener and HTTP-to-HTTPS redirects.
-> - If you set both directives to `false`, host blocks without explicit ports create no listeners, and Ferron logs a warning.
+> The redirect stage builds `https://` URLs with this port. It omits the port when the value is `443`.
+>
+> `default_http_port false` disables the automatic HTTP listener. `default_https_port false` disables the automatic HTTPS listener and the HTTP-to-HTTPS redirects.
+>
+> With both directives set to `false`, host blocks without explicit ports create no listeners, and Ferron logs a warning.
 
-**Disable default HTTP listener (HTTPS only):**
+HTTPS only:
 
 ```ferron
 {
@@ -54,7 +50,7 @@ This page documents directives that belong in top-level global blocks:
 }
 ```
 
-**Disable both default listeners (only explicit ports work):**
+Explicit ports only:
 
 ```ferron
 {
@@ -63,12 +59,13 @@ This page documents directives that belong in top-level global blocks:
 }
 ```
 
-### Host definitions
+## Host definitions
 
-- `strict_hosts <bool>`
-  - This directive rejects a host that host blocks in more than one configuration file define. By default, Ferron merges all host blocks for the same host (same protocol, port, IP address and hostname), even when they come from different files. With `strict_hosts` turned on, a second file that defines an existing host makes validation, startup and reload fail. The error names both files. Host blocks for the same host within one file still merge. Default: disabled
+`strict_hosts <bool>` rejects a host that host blocks define in more than one configuration file.
 
-**Configuration example:**
+By default, Ferron merges all host blocks for the same host, meaning the same protocol, port, IP address, and hostname, even across files. With `strict_hosts` on, a second file that defines an existing host makes validation, startup, and reload fail. The error names both files. Blocks for the same host within one file still merge.
+
+Default: disabled.
 
 ```ferron
 {
@@ -79,18 +76,21 @@ include "sites/*.ferron"
 ```
 
 > [!note]
+> Use `strict_hosts` when each site has its own file, for example on a server that hosts sites for several teams.
 >
-> - Use `strict_hosts` when each site lives in its own file, for example on a server that hosts sites for several users or teams. Without it, a second file for an existing domain merges into the first: first-value directives such as `root` keep the value from the file loaded first, other directives such as `header` add to it, and `basic_auth` accepts users from both files.
-> - Ferron loads files matched by an `include` glob in alphabetical order.
+> Without it, a second file for an existing domain merges into the first. First-value directives such as `root` keep the value from the file loaded first. Directives such as `header` add to the existing value. `basic_auth` accepts users from both files.
+>
+> Ferron loads files matched by an `include` glob in alphabetical order.
 
-### Runtime
+## Runtime
 
-- `io_uring <bool>`
-  - This directive turns on `io_uring` for the server when it is available. Enabling `io_uring` could improve performance for static file serving involving large files or reverse proxying involving very high concurrency. If initialization fails, Ferron falls back to `epoll` and logs a warning. Default: disabled
-- `cpu_affinity <core_id> [<core_id> ...]`
-  - This directive sets CPU affinity for Ferron's primary (data plane) threads. It accepts a list of CPU core IDs (0-based). This could be useful when using asymmetric CPU cores (ASMP) or NUMA, as this allows pinning CPU cores into specific CPU cores that are symmetric together or NUMA nodes. The thread count is set to the number of cores specified in CPU affinity. Default: all available CPU cores
+`io_uring <bool>` enables `io_uring` when the system supports it. It can improve static file serving for large files and reverse proxying under very high concurrency. If initialization fails, Ferron falls back to `epoll` and logs a warning.
 
-**Configuration example:**
+Default: disabled.
+
+`cpu_affinity <core_id> [<core_id> ...]` pins Ferron's primary (data plane) threads to the listed CPU cores, using 0-based IDs. This helps with asymmetric CPU cores (ASMP) and NUMA, where some cores are symmetric with each other or share a NUMA node. The thread count becomes the number of listed cores.
+
+Default: all available CPU cores.
 
 ```ferron
 {
@@ -101,24 +101,21 @@ include "sites/*.ferron"
 }
 ```
 
-### Network and listeners
+## Network and listeners
 
-- `listen <address: string>`
-  - This directive sets the bind addresses for TCP listeners. It accepts either IP addresses or full socket addresses. If you use a socket address, its port must match the HTTP port that Ferron starts. If you just need to change default HTTP ports, use `default_http_port` and `default_https_port` instead. Default: `[::]:<http-port>`
+`listen <address: string>` sets the bind addresses for TCP listeners. It accepts IP addresses or full socket addresses. A socket address must use the same port that Ferron starts. To change the default HTTP ports, use `default_http_port` and `default_https_port` instead.
 
-- `send_buf <size: integer>`
-  - This directive sets the TCP send buffer size. It must resolve to a non-negative integer at runtime. Default: OS default
+Default: `[::]:<http-port>`.
 
-- `recv_buf <size: integer>`
-  - This directive sets the TCP receive buffer size. It must resolve to a non-negative integer at runtime. Default: OS default
+`send_buf <size: integer>` sets the TCP send buffer size. The value must resolve to a non-negative integer at runtime. Default: OS default.
 
-- `backlog <size: integer>`
-  - This directive sets the maximum number of pending connections allowed on the listener socket. Default: `-1` (Windows, *BSD, macOS), `4096` (others)
+`recv_buf <size: integer>` sets the TCP receive buffer size. The value must resolve to a non-negative integer at runtime. Default: OS default.
 
-- `multipath <bool>`
-  - This directive turns on Multipath TCP (MPTCP) for the listener. MPTCP allows a single TCP connection to use multiple network interfaces at the same time, improving throughput and resilience. When enabled, Ferron attempts to create an MPTCP socket. If the kernel lacks MPTCP support or MPTCP is off, Ferron logs a warning and falls back to standard TCP. Default: disabled
+`backlog <size: integer>` sets the maximum number of pending connections on the listener socket. Default: `-1` unlimited on Windows, BSD, and macOS, and `4096` elsewhere.
 
-**Configuration example:**
+`multipath <bool>` enables Multipath TCP (MPTCP) on the listener. MPTCP lets one TCP connection use several network interfaces at once, which improves throughput and resilience. If the kernel does not support MPTCP or has it disabled, Ferron logs a warning and falls back to standard TCP.
+
+Default: disabled.
 
 ```ferron
 {
@@ -131,12 +128,13 @@ include "sites/*.ferron"
 }
 ```
 
-### Unix domain sockets (Unix only)
+## Unix domain sockets (Unix only)
 
-- `unix <path: string> { ... }`
-  - This directive creates a Unix domain socket listener. You can repeat it to listen on multiple sockets. Each directive accepts a filesystem path and an optional block with `backlog`, `mode`, `owner`, and `group` subdirectives. The path can be absolute (`/run/ferron.sock`) or relative (`ferron.sock`, `tmp/ferron.sock`). Relative paths are resolved against the server's current working directory and canonicalized when the target exists, otherwise kept as-is. Default: none
+`unix <path: string> { ... }` creates a Unix domain socket listener. Repeat the directive to listen on several sockets. Each directive takes a filesystem path and an optional block with `backlog`, `mode`, `owner`, and `group`.
 
-The `unix` directive also supports the subdirectives below:
+The path can be absolute (`/run/ferron.sock`) or relative (`ferron.sock`, `tmp/ferron.sock`). A relative path resolves against the server working directory and is canonicalized when the target exists. Otherwise Ferron keeps the path as written.
+
+Default: none.
 
 | Directive | Arguments                  | Description                     | Default                       |
 | --------- | -------------------------- | ------------------------------- | ----------------------------- |
@@ -144,17 +142,6 @@ The `unix` directive also supports the subdirectives below:
 | `mode`    | `<mode: string\|integer>`  | File permissions for the socket | OS default respecting `umask` |
 | `owner`   | `<user: string\|integer>`  | Owner of the socket             | Process user                  |
 | `group`   | `<group: string\|integer>` | Group of the socket             | Process group                 |
-
-> [!note]
-> When at least one `unix` directive is present, Ferron disables all TCP and QUIC (for HTTP/3) listeners and serves HTTP only over Unix sockets. Host blocks are then served via the Unix sockets no matter what are their port assignments (excluding IP blocks, since Unix sockets do not use IP addresses), meaning `Host` header and TLS SNI still select the virtual host. To serve both TCP and Unix at once, do not use `unix` (run a separate TCP terminator or reverse proxy in front of the Unix socket instead).
-
-> [!important]
->
-> - `unix` is available only on Unix-like systems. The validator rejects it on Windows.
-> - Socket paths must be shorter than 108 bytes (`sun_path` limit), must not contain `NUL`, and must not already exist as a non-socket file.
-> - Parent directories are created automatically. Stale socket files from a previous run are removed if they are sockets; otherwise startup fails.
-
-**Configuration example:**
 
 ```ferron
 {
@@ -165,25 +152,35 @@ The `unix` directive also supports the subdirectives below:
         group ferron
     }
 
-    # Relative path (resolved against the server's working directory)
-    # (for example, /var/log/ferron when using the default Docker image).
+    # Relative path, resolved against the server working directory.
+    # The default Docker image uses /var/log/ferron.
     unix "ferron.sock" {
         mode "0660"
     }
 
-    # Multiple sockets (see above)
     unix /run/ferron-api.sock {
         mode "0660"
     }
 }
 ```
 
-### Reverse proxy connection limits
+> [!note]
+> With at least one `unix` directive, Ferron disables all TCP and QUIC (HTTP/3) listeners and serves HTTP only over Unix sockets. Host blocks then use the Unix sockets regardless of their port assignments, except for IP blocks because Unix sockets have no IP address. The `Host` header and TLS SNI still select the virtual host.
+>
+> To serve TCP and Unix at the same time, do not use `unix`. Run a separate TCP terminator or reverse proxy in front of the Unix socket instead.
 
-- `concurrent_conns <limit: integer>`
-  - This directive sets the global maximum number of concurrent TCP connections maintained in the reverse proxy keep-alive connection pool. All hosts that use the `proxy` directive share the limit. Unix socket connections have no limit. Default: `concurrent_conns 16384`
+> [!important]
+> `unix` works only on Unix-like systems. The validator rejects it on Windows.
+>
+> A socket path must be shorter than 108 bytes (`sun_path` limit), must not contain `NUL`, and must not already exist as a non-socket file.
+>
+> Ferron creates parent directories automatically. It removes stale socket files from a previous run when they are sockets. Otherwise startup fails.
 
-**Configuration example:**
+## Reverse proxy connection limits
+
+`concurrent_conns <limit: integer>` sets the global maximum number of concurrent TCP connections in the reverse proxy keep-alive pool. Every host that uses `proxy` shares the limit. Unix socket connections have no limit.
+
+Default: `16384`.
 
 ```ferron
 {
@@ -191,35 +188,30 @@ The `unix` directive also supports the subdirectives below:
 }
 ```
 
-### Admin API
+## Admin API
 
-The `admin` block configures the built-in administration endpoints. If the `admin` block is absent, Ferron disables the admin API entirely.
+The `admin` block configures the built-in administration endpoints. Without an `admin` block, Ferron disables the admin API.
 
-- `listen <address: string>` (`admin-api`)
-  - This directive sets the socket address for the admin HTTP listener. Default: `listen 127.0.0.1:8081`
+| Directive     | Arguments            | Default            | Description                                                             |
+| ------------- | -------------------- | ------------------ | ----------------------------------------------------------------------- |
+| `listen`      | `<address: string>`  | `127.0.0.1:8081`   | Socket address for the admin HTTP listener.                             |
+| `auth_token`  | `<token: string>`    | none               | Bearer token. Clients send `Authorization: Bearer <token>`.             |
+| `health`      | `[bool]`             | `true`             | Enables `GET /health`.                                                  |
+| `status`      | `[bool]`             | `true`             | Enables `GET /status`.                                                  |
+| `config`      | `[bool]`             | `true`             | Enables `GET /config`.                                                  |
+| `reload`      | `[bool]`             | `true`             | Enables `POST /reload`.                                                 |
+| `reload_get`  | `[bool]`             | `true`             | Enables `GET /reload`.                                                  |
+| `runtime`     | `[bool]`             | `true`             | Enables `GET /runtime`.                                                 |
 
-- `auth_token <token: string>` (`admin-api`)
-  - This directive sets a bearer token for authenticating admin API requests. When set, clients must send `Authorization: Bearer <token>` header. The `/health` endpoint is always exempt from authentication (required by load balancers and orchestrators). Default: none (authentication disabled)
+`/health` returns `200 OK`, or `503 Service Unavailable` during shutdown. It is always exempt from authentication, because load balancers and orchestrators require it.
 
-- `health [bool]` (`admin-api`)
-  - This directive enables the `GET /health` endpoint. It returns `200 OK` or `503 Service Unavailable` during shutdown. Default: `health true`
+`/status` returns JSON with uptime, active connections, request count, and reload count.
 
-- `status [bool]` (`admin-api`)
-  - This directive enables the `GET /status` endpoint. It returns JSON with uptime, active connections, request count, and reload count. Default: `status true`
+`/config` returns the current effective configuration as JSON with sensitive values redacted.
 
-- `config [bool]` (`admin-api`)
-  - This directive enables the `GET /config` endpoint. It returns the current effective configuration as sanitized JSON (sensitive fields redacted). Default: `config true`
+`POST /reload` triggers a configuration reload, equivalent to `SIGHUP`. `GET /reload` returns the current reload status.
 
-- `reload [bool]` (`admin-api`)
-  - This directive enables the `POST /reload` endpoint. It triggers a configuration reload equivalent to SIGHUP. Default: `reload true`
-
-- `reload_get [bool]` (`admin-api`)
-  - This directive enables the `GET /reload` endpoint. It returns the current reload status. Default: `reload_get true`
-
-- `runtime [bool]` (`admin-api`)
-  - This directive enables the `GET /runtime` endpoint. It returns runtime information such as thread count and io_uring status. Default: `runtime true`
-
-**Configuration example:**
+`/runtime` returns runtime information such as thread count and `io_uring` status.
 
 ```ferron
 {
@@ -238,194 +230,25 @@ The `admin` block configures the built-in administration endpoints. If the `admi
 ```
 
 > [!note]
-> The `/config` endpoint redacts sensitive directive names, such as: `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`, `bearer`, `passwd`, `htpasswd`.
+> `/config` redacts sensitive directive names, including `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`, `bearer`, `passwd`, and `htpasswd`.
 
-### Observability
+## Admin API security
 
-The `observability` block configures per-host event sinks for logging and metrics. Multiple `observability` directives for the same host accumulate event sinks.
+The admin API is a privileged control plane with full access to the server configuration and the reload capability. It has no encryption and no authentication by default. `auth_token` enables bearer token authentication. Treat the admin API with the same care as a root shell on the server.
 
-- `provider <name: string>` (`observability-consolelog`, `observability-logfile`)
-  - This directive sets the observability provider name. Required when observability is enabled through the block form. Supported providers: `console` (`observability-consolelog`), `file` (`observability-logfile`). Default: none
+### Risks of binding to `0.0.0.0`
 
-**Configuration example:**
-
-```ferron
-example.com {
-    observability {
-        provider console
-    }
-}
-```
-
-#### `provider console`
-
-The bundled `console` provider (`observability-consolelog`) takes no additional subdirectives and writes supported observability events to Ferron logs.
-
-#### `provider file`
-
-The bundled `file` provider (`observability-logfile`) writes observability events to specified log files.
-
-| Additional subdirective  | Arguments  | Description                                            | Default         |
-| ------------------------ | ---------- | ------------------------------------------------------ | --------------- |
-| `access_log`             | `<string>` | File path for access log output.                       | none            |
-| `error_log`              | `<string>` | File path for error log output.                        | none            |
-| `format`                 | `<string>` | Access log formatter name (`text` or `json`).          | `text`          |
-| `error_format`           | `<string>` | Application log formatter name (`text` or `json`).     | `text`          |
-| `access_log_rotate_size` | `<number>` | Maximum access log file size in bytes before rotation. | disabled        |
-| `access_log_rotate_keep` | `<number>` | Number of rotated access log files to keep.            | none (no limit) |
-| `error_log_rotate_size`  | `<number>` | Maximum error log file size in bytes before rotation.  | disabled        |
-| `error_log_rotate_keep`  | `<number>` | Number of rotated error log files to keep.             | none (no limit) |
-
-**Configuration example:**
-
-```ferron
-example.com {
-    observability {
-        provider file
-
-        access_log /var/log/ferron/access.log
-        error_log /var/log/ferron/error.log
-        format text
-        error_format json
-    }
-}
-```
-
-> [!note]
->
-> - Ferron creates log files in append mode if they do not exist.
-> - Ferron buffers writes and flushes them every 1 second and on shutdown.
-> - If you omit `access_log`, Ferron ignores access events, and the same applies to `error_log`.
-> - With rotation on, Ferron renames the current log file to `<filename>.1`, shifts rotated files up, and creates a new log file.
-> - If you set `access_log_rotate_keep` (or `error_log_rotate_keep`) to `0`, Ferron deletes the log file on rotation instead of renaming it.
-
-## Observability aliases
-
-Ferron has shorthand directives for common observability configurations. Ferron transforms these automatically into equivalent `observability` blocks.
-
-### `log`
-
-The `log` directive is shorthand for configuring access logging with the `file` provider.
-
-```ferron
-example.com {
-    # These are equivalent:
-
-    log /var/log/access.log {
-        format text
-    }
-
-    observability {
-        provider file
-        access_log /var/log/access.log
-        format text
-    }
-}
-```
-
-Examples:
-
-```ferron
-example.com {
-    # Enable access logging with default format
-    log /var/log/access.log
-
-    # Enable with custom format
-    log /var/log/access.log {
-        format json
-    }
-
-    # Enable with log rotation (100MB max, keep 5 rotated files)
-    log /var/log/access.log {
-        access_log_rotate_size 104857600
-        access_log_rotate_keep 5
-    }
-
-    # Disable access logging
-    log false
-}
-```
-
-### `error_log`
-
-The `error_log` directive is shorthand for configuring error logging with the `file` provider.
-
-```ferron
-example.com {
-    # These are equivalent:
-
-    error_log /var/log/error.log
-
-    observability {
-        provider file
-        error_log /var/log/error.log
-    }
-}
-```
-
-Examples:
-
-```ferron
-example.com {
-    # Enable error logging
-    error_log /var/log/error.log
-
-    # Enable with log rotation (50MB max, keep 3 rotated files)
-    error_log /var/log/error.log {
-        error_log_rotate_size 52428800
-        error_log_rotate_keep 3
-    }
-
-    # Enable with JSON application log formatting
-    error_log /var/log/error.log {
-        error_format json
-    }
-
-    # Disable error logging
-    error_log false
-}
-```
-
-### `console_log`
-
-The `console_log` directive is shorthand for configuring console-based observability.
-
-```ferron
-example.com {
-    # These are equivalent:
-
-    console_log {
-        format json
-    }
-
-    observability {
-        provider console
-        format json
-    }
-}
-```
-
-## Admin API
-
-The admin API is a built-in HTTP interface for server health checks, status monitoring, configuration inspection, and reload control. It is meant for local access and debugging purposes.
-
-### Security considerations
-
-The admin API is a privileged control plane with full server configuration access and reload capability. It has no encryption and no authentication by default. You can enable bearer token authentication with the `auth_token` directive. Treat it with the same security posture as a root shell on your server.
-
-#### Risks of binding to `0.0.0.0`
-
-Setting `listen "0.0.0.0:<port>"` makes the admin API completely open to any client that can reach the host. Omitting the bind address defaults to all interfaces and has the same effect. This can happen accidentally in containerized environments (for example, Docker with bridge networking) or misconfigured networks.
+`listen "0.0.0.0:<port>"` opens the admin API to any client that can reach the host. Omitting the bind address defaults to all interfaces and has the same effect. This can happen by accident in a containerized environment, for example Docker with bridge networking, or on a misconfigured network.
 
 Consequences of an open admin API:
 
-- **Denial of service**: Anyone can send `POST /reload` continuously, causing reload loops that degrade performance.
-- **Configuration leak**: `GET /config` reveals the full server configuration, including hostnames, upstream addresses, and routing rules, with sensitive values redacted.
-- **Service disruption**: Anyone can use reload with modified configuration to disable any endpoint or inject misconfigured directives.
+- Denial of service: anyone can send `POST /reload` in a loop, which degrades performance.
+- Configuration leak: `GET /config` reveals hostnames, upstream addresses, and routing rules. Sensitive values stay redacted.
+- Service disruption: anyone can reload a modified configuration to disable an endpoint or inject a misconfigured directive.
 
-#### Hardening recommendations
+### Hardening
 
-1. **Always bind to localhost** unless you have a specific, secure reason not to:
+1. Bind to localhost unless you have a specific, secure reason not to:
 
    ```ferron
    {
@@ -439,7 +262,7 @@ Consequences of an open admin API:
    }
    ```
 
-2. **Disable unnecessary endpoints**. Only enable the endpoints you need:
+2. Disable endpoints that you do not need:
 
    ```ferron
    {
@@ -453,34 +276,32 @@ Consequences of an open admin API:
    }
    ```
 
-3. **Use a reverse proxy for remote access**. If you need to access the admin API from a remote machine, front it with an authenticating reverse proxy. Do not bind to `0.0.0.0`:
+3. For remote access, front the admin API with an authenticating reverse proxy. Do not bind to `0.0.0.0`:
 
    ```text
    Remote user -> reverse proxy (auth required) -> 127.0.0.1:8081 (admin API)
    ```
 
-4. **Restrict network access at the infrastructure level**. Use firewall rules, security groups, or VPC networking to make sure only trusted hosts can reach the admin port.
+4. Restrict network access at the infrastructure level. Use firewall rules, security groups, or VPC networking so that only trusted hosts reach the admin port.
 
-5. **Monitor admin API access**. Use your observability sinks to track requests to admin endpoints for anomaly detection.
+5. Monitor admin API access with your observability sinks and watch for anomalies.
 
-6. **Never expose the admin API to the public internet**. If you need remote administration, use SSH tunneling:
+6. Never expose the admin API to the public internet. For remote administration, use an SSH tunnel:
 
    ```bash
    ssh -L 8081:127.0.0.1:8081 admin@your-server
    # Then access http://127.0.0.1:8081 locally
    ```
 
-### API reference
+## Admin API endpoints
 
-The admin API is a RESTful interface for server configuration and control. Below are the available endpoints:
+### `GET /health`
 
-#### `GET /health`
+Returns `200 OK` while the server runs, and `503 Service Unavailable` when shutdown starts. Use it for load balancer and orchestration health checks.
 
-It returns `200 OK` while the server runs, or `503 Service Unavailable` when shutdown starts. Suitable for load balancer and orchestration health checks.
+### `GET /status`
 
-#### `GET /status`
-
-Returns JSON with server metrics:
+Returns server metrics as JSON:
 
 ```json
 {
@@ -502,11 +323,11 @@ Returns JSON with server metrics:
 | `observability_events_dropped`  | Total number of observability events dropped due to backpressure. |
 | `observability_event_queue_len` | Approximate current length of the observability event queue.      |
 
-#### `GET /config`
+### `GET /config`
 
-It returns the full effective server configuration as sanitized JSON. Ferron replaces sensitive directives (TLS keys, passwords, tokens) with `"[redacted]"`. Useful for debugging and auditing.
+Returns the full effective configuration as JSON with sensitive directives redacted. Ferron replaces TLS keys, passwords, and tokens with `"[redacted]"`. Use it for debugging and auditing.
 
-#### `GET /reload`
+### `GET /reload`
 
 Returns the current reload status as JSON:
 
@@ -524,11 +345,9 @@ Returns the current reload status as JSON:
 | `last_reload_error` | Error message from the last reload, or `null` if successful. |
 | `active_generation` | The configuration generation number currently in effect.     |
 
-#### `POST /reload`
+### `POST /reload`
 
-It triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process.
-
-Returns the reload status as JSON:
+Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon.
 
 ```json
 {
@@ -542,7 +361,7 @@ Returns the reload status as JSON:
 | `status` | `"reload_initiated"` if the reload is in progress, or `"reload_failed"` if it failed. |
 | `error`  | Error message from the last reload attempt, or `null` if successful.                  |
 
-#### `GET /runtime`
+### `GET /runtime`
 
 Returns the runtime status as JSON:
 
@@ -560,28 +379,189 @@ Returns the runtime status as JSON:
 | `io_uring_supported`       | Whether the current system supports `io_uring`.           |
 | `io_uring_runtime_enabled` | Whether `io_uring` was successfully enabled at runtime.   |
 
+## Observability
+
+The `observability` block configures per-host event sinks for logging and metrics. Several `observability` directives for one host accumulate sinks.
+
+`provider <name: string>` sets the observability provider. It is required when observability is enabled through the block form.
+
+| Value     | Module                     |
+| --------- | -------------------------- |
+| `console` | `observability-consolelog` |
+| `file`    | `observability-logfile`    |
+
+Default: none.
+
+```ferron
+example.com {
+    observability {
+        provider console
+    }
+}
+```
+
+The `console` provider takes no subdirectives. It writes supported observability events to Ferron logs.
+
+The `file` provider writes observability events to log files:
+
+| Subdirective             | Arguments  | Description                                            | Default         |
+| ------------------------ | ---------- | ------------------------------------------------------ | --------------- |
+| `access_log`             | `<string>` | File path for access log output.                       | none            |
+| `error_log`              | `<string>` | File path for error log output.                        | none            |
+| `format`                 | `<string>` | Access log formatter name (`text` or `json`).          | `text`          |
+| `error_format`           | `<string>` | Application log formatter name (`text` or `json`).     | `text`          |
+| `access_log_rotate_size` | `<number>` | Maximum access log file size in bytes before rotation. | disabled        |
+| `access_log_rotate_keep` | `<number>` | Number of rotated access log files to keep.            | none (no limit) |
+| `error_log_rotate_size`  | `<number>` | Maximum error log file size in bytes before rotation.  | disabled        |
+| `error_log_rotate_keep`  | `<number>` | Number of rotated error log files to keep.             | none (no limit) |
+
+```ferron
+example.com {
+    observability {
+        provider file
+
+        access_log /var/log/ferron/access.log
+        error_log /var/log/ferron/error.log
+        format text
+        error_format json
+    }
+}
+```
+
+> [!note]
+> Ferron creates log files in append mode when they do not exist.
+>
+> Ferron buffers writes and flushes them every second and on shutdown.
+>
+> Without `access_log`, Ferron ignores access events. Without `error_log`, it ignores error events.
+>
+> With rotation on, Ferron renames the current log file to `<filename>.1`, shifts the rotated files up, and creates a new log file.
+>
+> With `access_log_rotate_keep` or `error_log_rotate_keep` set to `0`, Ferron deletes the log file on rotation instead of renaming it.
+
+## Observability aliases
+
+Ferron has shorthand directives for common observability configurations. It converts them into equivalent `observability` blocks.
+
+### `log`
+
+`log` configures access logging with the `file` provider.
+
+```ferron
+example.com {
+    # These are equivalent:
+
+    log /var/log/access.log {
+        format text
+    }
+
+    observability {
+        provider file
+        access_log /var/log/access.log
+        format text
+    }
+}
+```
+
+```ferron
+example.com {
+    # Access logging with the default format
+    log /var/log/access.log
+
+    # Access logging with JSON output
+    log /var/log/access.log {
+        format json
+    }
+
+    # Rotation: 100 MB maximum, keep 5 rotated files
+    log /var/log/access.log {
+        access_log_rotate_size 104857600
+        access_log_rotate_keep 5
+    }
+
+    # Disable access logging
+    log false
+}
+```
+
+### `error_log`
+
+`error_log` configures error logging with the `file` provider.
+
+```ferron
+example.com {
+    # These are equivalent:
+
+    error_log /var/log/error.log
+
+    observability {
+        provider file
+        error_log /var/log/error.log
+    }
+}
+```
+
+```ferron
+example.com {
+    error_log /var/log/error.log
+
+    # Rotation: 50 MB maximum, keep 3 rotated files
+    error_log /var/log/error.log {
+        error_log_rotate_size 52428800
+        error_log_rotate_keep 3
+    }
+
+    # JSON application log formatting
+    error_log /var/log/error.log {
+        error_format json
+    }
+
+    # Disable error logging
+    error_log false
+}
+```
+
+### `console_log`
+
+`console_log` configures console-based observability.
+
+```ferron
+example.com {
+    # These are equivalent:
+
+    console_log {
+        format json
+    }
+
+    observability {
+        provider console
+        format json
+    }
+}
+```
+
 ## Best practices
 
-`ferron doctor` reports the following best-practice checks for directives on this page.
+`ferron doctor` reports these checks for directives on this page.
 
 ### Log rotation
 
-- **`log` without rotation**: File-based access logging should include `access_log_rotate_size` (or an external log rotation policy) to prevent unbounded disk growth.
-- **`error_log` without rotation**: File-based error logging should include `error_log_rotate_size` (or an external log rotation policy).
+- `log` without rotation: file-based access logging should set `access_log_rotate_size` or use an external rotation policy, so log files do not grow without bound.
+- `error_log` without rotation: file-based error logging should set `error_log_rotate_size` or use an external rotation policy.
 
 ### Default ports
 
-- **Both default ports disabled**: Setting `default_http_port false` and `default_https_port false` means host blocks without explicit ports create no listeners. Make sure all host blocks specify explicit ports, or keep at least one default listener enabled.
+- Both default ports disabled: with `default_http_port false` and `default_https_port false`, host blocks without explicit ports create no listeners. Set explicit ports on every host block, or keep at least one default listener enabled.
 
 ### PROXY protocol
 
-- **`protocol_proxy` enabled**: PROXY protocol trusts addresses from clients. Enable it only on listeners reachable exclusively by trusted load balancers.
+- `protocol_proxy` enabled: the PROXY protocol trusts addresses from clients. Enable it only on listeners that only trusted load balancers can reach.
 
 ### Admin API
 
-- **`admin.listen` on non-loopback address**: The admin API has no encryption and no authentication by default. Use `auth_token` to enable bearer token auth. Bind to a loopback address or restrict access via network controls.
-- **`admin` without `auth_token`**: The admin API has no authentication by default. Use `auth_token` to require a bearer token on all endpoints except `/health` when the listener is reachable from untrusted networks.
+- `admin.listen` on a non-loopback address: the admin API has no encryption and no authentication by default. Enable `auth_token`, bind to a loopback address, or restrict access with network controls.
+- `admin` without `auth_token`: add `auth_token` to require a bearer token on every endpoint except `/health` when the listener is reachable from untrusted networks.
 
 ### Location blocks
 
-- **No duplicate `location` block pathnames**: Duplicate pathnames in location blocks cause the server to return an ambiguous response, so avoid them.
+- Duplicate `location` pathnames: a duplicate pathname makes the server response ambiguous. Give each `location` a distinct path.

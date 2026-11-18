@@ -3,33 +3,33 @@ title: "Configuration formatting"
 description: "Using ferron-fmt to format, check, and style Ferron configuration files."
 ---
 
-This page documents the `ferron-fmt` tool, a formatter for Ferron configuration files. It formats `.conf` files with configurable indentation, quote style, and other styling options.
+`ferron-fmt` formats Ferron configuration files. Indentation, quote style, blank lines, and directive order are configurable.
 
 > [!tip]
-> The idiomatic Ferron 3 configuration style uses bare strings without quotes (when possible), 4-space indentation, and bare boolean flags. The `ferron-fmt` formatter also supports raw string literals for regex patterns and defaults to this style.
+> The idiomatic Ferron 3 style uses bare strings without quotes when possible, 4-space indentation, and bare boolean flags. `ferron-fmt` defaults to this style and also preserves raw string literals for regex patterns.
 
 ## What it does
 
-`ferron-fmt` parses a Ferron configuration file and rewrites it with consistent formatting. It handles:
+`ferron-fmt` parses a configuration file and rewrites it with consistent formatting. It handles:
 
-- **Indentation**: configurable width and style (spaces or tabs)
-- **Quote style**: auto (bare when possible, quoted when necessary), always double-quoted, or always bare
-- **Blank lines**: normalization with a configurable maximum consecutive blank lines
-- **Trailing newline**: optional trailing newline
-- **Directive sorting**: optional alphabetical sorting of directives within blocks
-- **Comment preservation**: the formatter preserves inline and trailing comments
-- **Quoting normalization**: bare strings when possible, double-quoted when necessary (for example, values that would be ambiguous)
-- **Raw string preservation**: the formatter preserves `r"..."` syntax for strings that were originally raw
-- **Line continuation preservation**: the formatter preserves `\` at end of line at the same position
+- Indentation: configurable width and style (spaces or tabs).
+- Quote style: bare when possible, always double-quoted, or always bare.
+- Blank lines: normalization with a configurable maximum.
+- Trailing newline: optional.
+- Directive sorting: optional alphabetical order within blocks.
+- Comments: inline and trailing comments are preserved.
+- Quoting: bare strings when possible, double-quoted when necessary.
+- Raw strings: `r"..."` syntax is preserved for strings that were originally raw.
+- Line continuations: `\` at end of line stays at the same position.
 
-Use this tool to make sure formatting is consistent across multiple Ferron configuration files.
+Use the formatter to keep style consistent across configuration files.
 
 > [!tip]
-> The formatter is idempotent (meaning running it multiple times on the same file produces identical output).
+> The formatter is idempotent. Running it again on its own output produces identical output.
 
 ## Installation
 
-All Ferron distributions include `ferron-fmt` alongside the main server binary. See [Installation](/docs/installation) for details.
+All Ferron distributions include `ferron-fmt` alongside the main server binary. See [Getting started](/docs/getting-started) for installation options.
 
 ## Usage
 
@@ -63,7 +63,7 @@ cat ferron.conf | ferron-fmt
 ferron-fmt --check ferron.conf
 ```
 
-Exits with code 0 if the file is already formatted, 1 if not. Useful for CI:
+Exits with code 0 if the file is already formatted, and 1 if not. This suits CI:
 
 ```bash
 ferron-fmt --check ferron.conf && echo "Formatted" || echo "Needs formatting"
@@ -109,22 +109,13 @@ example.com {
 ferron-fmt --indent-style tabs ferron.conf
 ```
 
-```ferron
-example.com {
-    root "/var/www/html"
-    tls {
-        provider "manual"
-        cert "/etc/ssl/cert.pem"
-        key "/etc/ssl/key.pem"
-    }
-}
-```
+The output indents each level with one tab character instead of spaces.
 
 ## Quote style
 
 ### Auto (default)
 
-Bare strings when possible, double-quoted when necessary (this produces idiomatic Ferron 3 configuration style):
+Bare strings where possible, double-quoted where necessary. This produces idiomatic Ferron 3 style:
 
 ```bash
 ferron-fmt --quote-style auto ferron.conf
@@ -141,15 +132,11 @@ example.com {
 }
 ```
 
-Values that require quoting (would be ambiguous):
+`auto` keeps double quotes when a value cannot be a bare string. A value with spaces is one example:
 
 ```ferron
 example.com {
-    root "/var/www/html"
-    tls {
-        provider "manual"
-        cert "/etc/ssl/cert.pem"
-    }
+    header X-Example "value with spaces"
 }
 ```
 
@@ -161,11 +148,11 @@ ferron-fmt --quote-style always-double ferron.conf
 
 ```ferron
 example.com {
-    root /var/www/html
+    root "/var/www/html"
     tls {
-        provider manual
-        cert /etc/ssl/cert.pem
-        key /etc/ssl/key.pem
+        provider "manual"
+        cert "/etc/ssl/cert.pem"
+        key "/etc/ssl/key.pem"
     }
 }
 ```
@@ -188,21 +175,21 @@ example.com {
 ```
 
 > [!note]
-> `always-bare` produces a parse error if the formatter cannot represent a value as a bare string. For example, values containing spaces or special characters cause this error.
+> `always-bare` fails when a value cannot be written as a bare string, for example a value with spaces or special characters.
 
 ## Preserving original quoting
 
-By default, `ferron-fmt` normalizes quoting according to the configured quote style. Use `--no-normalize-quotes` to preserve the original quoting:
+By default, `ferron-fmt` normalizes quoting to the configured quote style. `--no-normalize-quotes` preserves the original quoting:
 
 ```bash
 ferron-fmt --no-normalize-quotes ferron.conf
 ```
 
-This is useful when you want consistent indentation but do not want to change the quoting style.
+Use it when you want consistent indentation but no change to quoting.
 
 ## Trailing newline
 
-By default, `ferron-fmt` adds a trailing newline at the end of the file:
+`ferron-fmt` adds a trailing newline by default. To omit it:
 
 ```bash
 ferron-fmt --no-trailing-newline ferron.conf
@@ -210,7 +197,7 @@ ferron-fmt --no-trailing-newline ferron.conf
 
 ## Sorting directives
 
-By default, directives are output in the order they appear in the source. Use `--sort-directives` to sort them alphabetically:
+By default, directives keep their order from the source. `--sort-directives` sorts them alphabetically:
 
 ```bash
 ferron-fmt --sort-directives ferron.conf
@@ -218,32 +205,31 @@ ferron-fmt --sort-directives ferron.conf
 
 ```ferron
 example.com {
+    compressed false
+    directory_listing false
     root /var/www/html
 
     tls {
-        provider manual
         cert /etc/ssl/cert.pem
         key /etc/ssl/key.pem
+        provider manual
     }
-
-    # Directives are sorted alphabetically:
-    # compress > directory_listing > root > tls
 }
 ```
 
 ## Blank lines
 
-`ferron-fmt` preserves blank lines between directives up to the configured maximum (default: 2):
+`ferron-fmt` keeps blank lines between directives up to the configured maximum (default: 2):
 
 ```bash
 ferron-fmt --max-blank-lines 1 ferron.conf
 ```
 
-This collapses consecutive blank lines beyond the limit.
+Runs of blank lines longer than the limit collapse to the limit.
 
 ## Raw strings
 
-The formatter preserves raw string syntax (`r"..."`) for strings that were originally written as raw strings in the input. Raw strings are output with no escape processing, making them ideal for regex patterns:
+The formatter keeps raw string syntax (`r"..."`) for strings that were raw in the input. A raw string is written without escape processing, which suits regex patterns:
 
 ```ferron
 match api_request {
@@ -251,30 +237,28 @@ match api_request {
 }
 ```
 
-Running the formatter on this input keeps the `r"..."` syntax intact. Regular quoted strings (`"..."`) are not converted to raw strings.
+The formatter leaves the `r"..."` syntax intact. It does not convert quoted strings (`"..."`) to raw strings.
 
 > [!note]
 > Raw strings do not support interpolation. The formatter does not convert interpolated strings to raw strings.
 
 ## Line continuations
 
-The formatter preserves line continuations (`\` at end of line) that were present in the original input. This is useful for splitting long directives across multiple lines:
+The formatter keeps the line continuations (`\` at end of line) that were in the input. This helps with long directives:
 
 ```ferron
 example.com {
-    # This is just an example directive
-    example_proxy http://localhost:3000 \
-      http://localhost:3001
+    index index.html \
+      index.htm
 }
 ```
 
-After formatting, the formatter preserves the continuation at the same position. Line continuations with trailing comments are also preserved:
+The continuation stays at the same position. A continuation with a trailing comment is preserved too:
 
 ```ferron
 example.com {
-    # This is just an example directive
-    example_proxy http://localhost:3000 \ # first backend
-      http://localhost:3001
+    index index.html \ # first choice
+      index.htm
 }
 ```
 

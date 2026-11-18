@@ -1,13 +1,13 @@
 ---
 title: "Configuration: OTLP observability"
-description: "OpenTelemetry Protocol (OTLP) export configuration for logs, metrics, and traces."
+description: "Export logs, metrics, and traces to OpenTelemetry collectors over OTLP."
 ---
 
-This page documents the OTLP (OpenTelemetry Protocol) observability configuration for Ferron. The `observability-otlp` module exports logs, metrics, and traces to OpenTelemetry collectors. This allows integration with observability platforms such as Jaeger, Loki, Prometheus, and commercial APM solutions.
+The `observability-otlp` module exports logs, metrics, and traces to OpenTelemetry collectors. You can send the data to Jaeger, Loki, Prometheus, or a commercial APM.
 
 ## Directives
 
-You configure OTLP export via `observability` blocks with `provider otlp`:
+Configure OTLP export in an `observability` block with `provider otlp`:
 
 ```ferron
 example.com {
@@ -23,30 +23,34 @@ example.com {
 }
 ```
 
-### Signal sub-blocks
+### Signals
 
-You configure each signal type (`logs`, `metrics`, `traces`) independently. Omitting a signal disables it for that host.
+Each signal has its own endpoint. When you omit a signal, it is disabled for that host.
 
-| Directive | Arguments    | Description            | Default  |
-| --------- | ------------ | ---------------------- | -------- |
-| `logs`    | `<endpoint>` | OTLP logs endpoint.    | disabled |
+| Directive | Arguments    | Purpose              | Default  |
+| --------- | ------------ | -------------------- | -------- |
+| `logs`    | `<endpoint>` | OTLP logs endpoint.  | disabled |
 | `metrics` | `<endpoint>` | OTLP metrics endpoint. | disabled |
-| `traces`  | `<endpoint>` | OTLP traces endpoint.  | disabled |
+| `traces`  | `<endpoint>` | OTLP traces endpoint. | disabled |
 
-Each signal sub-block supports these nested directives:
+Each signal sub-block accepts these directives:
 
 | Directive       | Arguments  | Description                                                      | Default                                      |
 | --------------- | ---------- | ---------------------------------------------------------------- | -------------------------------------------- |
-| `protocol`      | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` (port 4317), `http/protobuf` (others) |
+| `protocol`      | `<string>` | Transport protocol: `grpc`, `http/protobuf`, or `http/json`.     | `grpc` (port 4317), `http/protobuf` (others) |
 | `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC).      | none                                         |
-| `gzip`          | `[bool]`   | Compress export requests with gzip (HTTP and gRPC).              | `false`                                      |
+| `gzip`          | `[bool]`   | Compress export requests with gzip. Works for HTTP and gRPC.     | `false`                                      |
 
-The `logs` and `traces` sub-blocks also support batching tuning:
+### Batching
+
+The `logs` and `traces` sub-blocks support batching tuning:
 
 | Directive           | Arguments    | Description                                       | Default |
 | ------------------- | ------------ | ------------------------------------------------- | ------- |
 | `export_interval`   | `<duration>` | Flush interval for a partially full export batch. | `5s`    |
-| `export_batch_size` | `<number>`   | Number of finished items that trigger an export.  | `512`   |
+| `export_batch_size` | `<number>`   | Finished items that trigger an export.            | `512`   |
+
+### Metrics collection tuning
 
 The `metrics` sub-block supports collection tuning:
 
@@ -56,7 +60,7 @@ The `metrics` sub-block supports collection tuning:
 | `exemplars`         | `[bool]`     | Attach the last sampled measurement per series as an exemplar.                                   | `true`  |
 | `native_histograms` | `[bool]`     | Aggregate histograms with the exponential layout. Set to `false` for explicit bucket boundaries. | `true`  |
 
-Durations accept a number (seconds), a float (seconds), or a quoted string such as `"10s"`, `"5m"`, or `"1h"`.
+Durations accept a number in seconds, a float in seconds, or a quoted string such as `"10s"`, `"5m"`, or `"1h"`.
 
 Example with per-signal tuning:
 
@@ -80,10 +84,10 @@ example.com {
 ```
 
 > [!tip]
-> If you have connection issues, verify collector endpoints are reachable with `curl -v https://collector:4317` and check your firewall rules.
+> If the collector connection fails, check reachability with `curl -v https://collector:4317` and check the firewall rules.
 
 > [!note]
-> Exemplar export follows the OpenTelemetry convention: only the last sample per series is kept, and only when the sample carries a trace and span ID.
+> Exemplar export follows the OpenTelemetry convention. Ferron keeps only the last sample per series, and only when the sample carries a trace ID and span ID.
 
 ### Global options
 
@@ -91,15 +95,15 @@ example.com {
 | ----------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
 | `service_name`    | `<string>` | OTLP resource service name.                                                                                                           | `"ferron"` |
 | `no_verification` | `[bool]`   | Disable TLS certificate verification. Use with caution.                                                                               | `false`    |
-| `log_style`       | `<string>` | Log style for log records. `legacy` keeps the `message` body. `modern` publishes a `summary` with typed attributes and remaps fields. | `"modern"` |
-| `authorization`   | `<string>` | Fallback HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC), in case per-signal one is not configured.                        | none       |
+| `log_style`       | `<string>` | Log record style. `legacy` keeps the `message` body. `modern` publishes a `summary` with typed attributes and remaps fields.           | `"modern"` |
+| `authorization`   | `<string>` | Fallback HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC), when a signal has no value of its own.                           | none       |
 
 > [!tip]
-> The OTLP resource automatically includes `process.pid` and `process.start_time` attributes. These attributes let backends distinguish concurrent processes (same PID range after restart) from sequential lifetimes (different start times). This prevents cumulative counters from adjacent process lifetimes from mixing in dashboards.
+> OTLP resources include `process.pid` and `process.start_time` attributes. Backends use them to separate process lifetimes, so counters from different lifetimes do not mix.
 
 ### Baggage promotion
 
-The `baggage` sub-directive promotes specific W3C Baggage keys into telemetry attributes for logs, metrics, and traces. Use it to add request-scoped context (such as tenant IDs or user roles) to your telemetry signals without custom instrumentation.
+The `baggage` sub-directive promotes W3C Baggage keys into telemetry attributes for logs, metrics, and traces. Use it to add request-scoped context, such as tenant IDs or user roles, without custom instrumentation.
 
 ```ferron
 {
@@ -119,31 +123,33 @@ The `baggage` sub-directive promotes specific W3C Baggage keys into telemetry at
 }
 ```
 
-Each `key` entry configures one baggage key to promote:
+Each `key` entry configures one baggage key:
 
-| Nested directive | Arguments           | Description                                                                                     | Default                 |
-| ---------------- | ------------------- | ----------------------------------------------------------------------------------------------- | ----------------------- |
-| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                       | none                    |
-| `attribute`      | `<string>`          | The OpenTelemetry attribute name to use.                                                        | same as the baggage key |
-| `signals`        | `<string>...`       | Which signals to emit the attribute on. Values: `traces`, `logs`, `metrics`.                    | all signals             |
-| `max_distinct`   | `<number> \| false` | Maximum distinct values for metrics before dropping. Prevents high-cardinality label explosion. | 100                     |
+| Directive      | Arguments           | Description                                                                                     | Default                 |
+| -------------- | ------------------- | ----------------------------------------------------------------------------------------------- | ----------------------- |
+| `key`          | `<string>`          | W3C Baggage key to extract. Required.                                                           | none                    |
+| `attribute`    | `<string>`          | OpenTelemetry attribute name.                                                                   | same as the baggage key |
+| `signals`      | `<string>...`       | Signals that receive the attribute: `traces`, `logs`, `metrics`.                                | all signals             |
+| `max_distinct` | `<number> \| false` | Maximum distinct values for metrics before dropping. Prevents high-cardinality label explosion.  | 100                     |
 
 > [!tip]
-> Ferron parses the `baggage` header and attaches it to spans automatically. Use the `baggage` sub-directive to promote specific keys into telemetry attributes.
+> Ferron parses the `baggage` header and attaches it to spans. Use `baggage` to promote specific keys into telemetry attributes.
 
 > [!info]
-> You configure trace sampling in the `http` block. See [Tracing](/docs/configuration/observability/tracing#trace-sampling) for details on configuring sampling modes, ratio-based sampling, and attribute-based sampling.
+> Configure trace sampling in the `http` block. See [Tracing](/docs/configuration/observability/tracing#trace-sampling) for sampling modes, ratio-based sampling, and attribute-based sampling.
 
 ### Log style
 
-The `log_style` directive selects how log records go over OTLP:
+The `log_style` directive selects the format of OTLP log records:
 
-- `legacy` - each log record's body is the human-readable `message` text. The `format` directive (when set) continues to apply to log records. This is the existing behavior.
-- `modern` (default) - each log record's body is a short OTEL-friendly `summary` (for example, `"Upstream circuit opened"`). Per-event attributes use OpenTelemetry types (string, boolean, integer, float). The `format` directive does not apply to log records in this mode. Access logs in modern mode use a body of `"Access log (<protocol>)"`. They set the record timestamp from the access event and remap access-log fields onto OTEL semantic-convention attribute names.
+- `legacy`: the record body is the human-readable `message` text. The `format` directive continues to apply.
+- `modern` (default): the record body is a short OpenTelemetry-friendly `summary`, for example `"Upstream circuit opened"`. Per-event attributes use OpenTelemetry types (string, boolean, integer, float). The `format` directive does not apply.
 
-The most common access-log field remappings in modern mode are:
+In modern mode, access logs use a body of `"Access log (<protocol>)"`. The record timestamp comes from the access event. Access-log fields are remapped to OpenTelemetry semantic-convention attribute names.
 
-| Legacy field                               | OTEL semantic-convention attribute                                 |
+The most common remappings:
+
+| Legacy field                               | OpenTelemetry attribute                                          |
 | ------------------------------------------ | ------------------------------------------------------------------ |
 | `path`                                     | `url.path`                                                         |
 | `path_and_query`                           | `url.full`                                                         |
@@ -160,7 +166,7 @@ The most common access-log field remappings in modern mode are:
 | `duration_secs`                            | `http.server.request.duration`                                     |
 | `header_<name>`                            | `http.request.header.<name>`                                       |
 | `res_header_<name>`                        | `http.response.header.<name>`                                      |
-| `timestamp`, `trace_id`, `span_id`, `*_ip` | dropped (use the record timestamp and standard attributes instead) |
+| `timestamp`, `trace_id`, `span_id`, `*_ip` | dropped. Use the record timestamp and standard attributes instead. |
 | fields with `.`                            | `<field_name>`                                                     |
 | other fields                               | `ferron.custom.<field_name>`                                       |
 
@@ -180,7 +186,8 @@ example.com {
 }
 ```
 
-Setting `log_style modern` together with a `format` directive is not allowed (the validator errors out when you set both).
+> [!warning]
+> The validator rejects `log_style modern` together with a `format` directive.
 
 ## Configuration examples
 
@@ -219,30 +226,7 @@ example.com {
 }
 ```
 
-### Multiple protocols
-
-```ferron
-example.com {
-    observability {
-        provider otlp
-        service_name ferron-mixed
-
-        logs http://localhost:4318/v1/logs {
-            protocol http/json
-        }
-
-        metrics http://localhost:4318/v1/metrics {
-            protocol http/protobuf
-        }
-
-        traces http://localhost:4317/v1/traces {
-            protocol grpc
-        }
-    }
-}
-```
-
-### Disabling TLS verification (development only)
+### Disable TLS verification (development only)
 
 ```ferron
 example.com {
@@ -257,7 +241,7 @@ example.com {
 ```
 
 > [!warning]
-> Only disable TLS certificate verification with `no_verification` for development or testing with self-signed certificates.
+> Use `no_verification` only for development or testing with self-signed certificates.
 
 ### Production trace sampling
 
@@ -278,97 +262,43 @@ example.com {
 }
 ```
 
-### Attribute-based trace sampling
-
-```ferron
-example.com {
-    http {
-        trace_sampling attribute_based {
-            default_action sample
-            rules {
-                rule exact http.request.method POST
-                rule prefix url.path /api/
-            }
-        }
-    }
-
-    observability {
-        provider otlp
-        service_name ferron-production
-
-        traces https://collector:4317/v1/traces
-    }
-}
-```
-
-### Baggage promotion with cardinality control
-
-```ferron
-example.com {
-    observability {
-        provider otlp
-        service_name my-service
-
-        traces https://collector:4317/v1/traces
-
-        baggage {
-            key tenant.id {
-                attribute tenant.id
-                signals traces logs
-            }
-
-            key user.role {
-                attribute ferron.user_role
-                max_distinct 100
-            }
-        }
-    }
-}
-```
-
 ## Protocol options
 
-Ferron supports three OTLP protocols for exporting signals:
-
-- `grpc` - gRPC protocol for efficient binary communication, recommended for production environments
-- `http/protobuf` - HTTP with Protocol Buffers encoding, recommended for compatibility with HTTP-based collectors
-- `http/json` - HTTP with JSON encoding, recommended for debugging and development
+| Protocol        | Use                                                        |
+| --------------- | ---------------------------------------------------------- |
+| `grpc`          | Binary gRPC. Recommended for production.                   |
+| `http/protobuf` | HTTP with Protocol Buffers. For HTTP-based collectors.     |
+| `http/json`     | HTTP with JSON. For debugging and development.             |
 
 > [!note]
-> Not all collectors support all protocols. Check your collector's documentation.
+> Not all collectors support all protocols. Check your collector documentation.
 
 ## Signal correlation
 
-Request traces, request-scoped logs, and access logs from the same HTTP request share the same request span context. This happens when Ferron has a request trace. Ferron attaches baggage from the incoming `baggage` header to the span context. This makes baggage available for correlated queries in your observability backend. For example, "show me all logs for trace `abc123`" or "filter by baggage key `userId`".
+Traces, request-scoped logs, and access logs from the same request share one span context when Ferron has a request trace. Ferron attaches values from the incoming `baggage` header to the span context. Backends can then query by baggage key, for example `userId`.
+
+### Trace context propagation
+
+Ferron does the following for each request:
+
+1. Generates a trace ID when the request has no trace context.
+2. Propagates trace context in the W3C headers `traceparent` and `tracestate`.
+3. Propagates baggage in the W3C `baggage` header.
+4. Creates one local request span and nests pipeline, stage, and error-pipeline spans under it.
+5. Adds the request span context to OTLP logs and access logs.
+
+When a request carries a `baggage` header, Ferron parses it and attaches the key-value pairs to the OpenTelemetry span context. Downstream spans and the backend can then read the baggage.
 
 > [!note]
 > All signals from the same request share the same trace context.
 
-### Trace context propagation
+OTLP metrics do not carry per-request trace or span IDs. Correlate metrics by semantic attributes, resource attributes, and timestamps. A metric data point does not join directly to a single trace.
 
-Ferron automatically:
+## Export error logs
 
-1. **Generates trace IDs** for incoming requests without trace context
-2. **Propagates trace context** via W3C Trace Context headers (`traceparent`, `tracestate`)
-3. **Propagates baggage** via the W3C Baggage header (`baggage`)
-4. **Creates one local request span** per request and nests pipeline, stage, and error-pipeline spans under it
-5. **Adds request span context** to OTLP logs and access logs for correlation
+Each provider logs a warning when an export error occurs:
 
-When a request carries a `baggage` header, Ferron parses it and attaches the key-value pairs to the OpenTelemetry span context. This makes baggage available to downstream spans and visible in your observability backend as span baggage attributes.
-
-Metrics exported through OTLP do not carry per-request trace or span IDs. Correlate metrics using their semantic attributes, resource attributes, and timestamps. Do not expect a metric data point to join directly to a single trace.
-
-## Observability
-
-### Logs
-
-- `WARN`. Logged when an error occurs with the logs provider.
-- `WARN`. Logged when an error occurs with the metrics provider.
-- `WARN`. Logged when an error occurs with the traces provider.
-
-### Structured logs
-
-| Description (summary)       | Level | Attributes                              |
+| Summary                     | Level | Attributes                              |
 | --------------------------- | ----- | --------------------------------------- |
 | Error with logs provider    | WARN  | `error.message` (string): error details |
 | Error with metrics provider | WARN  | `error.message` (string): error details |
@@ -376,16 +306,16 @@ Metrics exported through OTLP do not carry per-request trace or span IDs. Correl
 
 ## Best practices
 
-`ferron doctor` reports the following best-practice checks for directives on this page.
+`ferron doctor` reports these checks for directives on this page:
 
-- **`max_distinct false` inside Baggage configuration** - do not set high-cardinality attributes in baggage. They can lead to excessive memory usage and performance issues.
-- **Service name not explicitly set** - when you do not set an explicit `service_name`, Ferron uses the default value `"ferron"`. This might attribute data incorrectly.
-- **"Legacy" log style** - when using `log_style legacy`, OpenTelemetry log reports may be harder to filter or aggregate.
-- **`no_verification` enabled**. Only disable TLS verification for OTLP endpoints when testing.
+- **`max_distinct false` in baggage**: do not set high-cardinality attributes in baggage. They can increase memory use and reduce performance.
+- **Service name not set**: without `service_name`, Ferron uses `"ferron"`. This can attribute data incorrectly.
+- **`log_style legacy`**: OpenTelemetry log reports are harder to filter or aggregate in legacy mode.
+- **`no_verification` enabled**: disable TLS verification only for testing.
 
 ## See also
 
-- [Observability and logging](/docs/configuration/observability/logging) for general observability configuration
-- [Tracing](/docs/configuration/observability/tracing) for W3C Trace Context and Baggage propagation details
-- [Prometheus metrics](/docs/configuration/observability/prometheus) for native Prometheus metrics export
-- [Core directives](/docs/configuration/server/core-directives#observability) for global observability settings
+- [Observability and logging](/docs/configuration/observability/logging): general observability configuration
+- [Tracing](/docs/configuration/observability/tracing): W3C Trace Context and Baggage propagation
+- [Prometheus metrics](/docs/configuration/observability/prometheus): native Prometheus metrics export
+- [Core directives](/docs/configuration/server/core-directives#observability): global observability settings

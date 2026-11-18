@@ -1,27 +1,32 @@
 ---
 title: Status codes & redirects
-description: "Configure Ferron to respond with custom HTTP status codes, or redirect old URLs."
+description: "Return custom HTTP status codes and redirect old URLs with the status directive."
 ---
 
-Redirects help prevent search engines from indexing duplicate content. They also help with legacy website migration.
+The `status` directive returns a custom status code or a redirect.
 
-You can also use HTTP status codes for specific paths to signal temporary maintenance (`503 Service Not Available`) or intentionally-deleted content (`410 Gone`).
-
-Ferron has `status` directive for configuring both custom HTTP status codes, and redirects.
+Redirects keep search engines from indexing duplicate content and keep old links working after a migration. Status codes also signal maintenance (`503 Service Unavailable`) or removed content (`410 Gone`).
 
 > [!info]
-> If you want to rewrite URLs instead of redirecting them, see [URL rewriting](/docs/use-cases/traffic/url-rewriting).
+> To rewrite a URL without a redirect, see [URL rewriting](/docs/use-cases/traffic/url-rewriting).
 
-## Domain canonicalization
+## Redirect variants
 
-A common pattern redirects URLs from a `www` subdomain to an apex domain (or from an apex domain to a `www` subdomain):
+| Code | Meaning              | Method and body |
+| ---- | -------------------- | --------------- |
+| 301  | Moved Permanently    | Changed to GET  |
+| 302  | Found                | Changed to GET  |
+| 307  | Temporary Redirect   | Preserved       |
+| 308  | Permanent Redirect   | Preserved       |
+
+Use 307 or 308 when the client must keep the method and body.
+
+## Canonical domain
+
+Redirect between a `www` subdomain and the apex domain:
 
 ```ferron
 www.example.com {
-    # 301 - Moved Permanently (permanent redirect with always GET)
-    # 302 - Found (temporary redirect with always GET)
-    # 307 - Temporary Redirect (temporary redirect with HTTP method preservation)
-    # 308 - Permanent Redirect (permanent redirect with HTTP method preservation)
     status 308 {
         location "https://example.com{{request.uri}}"
     }
@@ -34,9 +39,7 @@ example.org {
 }
 ```
 
-## Moving domain names
-
-If you want to move domain names, use redirects to help with that:
+## Move to a new domain
 
 ```ferron
 old.example.com {
@@ -50,9 +53,9 @@ example.com {
 }
 ```
 
-## Legacy route migration
+## Migrate a legacy route
 
-Some websites have legacy routes that you must migrate (for example, for legacy clients or software). You can configure Ferron to handle these routes:
+Use a regex to redirect a group of old paths to new paths:
 
 ```ferron
 blog.example.com {
@@ -63,13 +66,12 @@ blog.example.com {
 }
 ```
 
-## Intentional removal
+## Remove content
 
-For intentionally-removed resources, use this configuration:
+Return `410 Gone` for content that will not come back:
 
 ```ferron
 old.example.com {
-    # 410 Gone
     status 410 {
         url /posts/some-deleted-content
     }
@@ -78,14 +80,13 @@ old.example.com {
 
 ## Maintenance mode
 
-When closing a website for maintenance, use this configuration:
+Return `503 Service Unavailable` for the whole host:
 
 ```ferron
 example.com {
-    # 503 Service Unavailable
     status 503
 }
 ```
 
 > [!tip]
-> You can also configure custom maintenance error page, see [Error pages](/docs/use-cases/traffic/error-pages).
+> Add an `error_page` rule to serve a custom maintenance page. See [Error pages](/docs/use-cases/traffic/error-pages).

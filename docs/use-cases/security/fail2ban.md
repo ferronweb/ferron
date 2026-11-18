@@ -3,14 +3,12 @@ title: Fail2ban integration
 description: "Block abusive IPs at the firewall level by combining the Ferron access logs with Fail2ban filters and actions."
 ---
 
-Ferron access logs use an extended variant of Combined Log Format by default (the same format NGINX and Apache use). This makes them easy to parse with [Fail2ban](https://github.com/fail2ban/fail2ban). Fail2ban monitors log files, matches patterns with regex filters, and executes actions (typically `iptables` or `nftables` rules). It bans offending IPs at the firewall level.
+Ferron access logs use an extended Combined Log Format by default, the same format NGINX and Apache use. [Fail2ban](https://github.com/fail2ban/fail2ban) can parse these logs. Fail2ban matches log lines with regex filters and runs actions, usually `iptables` or `nftables` rules. It blocks the offending IP at the firewall.
 
-Unlike the built-in [abuse protection](/docs/use-cases/security/abuse-protection), which bans IPs in memory for a fixed duration, Fail2ban gives persistent bans managed by the OS firewall. Use Fail2ban when you want bans to survive Ferron restarts. Use it also when you need to block IPs across multiple services.
+The built-in [abuse protection](/docs/use-cases/security/abuse-protection) bans IPs in memory for a fixed time. Fail2ban adds persistent firewall bans that survive a Ferron restart and apply to other services.
 
 > [!note]
->
-> - Ferron built-in `abuse_protection` and external Fail2ban serve complementary purposes. Use `abuse_protection` for fast, in-process banning with fine-grained HTTP thresholds. Use Fail2ban for firewall-level bans that persist across restarts.
-> - If you only need temporary bans and do not require firewall integration, prefer `abuse_protection`. It is simpler and does not require external software.
+> Use `abuse_protection` for fast, in-process bans with HTTP-level thresholds. Use Fail2ban for firewall bans that outlive Ferron. If you need only temporary bans, `abuse_protection` is simpler and needs no external software.
 
 ## Prerequisites
 
@@ -24,7 +22,7 @@ sudo apt install fail2ban
 sudo dnf install fail2ban
 ```
 
-Make sure Ferron writes access logs to a file. The default text format works out of the box:
+Make sure Ferron writes access logs to a file. The default text format works without changes:
 
 ```ferron
 example.com {
@@ -170,7 +168,7 @@ bantime  = 86400
 action   = iptables-multiport[name=ferron-scanner, port="http,https"]
 ```
 
-This bans IPs for 24 hours after just 5 probe attempts within 10 minutes. Scanner traffic is almost always malicious.
+This bans IPs for 24 hours after 5 probe attempts within 10 minutes. Scanner traffic is almost always malicious.
 
 ## Using nftables instead of iptables
 

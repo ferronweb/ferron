@@ -3,10 +3,7 @@ title: "Creating a Ferron 3 module"
 description: "Step-by-step guide to create a Ferron 3 ModuleLoader crate and wire it into a custom binary."
 ---
 
-Ferron modules are Rust library crates that implement `ModuleLoader`. You add
-them to a custom binary that depends on `ferron-entrypoint`. Ferron then calls
-your loader during start-up to register stages, providers, validators, and
-directives.
+A Ferron module is a Rust library crate that implements `ModuleLoader`. You add it to a custom binary that depends on `ferron-entrypoint`. Ferron calls the loader during start-up to register stages, providers, validators, and directives.
 
 ## 1. Create the crate
 
@@ -30,10 +27,7 @@ ferron-http = { git = "https://github.com/ferronweb/ferron", branch = "3.x" }
 ```
 
 > [!tip]
-> For local development inside a clone of `ferron`, add a patch that redirects
-> the git source to the local checkout so `cargo build` works offline. See the
-> example modules repository for a complete workspace example:
-> `https://github.com/ferronweb/ferron3-example-modules`.
+> For local development inside a clone of `ferron`, add a patch that redirects the git source to the local checkout, so `cargo build` works offline. The example modules repository (`https://github.com/ferronweb/ferron3-example-modules`) has a complete workspace example.
 
 ## 2. Implement `ModuleLoader`
 
@@ -81,9 +75,9 @@ Ferron calls `ModuleLoader` methods in this order:
 6. `register_stages`
 7. `register_providers`
 8. `register_directives`
-9. `register_modules` (creates `Module` instances, may read finalized config)
+9. `register_modules`, which creates `Module` instances and can read the finalized configuration
 
-All methods have default no-op impls. Override only what you need.
+Every method has a default no-op implementation. Override only the methods you need.
 
 ## 3. Add directives and validators
 
@@ -132,12 +126,11 @@ impl ConfigurationValidator for ExampleValidator {
 }
 ```
 
-Mark directives as used so `UnknownDirective` diagnostics are accurate. Use
-`validate_directive!` and `validate_nested!` helpers from `ferron-core`.
+Mark directives as used, so that `UnknownDirective` diagnostics stay accurate. The `validate_directive!` and `validate_nested!` helpers from `ferron-core` cover most cases.
 
 ## 4. Wire the module into a binary
 
-Create a binary crate that depends on `ferron-entrypoint` and your module:
+Create a binary crate that depends on `ferron-entrypoint` and the module:
 
 ```toml
 [dependencies]
@@ -157,18 +150,14 @@ fn main() {
 ```
 
 > [!note]
-> The binary must recompile when the module list changes. Modules are
-> statically linked. Use `cargo build -r -p your-binary` and run with
-> `./target/release/your-binary run -c ferron.conf`.
+> Modules are statically linked, so the binary must recompile when the module list changes. Build with `cargo build -r -p your-binary` and run with `./target/release/your-binary run -c ferron.conf`.
 
 ## 5. Test the module
 
-- Unit tests: test `Stage::run` with a synthetic `HttpContext` (see
-  `ferron-http-header-append` tests in the example repo).
-- `ferron validate -c ferron.conf`: checks validation without starting.
-- `ferron directives | jq .`: confirms directives appear.
-- E2E: build an image with `e2e/Dockerfile.test` and run `testcontainers`
-  tests that issue real HTTP requests.
+- Unit tests: test `Stage::run` with a synthetic `HttpContext`. The `ferron-http-header-append` tests in the example repository show the pattern.
+- `ferron validate -c ferron.conf`: checks validation without starting the server.
+- `ferron directives | jq .`: confirms that the directives appear in the schema.
+- End-to-end: build an image with `e2e/Dockerfile.test` and run `testcontainers` tests that send real HTTP requests.
 
 ## Choosing the right extension point
 
@@ -179,10 +168,10 @@ fn main() {
 | Pluggable backend (TLS, DNS, observability, log format) | `Provider<C>`                     |
 | New config source                                       | `ConfigurationAdapter`            |
 | Editor support                                          | `Directive` + `DirectiveRegistry` |
-| Config errors / warnings                                | `ConfigurationValidator`          |
+| Config errors and warnings                              | `ConfigurationValidator`          |
 
 ## Next steps
 
 - Read [Module API](/docs/module-development/concepts/module-api) for trait details and helpers.
-- Check [Examples](/docs/module-development/guides/examples) for runnable crates to copy.
+- Check [Examples](/docs/module-development/guides/examples) for runnable crates to use as a starting point.
 - See [Naming conventions](/docs/module-development/guides/naming-conventions) for directive and crate names.

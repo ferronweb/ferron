@@ -3,13 +3,9 @@ title: "Configuration: TLS session ticket keys"
 description: "Stateless TLS session resumption with automatic key rotation and file-backed persistence."
 ---
 
-This page documents TLS session ticket key management. TLS session tickets enable stateless session resumption, allowing clients to resume previous TLS sessions without a full handshake. This improves performance and reduces latency for returning clients.
+TLS session tickets let clients resume an earlier TLS session without a full handshake. This reduces latency for returning clients. Ferron reads ticket keys from a file and can rotate them automatically.
 
-## Configuration
-
-### Basic usage (static keys)
-
-To enable session tickets with a pre-existing key file (works with any TLS provider):
+## Static keys
 
 ```ferron
 example.com {
@@ -24,11 +20,12 @@ example.com {
 }
 ```
 
-This configuration validates the key file and enables session tickets. Ferron loads the keys once at startup.
+Ferron validates the key file and enables session tickets. It loads the keys once at startup.
 
-### Automatic key rotation (recommended for production)
+> [!note]
+> If the key file does not exist and `auto_rotate` is off, Ferron logs a warning and does not use session tickets.
 
-To enable automatic key rotation:
+## Automatic key rotation
 
 ```ferron
 example.com {
@@ -46,38 +43,36 @@ example.com {
 }
 ```
 
-This configuration:
+With `auto_rotate`, Ferron does the following:
 
-- Generates initial keys if the file does not exist
-- Automatically rotates keys every 12 hours
-- Keeps up to 3 keys for decryption of old tickets without interruption
-- Persists new keys to disk atomically on each rotation
+- Creates the file with initial keys when the file does not exist.
+- Rotates the keys every `rotation_interval`.
+- Keeps up to `max_keys` keys, so old tickets remain readable.
+- Writes each new key set to disk atomically.
 
 > [!tip]
-> Automatic session ticket key rotation feature also supports keys being shared across a shared network volume.
+> Automatic rotation also works when several servers share the key file on a network volume.
 
-### Configuration parameters
+## Options
 
 | Parameter           | Type         | Default | Required | Description                   |
 | ------------------- | ------------ | ------- | -------- | ----------------------------- |
 | `file`              | `<string>`   | none    | Yes      | Path to the ticket key file   |
 | `auto_rotate`       | `[<bool>]`   | `false` | No       | Enable automatic key rotation |
 | `rotation_interval` | `<duration>` | `12h`   | No       | How often to rotate keys      |
-| `max_keys`          | `<int>`      | `3`     | No       | Maximum keys to retain (2–5)  |
+| `max_keys`          | `<int>`      | `3`     | No       | Maximum keys to retain (2-5)  |
 
 ## Key file format
 
-The ticket key file follows a specific format:
+The file size must be a multiple of 80 bytes. Each 80-byte record contains:
 
-- File size must be a multiple of 80 bytes
-- Each 80-byte record contains:
-  - **16 bytes**: key name (unique identifier)
-  - **32 bytes**: AES-256 key (encryption/decryption)
-  - **32 bytes**: HMAC-SHA256 key (authentication)
+- 16 bytes: key name
+- 32 bytes: AES-256 key for encryption and decryption
+- 32 bytes: HMAC-SHA256 key for authentication
 
-### Generating a key file manually
+### Generate a key file
 
-If you disable `auto_rotate`, you can generate keys externally:
+When `auto_rotate` is off, generate the keys yourself:
 
 ```bash
 # Generate a single 80-byte key
@@ -92,9 +87,7 @@ openssl rand 80 >> session_tickets.keys
 > [!important]
 > Use cryptographically secure randomness to generate keys.
 
-#### Rotating key files
-
-Rotate ticket keys manually like this:
+### Rotate keys manually
 
 ```bash
 # Rotate keys, keeping some previous keys from the old file
@@ -109,7 +102,7 @@ sudo kill -HUP $(pidof ferron)
 
 ### File permissions
 
-The ticket key file contains sensitive cryptographic material. Set restrictive permissions:
+The key file contains secret material. Set restrictive permissions:
 
 ```bash
 chmod 600 session_tickets.keys
@@ -118,27 +111,27 @@ chown ferron:ferron session_tickets.keys
 
 ## How rotation works
 
-When you enable `auto_rotate`, Ferron automatically generates and rotates session ticket keys. Session ticket keys must have their sizes being multiple of 80 bytes (80 bytes would be the size of one session ticket key).
+Ferron encrypts with the newest key. Older keys remain available for decryption only. At each `rotation_interval`, Ferron generates a key and discards the oldest key. `max_keys` sets how many keys the file keeps.
 
-The newest key would be used for encryption, while the other keys (including older ones) could only be used for decryption.
+Ferron writes the keys to the file, so they survive a server restart.
 
-When a configured `rotation_interval` elapses, the keys are rotated (the oldest key is discarded, while the newest key is generated, added, and used for encryption). The maximum amount of keys that can be used is configured by `max_keys`.
+With `rotation_interval` set to 12 hours and `max_keys` set to 3:
 
-This feature also saves session ticket keys to a file, so they can be reused across server restarts.
+| Time after start | Keys    | Encryption key |
+| ---------------- | ------- | -------------- |
+| 0 hours          | A, B, C | A              |
+| 12 hours         | D, A, B | D              |
+| 24 hours         | E, D, A | E              |
+| 36 hours         | F, E, D | F              |
 
-The process can be described like this (with `rotation_interval` being 12 hours and `max_keys` being set to 3):
-
-- **Right after initialization**: keys A, B and C are present in session ticket key file. Since the key A is the newest, it will be used for encrypting new session tickets.
-- **12 hours after initialization**: a new key D is generated, and the oldest key C is discarded. Keys D, A and B are now present in session ticket key file. Since the key D is the newest, it will be used for encrypting sesion tickets instead of the key A.
-- **24 hours after initialization**: same as before, but a new key E is generated and the oldest key B is discarded.
-- **36 hours after initialization**: same as before, but a new key F is generated and the oldest key A is discarded. The key A is no longer used for decryption session tickets, and old session tickets encrypted with that key cannot be used anymore.
+A ticket encrypted with key A at 0 hours remains valid until 24 hours, when Ferron discards key A.
 
 ## Security considerations
 
-- **Enable `auto_rotate` for production deployments**: this makes sure session tickets are rotated regularly, which reduces the risk of a single key being compromised.
-- **Rotate keys regularly**: this is to make sure key compromises are less effective (recommended: every 12-24 hours)
-- **Do not expose keys publicly**: this would cause key compromise, which causes attackers to be able to decrypt TLS sessions using the keys. This includes logging the keys, world-readable permissions, or committing them to version control.
-- **Do not use predictable values**: doing so would make it easier for attackers to compromise TLS sessions.
+- Enable `auto_rotate` in production. Regular rotation limits the effect of a compromised key.
+- Rotate keys every 12-24 hours.
+- Do not expose the key file. Anyone with a key can decrypt TLS sessions. Do not log keys, make the file world-readable, or commit it to version control.
+- Do not use predictable key values.
 
 ## See also
 

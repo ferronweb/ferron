@@ -1,49 +1,24 @@
 ---
 title: "Configuration: OCSP stapling"
-description: OCSP stapling for TLS. Attaches signed OCSP responses during the TLS handshake.
+description: "Attach signed OCSP responses to the TLS handshake."
 ---
 
-This page documents OCSP stapling configuration (`ocsp-stapler` module). OCSP stapling allows the TLS server to attach a signed OCSP response during the TLS handshake. This eliminates the need for clients to contact the CA OCSP responder directly. This improves:
+OCSP stapling attaches a signed OCSP response to the TLS handshake. Clients then do not contact the CA responder themselves. Ferron fetches responses in the background and refreshes them before they expire. Stapling works with every TLS provider (`manual`, `acme`, `http`, and `local`).
 
-- **Privacy**. Clients no longer reveal their browsing habits to the CA.
-- **Performance**. Eliminates the extra round-trip to the OCSP responder.
-- **Reliability**. Works even when the CA OCSP responder is unreachable.
+Clients learn revocation status without a separate request, so:
 
-OCSP stapling works with all TLS providers (`manual`, `acme`, and so on).
+- Their browsing habits stay private from the CA.
+- Handshakes avoid an extra round-trip to the responder.
+- Validation still works when the responder is unreachable.
 
-## Default behavior (recommended)
+## Enable or disable stapling
 
-OCSP stapling is enabled by default. You do not need any configuration.
+Stapling is enabled by default. You do not need to configure it.
 
-```ferron
-example.com {
-    tls cert.pem key.pem
-}
-```
-
-The server will:
-
-1. Extract the OCSP responder URL from the AIA extension of the certificate
-2. Fetch an OCSP response on startup
-3. Cache and staple the response during TLS handshakes
-4. Automatically refresh responses before they expire
-
-## Explicit configuration
-
-### Enable OCSP stapling
-
-```ferron
-example.com {
-    tls {
-        provider manual
-        cert "cert.pem"
-        key "key.pem"
-        ocsp
-    }
-}
-```
-
-### Disable OCSP stapling
+| Directive    | Effect                    |
+| ------------ | ------------------------- |
+| `ocsp`       | Enable stapling (default) |
+| `ocsp false` | Disable stapling          |
 
 ```ferron
 example.com {
@@ -56,38 +31,25 @@ example.com {
 }
 ```
 
-## OCSP responder URL
+At startup, Ferron reads the OCSP responder URL from the certificate's Authority Information Access (AIA) extension, fetches a response, caches it, and staples it during handshakes. It refreshes responses before they expire. If the certificate has no OCSP URL, Ferron skips stapling for that certificate without an error.
 
-The responder URL comes from the Authority Information Access (AIA) extension of the certificate. Most CA-issued certificates include this automatically.
+> [!warning]
+> A certificate with the OCSP Must-Staple extension (TLS Feature `status_request`, RFC 7633) requires a stapled response. Clients that enforce Must-Staple reject connections without one. Keep stapling enabled for these certificates. Ferron fetches the response at startup, so no extra setting is needed.
 
-If the certificate has no OCSP URL, OCSP stapling is silently skipped for that certificate. The server does not raise an error.
-
-> [!tip]
-> The module automatically detects certificates with the OCSP Must-Staple extension (TLS Feature `status_request`, RFC 7633). Must-Staple certificates require a stapled OCSP response. Clients that enforce Must-Staple will reject connections without one. Preloading makes sure the service fetches the response immediately on startup.
-
-## Troubleshooting
-
-### "OCSP fetch failed: ..."
-
-The OCSP responder returned an error or was unreachable. The service will retry with jitter. The log message includes the common name of the certificate subject. If the CN is unavailable, the message includes a SPKI hash prefix instead. This helps identify which certificate has the issue. Common causes:
-
-- Network issues
-- CA OCSP responder is down
-- Certificate has no OCSP URL in AIA extension
-
-### Verifying stapling
-
-Use OpenSSL to verify that OCSP stapling works:
+## Verify stapling
 
 ```bash
 openssl s_client -connect example.com:443 -status -servername example.com </dev/null 2>/dev/null | grep -A 20 "OCSP response"
 ```
 
-You should see a `OCSP Response Status: successful` in the output.
+The output should include `OCSP Response Status: successful`.
 
 ## Observability
 
-The OCSP background task emits log events and metrics through the configured observability pipeline:
+OCSP emits log events and metrics through the configured observability pipeline.
+
+> [!note]
+> When a fetch fails, Ferron retries with jitter. `OCSP fetch failed` names the certificate common name, or a SPKI hash prefix when the CN is unavailable. Common causes are network problems, an unavailable responder, or a certificate without an OCSP URL in its AIA extension.
 
 ### Logs
 
@@ -100,7 +62,7 @@ The OCSP background task emits log events and metrics through the configured obs
 
 ### Structured logs
 
-In OTLP `log_style modern`, the `summary` field is the log body. The system types `attributes` as OpenTelemetry log record attributes.
+In OTLP `log_style modern`, the `summary` field is the log body. The `attributes` are typed OpenTelemetry log record attributes.
 
 | Summary                          | Level | Attributes                                                                                                                                                                                                                                 |
 | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

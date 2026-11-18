@@ -3,8 +3,7 @@ title: "Obtaining the module API docs"
 description: "How to generate and read Ferron 3 module API docs from the 3.x branch."
 ---
 
-Ferron does not publish its internal API docs on docs.rs for every commit.
-Generate them locally from the `3.x` branch.
+Ferron does not publish its internal API docs on docs.rs for every commit. Generate them locally from the `3.x` branch.
 
 ## Clone Ferron
 
@@ -45,17 +44,15 @@ Domain crates:
 - `ferron-dns` (`types/dns`): `DnsContext`, `DnsClient`
 
 > [!tip]
-> Run `cargo doc --document-private-items --no-deps` to see internal helpers
-> that may not be public but are useful examples.
+> Run `cargo doc --document-private-items --no-deps` to include internal helpers. Some are not public, but they still show useful examples.
 
 ## User-facing docs
 
-User docs live in `docs/` in the Ferron repository. The sidebar is
-`docs/links.json`. Read them on GitHub or locally:
+User docs live in `docs/` in the Ferron repository, and the sidebar is `docs/links.json`. Read them on GitHub or locally:
 
 - `https://github.com/ferronweb/ferron/blob/3.x/docs/module-development/` (this section)
 - `https://github.com/ferronweb/ferron/blob/3.x/docs/configuration/` (directive reference)
 
 ## Keeping docs in sync
 
-When Ferron API changes, regenerate docs and update your `Cargo.toml` branch reference (`branch = "3.x"` always tracks the latest development API).
+When the Ferron API changes, regenerate the docs and update the branch reference in `Cargo.toml`. The reference `branch = "3.x"` always tracks the latest development API.

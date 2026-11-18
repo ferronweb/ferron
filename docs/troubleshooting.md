@@ -3,92 +3,80 @@ title: Troubleshooting
 description: "Quick checks for Ferron 3 when a site, listener, proxy, TLS setup, static files, or config stops working."
 ---
 
-When something goes wrong with Ferron or your site, start here. The fastest way to find the cause is to separate service state, networking, TLS, routing, permissions, and configuration.
+Start with the service state, then check networking, TLS, routing, permissions, and configuration.
 
 > [!tip]
-> If you ask for help, include the Ferron version, your deployment type, a minimal config snippet, and the error-log lines. If you suspect a Ferron bug, open an issue on [GitHub](https://github.com/ferronweb/ferron/issues).
-
-## Quick diagnostic checklist
-
-1. Check the logs.
-2. Confirm Ferron runs.
-3. Test the upstream directly if you proxy requests.
-4. Confirm the port and firewall.
-5. Validate the config after changes.
+> If you ask for help, include the Ferron version, your deployment type, a minimal config snippet, and the error log lines. If you suspect a Ferron bug, open an issue on [GitHub](https://github.com/ferronweb/ferron/issues).
 
 ## First checks
 
 ### Is Ferron running?
 
-Check service status first.
+- Linux (systemd): `sudo systemctl status ferron`
+- Windows Server: `sc query ferron`
+- Docker: `docker ps` and `docker logs <container>`
 
-- Linux (systemd) - `sudo systemctl status ferron`
-- Windows Server - `sc query ferron`
-- Docker - `docker ps` and `docker logs <container>`
+Restart the service and read the logs again:
 
-If Ferron is not running, restart it and re-check logs right away.
-
-- Linux - `sudo systemctl restart ferron`
-- Windows Server - `net stop ferron && net start ferron`
+- Linux: `sudo systemctl restart ferron`
+- Windows Server: `net stop ferron && net start ferron`
 
 If you start Ferron manually, keep the terminal open and read stderr first.
 
 ### Is the port correct?
 
-- Host blocks without explicit ports usually serve on `default_http_port` and `default_https_port` (`80` and `443` by default).
+- Host blocks without explicit ports listen on `default_http_port` and `default_https_port` (`80` and `443` by default).
 - `ferron-serve` defaults to `127.0.0.1:3000`.
-- If you set an explicit port in the host block, Ferron starts a single listener on that port.
-- If you bind to a specific interface, check the `listen` directive too.
+- A host block with an explicit port starts one listener on that port.
+- If you bind to a specific interface, check the `listen` directive.
 
-If you test the wrong port, the server can be healthy but still appear down.
+Testing the wrong port can make a healthy server appear down.
 
 ### Are the logs enabled?
 
-Use at least one access log and one error log.
+Configure at least one access log and one error log:
 
-- File logs - `log` and `error_log`
-- Common package paths - `/var/log/ferron/access.log` and `/var/log/ferron/error.log` on Linux packages
-- Windows Event Log (if using Ferron on Windows)
-- If you prefer structured output, use [Observability and logging](/docs/configuration/observability/logging) instead of relying on defaults
+- File logs: `log` and `error_log`
+- Linux packages: `/var/log/ferron/access.log` and `/var/log/ferron/error.log`
+- Windows Event Log, when using Ferron on Windows
+- For structured output, see [Observability and logging](/docs/configuration/observability/logging)
 
-Read the newest error lines first, then reproduce the request once and read again.
+Read the newest error lines first. Reproduce the request once, then read the log again.
 
 ### What does the log say?
 
-Common meanings:
-
-- `connection refused` - the target process is not listening on that host, port, or socket.
-- timeout errors - the target is unreachable, blocked, overloaded, or too slow.
-- TLS verification or certificate errors - the upstream certificate or trust chain is wrong.
-- `permission denied` or file-open errors - filesystem ownership or mode issues.
+| Message                                    | Likely cause                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| `connection refused`                       | The target process does not listen on that host, port, or socket.   |
+| Timeout errors                             | The target is unreachable, blocked, overloaded, or too slow.        |
+| TLS verification or certificate errors     | The upstream certificate or trust chain is wrong.                   |
+| `permission denied` or file-open errors    | Filesystem ownership or mode issues.                                |
 
 ## Reverse proxy issues
 
 ### Can you reach the upstream directly?
 
-From the same host where Ferron runs, test the upstream URL or socket directly.
+Test the upstream URL or socket from the host where Ferron runs. If direct access fails, fix the upstream first. Ferron cannot proxy to an unreachable backend.
 
-If direct access fails, fix the upstream first. Ferron cannot proxy to an unreachable backend.
+### Is the upstream bound to `127.0.0.1`?
 
-### Is the upstream bound to `127.0.0.1` instead of `0.0.0.0`?
+If Ferron and the upstream run in different hosts, containers, or namespaces, bind the upstream to `0.0.0.0` or the correct interface. A loopback bind is reachable only from the same network namespace.
 
-If Ferron and the upstream are in different hosts, containers, or namespaces, do not bind the upstream to `127.0.0.1`. Bind to `0.0.0.0` or the correct interface when needed.
+### Does the upstream rate-limit or ban clients?
 
-### Upstream rate-limiting or banning everyone?
-
-If the upstream has rate-limiting or anti-abuse rules, it may block Ferron requests. This might be caused by the upstream not recognizing the client IP correctly. Make sure the upstream has `X-Forwarded-For` or `Forwarded` header setting enabled and that Ferron is configured to send them (it sends them by default).
+Upstream anti-abuse rules can block Ferron requests when the upstream cannot identify the client IP. Enable `X-Forwarded-For` or `Forwarded` handling on the upstream. Ferron sends these headers by default.
 
 ### Is TLS verification failing?
 
-For HTTPS upstreams with private or self-signed certs:
+For HTTPS upstreams with private or self-signed certificates:
 
-- Prefer fixing trust by installing the correct CA chain.
-- Use `no_verification` only to confirm the diagnosis, not as a production default.
+- Prefer installing the correct CA chain.
+- Use `no_verification` only to confirm the diagnosis. Do not use it as a production default.
 
-### Timeout vs connection refused?
+### Timeout or connection refused?
 
-- `connection refused` - wrong port or host, or the service is down.
-- timeout - route, firewall, DNS, or upstream responsiveness problem.
+- `connection refused`: wrong port or host, or the service is down.
+- Timeout: route, firewall, DNS, or upstream responsiveness problem.
 
 > [!info]
 > See [Reverse proxying](/docs/use-cases/traffic/reverse-proxy) and [Configuration: reverse proxying](/docs/configuration/proxy/reverse-proxy).
@@ -97,74 +85,74 @@ For HTTPS upstreams with private or self-signed certs:
 
 ### Certificate does not match the hostname
 
-Make sure the requested hostname matches the certificate SAN or CN and the correct Ferron host block.
+Check that the requested hostname matches a certificate SAN or the CN. Also check that the request reaches the correct Ferron host block.
 
 ### Missing DNS records
 
-For automatic TLS, DNS must point the hostname to the Ferron server.
+Automatic TLS requires a DNS record that points the hostname to the Ferron server.
 
 ### A firewall blocks port `80` or `443`
 
-ACME validation can fail when a firewall, cloud policy, or proxy path blocks these ports.
+ACME validation fails when a firewall, cloud policy, or proxy path blocks these ports.
 
 ### ACME challenge fails
 
-- Use the Let's Encrypt staging endpoint first if you are still testing.
+- Use the Let's Encrypt staging endpoint while you test.
 - If Ferron sits behind an HTTPS-terminating proxy, choose the challenge type that matches that setup.
 - Keep the ACME cache on persistent storage.
 
 ### `localhost` looks different from a public hostname
 
-`localhost`, `127.0.0.1`, and `::1` use Ferron's local TLS provider, not ACME. That certificate is for local development only.
+`localhost`, `127.0.0.1`, and `::1` use the local TLS provider, not ACME. The local certificate is for development only.
 
-### Could this be bot or scanner traffic?
+### Is the traffic bot or scanner noise?
 
-On public servers, some TLS and HTTP errors are just background Internet scanning noise.
+Public servers receive background scanning traffic. This traffic can look like a misconfiguration.
 
-- Requests like `/wp-login.php`, `/.env`, or `/phpmyadmin` are common bot probes against non-WordPress/non-PHP sites.
-- Some TLS handshake failures happen before HTTP request parsing, so they may appear in error logs without a matching access-log line.
-- If legitimate traffic works and failures come from random IPs/paths, this is often not a Ferron misconfiguration.
+- Requests for `/wp-login.php`, `/.env`, or `/phpmyadmin` are common probes against unrelated sites.
+- Some TLS handshake failures happen before HTTP parsing. They can appear in the error log without a matching access log line.
+- If legitimate traffic works and failures come from random IPs and paths, the cause is often external.
 
-If noise is high, reduce impact with targeted controls:
+Reduce the impact with targeted controls:
 
 - Add route-specific `limit` rules for sensitive endpoints.
-- Use `allow`/`block` rules where appropriate.
+- Use `allow` and `block` rules where they apply.
 - Keep authentication and admin paths narrow and explicit.
 
 ## Static file issues
 
 ### Incorrect root path
 
-Verify `root` points to the directory containing the deployed files for that host or location.
+Check that `root` points to the directory that contains the deployed files for that host or location.
 
 ### Permissions
 
-Ferron must be able to read files and traverse directories.
+Ferron must read files and traverse every directory in the path.
 
-### Path rewriting confusion
+### Path rewriting
 
-For SPAs, you commonly need route fallback rewrites. If you use rewrites, enable `rewrite_log` while diagnosing. Guard fallback rules with `file false` and `directory false`, or static assets match the fallback too.
+Single-page applications usually need a route fallback rewrite. Enable `rewrite_log` while you diagnose rewrite rules. Guard fallback rules with `file false` and `directory false`. Without the guards, static assets also match the fallback.
 
 ### Symlink 403 errors
 
-Symlinks return `403 Forbidden` by default (`disable_symlinks true`). The error page does not name the link. Check each path component for links, then allow them with `disable_symlinks false` or `disable_symlinks if_not_owner`.
+Symlinks return `403 Forbidden` by default (`disable_symlinks true`). The error page does not name the link. Check each path component for links. Then allow them with `disable_symlinks false` or `disable_symlinks if_not_owner`.
 
 > [!info]
 > See [Static file serving](/docs/use-cases/content/static-files), [URL rewriting](/docs/use-cases/traffic/url-rewriting), and [Configuration: routing and URL processing](/docs/configuration/routing/url-processing).
 
-## Rate limiting and access control
+## Access control and rate limiting
 
 ### Is a condition blocking traffic?
 
-Check `status` rules, `allow`/`block`, and conditional logic.
+Check `status` rules, `allow` and `block` rules, and conditional logic.
 
 ### Is client IP detection correct?
 
-If Ferron is behind a proxy or load balancer, verify client IP handling. Wrong client IP handling can break access control and rate limiting.
+If Ferron is behind a proxy or load balancer, check client IP handling. Wrong client IP handling breaks access control and rate limiting.
 
-### Does the configuration set `client_ip_from_header` correctly?
+### Is `client_ip_from_header` configured correctly?
 
-Set `client_ip_from_header` only when the trusted proxy path supplies forwarded client IP headers. Use `trusted_proxy` to restrict who can provide them. For PROXY protocol frontends, use `protocol_proxy`.
+Set `client_ip_from_header` only when the trusted proxy path supplies forwarded client IP headers. Use `trusted_proxy` to restrict who can send them. For PROXY protocol frontends, use `protocol_proxy`.
 
 > [!info]
 > See [HTTP host directives](/docs/configuration/server/host), [Rate limiting](/docs/use-cases/security/rate-limiting), [Access control](/docs/use-cases/security/access-control), and [Configuration: conditionals](/docs/configuration/fundamentals/conditionals).
@@ -173,47 +161,47 @@ Set `client_ip_from_header` only when the trusted proxy path supplies forwarded 
 
 ### Wrong nesting
 
-Directive placement matters. A directive in the wrong block can look valid but not apply where you expect.
+Directive placement matters. A directive in the wrong block can pass validation but not apply where you expect.
 
 ### Missing directive
 
 Common examples:
 
-- Using `root` when you meant `proxy`
-- Missing `fcgi_php` or `cgi` plus `extension` for PHP
-- Missing `location` separation between static files and API traffic
+- `root` where the site needs `proxy`.
+- No `fcgi_php` or `cgi` plus `extension` for PHP.
+- No `location` separation between static files and API traffic.
 
 ### Unexpected conditional behavior
 
 All subconditions in one `condition` block must pass. If one fails, the condition fails.
 
-### Quick isolation method
+### Isolate the change
 
-Start with a minimal known-good config. Validate it with `ferron validate -c ferron.conf`. Then add one change at a time.
+Start with a minimal known-good configuration. Validate it with `ferron validate -c ferron.conf`. Then add one change at a time.
 
 > [!info]
 > See [Getting started](/docs/getting-started), [Configuration syntax](/docs/configuration/fundamentals/syntax), and [Core directives](/docs/configuration/server/core-directives).
 
 ## Observability and logs
 
-### How to enable debug visibility
+### Enable debug visibility
 
-Ferron does not have a single global debug mode. For troubleshooting visibility:
+Ferron has no single global debug mode. For troubleshooting visibility:
 
-- Make sure `error_log` is on.
-- Make sure access logging is on via `log`.
-- Temporarily enable `rewrite_log` when debugging rewrites.
+- Keep `error_log` on.
+- Keep access logging on with `log`.
+- Enable `rewrite_log` temporarily when you debug rewrites.
 - Use OTLP export if you already have centralized tracing or metrics.
 
-### How to read logs effectively
+### Read logs effectively
 
 - Reproduce one request at a time.
-- Match request path and status in access logs with timestamps in error logs.
-- Check whether the failure happened before upstream routing, during upstream connection, or in local file or routing logic.
+- Match the request path and status in access logs with timestamps in error logs.
+- Check whether the failure happened before upstream routing, during the upstream connection, or in local file or routing logic.
 
-### Common access log interpretations
+### Common access log status codes
 
-- `404 Not Found` - often wrong `root`, wrong path rewrite, or backend route mismatch.
-- `403 Forbidden` - often an access-control rule or filesystem permission issue.
-- `502 Bad Gateway` - upstream connection or handshake failure.
-- `504 Gateway Timeout` - upstream reachable but too slow or unresponsive.
+- `404 Not Found`: wrong `root`, wrong path rewrite, or backend route mismatch.
+- `403 Forbidden`: access-control rule or filesystem permission issue.
+- `502 Bad Gateway`: upstream connection or handshake failure.
+- `504 Gateway Timeout`: upstream reachable but too slow or unresponsive.

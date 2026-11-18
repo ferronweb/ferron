@@ -3,32 +3,42 @@ title: Ferron 3 documentation
 description: "Installation guides, first steps, troubleshooting, configuration reference, and feature guides for Ferron 3."
 ---
 
-Ferron 3 is a configurable web server for static sites, reverse proxying, TLS, and more. Use the sidebar to jump to the guide you need.
+Ferron 3 is a configurable web server for static sites, reverse proxying, TLS, and more.
 
-## Start here
+## Install Ferron
 
-If you are new to Ferron, follow this path:
+Choose the guide for your platform:
 
-1. Install Ferron using the guide that matches your platform.
-   - [Linux installer](/docs/installation/linux/installer)
-   - [Debian/Ubuntu](/docs/installation/linux/debian-ubuntu)
-   - [RHEL/Fedora](/docs/installation/linux/rhel-fedora)
-   - [Docker](/docs/installation/docker)
-   - [Windows installer](/docs/installation/windows)
-   - [Manual installation](/docs/installation/manual-installation)
-   - [Build from source with default modules](/docs/installation/source/default-modules)
-   - [Build from source with custom modules](/docs/installation/source/custom-modules)
-2. Read [Getting started](/docs/getting-started) to choose static serving, reverse proxying, or a mixed setup.
+- [Linux installer](/docs/installation/linux/installer)
+- [Debian/Ubuntu](/docs/installation/linux/debian-ubuntu)
+- [RHEL/Fedora](/docs/installation/linux/rhel-fedora)
+- [Docker](/docs/installation/docker)
+- [Windows installer](/docs/installation/windows)
+- [Manual installation](/docs/installation/manual-installation)
+- [Build from source with default modules](/docs/installation/source/default-modules)
+- [Build from source with custom modules](/docs/installation/source/custom-modules)
+
+## First steps
+
+1. Read [Getting started](/docs/getting-started) to choose static serving, reverse proxying, or a mixed setup.
+2. Validate the configuration before you reload or restart Ferron.
 3. Use [Troubleshooting](/docs/troubleshooting) if the server does not start or the site does not respond.
-4. Move on to [Configuration syntax](/docs/configuration/fundamentals/syntax) and the related directive pages when you want directive-level details.
 
-## Good next reads
+## Common tasks
 
-- [Configuration syntax](/docs/configuration/fundamentals/syntax)
-- [Routing and URL processing](/docs/configuration/routing/url-processing)
 - [Static file serving](/docs/use-cases/content/static-files)
 - [Reverse proxying](/docs/use-cases/traffic/reverse-proxy)
 - [Automatic TLS](/docs/use-cases/https/automatic-tls)
+- [Rate limiting](/docs/use-cases/security/rate-limiting)
+- [Access control](/docs/use-cases/security/access-control)
+- [Logging and observability](/docs/use-cases/operations/logging-observability)
+
+## Configuration reference
+
+- [Configuration syntax](/docs/configuration/fundamentals/syntax)
+- [Directives](/docs/configuration/fundamentals/directives)
+- [Routing and URL processing](/docs/configuration/routing/url-processing)
+- [Request pipeline order](/docs/configuration/fundamentals/request-pipeline)
 
 > [!tip]
-> If a guide references a directive you have not seen yet, open the related reference page from the links above.
+> If a guide references a directive you have not seen, open its reference page from the sidebar.

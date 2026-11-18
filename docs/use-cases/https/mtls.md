@@ -1,19 +1,18 @@
 ---
 title: mTLS (mutual TLS)
-description: "Require client TLS certificates in Ferron for internal/admin traffic and service-to-service access, and present client certificates to upstream backends."
+description: "Require client certificates for inbound access, or present a client certificate to an upstream backend."
 ---
 
-Mutual TLS (mTLS) adds client certificate verification on top of normal server TLS. Ferron supports mTLS in two directions.
+Mutual TLS (mTLS) adds client certificate verification to normal server TLS. Ferron supports mTLS in two directions:
 
-- **Inbound**: require clients connecting to Ferron to present a valid certificate (server-side mTLS).
-- **Outbound**: present a client certificate when Ferron connects to an upstream backend via the reverse proxy (client-side mTLS).
+- Inbound: clients must present a valid certificate to connect to Ferron.
+- Outbound: Ferron presents a client certificate when it connects to an HTTPS backend.
 
 ## Require client certificates
 
-Configure client certificate validation against your internal CA inside the `tls` block:
+Verify client certificates against your internal CA:
 
 ```ferron
-# Replace "admin.example.com" with your domain name.
 admin.example.com:443 {
     tls {
         provider manual
@@ -38,7 +37,7 @@ admin.example.com:443 {
         key /etc/ssl/private/admin.example.com.key
 
         client_auth
-        client_auth_ca system  # or "webpki" for Mozilla's root bundle
+        client_auth_ca system
     }
 
     proxy http://127.0.0.1:9000
@@ -46,14 +45,12 @@ admin.example.com:443 {
 ```
 
 > [!warning]
-> When you use `client_auth_ca system`, the OS trust store includes all OS-trusted root CAs. Use it only when you want to accept client certificates from any publicly trusted CA. This is rarely the right choice for mTLS.
+> `client_auth_ca system` accepts client certificates from any CA in the OS trust store. That includes public root CAs. For mTLS, use a private CA bundle instead.
 
 > [!important]
-> For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path. Protect private internal CA material and rotate client certificates regularly.
+> For internal mTLS, use a private CA and set `client_auth_ca` to the CA bundle file. Protect the CA material and rotate client certificates regularly.
 
-## mTLS with TLS 1.3 only
-
-For maximum security, combine mTLS with TLS 1.3-only settings:
+## TLS 1.3 only
 
 ```ferron
 internal-api.example.com:443 {
@@ -73,12 +70,11 @@ internal-api.example.com:443 {
 }
 ```
 
-## Scope planning for admin/internal endpoints
+## Mix public and internal hosts
 
-`client_auth` lives inside a `tls` block, which scopes to a specific host. You can enable mTLS for some hosts while keeping others public. A separate Ferron instance is unnecessary.
+`client_auth` belongs to the `tls` block, so it applies to one host. You can protect some hosts and leave others public:
 
 ```ferron
-# Public website - no client auth
 example.com:443 {
     tls {
         provider acme
@@ -89,7 +85,6 @@ example.com:443 {
     root /var/www/html
 }
 
-# Internal admin - requires client certificate
 admin.example.com:443 {
     tls {
         provider manual
@@ -104,9 +99,9 @@ admin.example.com:443 {
 }
 ```
 
-## Presenting client certificates to upstream backends
+## Present a client certificate to a backend
 
-When the reverse proxy connects to an HTTPS upstream, Ferron can present a client certificate. This authenticates the proxy to the backend. Configure `cert` and `key` on the upstream block:
+Set `cert` and `key` on the upstream. Ferron presents the certificate when it connects to the HTTPS backend:
 
 ```ferron
 example.com {
@@ -119,11 +114,11 @@ example.com {
 }
 ```
 
-You must supply both `cert` and `key` for mTLS to activate. The certificate chain and private key must be PEM-encoded.
+Both directives are required. The certificate chain and private key must use PEM encoding.
 
-### Per-upstream credentials
+### One credential per upstream
 
-mTLS credentials scope per-upstream. Different backends can require different client certificates:
+Each upstream can use its own certificate:
 
 ```ferron
 example.com {
@@ -140,9 +135,9 @@ example.com {
 }
 ```
 
-### mTLS with SRV upstreams
+### SRV upstreams
 
-When using SRV-record-based upstreams, the same mTLS credentials apply to all backends resolved from that SRV record:
+For an SRV-based upstream, the same credential applies to every backend the record resolves:
 
 ```ferron
 example.com {
@@ -155,6 +150,9 @@ example.com {
 }
 ```
 
-### Health checks and mTLS
+### Health checks
 
-Active health check probes use the same mTLS credentials configured on the upstream. Probes then accurately reflect backend reachability with client authentication.
+Active health checks use the same mTLS credentials as normal requests. A probe reflects reachability with client authentication.
+
+> [!info]
+> See [Configuration: TLS](/docs/configuration/security/tls) for all mTLS options.

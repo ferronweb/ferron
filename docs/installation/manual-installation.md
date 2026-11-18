@@ -3,27 +3,30 @@ title: Manual installation from archive
 description: "Install Ferron 3 from a pre-built archive: download, extract, configure, and run on Windows, macOS, or Unix-like systems."
 ---
 
-You can install Ferron 3 manually from pre-built binaries in an archive. Archives are available for Windows, macOS, Linux, and FreeBSD.
+Ferron also ships as pre-built archives for Windows, macOS, Linux, and FreeBSD.
 
 ## Prerequisites
 
-Before installing Ferron, make sure you have:
-
-- A supported operating system: Windows 10+, Windows Server 2016+, macOS 12+, or a modern Linux distribution.
-- Internet connectivity to download the archive.
-- On Unix-like systems, the `unzip` or `tar` utility available in your `PATH`.
+- A supported operating system: Windows 10 or later, Windows Server 2016 or later, macOS 12 or later, or a modern Linux distribution.
+- Internet access to download the archive.
+- On Unix-like systems, `unzip` or `tar` in `PATH`.
 
 ## Downloading the archive
 
-Visit the [Ferron downloads page](/download) and choose the archive that matches your operating system and architecture:
+Choose the archive for the operating system and architecture on the [Ferron downloads page](/download):
 
-- **Windows**: `.zip` archive (for example, `ferron-3.0.0-x86_64-pc-windows-msvc.zip`)
-- **macOS**: `.tar.gz` archive (for example, `ferron-3.0.0-aarch64-apple-darwin.tar.gz`)
-- **Linux**: `.tar.gz` archive (for example, `ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz`)
-- **FreeBSD**: `.tar.gz` archive (for example, `ferron-3.0.0-x86_64-unknown-freebsd.tar.gz`)
+- Windows: `.zip` archive, for example `ferron-3.0.0-x86_64-pc-windows-msvc.zip`
+- macOS: `.tar.gz` archive, for example `ferron-3.0.0-aarch64-apple-darwin.tar.gz`
+- Linux: `.tar.gz` archive, for example `ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz`
+- FreeBSD: `.tar.gz` archive, for example `ferron-3.0.0-x86_64-unknown-freebsd.tar.gz`
 
 > [!note]
-> FIPS-certified archives use a `+fips` suffix in the archive name. For example, `ferron+fips-3.0.0-x86_64-unknown-linux-gnu.tar.gz`. A FIPS archive restricts cryptography to FIPS-approved algorithms: OCSP stapling, TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2, scrypt and bcrypt are rejected). Use a FIPS archive when you must run Ferron in a FIPS-compliant environment.
+> FIPS-certified archives carry a `+fips` suffix, for example `ferron+fips-3.0.0-x86_64-unknown-linux-gnu.tar.gz`. A FIPS archive restricts cryptography to FIPS-approved algorithms:
+>
+> - OCSP stapling, TLS cipher suites, and key exchange groups are filtered.
+> - HTTP basic auth password verification accepts only PBKDF2 hashes. Argon2, scrypt, and bcrypt are rejected.
+>
+> Use a FIPS archive when you must run Ferron in a FIPS-compliant environment.
 
 Every release also publishes a software bill of materials (SBOM) archive. See [Software bill of materials](#software-bill-of-materials-sbom).
 
@@ -31,105 +34,91 @@ Every release also publishes a software bill of materials (SBOM) archive. See [S
 
 ### 1. Extract the archive
 
-- **Windows**:
+On Windows, right-click the downloaded `.zip` file and select "Extract All...".
 
-  Right-click on the downloaded `.zip` file and select "Extract All..." to extract the contents.
+On macOS and Linux, open a terminal in the directory with the `.tar.gz` file and extract it:
 
-- **macOS and Linux**:
+```sh
+mkdir ferron
+tar -xzf ferron-*.tar.gz -C ferron
+```
 
-  Open a terminal, navigate to the directory containing the downloaded `.tar.gz` file, and extract it:
-
-  ```sh
-  mkdir ferron
-  tar -xzf ferron-*.tar.gz -C ferron
-  ```
-
-  This creates a directory containing the Ferron binaries and configuration files.
+The directory then contains the Ferron binaries and configuration files.
 
 ### 2. Verify the archive (Linux, FreeBSD)
-
-Run the following command to verify the archive integrity:
 
 ```sh
 # 1. Import the signing key (if not already imported)
 wget https://dl.ferron.sh/signing.pgp
 gpg --import signing.pgp
 
-# 2. Download the .asc file corresponding to the downloaded .tar.gz archive
-# The example below assumes you have downloaded ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz
+# 2. Download the .asc file for the downloaded .tar.gz archive
+# This example assumes ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz
 #wget https://dl.ferron.sh/3.0.0/ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz.asc
 
-# 3. Verify the archive's integrity (using the detached signature)
+# 3. Verify the detached signature
 gpg --verify ferron-*.tar.gz.asc
 ```
 
 ### 3. Review the extracted contents
 
-After extraction, you see these files and directories:
-
-- `ferron` or `ferron.exe`: the main Ferron web server executable.
-- `ferron-fmt` or `ferron-fmt.exe`: a tool for formatting Ferron configuration files.
-- `ferron-kdl2ferron` or `ferron-kdl2ferron.exe`: a tool for converting Ferron 2 KDL configurations to Ferron 3 configurations.
-- `ferron-passwd` or `ferron-passwd.exe`: a tool for generating hashed passwords for the server configuration.
-- `ferron-precompress` or `ferron-precompress.exe`: a tool for precompressing static files.
-- `ferron-serve` or `ferron-serve.exe`: a command for serving static files with Ferron with zero configuration.
-- `ferron.conf`: an example configuration file for Ferron.
-- `wwwroot/`: the webroot directory containing the default `index.html` file.
+- `ferron` or `ferron.exe`: main Ferron web server executable.
+- `ferron-fmt` or `ferron-fmt.exe`: configuration formatter.
+- `ferron-kdl2ferron` or `ferron-kdl2ferron.exe`: converts Ferron 2 KDL configurations to Ferron 3 configurations.
+- `ferron-passwd` or `ferron-passwd.exe`: generates hashed passwords for the server configuration.
+- `ferron-precompress` or `ferron-precompress.exe`: precompresses static files.
+- `ferron-serve` or `ferron-serve.exe`: serves static files with no configuration.
+- `ferron.conf`: example configuration file.
+- `wwwroot/`: web root with the default `index.html` file.
 
 ### 4. Configure Ferron
 
-Open the `ferron.conf` file in a text editor. Modify it to suit your server requirements. This file includes settings for server ports, logging, modules, and more. Detailed configuration options are in the [server configuration reference](/docs/configuration/server/core-directives).
+Open `ferron.conf` in a text editor and adjust it to the server. The file covers ports, logging, modules, and more. For the available directives, see the [server configuration reference](/docs/configuration/server/core-directives).
 
 ### 5. Run Ferron
 
-- **Windows**:
+On Windows, open Command Prompt in the extracted directory:
 
-  Open Command Prompt. Navigate to the extracted directory and run:
+```cmd
+ferron.exe
+```
 
-  ```cmd
-  ferron.exe
-  ```
+On macOS:
 
-- **macOS**:
+```sh
+./ferron
+```
 
-  Run:
+> [!tip]
+> On macOS, remove the quarantine attribute first if the system blocks the binary:
+>
+> ```sh
+> xattr -d com.apple.quarantine ferron
+> ```
 
-  ```sh
-  ./ferron
-  ```
+On Linux, make the binary executable and run it:
 
-  > [!tip]
-  > On macOS, you may need to remove the quarantine attribute first:
-  >
-  > ```sh
-  > xattr -d com.apple.quarantine ferron
-  > ```
-
-- **Linux**:
-
-  Make the binary executable and run it:
-
-  ```sh
-  chmod +x ferron
-  ./ferron
-  ```
+```sh
+chmod +x ferron
+./ferron
+```
 
 ### 6. Access the web server
 
-By default, Ferron serves content from the `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify the server works.
+Ferron serves content from `wwwroot` by default. Open `http://localhost` in a browser to verify the server works.
 
-If you see a "Ferron is ready to serve." message on the page, the web server works correctly.
+The page shows "Ferron is ready to serve." when the server works.
 
 > [!tip]
-> If you cannot access the server from another machine, make sure your firewall allows incoming connections on the configured port (default: 80). If port 80 is in use, change the listen port in `ferron.conf`. Then update your firewall rules.
+> If you cannot reach the server from another machine, check that the firewall allows connections on the configured port, port 80 by default. If port 80 is in use, change the listen port in `ferron.conf` and update the firewall rules.
 
 ## Software bill of materials (SBOM)
 
-Ferron publishes a software bill of materials (SBOM) for every release. An SBOM is a machine-readable inventory of the third-party components in a software product. Ferron builds the SBOM from the Rust crates that are compiled into the binaries.
+Ferron publishes a software bill of materials (SBOM) for every release. An SBOM is a machine-readable inventory of the third-party components in a software product. Ferron builds it from the Rust crates compiled into the binaries.
 
 ### Download the SBOM archive
 
-Each SBOM archive has the same base name as the matching binary archive, with a `-sbom` suffix. The archive format follows the binary archive: `.tar.gz` for Unix-like systems, `.zip` for Windows.
+An SBOM archive has the same base name as the matching binary archive, with a `-sbom` suffix. The format follows the binary archive: `.tar.gz` for Unix-like systems and `.zip` for Windows.
 
 Examples:
 
@@ -137,7 +126,7 @@ Examples:
 - `ferron-3.0.0-x86_64-pc-windows-msvc-sbom.zip`
 - `ferron+fips-3.0.0-x86_64-unknown-linux-gnu-sbom.tar.gz`
 
-Download SBOM archives from the same place as the binary archives. GitHub releases attach the SBOM archive next to the binary archive.
+GitHub releases attach the SBOM archive next to the binary archive.
 
 ### Contents of the SBOM archive
 
@@ -146,47 +135,45 @@ Each archive contains one SBOM document per Ferron binary, in two formats:
 - `.cdx.json`: CycloneDX in JSON format.
 - `.cdx.xml`: CycloneDX in XML format.
 
-Each document lists the third-party Rust crates in the binary, with their versions and package URLs (purl). License information appears when the crate declares it.
+Each document lists the third-party Rust crates in the binary with their versions and package URLs (purl). License information appears when the crate declares it.
 
 ### Use the SBOM
 
-You can feed the SBOM to software composition analysis tools, for example Grype, Trivy, or Dependency-Track. The tools match the components against vulnerability databases and license policies. Run this scan before you deploy a release.
+Software composition analysis tools such as Grype, Trivy, and Dependency-Track can read the SBOM. They match components against vulnerability databases and license policies. Run the scan before you deploy a release.
 
-## Reloading the configuration (Unix)
+## Reload the configuration (Unix)
 
-To reload the configuration without restarting the server, send a `SIGHUP` signal to the `ferron` process:
+Send `SIGHUP` to the `ferron` process to reload the configuration without a restart:
 
 ```sh
 kill -HUP $(pidof ferron)
 ```
 
-## Installing as a Windows service
+## Install as a Windows service
 
-To install Ferron as a Windows service, use the following command in an elevated PowerShell session (run as administrator):
+Run this in an elevated PowerShell session:
 
 ```powershell
 path\to\ferron winservice install -c path\to\ferron.conf
 ```
 
-Replace `path\to` with the actual path to your Ferron installation directory.
+Replace `path\to` with the path to the Ferron installation directory.
 
-## Running as a daemon (Unix)
+## Run as a daemon (Unix)
 
-On Unix systems, you can run Ferron as a background daemon with a PID file:
+Run Ferron as a background daemon with a PID file:
 
 ```sh
 ./ferron daemon -c ferron.conf --pid-file /var/run/ferron.pid
 ```
 
-You can then reload the daemon using its PID file:
+Reload the daemon through its PID file:
 
 ```sh
 kill -HUP $(cat /var/run/ferron.pid)
 ```
 
 ## Other CLI commands
-
-Ferron also gives you several commands for working with configuration files:
 
 ```sh
 ./ferron validate -c ferron.conf   # validate configuration without starting

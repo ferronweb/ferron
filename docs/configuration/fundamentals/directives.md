@@ -3,18 +3,18 @@ title: "Configuration directives"
 description: "Listing available directives with the ferron directives command."
 ---
 
-The `ferron directives` command prints every configuration directive that the loaded modules register as a JSON document. It does not validate a configuration file, it only reflects the directive schema known to the running binary.
+The `ferron directives` command prints every configuration directive that the loaded modules register, as a JSON document. It does not validate a configuration file. It only reports the directive schema that the running binary knows.
 
 ```bash
 ferron directives
 ```
 
 > [!tip]
-> Pipe the output to a JSON processor (for example, `jq`) for filtering, or save it to a file for reference.
+> Pipe the output to a JSON processor such as `jq` to filter it, or save it to a file for reference.
 
 ## Output structure
 
-The JSON output is an object whose keys are **directive sections**: logical groupings of related directives. Each section maps to a list of directive definitions:
+The JSON output is an object whose keys are directive sections, which group related directives. Each section maps to a list of directive definitions:
 
 ```json
 {
@@ -37,7 +37,7 @@ The JSON output is an object whose keys are **directive sections**: logical grou
 | ---------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`                 | `string`           | The directive name as it appears in the configuration file.                                                                                                            |
 | `usage`                | `string`           | A usage hint showing the expected argument shape. `<arg>` indicates a required value, `[bool]` an optional boolean flag, and `{ ... }` a block with sub-directives.    |
-| `description`          | `string`           | A short human-readable description that states the directive's purpose.                                                                                                |
+| `description`          | `string`           | A short description of the directive.                                                                                                                                 |
 | `applicable_protocols` | `string[] \| null` | The protocols this directive can appear in (for example `["http"]`). `null` means the directive is valid globally or in all protocol contexts.                         |
 | `global_only`          | `bool`             | If `true`, the directive can only appear at the top level of the configuration file (outside any host block).                                                          |
 | `subblock_link`        | `string \| null`   | When non-null, the directive has child directives registered under this subblock name. Ferron groups the child directives under a separate section with the same name. |

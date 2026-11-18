@@ -1,13 +1,9 @@
 ---
 title: "Configuration: abuse protection"
-description: "Lightweight Fail2ban-like IP banning with temporary lockouts for abusive behavior."
+description: "Temporary IP bans for clients that exceed abuse thresholds."
 ---
 
-This page documents `abuse_protection` and `abuse_event` directives for configuring lightweight IP-based abuse protection. When a client exceeds configured thresholds (for example, rate limit breaches or brute-force failures), Ferron temporarily bans the IP address.
-
-The abuse protection module tracks abuse events that other HTTP modules emit. These modules include rate limiting and basic authentication. It temporarily bans IPs that exceed configured thresholds within time windows. The system stores bans in memory and they automatically expire after the configured duration.
-
-## `abuse_protection`
+`abuse_protection` bans an IP address for a fixed time when it exceeds a threshold. Ferron counts abuse events from rate limiting, basic authentication, error responses, and custom `abuse_event` rules. Bans live in memory and expire on their own.
 
 ```ferron
 example.com {
@@ -28,38 +24,56 @@ example.com {
 }
 ```
 
-You can place the `abuse_protection` block inside an HTTP host block.
+Place the `abuse_protection` block inside an HTTP host block. A bare `abuse_protection` enables it with defaults.
 
-| Nested directive        | Arguments                 | Description                                                                                                     | Default              |
-| ----------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `ban_duration`          | `<duration>`              | How long to ban an IP.                                                                                          | `"15m"` (15 minutes) |
-| `rate_limit_threshold`  | block                     | Ban after N rate limit events in window.                                                                        | 5 in 300s            |
-| `brute_force_threshold` | block                     | Ban after N brute force failures in window.                                                                     | 3 in 120s            |
-| `custom_threshold`      | block                     | Ban after N custom events in window.                                                                            | none                 |
-| `error_rate_threshold`  | block                     | Ban after N error responses (for example, 404, 403) in window.                                                  | none                 |
-| `allowlist`             | `<string> [<string> ...]` | IP addresses or CIDR ranges exempt from bans. You can specify this directive multiple times.                    | none                 |
-| `log_rejections`        | `[bool]`                  | Re-enable per-request ban rejection debug logs for forensics. Off by default; ban lifecycle transitions are logged instead. | `false` |
+| Nested directive        | Arguments                 | Description                                   | Default              |
+| ----------------------- | ------------------------- | --------------------------------------------- | -------------------- |
+| `ban_duration`          | `<duration>`              | How long to ban an IP.                        | `"15m"` (15 minutes) |
+| `rate_limit_threshold`  | block                     | Ban after N rate limit events in the window.  | 5 in 300s            |
+| `brute_force_threshold` | block                     | Ban after N brute force failures in the window. | 3 in 120s          |
+| `custom_threshold`      | block                     | Ban after N custom events in the window.      | none                 |
+| `error_rate_threshold`  | block                     | Ban after N error responses in the window.    | none                 |
+| `allowlist`             | `<string> [<string> ...]` | IP addresses or CIDR ranges exempt from bans. | none                 |
+| `log_rejections`        | `[bool]`                  | Per-request ban rejection debug logs.         | `false`              |
+
+You can specify `allowlist` more than once. Ban starts and expirations always log. Per-request rejections stay quiet by default because a ban wave would flood the log. Set `log_rejections` to get `DEBUG` rejection logs, and watch the `ferron.abuseban.rejected` counter for rejection volume.
 
 ### Threshold blocks
 
-Each threshold block (`rate_limit_threshold`, `brute_force_threshold`, `custom_threshold`) configures when a specific event type triggers a ban:
+`rate_limit_threshold`, `brute_force_threshold`, and `custom_threshold` share the same shape. A threshold fires when the event count inside the window reaches `events`. Ferron bans the IP immediately.
 
-| Nested directive | Arguments    | Description                                            |
-| ---------------- | ------------ | ------------------------------------------------------ |
-| `events`         | `<int>`      | Number of events required to trigger a ban (required). |
-| `window`         | `<duration>` | Time window for counting events (required).            |
+| Nested directive | Arguments    | Description                            |
+| ---------------- | ------------ | -------------------------------------- |
+| `events`         | `<int>`      | Events needed to trigger a ban. Required. |
+| `window`         | `<duration>` | Time window for counting events. Required. |
 
-### Error rate threshold block
+### Error rate threshold
 
-The `error_rate_threshold` block configures when error response patterns trigger a ban:
+`error_rate_threshold` bans clients that produce many error responses, such as vulnerability scanners.
 
-| Nested directive | Arguments                 | Description                                                             | Default |
-| ---------------- | ------------------------- | ----------------------------------------------------------------------- | ------- |
-| `events`         | `<int>`                   | Number of error responses required to trigger a ban.                    | 50      |
-| `window`         | `<duration>`              | Time window for counting error responses.                               | `"60s"` |
-| `status_codes`   | `<string> [<string> ...]` | HTTP status codes that count as errors (for example, `"404"`, `"403"`). | `"404"` |
+| Nested directive | Arguments                 | Description                              | Default |
+| ---------------- | ------------------------- | ---------------------------------------- | ------- |
+| `events`         | `<int>`                   | Error responses needed to trigger a ban. | 50      |
+| `window`         | `<duration>`              | Time window for counting errors.         | `"60s"` |
+| `status_codes`   | `<string> [<string> ...]` | Status codes that count as errors.       | `"404"` |
 
-**Configuration example, stricter thresholds:**
+```ferron
+example.com {
+    abuse_protection {
+        error_rate_threshold {
+            events 10
+            window "60s"
+            status_codes "404" "403"
+        }
+    }
+}
+```
+
+This configuration bans an IP after 10 responses with status 404 or 403 within 60 seconds.
+
+### Tune the thresholds
+
+These thresholds ban an IP for 30 minutes after 3 rate limit events in 60 seconds, or after 2 brute force failures in 120 seconds.
 
 ```ferron
 example.com {
@@ -79,37 +93,7 @@ example.com {
 }
 ```
 
-Ban after:
-
-- 3 rate limit events in 60s (30-min ban), OR
-- 2 brute force failures in 120s (30-min ban)
-
-**Configuration example, lenient thresholds:**
-
-```ferron
-example.com {
-    abuse_protection {
-        ban_duration "5m"
-
-        rate_limit_threshold {
-            events 10
-            window "600s"
-        }
-
-        brute_force_threshold {
-            events 10
-            window "600s"
-        }
-    }
-}
-```
-
-Ban after:
-
-- 10 rate limit events in 10 minutes (5-min ban), OR
-- 10 brute force failures in 10 minutes (5-min ban)
-
-**Configuration example, trusted IP list:**
+### Exempt trusted clients
 
 ```ferron
 example.com {
@@ -119,33 +103,23 @@ example.com {
 }
 ```
 
-Ferron never bans IPs in the `allowlist`, even if they exceed thresholds. This is useful for protecting internal networks, monitoring systems, or other trusted infrastructure.
+Ferron never bans an IP in the `allowlist`, even when it exceeds a threshold. Use this for internal networks, monitoring systems, and other trusted infrastructure.
 
-**Configuration example, error rate threshold:**
+### Disable abuse protection
 
 ```ferron
 example.com {
-    abuse_protection {
-        ban_duration "15m"
-
-        error_rate_threshold {
-            events 10
-            window "60s"
-            status_codes "404" "403"
-        }
-    }
+    abuse_protection false
 }
 ```
 
-Ban after 10 error responses (404 or 403) within 60 seconds. This detects hostile scanning behavior such as probing for old vulnerabilities or non-existent plugin paths.
-
 ## `abuse_event`
+
+`abuse_event <name>` registers a custom abuse event. The name is a label for the event, and all custom events count toward the `custom_threshold` block.
 
 ```ferron
 example.com {
     abuse_protection {
-        ban_duration "15m"
-
         custom_threshold {
             events 5
             window "300s"
@@ -162,120 +136,82 @@ example.com {
 }
 ```
 
-You can place the `abuse_event` block inside an HTTP host block.
-
-You can use this directive to define custom abuse protection rules. For example, it can protect your website from automated vulnerability scanners. It is also useful when configuring a honeypot within Ferron.
+Place `abuse_event` inside an HTTP host block. Use it to protect a site from automated scanners, or to build a honeypot inside Ferron.
 
 ## Behavior
 
-### Event tracking
+Ferron tracks events per IP address and per event type:
 
-The module tracks events per IP address and event type:
+- Rate limit events: emitted by the rate limiting module when a client exceeds its limit.
+- Brute force events: emitted by the basic authentication module after repeated failed logins.
+- Custom events: emitted by other modules or by `abuse_event`.
+- Error rate events: counted by the abuse protection module after the pipeline completes, when the final status code matches `status_codes`. For example, 404 and 403.
 
-- **Rate limit events**: the rate limiting module emits them when a client exceeds its rate limit.
-- **Brute force events**: the basic authentication module emits them when a client has repeated failed authentication attempts.
-- **Custom events**: available for other modules (and `abuse_event` directive) to emit custom abuse events.
-- **Error rate events**: the abuse protection module emits them when a response status code matches configured error codes. For example, 404 and 403. It uses `run_inverse` to observe responses after the pipeline completes.
+Events sit in a sliding window. When the count inside the window reaches the threshold, Ferron bans the IP.
 
-The system stores events in a sliding time window. When the number of events within the window reaches the configured threshold, the system immediately bans the IP.
+Bans have these properties:
 
-### Ban mechanics
-
-- **Ban duration**: fixed duration (default 15 minutes). It is independent from the event counting window.
-- **TTL-based expiry**: bans automatically expire after the configured duration. The system needs no background eviction threads.
-- **Per-IP tracking**: the module tracks each IP address independently. It tracks different event types separately for the same IP.
-- **No persistence**: the system stores bans in memory. They are not preserved across server restarts.
-
-> [!tip]
-> If the system bans your IP immediately, check configured thresholds. You may have `events 1` or `events 2`, or very short `window` values (for example, 10s) that are too aggressive. Reduce the `ban_duration` to shorten ban times, or increase the `events` threshold to require more violations before banning.
+- Fixed duration, set by `ban_duration`. The ban duration is independent from the event counting window.
+- Expiry by TTL. No background eviction task is needed.
+- Per-IP and per-event-type tracking. One IP can have separate counts and bans for each event type.
+- Memory only. Bans do not survive a server restart.
 
 > [!warning]
-> For manual unbanning, you must wait for the ban to expire naturally.
+> You cannot lift a ban manually. Wait for it to expire.
 
-### Allowlist behavior
+If Ferron bans your own IP immediately, check the thresholds. `events 1`, `events 2`, or a short `window` such as 10 seconds are easy to trip. Increase `events` to require more violations, or lower `ban_duration` to shorten the ban.
 
-The stage skips any IP that matches an entry in the `allowlist` before it runs ban checks. This allows you to protect internal services, monitoring systems, or known-trusted infrastructure from accidental bans.
-
-## Examples
-
-### Basic abuse protection (defaults)
-
-```ferron
-example.com {
-    abuse_protection
-}
-```
-
-Uses default thresholds: bans IPs for 15 minutes if:
-
-- 5 rate limit breaches in 5 minutes, OR
-- 3 brute force failures in 2 minutes
-
-### Disable abuse protection
-
-```ferron
-example.com {
-    abuse_protection false
-}
-```
+The allowlist check runs before the ban check. Matching IPs skip ban checks entirely.
 
 ## Observability
 
 ### Metrics
 
-The abuse protection module emits the following metrics:
-
-| Metric                      | Type    | Attributes                                                                 | Description                                          |
-| --------------------------- | ------- | -------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `ferron.abuseban.rejected`  | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`)                 | Requests rejected due to IP ban                      |
-| `ferron.abuseban.triggered` | Counter | `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`, `"error_rate"`) | Requests that triggered an IP ban                    |
-| `ferron.abuseban.expired`   | Counter | `ferron.abuseban.reason`                                                   | IP bans that expired                                 |
-| `ferron.abuseban.active_bans` | Gauge | None                                                                       | Current number of active IP bans                     |
+| Metric                        | Type    | Attributes                                                                 | Description                       |
+| ----------------------------- | ------- | -------------------------------------------------------------------------- | --------------------------------- |
+| `ferron.abuseban.rejected`    | Counter | `ferron.abuseban.reason` (`rate_limit`, `brute_force`)                     | Requests rejected by an IP ban.   |
+| `ferron.abuseban.triggered`   | Counter | `ferron.abuseban.reason` (`rate_limit`, `brute_force`, `error_rate`)       | Requests that triggered a ban.    |
+| `ferron.abuseban.expired`     | Counter | `ferron.abuseban.reason`                                                   | Bans that expired.                |
+| `ferron.abuseban.active_bans` | Gauge   | none                                                                       | Current number of active bans.    |
 
 ### Logs
 
-- **`WARN`**: logged when the module triggers a ban for an IP.
-- **`INFO`**: logged once when a ban expires.
-- Per-request ban rejections are **not** logged by default: under a ban wave they would exhaust the observability pipeline. Rejection volume remains visible via the `ferron.abuseban.rejected` counter. Set `log_rejections` to re-enable per-request `DEBUG` rejection logs for forensics.
+| Event          | Level | Attributes                                                                                                   |
+| -------------- | ----- | ------------------------------------------------------------------------------------------------------------ |
+| Ban rejection  | DEBUG | `client.address`, `ferron.abuseban.reason`, `ferron.abuseban.remaining_secs`. Only when `log_rejections` is set. |
+| Ban triggered  | WARN  | `client.address`, `ferron.abuseban.reason`                                                                   |
+| Ban expired    | INFO  | `client.address`, `ferron.abuseban.reason`                                                                   |
 
-### Structured logs
-
-| Description (summary) | Level | Attributes                                                                                                                                                                |
-| --------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ban rejection         | DEBUG | Only emitted when `log_rejections` is set. `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`), `ferron.abuseban.remaining_secs` (remaining seconds before ban expires) |
-| Ban triggered         | WARN  | `client.address` (client IP address), `ferron.abuseban.reason` (`"rate_limit"`, `"brute_force"`)                                                                          |
-| Ban expired           | INFO  | `client.address` (client IP address), `ferron.abuseban.reason`                                                                                                            |
+`ferron.abuseban.reason` is `rate_limit`, `brute_force`, or `error_rate`, depending on the source. `ferron.abuseban.remaining_secs` counts the seconds left on the ban. `client.address` holds the client IP address.
 
 ### Access log fields
 
-The abuse protection module contributes the following fields to the HTTP access log line:
-
-| Field                            | Type   | Description                                               |
-| -------------------------------- | ------ | --------------------------------------------------------- |
-| `ferron.abuseban.action`         | string | Action taken: `skip` (not banned) or `rejected` (banned). |
-| `ferron.abuseban.reason`         | string | Ban reason (rejection only).                              |
-| `ferron.abuseban.remaining_secs` | int    | Seconds remaining on ban (rejection only).                |
+| Field                            | Type   | Description                                  |
+| -------------------------------- | ------ | -------------------------------------------- |
+| `ferron.abuseban.action`         | string | `skip` (not banned) or `rejected` (banned).  |
+| `ferron.abuseban.reason`         | string | Ban reason. Set on rejection only.           |
+| `ferron.abuseban.remaining_secs` | int    | Seconds remaining on the ban. Rejection only. |
 
 ### Trace spans
 
-The abuse protection stage sets the following attributes on its `ferron.stage.abuse_protection` span:
+The abuse protection stage sets these attributes on its `ferron.stage.abuse_protection` span.
 
-| Attribute                        | Type   | Description                                                                         |
-| -------------------------------- | ------ | ----------------------------------------------------------------------------------- |
-| `ferron.abuseban.action`         | string | Action taken: `skip` (not banned) or `rejected` (banned).                           |
-| `ferron.abuseban.reason`         | string | The reason for the ban, when rejected.                                              |
-| `ferron.abuseban.remaining_secs` | int    | Remaining ban duration in seconds, when rejected.                                   |
-| `error.type`                     | string | Set to `ip_banned` when Ferron rejects the request, enabling trace UI highlighting. |
+| Attribute                        | Type   | Description                                                            |
+| -------------------------------- | ------ | ---------------------------------------------------------------------- |
+| `ferron.abuseban.action`         | string | `skip` (not banned) or `rejected` (banned).                            |
+| `ferron.abuseban.reason`         | string | Ban reason, when rejected.                                             |
+| `ferron.abuseban.remaining_secs` | int    | Remaining ban duration in seconds, when rejected.                      |
+| `error.type`                     | string | `ip_banned` when Ferron rejects the request. Highlights the span in the trace UI. |
+
+## Best practices
+
+`ferron doctor` reports these checks for directives on this page.
+
+- `abuse_protection false`: disabling IP banning removes a layer of protection against repeated abuse. Keep it enabled unless another layer handles abusive clients.
+- `allowlist` with a wildcard: exempting every source address applies only to known trusted clients.
 
 ## See also
 
 - [Rate limiting](/docs/configuration/content/rate-limit)
 - [HTTP basic authentication](/docs/configuration/security/basic-auth)
 - [Routing and URL processing](/docs/configuration/routing/url-processing)
-
-## Best practices
-
-`ferron doctor` reports the following best-practice checks for directives on this page.
-
-- **`abuse_protection false`**: Disabling IP banning for repeated abuse events removes a layer of protection. Keep it enabled unless another layer handles abusive clients.
-- **`allowlist` with wildcard**: Exempting every source address from abuse protection should apply only to known trusted clients.

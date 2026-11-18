@@ -3,7 +3,7 @@ title: "Migrating from Apache .htaccess to Ferron 3 (PHP hosting)"
 description: "A practical guide for moving Apache-based PHP, WordPress, and Joomla hosting to Ferron 3 with PHP-FPM."
 ---
 
-This guide helps you replace an Apache + `mod_php`/`mod_rewrite` setup with Ferron 3 in front of [PHP-FPM](/docs/use-cases/content/php). It maps the `.htaccess` patterns you know to Ferron 3 directives. It also highlights differences in how the two servers approach configuration.
+The mapping below covers the `.htaccess` patterns you know, translated to Ferron 3, and the differences in how the two servers handle configuration. It targets an Apache + `mod_php`/`mod_rewrite` setup that moves to Ferron 3 in front of [PHP-FPM](/docs/use-cases/content/php).
 
 The examples assume a single WordPress-style site served through PHP-FPM over a Unix socket. The patterns apply equally to Joomla and other PHP applications.
 

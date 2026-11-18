@@ -1,9 +1,9 @@
 ---
 title: Static file serving
-description: "Serve static sites with Ferron using root, compression, directory listings, SPA rewrites, caching, and precompressed assets."
+description: "Serve a static site with root, compression, directory listings, SPA fallback, cache headers, and precompressed assets."
 ---
 
-Configure Ferron as a static file server with the `root` directive. The directive sets the directory that contains your static files. Use this configuration:
+Set `root` to the directory that contains the site:
 
 ```ferron
 example.com {
@@ -11,9 +11,14 @@ example.com {
 }
 ```
 
-## HTTP compression for static files
+Ferron serves files from that directory. A path that does not match a file returns `404 Not Found`.
 
-Ferron enables HTTP compression for static files by default. To disable it, use this configuration:
+> [!tip]
+> If a file exists but Ferron returns `404 Not Found`, check the `root` path and the read permissions of the user that runs Ferron.
+
+## Compression
+
+Ferron compresses static files on the fly by default. It compresses files larger than 256 bytes with a compressible extension. To disable compression:
 
 ```ferron
 example.com {
@@ -24,7 +29,7 @@ example.com {
 
 ## Directory listings
 
-Ferron disables directory listings by default. To enable them, use this configuration:
+Directory listings are off by default. To enable them:
 
 ```ferron
 example.com {
@@ -33,12 +38,9 @@ example.com {
 }
 ```
 
-> [!tip]
-> If you get `404 Not Found` for files that should exist, verify the `root` path is correct and readable by the user running Ferron.
-
 ## Single-page applications
 
-Ferron also supports single-page applications (SPAs). Add a URL rewrite rule to the static file serving configuration. Use this configuration:
+A single-page application needs a fallback rewrite. Without it, client-side routes such as `/dashboard/settings` return `404 Not Found`.
 
 ```ferron
 example.com {
@@ -51,12 +53,11 @@ example.com {
 }
 ```
 
-> [!tip]
-> If SPA routes (for example `/dashboard/settings`) return `404 Not Found`, add the rewrite rule from the SPA section so unknown paths fall back to `/`.
+The `file false` and `directory false` guards keep real files and directories on the normal file path. Only unmatched paths fall back to `/`.
 
-## Static file serving with caching headers
+## Cache headers
 
-Ferron supports setting `Cache-Control` headers for static files. To enable caching headers for static files, you can use this configuration:
+`etag` adds an ETag validator to file responses. `file_cache_control` sets the `Cache-Control` header:
 
 ```ferron
 example.com {
@@ -67,11 +68,11 @@ example.com {
 ```
 
 > [!tip]
-> If responses look stale while using `file_cache_control`, reduce cache lifetime or temporarily disable caching while debugging.
+> If clients keep stale content after you deploy, lower the `max-age` value or add a content hash to the file names.
 
-## Serving precompressed static files
+## Precompressed files
 
-Ferron supports serving precompressed static files (sidecar files like `app.js.gz`, `app.js.br`). To enable this feature, you can use this configuration:
+Precompressed serving uses sidecar files next to the original file. For example, `app.js.br` serves the Brotli variant of `app.js`.
 
 ```ferron
 example.com {
@@ -80,7 +81,17 @@ example.com {
 }
 ```
 
-In this configuration, Ferron serves precompressed versions of static files if they exist. The precompressed files use the `.gz` extension for gzip, `.br` for Brotli, `.deflate` for Deflate, and `.zst` for Zstandard.
+Ferron checks for these sidecar extensions:
+
+| Encoding  | Extension |
+| --------- | --------- |
+| gzip      | `.gz`     |
+| Brotli    | `.br`     |
+| Deflate   | `.deflate` |
+| Zstandard | `.zst`    |
 
 > [!tip]
-> If Ferron does not serve precompressed assets, check that the matching files exist (for example `app.js.br` or `app.js.gz`). Regenerate the files after you change the source assets.
+> If Ferron does not serve a precompressed variant, check that the sidecar file exists next to the source file. Regenerate the sidecars after you change the source assets.
+
+> [!info]
+> For all static file options, see [Configuration: static files](/docs/configuration/content/static-files). For rewrite syntax, see [URL rewriting](/docs/use-cases/traffic/url-rewriting).

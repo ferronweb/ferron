@@ -1,15 +1,11 @@
 ---
 title: "Configuration: forwarded authentication"
-description: "External authentication backend integration with connection pooling, header copying, and configurable backends."
+description: "Send requests to an external authentication backend, with connection pooling, header copying, and multiple backends."
 ---
 
-This page documents the `auth_to` directive for configuring forwarded authentication. Forwarded authentication sends every incoming request to an external backend server for verification before the server processes the request. If the backend returns a success status (2xx), the request continues through the pipeline. If it returns a failure status (4xx/5xx), the backend sends its response directly to the client.
+`auth_to` sends every request to an external backend before Ferron processes it. A `2xx` response lets the request continue through the pipeline. A `4xx` or `5xx` response goes to the client and stops the pipeline. This works with authentication proxies such as [Authelia](https://www.authelia.com/), [Keycloak](https://www.keycloak.org/), or a custom service.
 
-This pattern works with authentication proxies like [Authelia](https://www.authelia.com/), [Keycloak](https://www.keycloak.org/), or custom services.
-
-## Directives
-
-### `auth_to`
+## auth_to
 
 ```ferron
 example.com {
@@ -27,25 +23,24 @@ example.com {
 
 | Nested directive   | Arguments     | Description                                                                                               | Default                 |
 | ------------------ | ------------- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `url`              | `<string>`    | Backend server URL (http:// or https://). Required if you do not provide it as an argument.               | none                    |
-| `unix`             | `<path>`      | Connect to the backend via Unix domain socket instead of TCP.                                             | TCP                     |
+| `url`              | `<string>`    | Backend server URL (`http://` or `https://`). Required if you do not provide it as an argument.            | none                    |
+| `unix`             | `<path>`      | Connect to the backend through a Unix domain socket instead of TCP.                                       | TCP                     |
 | `limit`            | `<number>`    | Maximum concurrent connections to this backend.                                                           | No limit (per upstream) |
-| `idle_timeout`     | `<duration>`  | Keep-alive idle timeout for connections. Connections idle longer than this duration expire from the pool. | `60s`                   |
+| `idle_timeout`     | `<duration>`  | Keep-alive idle timeout. Connections idle longer than this expire from the pool.                           | `60s`                   |
 | `no_verification`  | `[bool]`      | Skip TLS certificate verification for HTTPS backends.                                                     | `false`                 |
-| `request_header`   | see below     | Add, replace, or remove a header on the request sent to the auth backend. Repeat for multiple headers.    | none                    |
-| `copy`             | `<string>...` | Headers to copy from the auth response back to the original request. Supports multiple headers.           | none                    |
+| `request_header`   | see below     | Add, replace, or remove a request header sent to the auth backend. Repeat for more headers.                | none                    |
+| `copy`             | `<string>...` | Headers to copy from the auth response to the original request. Supports multiple headers.                 | none                    |
 | `last`             | `[bool]`      | Whether this is the last backend in the chain (no further verification).                                  | `false`                 |
 | `intercept_errors` | `[bool]`      | Whether to intercept upstream error responses and replace them with built-in error pages.                 | `false`                 |
-| `append_uri`       | `[bool]`      | Whether to enable appending the URI to the backend URL.                                                   | `false`                 |
+| `append_uri`       | `[bool]`      | Whether to append the URI to the backend URL.                                                             | `false`                 |
 
-> [!note]
->
-> - When you enable `client_ip_from_header`, Ferron appends `X-Forwarded-For` to the existing chain rather than replacing it. Ferron removes Upgrade and Connection headers from auth requests.
-> - The forwarded authentication module supports chaining multiple backends together. To terminate the chain, set `last` to `true`.
+When you enable `client_ip_from_header`, Ferron appends `X-Forwarded-For` to the existing chain instead of replacing it. Ferron removes the `Upgrade` and `Connection` headers from auth requests.
 
-#### Backend URL
+You can chain multiple backends. Set `last` to `true` on the final backend to terminate the chain.
 
-The `auth_to` directive requires a backend URL, specified either as a direct argument or via a nested `url` directive:
+### Backend URL
+
+Pass the backend URL as an argument or in a nested `url` directive:
 
 ```ferron
 example.com {
@@ -59,12 +54,9 @@ example.com {
 }
 ```
 
-> [!note]
-> The forwarded auth request uses the same path and query string as the original request. If the backend is unreachable or returns a non-2xx status, Ferron blocks the request. Ferron returns the backend's response to the client.
+The auth request uses the same path and query string as the original request. If the backend is unreachable, Ferron blocks the request.
 
-#### Unix socket connections
-
-To connect to a backend via Unix domain socket, use the `unix` nested directive:
+### Unix socket
 
 ```ferron
 example.com {
@@ -74,11 +66,9 @@ example.com {
 }
 ```
 
-When you use `unix`, Ferron ignores the URL host for the actual connection. The host must still be present for the HTTP scheme.
+With `unix`, Ferron ignores the URL host for the connection. The host must still be present for the HTTP scheme.
 
-#### Connection limits
-
-Each backend can have its own connection limit via the `limit` directive:
+### Connection limit
 
 ```ferron
 example.com {
@@ -95,11 +85,11 @@ second.example.com {
 }
 ```
 
-You can define multiple `auth_to` blocks for different backends. Ferron uses the first matching configuration.
+Each `auth_to` block has its own connection limit. You can define multiple blocks for different backends. Ferron uses the first matching configuration.
 
-#### Header copying
+### Copy response headers
 
-When authentication succeeds, Ferron can copy headers from the backend response to the original request. This is useful for passing user identity, roles, or other metadata downstream:
+When authentication succeeds, Ferron can copy headers from the backend response to the original request. Use this to pass user identity, roles, or other metadata downstream:
 
 ```ferron
 example.com {
@@ -112,11 +102,11 @@ example.com {
 }
 ```
 
-Ferron copies headers by name. If the auth response contains the specified header, Ferron adds it to the original request. Ferron preserves multiple values.
+Ferron matches headers by name. If the auth response contains a specified header, Ferron adds it to the original request and preserves multiple values.
 
-#### Request header transformations
+### Transform request headers
 
-Use `request_header` to add, replace, or remove a header on the request Ferron sends to the auth backend, before Ferron injects its own forwarding headers:
+`request_header` changes the request that Ferron sends to the auth backend. Ferron applies it before it injects its own forwarding headers.
 
 ```ferron
 example.com {
@@ -134,7 +124,7 @@ example.com {
 | `request_header -Name`         | Remove all instances of the header.                                |
 | `request_header Name "value"`  | Replace the header (removes existing instances, sets a new value). |
 
-The value argument supports `{{variable}}` interpolation, so you can forward request or host data to the auth backend:
+The value supports `{{variable}}` interpolation, so you can forward request or host data:
 
 ```ferron
 example.com {
@@ -144,12 +134,16 @@ example.com {
 }
 ```
 
-> [!note]
-> `request_header` only affects the request sent to the auth backend, not the original client request. To pass data from the auth response back to the original request, use `copy` instead.
+`request_header` affects only the request to the auth backend, not the original client request. To pass data from the auth response back to the original request, use `copy`.
 
-### Global connection limit
+## auth_to_concurrent_conns
 
-The global `auth_to_concurrent_conns` directive controls the maximum number of concurrent connections across all forwarded authentication backends:
+`auth_to_concurrent_conns` is global-only. It sets the maximum concurrent connections across all forwarded authentication backends. The default is `16384`.
+
+| Argument   | Description                                        |
+| ---------- | -------------------------------------------------- |
+| `<number>` | Maximum concurrent connections (positive integer). |
+| `false`    | No limit (unbounded).                              |
 
 ```ferron
 {
@@ -161,36 +155,19 @@ example.com {
 }
 ```
 
-| Argument   | Description                                        |
-| ---------- | -------------------------------------------------- |
-| `<number>` | Maximum concurrent connections (positive integer). |
-| `false`    | Disable the limit (unbounded).                     |
-
-Default: `auth_to_concurrent_conns 16384`
-
 ## Authentication flow
 
-1. The stage receives the incoming request and parses the `auth_to` configuration.
-2. The stage constructs a new HTTP request using the original request's method, path, query string, and headers.
-3. The stage applies any configured `request_header` transformations (add, replace, remove).
-4. The stage adds standard forwarding headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Uri`, `X-Forwarded-Method`, `X-Real-IP`, `Forwarded`).
-5. The stage sends the request to the authentication backend via the connection pool.
-6. **On success (2xx)**: The stage copies configured headers from the response to the original request. The pipeline continues.
-7. **On failure (4xx/5xx)**: The stage returns the backend's response directly to the client, or (if `intercept_errors` is enabled), the stage returns a custom error response. The pipeline stops.
+1. The stage parses the `auth_to` configuration for the request.
+2. It builds an HTTP request with the original method, path, query string, and headers.
+3. It applies the configured `request_header` transformations.
+4. It adds the forwarding headers: `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Uri`, `X-Forwarded-Method`, `X-Real-IP`, and `Forwarded`.
+5. It sends the request to the backend through the connection pool.
+6. On a `2xx` response, it copies the configured headers to the original request and continues the pipeline.
+7. On a `4xx` or `5xx` response, it returns the backend response to the client. With `intercept_errors`, it returns a custom error response instead. The pipeline stops.
 
-## Configuration examples
+## Examples
 
-### Basic forwarded authentication
-
-```ferron
-example.com {
-    auth_to http://auth.example.com/auth
-
-    proxy http://backend:8080
-}
-```
-
-### Authentication with user headers
+### Pass user headers to the backend
 
 ```ferron
 api.example.com {
@@ -205,21 +182,7 @@ api.example.com {
 }
 ```
 
-### Unix socket backend
-
-```ferron
-secure.example.com {
-    auth_to http://localhost/auth {
-        unix /var/run/authelia/authelia.sock
-        limit 100
-        idle_timeout "120s"
-    }
-
-    proxy http://backend:8080
-}
-```
-
-### Self-signed certificate backend
+### Backend with a self-signed certificate
 
 ```ferron
 internal.example.com {
@@ -233,33 +196,19 @@ internal.example.com {
 }
 ```
 
-> [!tip]
-> For authentication backends behind TLS, make sure the backend's certificate is valid or use `no_verification true` for development/testing.
-
-### Disabling the global connection limit
-
-```ferron
-{
-    auth_to_concurrent_conns false
-}
-
-example.com {
-    auth_to http://auth.example.com
-}
-```
+> [!warning]
+> `no_verification` disables certificate checks. Use it only for internal test environments. For production, install a certificate the backend can validate.
 
 ## Best practices
 
 `ferron doctor` reports the following best-practice checks for directives on this page.
 
-- **`auth_to_concurrent_conns false`**. Disabling the global forwarded-auth connection limit removes backpressure on authentication backends. Keep a bounded limit.
-- **`auth_to { no_verification }`**. Disable TLS verification for the authentication backend only in tightly controlled internal test environments.
+- `auth_to_concurrent_conns false`: Disabling the global forwarded-auth connection limit removes backpressure on authentication backends. Keep a bounded limit.
+- `auth_to { no_verification }`: Disable TLS verification for the authentication backend only in tightly controlled internal test environments.
 
 ## Observability
 
 ### Access log fields
-
-The forwarded authentication module contributes the following fields to the HTTP access log line:
 
 | Field                      | Type   | Description                                     |
 | -------------------------- | ------ | ----------------------------------------------- |
@@ -268,7 +217,7 @@ The forwarded authentication module contributes the following fields to the HTTP
 
 ### Trace spans
 
-The forwarded authentication stage sets the following attributes on its `ferron.stage.forwarded_auth` span:
+The stage sets these attributes on its `ferron.stage.forwarded_auth` span:
 
 | Attribute                   | Type   | Description                                                      |
 | --------------------------- | ------ | ---------------------------------------------------------------- |

@@ -1,26 +1,29 @@
 ---
 title: Rate limiting
-description: "Protect login and API endpoints in Ferron with token bucket-based rate limiting per IP, URI, or request header."
+description: "Limit login and API traffic per IP, URI, or request header with token buckets."
 ---
 
-Ferron implements token bucket-based rate limiting with the `rate_limit` directive. This helps reduce brute-force login attempts and API abuse. When a client exceeds the configured rate, the server returns a `429 Too Many Requests` response with a `Retry-After` header.
+`rate_limit` limits requests with token buckets. A client that exceeds the limit gets `429 Too Many Requests` with a `Retry-After` header.
 
-## Protect login endpoints
+Each key has a bucket with `rate + burst` tokens. Ferron refills the bucket at `rate` tokens per second and consumes one token per request.
 
-Apply stricter limits to authentication paths than to the rest of the site:
+> [!important]
+> If Ferron is behind another proxy or load balancer, resolve the client IP correctly. See [HTTP host directives](/docs/configuration/server/host) for `client_ip_from_header`.
+
+## Limit login paths
+
+Set a general host limit, then tighten the limit for login paths:
 
 ```ferron
 example.com {
     root /var/www/html
 
-    # General traffic limit for the site.
     rate_limit {
         rate 50
         burst 100
         key remote_address
     }
 
-    # Tighter limits for login endpoints.
     location /login {
         rate_limit {
             rate 5
@@ -39,28 +42,15 @@ example.com {
 }
 ```
 
-> [!note]
->
-> - Rate limiting uses a token bucket algorithm: capacity = `rate + burst` tokens, refilled at `rate` tokens per second.
-> - Ferron stores in-memory rate limit buckets in memory. They do not survive configuration reloads. Redis-backed buckets survive reloads.
+## Tiered API limits
 
-> [!info]
->
-> For distributed rate limiting across Ferron instances, configure a `rate_limit_backend` block with `type redis`. See [rate limiting configuration](/docs/configuration/content/rate-limit) for details. Redis failures allow by default (`fail_open true`), use `fail_open false` for high-security endpoints like login.
-
-> [!important]
-> If Ferron is behind another proxy/load balancer, make sure the client IP is correctly resolved. See [HTTP host directives](/docs/configuration/server/host) for `client_ip_from_header` configuration.
-
-## Protect APIs with tiered limits
-
-Use host-level and location-level limits together:
+Apply a default API limit and stricter caps on expensive endpoints:
 
 ```ferron
 api.example.com {
     location / {
         proxy http://localhost:3000
 
-        # Default API limit.
         rate_limit {
             rate 100
             burst 200
@@ -68,7 +58,6 @@ api.example.com {
         }
     }
 
-    # Heavier endpoints can have stricter caps.
     location /v1/search {
         rate_limit {
             rate 20
@@ -87,12 +76,11 @@ api.example.com {
 }
 ```
 
-> [!tip]
-> Start with permissive values. Tighten them after you observe production traffic patterns. Keep login and token endpoints on stricter limits than read-only API endpoints.
+Start with permissive values. Tighten them after you observe production traffic.
 
-## API key rate limiting
+## Limit by API key
 
-You can also key rate limits off request headers (for example, API keys):
+Key the bucket on a request header to limit each API key independently:
 
 ```ferron
 api.example.com {
@@ -106,11 +94,11 @@ api.example.com {
 }
 ```
 
-Each unique API key gets its own token bucket, independent of the client IP.
+A request without the header skips that rule.
 
-## Throttling
+## Throttle instead of reject
 
-To enable throttling for rate-limited requests, use the `throttle` subdirective:
+`throttle` delays a request when the bucket is empty. Ferron does not reject the request:
 
 ```ferron
 api.example.com {
@@ -124,9 +112,9 @@ api.example.com {
 }
 ```
 
-## JSON rate limit responses
+## Return JSON errors
 
-By default, when a client exceeds the rate limit, Ferron responds with an HTTP `429 Too Many Requests` status code and includes an HTML-format message. You can customize this response to return a JSON object instead using `json_errors` directive:
+By default, Ferron returns an HTML body for `429 Too Many Requests`. Add `json_errors` to return a JSON object instead:
 
 ```ferron
 api.example.com {
@@ -139,3 +127,21 @@ api.example.com {
     json_errors
 }
 ```
+
+## Distributed limits
+
+In-memory buckets apply to one Ferron instance and do not survive a configuration reload. To share limits across instances, configure a `rate_limit_backend` block with `type redis`:
+
+```ferron
+{
+    rate_limit_backend {
+        type redis
+        url redis://127.0.0.1:6379/0
+    }
+}
+```
+
+Redis-backed buckets survive reloads. By default, `fail_open true` allows traffic when Redis is unavailable. Set `fail_open false` for high-security endpoints such as login.
+
+> [!info]
+> For all options, see [Configuration: rate limiting](/docs/configuration/content/rate-limit).

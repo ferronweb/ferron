@@ -1,62 +1,59 @@
 ---
 title: "Configuration: control plane"
-description: "Embed contextual metadata and span links from the control plane into access logs and traces."
+description: "Embed control plane metadata and span links in access logs, metrics, and traces."
 ---
 
-This page documents the `control_plane` directive. It embeds contextual metadata and static OpenTelemetry span links from the server configuration into access logs and traces. A control plane (for example, a Kubernetes ingress controller) writes the configuration. The data plane serves requests. The `control_plane` directive bridges the gap between them.
-
-> [!info]
->
-> - For OTLP export configuration, see [OTLP observability](/docs/configuration/observability/otlp).
-> - For tracing configuration, see [Tracing](/docs/configuration/observability/tracing).
+The `control_plane` block embeds metadata and static OpenTelemetry span links from the server configuration into access logs and traces. A control plane (for example, a Kubernetes ingress controller) writes the configuration. The data plane serves requests.
 
 ## Directives
 
-The `control_plane` block accepts two sub-blocks:
-
-| Sub-block    | Arguments       | Description                                                                                                                   |
-| ------------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `metadata`   | `<key> <value>` | Arbitrary key-value pairs injected as `ferron.control_plane.*` attributes on all observability signals.                       |
-| `span_links` | N/A             | Static OpenTelemetry span links attached to every `ferron.request` span, creating causal connections to control plane traces. |
+| Sub-block    | Arguments       | Adds                                                      |
+| ------------ | --------------- | --------------------------------------------------------- |
+| `metadata`   | `<key> <value>` | `ferron.control_plane.*` attributes on observability data |
+| `span_links` | none            | Static links on every `ferron.request` span               |
 
 ### Metadata injection
 
-Metadata values are automatically included as:
+Metadata keys appear on every signal:
 
-- **OTLP traces**: `ferron.control_plane.<key>` attributes on the `ferron.request` span
-- **OTLP logs**: `ferron.control_plane.<key>` attributes on log records
-- **OTLP metrics**: `ferron.control_plane.<key>` attributes on metric data points
-- **Access logs**: `ferron.control_plane.<key>` attributes on access log records
-- **Console/file logs**: `[key=value]` prefix prepended to log lines
-- **Prometheus metrics**: `ferron_control_plane_<key>` constant labels
+| Signal             | Form                                                      |
+| ------------------ | --------------------------------------------------------- |
+| OTLP traces        | `ferron.control_plane.<key>` on the `ferron.request` span |
+| OTLP logs          | `ferron.control_plane.<key>` on log records               |
+| OTLP metrics       | `ferron.control_plane.<key>` on metric data points        |
+| Access logs        | `ferron.control_plane.<key>` on access log records        |
+| Console/file logs  | `[key=value]` prefix on log lines                         |
+| Prometheus metrics | `ferron_control_plane_<key>` constant label               |
 
 ### Span links
 
-Each `span_links` block defines one link with:
+Each `span_links` block defines one link:
 
-| Directive    | Type    | Required | Description                                                                       |
-| ------------ | ------- | -------- | --------------------------------------------------------------------------------- |
-| `trace_id`   | string  | yes      | 32 hex characters (the trace ID of the linked span)                               |
-| `span_id`    | string  | yes      | 16 hex characters (the span ID of the linked span)                                |
-| `sampled`    | boolean | no       | Whether the linked span was sampled (default: `false`)                            |
-| `attributes` | block   | no       | Key-value pairs describing the relationship (for example `relationship triggers`) |
+| Directive    | Type    | Required | Description                                              |
+| ------------ | ------- | -------- | -------------------------------------------------------- |
+| `trace_id`   | string  | yes      | Trace ID of the linked span. Exactly 32 hex characters.  |
+| `span_id`    | string  | yes      | Span ID of the linked span. Exactly 16 hex characters.   |
+| `sampled`    | boolean | no       | Whether the linked span was sampled. Default `false`.     |
+| `attributes` | block   | no       | Key-value pairs that describe the relationship.          |
+
+For example, `attributes { relationship triggers }`.
 
 ## Precedence
 
-The `control_plane` directive can appear at three levels. When present at multiple levels, the most specific one wins:
+`control_plane` can appear at three levels. The most specific level wins:
 
-1. **Location** (most specific): inside a `location` block within a host
-2. **Host**: inside a host block (for example, `example.com { ... }`)
-3. **Global** (least specific): at the top level of the configuration
+1. `location` block inside a host.
+2. Host block, for example `example.com { ... }`.
+3. Global block at the top level of the configuration.
 
-Metadata and span links from more specific levels fully replace those from less specific levels (they are not merged).
+The most specific block replaces the others. Metadata and span links are not merged across levels.
 
 > [!tip]
-> Unlike most Ferron directives, metadata and span links are not merged across levels. A more specific `control_plane` block replaces the one from a less specific level.
+> Most Ferron directives merge or inherit values across levels. `control_plane` does not.
 
 ## Variable interpolation
 
-Metadata values support variable interpolation, allowing you to reference request variables:
+Metadata values support `{{variable}}` interpolation with request variables:
 
 ```ferron
 {
@@ -118,9 +115,9 @@ api.example.com:80 {
 }
 ```
 
-### Full Kubernetes ingress controller example
+### Kubernetes ingress controller
 
-A Kubernetes ingress controller would write the server configuration with metadata derived from the `Ingress` resource:
+A Kubernetes ingress controller writes the configuration from the `Ingress` resource:
 
 ```ferron
 {
@@ -151,15 +148,15 @@ A Kubernetes ingress controller would write the server configuration with metada
 }
 ```
 
-This enables operators to:
+Use the metadata and links to:
 
-- Query traces by `ferron.control_plane.ingress_name` to find all requests for a specific ingress
-- Join traces with control plane events using the span link's trace ID
-- Filter metrics by `ferron.control_plane.cluster` to compare performance across clusters
+- Find all requests for an ingress with `ferron.control_plane.ingress_name`.
+- Join traces with control plane events by the span link trace ID.
+- Compare clusters by filtering metrics on `ferron.control_plane.cluster`.
 
-### Observability signal examples
+### Signal output
 
-When you configure metadata `{ org_id acme team platform }`:
+With metadata `{ org_id acme team platform }`:
 
 | Signal                  | Appearance                                  |
 | ----------------------- | ------------------------------------------- |

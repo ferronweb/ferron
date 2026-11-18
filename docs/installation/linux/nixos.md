@@ -3,7 +3,7 @@ title: "Installation on NixOS"
 description: "Install Ferron 3 on NixOS with the official flake: pick a prebuilt or source-built package, then declare hosts with the NixOS module."
 ---
 
-Ferron 3 ships a Nix flake with two packages and a NixOS module. The module generates `ferron.conf` from your Nix configuration and runs the server under systemd. You do not edit a config file on the host.
+Ferron 3 provides a Nix flake with two packages and a NixOS module. The module generates `ferron.conf` from the Nix configuration and runs the server under systemd, so you do not edit a configuration file on the host.
 
 ## Flake setup
 
@@ -75,12 +75,12 @@ Activate the configuration with `sudo nixos-rebuild switch --flake .#hostname`. 
 
 ## What the module manages
 
-- **Service user**: the server runs as the `ferron` system user and group. Change the names with `user` and `group`.
-- **Privileges**: the service gets `CAP_NET_BIND_SERVICE`, so it binds ports 80 and 443 without root.
-- **Directories**: systemd creates `/var/lib/ferron` for state, `/var/log/ferron` for logs, and `/run/ferron` for runtime files.
-- **Config validation**: the unit runs `ferron validate` in `ExecStartPre` before every start. An invalid config fails the start instead of a running server.
-- **Firewall**: the module opens TCP ports 80 and 443 in `networking.firewall`. Set `openFirewall = false` if you serve custom ports or manage the firewall yourself.
-- **Recovery**: the unit restarts the server after a failure. `systemctl reload ferron` sends `SIGHUP`, which makes Ferron read its config again.
+- Service user: the server runs as the `ferron` system user and group. Change the names with `user` and `group`.
+- Privileges: the service gets `CAP_NET_BIND_SERVICE`, so it binds ports 80 and 443 without root.
+- Directories: systemd creates `/var/lib/ferron` for state, `/var/log/ferron` for logs, and `/run/ferron` for runtime files.
+- Config validation: the unit runs `ferron validate` in `ExecStartPre` before every start. An invalid config fails the start instead of leaving a running server.
+- Firewall: the module opens TCP ports 80 and 443 in `networking.firewall`. Set `openFirewall = false` if you serve custom ports or manage the firewall yourself.
+- Recovery: the unit restarts the server after a failure. `systemctl reload ferron` sends `SIGHUP`, which makes Ferron read its config again.
 
 ## Host configuration
 

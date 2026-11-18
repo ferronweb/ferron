@@ -1,11 +1,11 @@
 ---
 title: Error pages
-description: "Serve custom error pages in Ferron and improve reverse-proxy failure UX for 5xx upstream issues."
+description: "Serve custom error pages for local errors and proxied upstream failures."
 ---
 
-Custom error pages make failures clearer for users and reduce confusion during incidents. Ferron can serve custom pages for local errors and (with error interception enabled) upstream proxy errors.
+Ferron can serve custom pages for local errors and, with error interception, for proxy errors.
 
-## Custom pages for common errors
+## Map status codes to a page
 
 ```ferron
 example.com {
@@ -16,11 +16,13 @@ example.com {
 }
 ```
 
-You can map multiple status codes to the same error page in a single directive.
+One directive can map several status codes to the same file.
 
-### Including trace information
+The path is absolute or relative to the working directory of Ferron. If the file does not exist, Ferron skips the directive and uses its built-in page.
 
-Set `error_page_placeholders true` to enable `{{trace.id}}` and `{{trace.spanid}}` placeholders in your error page files. When a request triggers an error, Ferron replaces the placeholders with the trace context of the request. This happens before Ferron serves the page.
+## Include trace information
+
+Set `error_page_placeholders` to replace `{{trace.id}}` and `{{trace.spanid}}` in the error page:
 
 ```ferron
 example.com {
@@ -29,7 +31,7 @@ example.com {
 }
 ```
 
-Example `50x.html`:
+For example, this `50x.html` shows the trace ID:
 
 ```html
 <!DOCTYPE html>
@@ -43,11 +45,11 @@ Example `50x.html`:
 ```
 
 > [!note]
-> Placeholder substitution reads the file into memory, disabling the zerocopy/sendfile optimization for that response. This is negligible for typical error pages.
+> Placeholder substitution reads the file into memory. It disables the zerocopy and sendfile optimization for that response. The effect is small for a typical error page.
 
-## Better UX for upstream failures
+## Handle upstream failures
 
-When reverse proxying, enable error interception so Ferron can serve custom pages for backend errors:
+Enable `intercept_errors` on the proxy so Ferron can replace backend error responses:
 
 ```ferron
 app.example.com {
@@ -63,15 +65,15 @@ app.example.com {
 }
 ```
 
-> [!note]
-> The file path is absolute or relative to the current working directory. If the specified error page file does not exist, Ferron skips the directive and uses the built-in error page instead.
+## Return JSON errors
 
-## JSON error responses
-
-You can serve JSON error responses using the `json_errors` directive (for example for RESTful APIs):
+For an API, use `json_errors` to return a JSON body:
 
 ```ferron
 api.example.com {
     json_errors
 }
 ```
+
+> [!info]
+> See [Configuration: static files](/docs/configuration/content/static-files) for `error_page` options and [Configuration: response](/docs/configuration/routing/response) for status rules.

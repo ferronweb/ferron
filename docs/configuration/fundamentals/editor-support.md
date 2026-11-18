@@ -3,7 +3,7 @@ title: "Editor support"
 description: "Syntax highlighting, language server, and editor extensions for Ferron configuration files."
 ---
 
-A range of editor integrations support Ferron configuration files (`.conf` / `.ferron`). These integrations cover syntax highlighting, formatting, completions, and diagnostics. They are useful for GitOps operators and anyone editing Ferron configuration by hand.
+Editor integrations for Ferron configuration files (`.conf` and `.ferron`) provide syntax highlighting, formatting, completions, and diagnostics. They help anyone who edits Ferron configuration by hand.
 
 ## Feature overview
 
@@ -91,7 +91,7 @@ If you prefer not to use the extension, you can install the TextMate grammar man
      -o ~/.vscode/extensions/ferron.tmLanguage.json
    ```
 
-2. Install the language server separately (see [Installation](#installation) above) and configure it in the LSP settings of your editor.
+2. Install the language server separately (see [Installation](#installation)) and point the LSP client of the editor at it.
 
 ## Zed
 
@@ -104,7 +104,7 @@ The [ferronweb/ferron-zed](https://github.com/ferronweb/ferron-zed) repository h
    cd ferron-zed
    ```
 
-2. Install it as a development extension ("Install Dev Extension" button in Extensions)
+2. Install it as a development extension with the "Install Dev Extension" button in Extensions.
 3. Restart Zed.
 
 The extension bundles the tree-sitter grammar and configures the language server automatically.
@@ -113,11 +113,11 @@ The extension bundles the tree-sitter grammar and configures the language server
 
 Any editor that supports TextMate grammars or tree-sitter can use Ferron syntax highlighting. Editors that support the Language Server Protocol can use the Ferron language server for completions and diagnostics.
 
-For editors without a dedicated extension, configure them to:
+For an editor without a dedicated extension:
 
-1. Associate `.conf` or `.ferron` files with the Ferron language
-2. Install the TextMate or tree-sitter grammar
-3. Point the LSP client to the `ferron-language-server` binary
+1. Associate `.conf` or `.ferron` files with the Ferron language.
+2. Install the TextMate or tree-sitter grammar.
+3. Point the LSP client at the `ferron-language-server` binary.
 
 ## See also
 

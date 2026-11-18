@@ -3,7 +3,7 @@ title: "Configuration: conditionals and variables"
 description: "Named matchers, conditional operators, built-in variables, and interpolated string syntax."
 ---
 
-This page describes how to define and use conditional matchers in Ferron configuration. Named matchers let you apply configuration selectively based on request properties. The matcher system is part of the request resolution pipeline of the `http-server` module.
+A named matcher applies configuration selectively, based on request properties. Declare one with `match`, then apply it with `if` or `if_not`. Matchers run in the request resolution pipeline of the `http-server` module.
 
 > [!info]
 > For URL rewriting with regex, see [URL rewriting](/docs/configuration/routing/rewrite). For HTTP response control with regex matching, see [HTTP response control](/docs/configuration/routing/response).
@@ -24,7 +24,7 @@ example.com {
 }
 ```
 
-Language matching example:
+Match a language:
 
 ```ferron
 match english_language {
@@ -40,7 +40,7 @@ example.com {
 
 ## Operators
 
-The following operators are available inside `match` blocks:
+Operators available inside `match` blocks:
 
 | Operator | Meaning                                                                                                                       |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -51,17 +51,16 @@ The following operators are available inside `match` blocks:
 | `in`     | Left value must equal one of the comma-separated items in the right value, or match a language in an `Accept-Language` header |
 
 > [!note]
+> `in` splits the right-hand string on commas and trims each item.
 >
-> - `in` splits the right-hand string on commas and trims each item.
-> - When the right value looks like an `Accept-Language` header, `in` matches by base language code. For example, `en` matches `en-US`.
-> - The header contains quality values or multiple language ranges.
+> When the right value looks like an `Accept-Language` header, `in` matches by base language code. For example, `en` matches `en-US`. The header must contain quality values or multiple language ranges.
 
 > [!note]
-> All expressions inside one `match` block must pass (AND semantics). If Ferron cannot resolve a variable, it keeps the placeholder as `{{name}}`.
+> All expressions inside one `match` block must pass (AND semantics).
 
 ## Built-in variables
 
-The HTTP resolver exposes these variables for use in `match` blocks and interpolation (`{{...}}`):
+The HTTP resolver exposes these variables in `match` blocks and interpolation (`{{...}}`):
 
 | Variable                    | Value                                                                                     |
 | --------------------------- | ----------------------------------------------------------------------------------------- |
@@ -89,11 +88,11 @@ Ferron normalizes header names by lowercasing them and converting `_` to `-`. Fo
 
 ### IP canonicalization
 
-The `server.ip` and `remote.ip` variables automatically canonicalize IPv4-mapped IPv6 addresses (`::ffff:x.x.x.x`) to their IPv4 form. For example, if the client connects via `::ffff:192.0.2.1`, `remote.ip` returns `192.0.2.1`.
+`server.ip` and `remote.ip` canonicalize IPv4-mapped IPv6 addresses (`::ffff:x.x.x.x`) to their IPv4 form. For example, if the client connects via `::ffff:192.0.2.1`, `remote.ip` returns `192.0.2.1`.
 
 ## Interpolated strings
 
-Interpolated strings use `{{name}}` syntax:
+Interpolated strings use the `{{name}}` syntax:
 
 - `{{env.NAME}}` reads the `NAME` environment variable.
 - Other interpolation variables depend on the consumer of that directive.

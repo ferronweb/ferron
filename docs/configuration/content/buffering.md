@@ -1,88 +1,56 @@
 ---
 title: "Configuration: HTTP buffering"
-description: "Request and response body buffering to protect backends and control memory usage."
+description: "Buffer request and response bodies to protect backends and bound memory use."
 ---
 
-This page documents the `buffer_request` and `buffer_response` directives for configuring HTTP body buffering in Ferron. Buffering collects incoming request bodies and outgoing response bodies up to a configured size limit. It can serve as an additional protection layer against Slowloris-style attacks. It also helps control memory consumption for large payloads.
-
-## Request and response buffering
+`buffer_request` and `buffer_response` collect a body up to a size limit before Ferron passes it on. Request buffering protects backends from Slowloris-style slow uploads. Response buffering bounds memory use and makes delivery to clients more even.
 
 ```ferron
-{
-    buffer_request 8192
-    buffer_response 65536
-}
-
 example.com {
-    buffer_request 16384
-    buffer_response 0
-}
-```
-
-Both directives accept an integer value (buffer size in bytes). You can configure them at global or HTTP host scope. When set, the server buffers up to the specified number of bytes before passing the body downstream. The server still serves bodies larger than the buffer limit, but it collects the initial portion first.
-
-### Global buffering directives
-
-| Directive         | Arguments | Description                                                                                                                                                                                                     | Default  |
-| ----------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `buffer_request`  | `<int>`   | This directive specifies the buffer size in bytes for incoming HTTP request bodies. Buffering request bodies can protect backend servers from Slowloris-style attacks by collecting the body before processing. | disabled |
-| `buffer_response` | `<int>`   | This directive specifies the buffer size in bytes for outgoing HTTP response bodies. Buffering responses can help control memory usage and make sure delivery to clients is consistent.                         | disabled |
-
-**Configuration example:**
-
-```ferron
-{
     buffer_request 8192
     buffer_response 32768
 }
-
-example.com {
-    buffer_request 16384
-}
 ```
 
-> [!note]
-> Ferron disables both `buffer_request` and `buffer_response` by default unless you configure them explicitly. This avoids unnecessary memory overhead. Set buffer sizes based on your expected request/response payload sizes. Typical values range from 4 KB to 64 KB. Setting the buffer too small provides little benefit. Setting it too large increases memory consumption per request.
+Both directives take a buffer size in bytes. You can set them at global or HTTP host scope. Ferron buffers up to the limit and then streams the rest, so bodies larger than the limit still work. Both directives are disabled by default.
 
-## Behavior
+| Directive         | Arguments | Description                                  | Default  |
+| ----------------- | --------- | -------------------------------------------- | -------- |
+| `buffer_request`  | `<int>`   | Buffer size in bytes for request bodies.     | disabled |
+| `buffer_response` | `<int>`   | Buffer size in bytes for response bodies.    | disabled |
 
-> [!tip]
->
-> - Each active connection uses memory proportional to the buffer size when you enable buffering. Under high concurrency, large buffer sizes can increase memory pressure. Monitor memory usage and adjust accordingly.
-> - To disable inherited buffering at a specific host scope, set the directive to `0` (zero bytes). Remove the directive entirely if no parent scope configures it.
+Typical values range from 4 KB to 64 KB. A small buffer provides little benefit. A large buffer uses more memory per active connection. Monitor memory under high concurrency.
 
-### Request buffering
+To disable inherited buffering at one scope, set the directive to `0`. Remove the directive when no parent scope configures it.
 
-When you configure `buffer_request`:
+## Request buffering
 
-- The server collects incoming request body frames up to the configured byte limit.
-- If the request body is smaller than the buffer limit, the server collects the entire body. It does this before downstream stages (like reverse proxy or authentication) process it.
-- If the request body exceeds the buffer limit, the server collects the buffered portion and preserves the remaining body stream. Downstream stages receive a chained stream consisting of the buffered frames followed by the remaining body.
-- If the request has an `Incremental: ?1` header, the server sends a 501 Not Implemented response.
-- The server preserves non-data frames (such as trailing headers) and stops further collection.
+- Ferron collects request body frames up to the limit.
+- If the body is smaller than the limit, Ferron collects the whole body before later stages run, including reverse proxy and authentication.
+- If the body is larger, downstream stages get a chained stream: the buffered frames, then the remaining body.
+- If the request has an `Incremental: ?1` header, Ferron returns `501 Not Implemented`.
+- Ferron keeps non-data frames such as trailing headers and stops further collection.
 
 > [!important]
-> Slowloris protection: Request buffering is one layer of defense against Slowloris attacks. You should also configure the `timeout` directive to enforce connection timeouts. See [Core directives](../server/core-directives.md) for the `timeout` directive.
+> Request buffering is one layer of Slowloris defense. Also set the `timeout` directive to enforce connection timeouts. See [Core directives](../server/core-directives.md).
 
-### Response buffering
+## Response buffering
 
-When you configure `buffer_response`:
+- Ferron collects response body frames up to the limit.
+- The body splits into buffered frames and a remaining stream. The remaining stream exists only when the body exceeds the limit.
+- Ferron reassembles the buffered frames and sends them as a chained stream.
+- If the response has an `Incremental: ?1` or `X-Accel-Buffering: no` header, Ferron skips buffering.
+- Only custom responses from the pipeline are buffered. Built-in error responses are not.
 
-- The server collects outgoing response body frames up to the configured byte limit.
-- Like request buffering, the server splits the response body into buffered frames and a remaining stream. Buffered frames stay within the configured limit. The remaining stream exists only if the body exceeds the limit.
-- The server reassembles the buffered response and sends it to the client as a chained stream.
-- If the response has an `Incremental: ?1` or `X-Accel-Buffering: no` header, the server does not buffer the response.
-- Response buffering only applies to custom responses generated by the pipeline. Built-in error responses are not buffered.
+## Pipeline position
 
-### Buffering and pipeline stages
-
-The buffer stage runs early in the HTTP pipeline. It runs after URL rewriting but before rate limiting, authentication, caching, reverse proxy, and static file stages. This ordering makes sure that the server buffers request bodies before they reach backend handlers.
+The buffer stage runs early. It runs after URL rewriting and before rate limiting, authentication, caching, reverse proxy, and static file serving. Request bodies are therefore buffered before they reach a backend handler.
 
 ## Observability
 
 ### Trace spans
 
-The request buffer stage sets the following attributes on its `ferron.stage.http_buffer` span:
+The request buffer stage sets these attributes on its `ferron.stage.http_buffer` span.
 
 | Attribute                | Type | Description                                 |
 | ------------------------ | ---- | ------------------------------------------- |

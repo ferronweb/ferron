@@ -3,20 +3,16 @@ title: Installation via Docker
 description: "Run Ferron in Docker or Docker Compose: pull the image, start a container, verify, manage containers, and see image tags."
 ---
 
-You can install Ferron via a Docker image for containerized deployments.
+Ferron ships as a Docker image for containerized deployments.
 
 ## Prerequisites
 
-Before starting the installation, you need:
-
-- A system with Docker installed. If Docker is not installed, follow the official [Docker installation guide](https://docs.docker.com/get-started/get-docker/).
-- Internet connectivity to pull the Ferron Docker image.
+- Docker on the host. See the official [Docker installation guide](https://docs.docker.com/get-started/get-docker/) if you need it.
+- Internet access to pull the Ferron image.
 
 ## Installation steps
 
 ### 1. Pull the Ferron Docker image
-
-To download the latest Ferron image from Docker Hub, run the following command:
 
 ```sh
 docker pull ferronserver/ferron:3
@@ -24,32 +20,28 @@ docker pull ferronserver/ferron:3
 
 ### 2. Run the Ferron container
 
-Once you download the image, start a Ferron container with the command below:
-
 ```sh
 docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:3
 ```
 
-This command does the following:
+The flags:
 
-- `--name myferron` - assigns a name (`myferron`) to the running container.
-- `-d` - runs the container in detached mode (as a background process).
-- `-p 80:80` - maps port 80 of the container to port 80 on the host machine.
-- `--restart=always` - makes sure the container automatically restarts if it stops or if the system reboots.
+- `--name myferron`: names the container `myferron`.
+- `-d`: runs the container in the background.
+- `-p 80:80`: maps container port 80 to host port 80.
+- `--restart=always`: restarts the container after a stop or a reboot.
 
 ## Verifying the installation
-
-To confirm that Ferron runs, execute:
 
 ```sh
 docker ps
 ```
 
-This should display a running container with the name `myferron`.
+The output lists a running container named `myferron`.
 
-To test the web server, open a browser and navigate to `http://localhost`. If you see the "Ferron is ready to serve." message on the page, the web server works correctly.
+Open `http://localhost` in a browser. The page shows "Ferron is ready to serve." when the server works.
 
-You can also use `curl` instead:
+You can also use `curl`:
 
 ```sh
 curl http://localhost
@@ -57,59 +49,51 @@ curl http://localhost
 
 ## File structure
 
-Ferron on Docker has the following file structure:
+The Docker image contains these paths:
 
-- `/usr/local/bin/ferron` - Ferron web server
-- `/usr/local/bin/ferron-fmt` - Ferron configuration formatter
-- `/usr/local/bin/ferron-kdl2ferron` - Ferron configuration conversion tool
-- `/usr/local/bin/ferron-passwd` - Ferron user password generation tool
-- `/usr/local/bin/ferron-precompress` - Ferron static files precompression tool
-- `/usr/local/bin/ferron-serve` - command for serving static files with Ferron with zero configuration
-- `/var/cache/ferron-acme` - the ACME cache directory for Ferron (if not explicitly specified in the server configuration)
-- `/var/www/ferron` - the default web root for Ferron
-- `/etc/ferron/conf.d` - Directory for split Ferron configuration files
-- `/etc/ferron/conf.d/00-default.conf` - Default Ferron configuration
+- `/usr/local/bin/ferron`: Ferron web server
+- `/usr/local/bin/ferron-fmt`: configuration formatter
+- `/usr/local/bin/ferron-kdl2ferron`: configuration conversion tool
+- `/usr/local/bin/ferron-passwd`: user password generation tool
+- `/usr/local/bin/ferron-precompress`: static file precompression tool
+- `/usr/local/bin/ferron-serve`: static file serving with no configuration
+- `/var/cache/ferron-acme`: ACME cache directory, unless the configuration sets another path
+- `/var/www/ferron`: default web root
+- `/etc/ferron/conf.d`: directory for split configuration files
+- `/etc/ferron/conf.d/00-default.conf`: default configuration
 
 ## Managing the Ferron container
 
-### Stopping the container
-
-To stop the Ferron container, run:
+Stop the container:
 
 ```sh
 docker stop myferron
 ```
 
-### Restarting the container
-
-To restart the container:
+Start it again:
 
 ```sh
 docker start myferron
 ```
 
-### Removing the container
-
-If you need to remove the Ferron container:
+Remove the container:
 
 ```sh
 docker rm -f myferron
 ```
 
-### Viewing the logs
-
-To view the Ferron access and error logs, use the Docker `logs` command with the container name or ID:
+View the access and error logs:
 
 ```sh
 docker logs myferron
 ```
 
 > [!tip]
-> By default, the Ferron Docker image outputs structured JSON-format access logs. These logs carry `grep`-able trace IDs that correlate with error logs.
+> The Ferron Docker image writes structured JSON access logs by default. The logs carry trace IDs that correlate with error logs and are easy to search with `grep`.
 
 ## Using Ferron with Docker Compose
 
-If you use Docker Compose, you can define a service for Ferron in your `docker-compose.yml` file:
+Define a Ferron service in `docker-compose.yml`:
 
 ```yaml
 services:
@@ -120,7 +104,7 @@ services:
     restart: always
 ```
 
-Then, you can start Ferron using:
+Start it:
 
 ```sh
 docker compose up -d
@@ -128,11 +112,10 @@ docker compose up -d
 
 ### Example: Ferron with Docker Compose and automatic TLS
 
-If using Ferron with Docker Compose and automatic TLS, you can use the following `docker-compose.yml` file contents:
+This `docker-compose.yml` serves HTTPS with automatic TLS:
 
 ```yaml
 services:
-  # Ferron container
   ferron:
     image: ferronserver/ferron:3
     ports:
@@ -140,24 +123,25 @@ services:
       - "443:443"
       - "443:443/udp" # HTTP/3 + QUIC
     volumes:
-      - "./ferron-conf.d:/etc/ferron/conf.d" # Ferron configuration file
-      - "ferron-acme:/var/cache/ferron-acme" # This volume is needed for persistent automatic TLS cache, otherwise the web server will obtain a new certificate on each restart
+      - "./ferron-conf.d:/etc/ferron/conf.d"
+      - "ferron-acme:/var/cache/ferron-acme"
     restart: always
 
 volumes:
   ferron-acme:
 ```
 
-You might also configure Ferron in a `ferron-conf.d/ferron.conf` file like this:
+The `ferron-acme` volume keeps the ACME cache. Without it, the server obtains a new certificate on each restart.
+
+A configuration in `ferron-conf.d/ferron.conf`:
 
 ```ferron
-# Replace "example.com" with your website's domain name
 example.com {
     root /var/www/ferron
 }
 ```
 
-Then, you can start Ferron using:
+Start it:
 
 ```sh
 docker compose up -d
@@ -165,34 +149,37 @@ docker compose up -d
 
 ## Ferron image tags
 
-The Ferron 3 image has the following tags:
+The Ferron 3 image has these tags:
 
-- `3` - Based on Distroless, statically-linked binaries
-- `3-alpine` - Based on Alpine Linux, statically-linked binaries
-- `3-debian` - Based on Debian GNU/Linux, dynamically-linked binaries (GNU libc required)
+- `3`: Distroless base, statically linked binaries.
+- `3-alpine`: Alpine Linux base, statically linked binaries.
+- `3-debian`: Debian GNU/Linux base, dynamically linked binaries that need GNU libc.
 
 ## Images with FIPS-certified cryptography
 
-Ferron publishes FIPS-certified image variants for deployments that require FIPS-approved cryptography. These use the same base images but with the `-fips` suffix on the tag. For example:
+FIPS-certified image variants use the same base images with a `-fips` suffix:
 
 - `3-fips`
 - `3-alpine-fips`
 - `3-debian-fips`
 
-Pull and run a FIPS image the same way as the standard images:
+Pull and run them the same way:
 
 ```sh
 docker pull ferronserver/ferron:3-fips
 docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:3-fips
 ```
 
-FIPS images restrict cryptography to FIPS-approved algorithms: OCSP stapling, TLS cipher suites and key exchange groups are filtered, and HTTP basic auth password verification accepts only PBKDF2 hashes (Argon2, scrypt and bcrypt are rejected).
+FIPS images restrict cryptography to FIPS-approved algorithms:
 
-If you build the Ferron image yourself, pass the `FIPS=1` build argument to enable the FIPS build:
+- OCSP stapling, TLS cipher suites, and key exchange groups are filtered.
+- HTTP basic auth password verification accepts only PBKDF2 hashes. Argon2, scrypt, and bcrypt are rejected.
+
+To build a FIPS image yourself, pass the `FIPS=1` build argument:
 
 ```sh
 docker build --build-arg FIPS=1 -t ferronserver/ferron:3-fips .
 ```
 
 > [!note]
-> Use FIPS image variants when you must run Ferron in a FIPS-compliant environment. The standard images use a broader set of algorithms and are not FIPS-certified.
+> Use a FIPS image when you must run Ferron in a FIPS-compliant environment. Standard images support more algorithms and are not FIPS-certified.

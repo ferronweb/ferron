@@ -3,17 +3,17 @@ title: PHP edge caching (LSCache)
 description: "Use Ferron as an edge caching proxy for Apache PHP hosting with LSCache plugin support."
 ---
 
-Serving PHP through Apache proves reliable. `.htaccess` files, `mod_rewrite`, `mod_php`, and decades of hosting infrastructure all rely on it. Ferron can sit in front of this setup as an edge caching proxy. It adds high-performance HTTP caching, TLS termination, rate limiting, and DDoS protection. You do not need to change your Apache configuration.
+Apache with PHP is a common hosting stack. `.htaccess`, `mod_rewrite`, `mod_php`, and existing hosting tools all depend on it. Ferron can sit in front of that stack as an edge cache and add TLS termination, rate limiting, and abuse protection. Apache keeps its configuration.
 
 ```text
 Client -> Ferron (edge cache) -> Apache (PHP origin) -> PHP-FPM / mod_php
 ```
 
-Ferron works with LSCache-compatible PHP plugins such as LiteSpeed Cache for WordPress, Joomla, or OpenCart. Ferron respects `X-LiteSpeed-Cache-Control` headers from the PHP application. This gives you cache control directly from your app. You do not need server-level tuning.
+Ferron works with LSCache-compatible plugins such as LiteSpeed Cache for WordPress, Joomla, and OpenCart. Ferron reads `X-LiteSpeed-Cache-Control` from the PHP application, so the application controls the cache policy.
 
 ## Basic edge cache configuration
 
-The simplest setup proxies all requests to Apache on `localhost:8080` and enables caching with LSCache override mode:
+This setup proxies all requests to Apache on port 8080 and enables LSCache override mode:
 
 ```ferron
 example.com {
@@ -28,38 +28,22 @@ example.com {
 }
 ```
 
-This configuration:
-
-- Proxies every request to Apache, which handles PHP execution via PHP-FPM or `mod_php`.
-- Enables LSCache semantics (`X-LiteSpeed-Cache-Control` from the PHP app controls cache TTL and scope).
-- Emits `X-LiteSpeed-Cache` response headers (hit/miss/bypass) for debugging and plugin visibility.
-- Caches responses separately by `Accept-Encoding` so the server stores compressed and uncompressed variants independently.
+Apache handles PHP through PHP-FPM or `mod_php`. The PHP application controls cache TTL and scope with `X-LiteSpeed-Cache-Control`. Ferron adds `X-LiteSpeed-Cache` headers with the hit, miss, or bypass result. It caches compressed and uncompressed variants separately.
 
 > [!tip]
-> Before adding caching, verify that the proxy path works: `ferron validate -c ferron.conf`. Then check that Apache is reachable. Add the caching layer once you confirm the reverse proxy works.
+> Confirm that the proxy works before you add caching. Run `ferron validate -c ferron.conf` and check that Apache is reachable.
 
 ## WordPress with the LSCache plugin
 
-WordPress sites using the [LiteSpeed Cache plugin](https://wordpress.org/plugins/litespeed-cache/) are the most common use of this pattern. The plugin emits `X-LiteSpeed-Cache-Control` headers on pages it considers cacheable. With `litespeed_override_cache_control` enabled, Ferron respects those headers and serves cached copies to later visitors. This reduces Apache and PHP-FPM load.
+The [LiteSpeed Cache plugin](https://wordpress.org/plugins/litespeed-cache/) emits `X-LiteSpeed-Cache-Control` on pages it considers cacheable. With `litespeed_override_cache_control`, Ferron caches those pages and serves them to later visitors. This removes Apache and PHP-FPM work on cache hits.
 
-```ferron
-example.com {
-    proxy http://127.0.0.1:8080
+Use the configuration from [Basic edge cache configuration](#basic-edge-cache-configuration).
 
-    cache {
-        max_response_size 2097152
-        litespeed_override_cache_control
-        emit_litespeed_headers
-        vary Accept-Encoding
-    }
-}
-```
+## Make the LSCache plugin detect Ferron
 
-## Fix for LSCache plugin not detecting a supported web server
+The LSCache plugin requires a supported web server: LiteSpeed Web ADC, LiteSpeed Web Server, or OpenLiteSpeed. Behind a Ferron cache, the plugin may not detect a supported server. It then does not emit `X-LiteSpeed-Cache-Control`, and Ferron has no LSCache policy to apply.
 
-The LSCache plugin requires a supported web server (officially, they are LiteSpeed Web ADC, LiteSpeed Web Server or OpenLiteSpeed) to function. If you are using Ferron 3 as a caching reverse proxy for Apache with LSCache-compatible cache, the plugin might not detect that your web server is supported, and as a result, not emit `X-LiteSpeed-Cache-Control` headers, which are required for Ferron to respect them.
-
-To fix this, add this to your `.htaccess` file:
+Add this to `.htaccess`:
 
 ```apache
 # This would make Apache masquerade as OpenLiteSpeed,
@@ -79,7 +63,7 @@ The additional configuration would be responsible for some aspects like TLS term
 
 ## Cache exclusion for admin paths
 
-You must never cache admin areas, login pages, and checkout flows. Use conditional blocks to disable caching for specific paths:
+Do not cache admin areas, login pages, or checkout flows. Use a conditional block to disable caching for those paths:
 
 ```ferron
 example.com {
@@ -102,7 +86,7 @@ example.com {
 ```
 
 > [!note]
-> The LSCache WordPress plugin already sends `no-cache` directives on admin and login pages by default. The explicit `location` blocks serve as a safety net in case the plugin does not send cache-control headers.
+> The LSCache WordPress plugin already sends `no-cache` directives on admin and login pages by default. The conditional rule is a safety net when the plugin does not send cache headers.
 
 ## Caching static files from Apache
 

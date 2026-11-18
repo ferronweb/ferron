@@ -1,16 +1,15 @@
 ---
 title: Manual TLS
-description: "Configure Ferron with existing TLS certificates and private keys, without automatic ACME certificate issuance."
+description: "Use existing certificate and key files when another system manages issuance and renewal."
 ---
 
-Manual TLS is useful when you already have certificates and private keys, or when certificate issuance and renewal is handled outside Ferron.
+Use manual TLS when you already have a certificate and private key. Automatic ACME is easier when you do not.
 
-For many use cases, automatic TLS with ACME is the easiest way to get HTTPS working. However, if you have specific requirements or existing certificates, you can configure Ferron to use them directly.
+## Basic configuration
 
-To enable manual TLS for a host, configure the `tls` directive with the `"manual"` provider and certificate/private key paths:
+Set the `manual` provider and the certificate and key paths:
 
 ```ferron
-# Replace "manual-tls.example.com" with your domain name.
 manual-tls.example.com {
     tls {
         provider manual
@@ -22,10 +21,9 @@ manual-tls.example.com {
 }
 ```
 
-Or with an alias:
+The short form takes the certificate and key paths directly:
 
 ```ferron
-# Replace "manual-tls.example.com" with your domain name.
 manual-tls.example.com {
     tls /etc/ssl/certs/manual-tls.example.com.crt /etc/ssl/private/manual-tls.example.com.key
 
@@ -33,7 +31,7 @@ manual-tls.example.com {
 }
 ```
 
-You can also use environment variable interpolation for the paths:
+Paths support environment variable interpolation:
 
 ```ferron
 manual-tls.example.com {
@@ -48,16 +46,12 @@ manual-tls.example.com {
 ```
 
 > [!important]
->
-> - Make sure Ferron can read both the certificate and key files. Make sure the certificate file includes any required intermediate certificates that your CA needs.
-> - The certificate and private key must match. If they do not match, TLS handshakes will fail.
+> Ferron must read both files. The certificate file must include the intermediate certificates that the CA requires. The certificate and key must match. A mismatch makes every TLS handshake fail.
 
 > [!note]
-> If you rotate certificates externally, reload or restart Ferron so it uses the updated files.
+> If another system rotates the files, reload or restart Ferron. Ferron does not read the files again on its own.
 
-## Manual TLS with multiple hosts
-
-You can configure manual TLS per virtual host. This is useful when each domain uses different certificates:
+## One certificate per host
 
 ```ferron
 example.com {
@@ -73,9 +67,9 @@ api.example.com {
 }
 ```
 
-## Manual TLS with custom crypto settings
+## Custom crypto settings
 
-You can combine manual TLS with custom cipher suites, ECDH curves, and protocol version restrictions:
+Combine manual TLS with protocol versions, cipher suites, and ECDH curves:
 
 ```ferron
 api.example.com {
@@ -96,3 +90,6 @@ api.example.com {
     proxy http://localhost:3000
 }
 ```
+
+> [!info]
+> See [Security and TLS](/docs/configuration/security/tls) for cipher suites, curves, versions, and mTLS.

@@ -1,48 +1,21 @@
 ---
 title: Getting started with Ferron 3
-description: "Choose your first Ferron 3 setup, start from a minimal config, and move on to the right installation and use-case guides."
+description: "Choose a static, reverse proxy, or mixed setup, then start from a minimal Ferron 3 configuration."
 ---
 
-If this is your first time setting up Ferron, start here.
+Ferron serves files from disk, forwards requests to an application server, or does both in one host block.
 
-Ferron usually does one of two jobs:
+## Choose a setup
 
-- Serve files directly from disk.
-- Forward requests to an app server.
+| Setup         | Use it when                                        | Main directive |
+| ------------- | -------------------------------------------------- | -------------- |
+| Static files  | You have a built site or static assets on disk.    | `root`         |
+| Reverse proxy | An application listens on a port or socket.        | `proxy`        |
+| Mixed         | A frontend serves `/` and an app serves `/api`.    | `location`     |
 
-You can also combine both in one host block.
+## Minimal configurations
 
-## Web server basics in 60 seconds
-
-A web server listens for HTTP and HTTPS requests and returns responses.
-
-- Static file serving means Ferron reads files from disk and sends them to the browser.
-- Reverse proxying means Ferron forwards a request to another server and returns that response to the browser.
-- Mixed setups are common when you serve a frontend and proxy API requests.
-
-## Which setup should you choose?
-
-Choose static file serving if:
-
-- You have a static website, docs site, landing page, or built frontend assets.
-- You do not need app logic on every request.
-- Your content is mostly stored in a directory on disk.
-
-Choose reverse proxying if:
-
-- You already have an app process listening on a port or socket.
-- You want Ferron in front for TLS, routing, access control, or observability.
-- You expose a backend service such as Node.js, Python, Go, Java, or an API gateway.
-
-Choose a mixed setup if:
-
-- You serve a frontend and proxy API requests.
-- You want static assets at `/` and app traffic under `/api`.
-- You need one site to combine file serving and upstream routing.
-
-## First configuration examples
-
-### Static file serving
+### Static files
 
 ```ferron
 example.com {
@@ -50,7 +23,7 @@ example.com {
 }
 ```
 
-### Reverse proxying
+### Reverse proxy
 
 ```ferron
 example.com {
@@ -58,7 +31,7 @@ example.com {
 }
 ```
 
-### Mixed setup
+### Mixed
 
 ```ferron
 example.com {
@@ -72,11 +45,11 @@ example.com {
 }
 ```
 
-Ferron 3 strips the matched `location` prefix before the next stage runs, so the backend sees the path after `/api`.
+Ferron strips the matched `location` prefix before the next stage runs. A request to `/api/users` reaches the backend as `/users`.
 
-## Recommended path for first-time users
+## Next steps
 
-1. Install Ferron with the guide that matches your environment:
+1. Install Ferron with the guide for your platform:
    - [Linux installer](/docs/installation/linux/installer)
    - [Debian/Ubuntu](/docs/installation/linux/debian-ubuntu)
    - [RHEL/Fedora](/docs/installation/linux/rhel-fedora)
@@ -85,19 +58,23 @@ Ferron 3 strips the matched `location` prefix before the next stage runs, so the
    - [Manual installation](/docs/installation/manual-installation)
    - [Build from source with default modules](/docs/installation/source/default-modules)
    - [Build from source with custom modules](/docs/installation/source/custom-modules)
-2. Start with the smallest working config from this page.
-3. Pick a deeper guide once the basic setup works:
+2. Start with one of the configurations above.
+3. Validate the configuration before you reload or restart Ferron:
+
+   ```bash
+   ferron validate -c ferron.conf
+   ```
+
+4. Continue with the guide for your setup:
    - [Static file serving](/docs/use-cases/content/static-files)
    - [Reverse proxying](/docs/use-cases/traffic/reverse-proxy)
    - [Automatic TLS](/docs/use-cases/https/automatic-tls)
-4. Validate your config before restarting or reloading Ferron with `ferron validate -c ferron.conf`.
 
-## Common beginner mistakes
+## Common mistakes
 
-- Using `root` when you actually need `proxy` for a running application.
-- Proxying everything to an app when your content is mostly static files.
-- Forgetting that `location` strips the matched prefix in Ferron 3.
-- Copying a complex configuration before verifying a minimal working setup.
+- Use `root` when the content exists on disk. Use `proxy` when an application serves the request.
+- Do not proxy all traffic when most of the site is static.
+- Remember that `location` strips the matched prefix.
 
 > [!tip]
-> If you test locally, start with a single host block and one directive at a time. If validation fails, fix the reported config error before you try to restart the server.
+> Test one host block and one directive at a time. If validation fails, fix the reported error before you restart the server.

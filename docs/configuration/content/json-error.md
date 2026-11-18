@@ -1,36 +1,19 @@
 ---
 title: "Configuration: JSON error responses"
-description: "The `json_errors` directive for structured JSON error responses."
+description: "Return structured JSON bodies for 4xx and 5xx errors instead of HTML pages."
 ---
 
-This page documents the `json_errors` directive for generating structured JSON error responses instead of HTML. This is useful for RESTful API endpoints where clients expect machine-readable error bodies.
+`json_errors` makes Ferron return JSON error bodies. This suits APIs where clients expect machine-readable errors.
 
-## Directives
+## `json_errors`
 
-### JSON errors
+`json_errors <bool>` (`http-jsonerror`) returns JSON for HTTP 4xx and 5xx responses instead of an HTML page. Default: `false`.
 
-- `json_errors <enabled: bool>` (`http-jsonerror`)
-  - When `true`, Ferron returns HTTP error responses (4xx, 5xx) with a JSON body instead of an HTML error page. Default: `false`
-
-#### Block options
-
-| Option     | Arguments                 | Description                                                                                                                             | Default         |
-| ---------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| `format`   | `"problem"` \| `"simple"` | Output format. `"problem"` uses RFC 9457 Problem Details (`application/problem+json`). `"simple"` uses plain JSON (`application/json`). | `"problem"`     |
-| `type_uri` | `<string>`                | URI for the `type` field in RFC 9457 format. Ferron replaces the `{status}` placeholder with the HTTP status code.                      | `"about:blank"` |
-| `trace_id` | `<bool>`                  | Include the trace ID of the request in the response when available.                                                                     | `true`          |
-
-**Configuration example:**
-
-```ferron
-example.com {
-    json_errors
-}
-```
-
-#### RFC 9457 Problem Details format
-
-With `format "problem"` (default), responses use `Content-Type: application/problem+json` and follow the RFC 9457 structure:
+| Block option | Arguments                 | Description                                                              | Default         |
+| ------------ | ------------------------- | ------------------------------------------------------------------------ | --------------- |
+| `format`     | `"problem"` \| `"simple"` | `problem` uses RFC 9457 Problem Details. `simple` uses plain JSON.       | `"problem"`     |
+| `type_uri`   | `<string>`                | URI for the RFC 9457 `type` field. `{status}` becomes the status code.   | `"about:blank"` |
+| `trace_id`   | `<bool>`                  | Include the request trace ID in the response, when available.            | `true`          |
 
 ```ferron
 example.com {
@@ -40,7 +23,9 @@ example.com {
 }
 ```
 
-Example response for a 404 error:
+### Problem Details format
+
+With `format "problem"`, the default, responses use `Content-Type: application/problem+json` and follow RFC 9457. A 404 response looks like this:
 
 ```json
 {
@@ -52,9 +37,9 @@ Example response for a 404 error:
 }
 ```
 
-#### Simple JSON format
+With the default `type_uri`, the `type` field is `about:blank`.
 
-With `format "simple"`, responses use `Content-Type: application/json` with a minimal structure:
+### Simple format
 
 ```ferron
 example.com {
@@ -64,7 +49,7 @@ example.com {
 }
 ```
 
-Example response:
+With `format "simple"`, responses use `Content-Type: application/json` and a smaller structure:
 
 ```json
 {
@@ -75,9 +60,9 @@ Example response:
 }
 ```
 
-#### Scope to API paths
+### Scope to API paths
 
-Use `location` blocks to enable JSON errors only for API endpoints:
+Use `location` blocks to enable JSON errors only for API paths:
 
 ```ferron
 example.com {
@@ -93,19 +78,17 @@ example.com {
 
 ## Interaction with error pages
 
-When you enable `json_errors`, the JSON error stage runs before the `error_page` stage, which serves custom HTML error pages. This means:
+The JSON error stage runs before the `error_page` stage, which serves custom HTML error pages. JSON errors therefore take precedence over file-based `error_page` pages. With JSON errors enabled, Ferron does not reach the built-in HTML fallback.
 
-- JSON errors take precedence over `error_page` file-based error pages
-- With JSON errors enabled, Ferron never reaches the built-in HTML error page fallback
-- To use both HTML and JSON error pages for different paths, use `location` blocks
+To use HTML and JSON errors on different paths, separate them with `location` blocks.
 
 ## Observability
 
 ### Trace spans
 
-The stage sets the following attributes on its `ferron.stage.json_error` span:
+The stage sets these attributes on its `ferron.stage.json_error` span.
 
 | Attribute                       | Type   | Description                               |
 | ------------------------------- | ------ | ----------------------------------------- |
-| `ferron.json_error.format`      | string | Output format (`"problem"` or `"simple"`) |
-| `ferron.json_error.status_code` | i64    | HTTP status code of the error response    |
+| `ferron.json_error.format`      | string | Output format (`problem` or `simple`).    |
+| `ferron.json_error.status_code` | i64    | HTTP status code of the error response.   |

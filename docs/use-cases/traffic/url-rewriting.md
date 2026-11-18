@@ -1,23 +1,23 @@
 ---
 title: URL rewriting
-description: "Apply practical rewrite rules in Ferron for SPAs, PHP front controllers, and legacy URL migrations."
+description: "Rewrite URLs for SPA fallback, PHP front controllers, clean URLs, and legacy path migrations."
 ---
 
-URL rewriting is useful when your application expects "pretty URLs" that map to a single entry script (common in PHP CMS/framework stacks). It is also useful when you need to preserve old URL structures after migrations.
+A rewrite changes the request path before proxying or file serving. The client sees no redirect.
 
-Ferron applies rewrites in the request pipeline, before proxying or static file serving, so later stages use the rewritten URL. Rewrites do not trigger a new round of `location` matching. Ferron selects the `location` block once, on the original URL. The client sees no redirect, meaning the rewrite is transparent.
+Ferron selects the `location` block once, from the original URL. A rewrite changes the URL for later stages only. It does not run `location` matching again.
 
-For many applications behind reverse proxy, rewriting is not required. Those apps usually handle routing themselves, and Ferron only forwards requests with `proxy` (often using `location` blocks).
+Many proxied applications handle routing themselves. Those applications usually need only `proxy` and `location`, without rewrites.
 
 > [!tip]
-> Use `rewrite_log true` while debugging to verify which rules match. Ferron logs each rewrite operation to the error log.
+> Set `rewrite_log true` while you debug. Ferron logs each rewrite operation to the error log.
 
 > [!info]
 > For directive reference, see [Configuration: URL rewriting](/docs/configuration/routing/rewrite).
 
 ## Single-page application fallback
 
-A common pattern is rewriting unknown routes to `/` so client-side routing works:
+Rewrite unmatched paths to `/` so client-side routing works:
 
 ```ferron
 example.com {
@@ -30,11 +30,11 @@ example.com {
 }
 ```
 
-This preserves real files (for example `/assets/app.js`) while routing non-file paths (for example `/dashboard/settings`) to your SPA entry point.
+The guards keep real files such as `/assets/app.js` on the file path. Non-file paths such as `/dashboard/settings` use the SPA entry point.
 
-## PHP front-controller pattern
+## PHP front controller
 
-Many PHP applications route requests through `index.php`:
+Route requests through `index.php`:
 
 ```ferron
 example.com {
@@ -47,11 +47,11 @@ example.com {
 }
 ```
 
-CMS/framework setups commonly use this pattern where the app resolves routes internally.
+The application resolves routes internally.
 
-## Legacy URL migration
+## Migrate legacy paths
 
-To keep old URLs working after restructuring paths:
+Keep old URLs working after you move content:
 
 ```ferron
 example.com {
@@ -65,20 +65,18 @@ example.com {
 }
 ```
 
-## Clean URLs without `.html` for static files
+## Clean URLs for static files
 
-To serve clean URLs (without `.html`) for static files, you can use a regex pattern that matches any path except those ending with `.html`:
+To serve `/test` from `test.html` without a redirect, rewrite the path and add the extension:
 
 ```ferron
 example.com {
     root /var/www/html
 
-    # Rewrite /test?a=b&c=d -> /test.html?a=b&c=d
     rewrite r"^/([^?#]*[^?#/])($|[?#].*)" "/$1.html$2" {
         file false
     }
 
-    # Redirect /test/?a=b&c=d -> /test?a=b&c=d
     status 301 {
         regex r"^/([^?#]*[^?#/])/($|[?#].*)"
         location /$1$2
@@ -86,11 +84,11 @@ example.com {
 }
 ```
 
-This is useful when serving websites generated with a static site generator (SSG) such as Jekyll, Hugo, or Astro.
+The second rule redirects `/test/` to `/test` to keep one canonical form.
 
-## Chained rules without `last`
+## Chain rules
 
-Without `last true`, multiple rewrite rules can chain together:
+Without `last`, Ferron applies the rules in sequence:
 
 ```ferron
 example.com {
@@ -99,4 +97,4 @@ example.com {
 }
 ```
 
-The first rule rewrites a request to `/legacy/foo` to `/modern/foo`. Then the second rule rewrites it to `/current/foo`.
+A request to `/legacy/foo` becomes `/modern/foo`, then `/current/foo`.

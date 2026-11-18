@@ -1,53 +1,48 @@
 ---
 title: "Configuration: HTTP compression"
-description: On-the-fly and pre-compressed HTTP response body compression, algorithm preference, and configuration.
+description: "On-the-fly and pre-compressed response compression, with algorithm preference and ETag handling."
 ---
 
-This page documents the Ferron HTTP compression system. It covers the algorithm preference order, supported algorithms, and configuration options.
+Ferron compresses response bodies when the client accepts a supported encoding. It can also serve pre-compressed sidecar files from disk.
 
-> [!info]
-> The `http-compression` module handles compression. For static file compression specifically, see [Static file serving](/docs/configuration/content/static-files#compression).
+Dynamic compression comes from the `http-compression` module. Static file compression comes from the static file module. See [Static file serving](/docs/configuration/content/static-files#compression) for the static side.
 
-## Algorithm preference
+## Algorithm selection
 
-When a client sends an `Accept-Encoding` header, Ferron selects the best compression algorithm based on a **preference order**:
+Ferron uses a fixed preference order, not the order in the client header:
 
-1. **Zstandard**: the preferred algorithm. Offers the best compression ratio for text content and fast decoding.
-2. **Brotli**: excellent compression ratio, widely supported.
-3. **gzip**: the most universally supported compression algorithm.
-4. **Deflate**: similar to gzip but without the CRC checksum overhead. Less common in practice.
-
-The server iterates through the `Accept-Encoding` header values that the client sends. It selects the first algorithm that matches the preference order. For example, if a client sends:
+1. Zstandard. Best ratio for text, fast decoding.
+2. Brotli. Strong ratio, widely supported.
+3. gzip. The most widely supported algorithm.
+4. Deflate. Similar to gzip without the CRC checksum overhead. Less common.
 
 ```text
 Accept-Encoding: gzip, br, zstd
 ```
 
-The server selects Zstandard because it appears first in the preference order, even though the client listed gzip first.
-
-If the client does not send an `Accept-Encoding` header, the server serves the response without compression (`identity`). The same applies when none of the supported algorithms appear in the header.
+For this header Ferron selects Zstandard, even though the client listed gzip first. If the header is missing or lists no supported algorithm, Ferron sends the response uncompressed (`identity`).
 
 ## Configuration
 
-Ferron uses two separate directives for the two response paths. Do not mix them up.
+Static files and dynamic responses use separate directives. Do not mix them up.
 
 ### Static file compression
 
-The `compressed` directive (`http-static`) enables on-the-fly compression for static file responses only. It applies when Ferron serves files from `root`. Ferron compresses files larger than 256 bytes with compressible extensions. Host isolation: a named host does not inherit `compressed` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: `compressed true`
+`compressed [bool]` (`http-static`) enables on-the-fly compression for files served from `root`. Ferron compresses files larger than 256 bytes that have a compressible extension. Default: `compressed true`.
+
+A named host does not inherit `compressed` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits from its host.
 
 ### Dynamic response compression
 
-The `dynamic_compressed` directive (`http-compression`) enables on-the-fly compression for dynamic response bodies, such as reverse proxy, FastCGI, and CGI responses. Use it when backends return compressible text without their own compression. Default: `dynamic_compressed false`
+`dynamic_compressed [bool]` (`http-compression`) enables on-the-fly compression for dynamic bodies, such as reverse proxy, FastCGI, and CGI responses. Use it when a backend returns compressible text without compressing it itself. Default: `dynamic_compressed false`.
 
-> [!note]
-> Ferron never compresses `101 Switching Protocols` or `304 Not Modified` responses. Protocol upgrades such as WebSockets pass through unchanged when `dynamic_compressed` is on.
+Ferron never compresses `101 Switching Protocols` or `304 Not Modified` responses. Protocol upgrades such as WebSockets pass through unchanged.
 
 ### Pre-compressed sidecar files
 
-- `precompressed [bool: boolean]` (`http-static`)
-  - Enables serving pre-compressed sidecar files (for example, `style.css.zst`, `app.js.br`) instead of compressing on the fly. The server checks for a pre-compressed file alongside the original based on which algorithms the client lists in `Accept-Encoding`. Host isolation: a named host does not inherit `precompressed` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits it from its own host. Default: `precompressed false`
+`precompressed [bool]` (`http-static`) serves sidecar files such as `style.css.zst` or `app.js.br` instead of compressing on the fly. Ferron checks for a sidecar next to the original file, based on the algorithms in `Accept-Encoding`. Default: `precompressed false`.
 
-**Configuration example:**
+A named host does not inherit `precompressed` from the wildcard `*` host. It still inherits from global defaults, and a `location` block inherits from its host.
 
 ```ferron
 example.com {
@@ -60,49 +55,48 @@ example.com {
 
 ## Algorithm details
 
-| Algorithm | `Content-Encoding` value | Pre-compressed file extension | ETag suffix                                                       | Encoding parameters                            |
-| --------- | ------------------------ | ----------------------------- | ----------------------------------------------------------------- | ---------------------------------------------- |
-| Zstandard | `zstd`                   | `.zst`                        | `-zstd` (static files), `-dynamic-zstd` (dynamic responses)       | Quality level 4, window log 17, hash log 10    |
-| Brotli    | `br`                     | `.br`                         | `-br` (static files), `-dynamic-br` (dynamic responses)           | Quality level 4, window size 17, block size 18 |
-| gzip      | `gzip`                   | `.gz`                         | `-gzip` (static files), `-dynamic-gzip` (dynamic responses)       | Quality level 4                                |
-| Deflate   | `deflate`                | `.deflate`                    | `-deflate` (static files), `-dynamic-deflate` (dynamic responses) | Quality level 4                                |
-
-## Browser compatibility
-
-Ferron detects and handles browsers with known compression bugs:
-
-- **Netscape 4.x** (non-IE): Ferron disables compression for text/html content.
-- **w3m/0.5.x**: Ferron disables HTML compression.
-- **IE masquerading as Netscape 4.x**: Ferron allows compression (`MSIE` in the user agent indicates it is safe).
+| Algorithm | `Content-Encoding` | Sidecar extension | ETag suffix                                       | Encoder settings                               |
+| --------- | ------------------ | ----------------- | ------------------------------------------------- | ---------------------------------------------- |
+| Zstandard | `zstd`             | `.zst`            | `-zstd`, `-dynamic-zstd` for dynamic responses     | Quality 4, window log 17, hash log 10          |
+| Brotli    | `br`               | `.br`             | `-br`, `-dynamic-br` for dynamic responses         | Quality 4, window 17, block 18                 |
+| gzip      | `gzip`             | `.gz`             | `-gzip`, `-dynamic-gzip` for dynamic responses     | Quality 4                                      |
+| Deflate   | `deflate`          | `.deflate`        | `-deflate`, `-dynamic-deflate` for dynamic responses | Quality 4                                    |
 
 ## ETag handling
 
-When Ferron applies compression, it modifies the ETag to distinguish compressed variants:
+Ferron changes the ETag so each encoding has a distinct validator.
 
-- **Static files**: Ferron appends a suffix to the ETag (for example, `W/"abc123-zstd"` for zstd-compressed files). Pre-compressed sidecar files receive their own ETag. That ETag derives from the metadata of the sidecar file.
-- **Dynamic responses**: Ferron appends a `-dynamic-` prefixed suffix (for example, `W/"abc123-dynamic-zstd"`).
+- Static files get a suffix, for example `W/"abc123-zstd"`.
+- Pre-compressed sidecar files get their own ETag, derived from the sidecar metadata.
+- Dynamic responses get a `-dynamic-` suffix, for example `W/"abc123-dynamic-zstd"`.
 
-When the `If-None-Match` header is present, the server checks both the base ETag and the compressed variant. This determines whether to return `304 Not Modified`.
+With `If-None-Match`, Ferron checks both the base ETag and the compressed variant before it returns `304 Not Modified`.
 
 ## Vary header
 
-When compression is possible (based on file size and extension), the server adds `Accept-Encoding` to the `Vary` header. This makes sure caches serve the correct compressed variant to each client.
+When compression is possible, based on file size and extension, Ferron adds `Accept-Encoding` to `Vary`. Caches then keep separate variants for each client encoding.
+
+## Browser compatibility
+
+Ferron handles browsers with known compression bugs:
+
+- Netscape 4.x, other than IE: compression is disabled for `text/html`.
+- w3m/0.5.x: HTML compression is disabled.
+- IE posing as Netscape 4.x: compression stays enabled. An `MSIE` user agent marks this case as safe.
 
 ## Observability
 
 ### Access log fields
 
-The compression module contributes the following field to the HTTP access log line:
-
 | Field                          | Type   | Description                                                            |
 | ------------------------------ | ------ | ---------------------------------------------------------------------- |
-| `ferron.compression.algorithm` | string | Compression algorithm: `gzip`, `br`, `deflate`, `zstd`, or `identity`. |
+| `ferron.compression.algorithm` | string | `gzip`, `br`, `deflate`, `zstd`, or `identity`.                         |
 
 ### Trace spans
 
-The dynamic compression stage sets the following attributes on its `ferron.stage.dynamic_compression` span:
+The dynamic compression stage sets these attributes on its `ferron.stage.dynamic_compression` span.
 
-| Attribute                          | Type   | Description                                                                 |
-| ---------------------------------- | ------ | --------------------------------------------------------------------------- |
-| `ferron.compression.algorithm`     | string | Compression algorithm used: `gzip`, `br`, `deflate`, `zstd`, or `identity`. |
-| `ferron.compression.precompressed` | bool   | Whether the server served a precompressed file variant.                     |
+| Attribute                          | Type   | Description                                                 |
+| ---------------------------------- | ------ | ----------------------------------------------------------- |
+| `ferron.compression.algorithm`     | string | `gzip`, `br`, `deflate`, `zstd`, or `identity`.              |
+| `ferron.compression.precompressed` | bool   | Whether Ferron served a precompressed file variant.          |

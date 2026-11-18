@@ -6,7 +6,7 @@ description: "Run Ferron with FIPS-certified cryptography from AWS-LC, and learn
 FIPS builds use FIPS-certified cryptography from AWS-LC for all TLS and password hashing. Ferron publishes FIPS artifacts with a `+fips` suffix, and FIPS Docker images with a `-fips` tag suffix. A FIPS build prints `This build is configured to use FIPS-certified cryptography.` in its version output.
 
 > [!note]
-> This page states the self-audited compliance status of Ferron FIPS builds. The certified cryptographic module is AWS-LC. This self-audit is not a CMVP certificate for Ferron itself.
+> The following statement describes the self-audited compliance status of Ferron FIPS builds. The certified cryptographic module is AWS-LC. This self-audit is not a CMVP certificate for Ferron itself.
 
 ## When to use FIPS builds
 
@@ -84,7 +84,9 @@ Session ticket encryption uses AES-256-CBC with HMAC-SHA256 authentication in En
 
 ### OCSP stapling
 
-FIPS builds use SHA-256 or stronger for OCSP request and response hashing. SHA-1 requests (which would be the default in non-FIPS builds) are disabled (this might cause compatibility issues with older Firefox and some Android devices, so disable OCSP stapling if such problems occur). OCSP response signatures must use RSA (2048-bit or larger) or ECDSA on NIST curves with SHA-256, SHA-384, or SHA-512. RSA-SHA1, Ed25519, and secp256k1 signatures are rejected. See [OCSP stapling](/docs/configuration/security/ocsp).
+FIPS builds use SHA-256 or stronger for OCSP request and response hashing. SHA-1 requests, which non-FIPS builds use by default, are disabled. Older Firefox and some Android devices can fail with SHA-1 disabled. If that happens, disable OCSP stapling.
+
+OCSP response signatures must use RSA with at least 2048 bits, or ECDSA on NIST curves with SHA-256, SHA-384, or SHA-512. FIPS builds reject RSA-SHA1, Ed25519, and secp256k1 signatures. See [OCSP stapling](/docs/configuration/security/ocsp).
 
 ### Password hashing
 

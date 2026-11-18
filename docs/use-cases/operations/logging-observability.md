@@ -1,25 +1,21 @@
 ---
 title: Logging & observability
-description: "Practical Ferron setups for access logs, JSON formatting, container-friendly outputs, and OTLP export for centralized observability."
+description: "Set up access logs, JSON formatting, trace IDs, Prometheus metrics, and OTLP export for Ferron."
 ---
 
-Ferron supports multiple observability outputs. You can start with local log files and later move to centralized telemetry without changing your application stack.
+Ferron can write local log files and export logs, metrics, and traces to an OpenTelemetry collector. Start with local files. Add Prometheus or OTLP when you need central storage.
 
-This page focuses on common deployment patterns. For directive-level details, see [Configuration: observability and logging](/docs/configuration/observability/logging).
-
-For specific backend configurations:
+The patterns below cover common deployments. For directive details, see [Configuration: logging](/docs/configuration/observability/logging).
 
 - [Prometheus metrics](/docs/configuration/observability/prometheus)
 - [OTLP observability](/docs/configuration/observability/otlp)
 
 > [!tip]
+> Start with text or JSON logs, then add Prometheus metrics, then OTLP. Logs, metrics, and traces from one HTTP request share the same `trace_id`.
 >
-> - Start simple: text or JSON logs first, then add Prometheus metrics, then OTLP for full observability. All three signals (logs, metrics, traces) from the same HTTP request share the same `trace_id`, allowing for correlated queries.
-> - Enable logging and observability in global scope (outside any host block) to be able to see control plane (automatic TLS, configuration drift detection, and more) events. This is because many control plane events are not associated with any specific host and thus would not be logged if logging is only enabled inside host blocks.
+> Configure logging and observability in global scope, outside host blocks. Many control plane events, such as automatic TLS and configuration drift, do not belong to a host. Host-scoped logging does not record them.
 
-## Basic production logs to files
-
-Use this when running Ferron directly on a VM or bare metal and collecting logs from disk:
+## Write production logs to files
 
 ```ferron
 {
@@ -31,11 +27,11 @@ example.com {
 }
 ```
 
-The text formatter uses the Combined Log Format (CLF) by default, the same format used by Apache and Nginx.
+The text formatter uses the Combined Log Format (CLF) by default. Apache and NGINX use the same format.
 
-## JSON-format access logs
+## Write JSON access logs
 
-Use this when you need structured logs for easier parsing by log aggregation tools. For example, ELK Stack, Splunk, or cloud-native log processors:
+JSON output is easier for log processors such as ELK Stack, Splunk, or cloud-native tools:
 
 ```ferron
 {
@@ -62,7 +58,7 @@ Example output:
 }
 ```
 
-You can also select specific fields:
+To keep only selected fields:
 
 ```ferron
 {
@@ -79,7 +75,7 @@ example.com {
 
 ## Custom text log patterns
 
-You can customize the text log format using the `access_pattern` directive:
+Set the text layout with `access_pattern`:
 
 ```ferron
 {
@@ -94,9 +90,7 @@ example.com {
 }
 ```
 
-## Log rotation
-
-To prevent log files from growing too large, you can configure Ferron to rotate them automatically:
+## Rotate log files
 
 ```ferron
 {
@@ -112,18 +106,16 @@ To prevent log files from growing too large, you can configure Ferron to rotate 
 }
 ```
 
-## Trace ID logging for debugging
+## Log trace IDs
 
-Trace context is always enabled, and console/file loggers automatically prefix messages with `[trace=<trace_id>]`. Ferron also uses a different variant of Combined Log Format. This variant adds hostname and trace ID fields (Enhanced Combined Log Format) by default. You do not need to configure it manually in most cases.
-
-Example log output:
+Trace context is always on. Console and file loggers prefix messages with `[trace=<trace_id>]`. Access logs use the Enhanced Combined Log Format by default. It adds the hostname and trace ID fields.
 
 ```text
 [2026-04-05 14:32:01.123 INFO] [trace=abc123def456] Request processed successfully
 [2026-04-05 14:32:01.124 DEBUG] [trace=abc123def456] Cache miss for key: user:123
 ```
 
-You can then use `grep` to filter logs by a specific trace ID:
+Filter both logs by trace ID:
 
 ```bash
 grep "trace=abc123def456" /var/log/ferron/access.log /var/log/ferron/error.log
@@ -131,7 +123,7 @@ grep "trace=abc123def456" /var/log/ferron/access.log /var/log/ferron/error.log
 
 ## Per-host logs
 
-Ferron also works with logs configured for each host, which can be configured like this:
+Global logs apply to all hosts. A host can override the paths:
 
 ```ferron
 {
@@ -141,15 +133,13 @@ Ferron also works with logs configured for each host, which can be configured li
 
 example.com {
     log "example-access.log"
-    error_log "example-access.log"
+    error_log "example-error.log"
 
     root /var/www/html
 }
 ```
 
-## Centralized observability with OTLP
-
-Use this when shipping logs, metrics, and traces to an OpenTelemetry collector:
+## Export to an OpenTelemetry collector
 
 ```ferron
 {
@@ -169,7 +159,7 @@ example.com {
 }
 ```
 
-If you use gRPC OTLP endpoints, set `protocol "grpc"` and optionally an auth header:
+For gRPC endpoints, set `protocol grpc` and an auth header:
 
 ```ferron
 {
@@ -196,9 +186,11 @@ If you use gRPC OTLP endpoints, set `protocol "grpc"` and optionally an auth hea
 }
 ```
 
-### Structured (OTEL-style) logs over OTLP
+### OTEL-style log records
 
-If your collector or APM expects log records in the OpenTelemetry semantic-convention shape, set `log_style modern`. In this mode each log record body is a short summary (for example, `"Upstream circuit opened"`). Ferron publishes per-event attributes as typed OpenTelemetry attributes. Access logs use a body of `"Access log (http)"`. Ferron remaps them to OTEL semantic-convention names such as `url.path`, `http.request.method`, `http.response.status_code`, `client.address`, and `http.server.request.duration`. Local console and file log sinks remain unaffected.
+Set `log_style modern` when the collector expects OpenTelemetry semantic conventions. Each log record body is a short summary, such as `"Upstream circuit opened"`. Ferron publishes per-event attributes as typed OpenTelemetry attributes.
+
+Access logs use the body `"Access log (http)"`. Ferron maps the fields to names such as `url.path`, `http.request.method`, `http.response.status_code`, `client.address`, and `http.server.request.duration`. Console and file sinks do not change.
 
 ```ferron
 {
@@ -218,9 +210,9 @@ example.com {
 }
 ```
 
-### "Traditional" logs over OTLP
+### Traditional log records
 
-If you want to send traditional, human-readable log records via OTLP, set `log_style` to `legacy`. This preserves the original log message body and disables per-event attribute mapping.
+Set `log_style legacy` to keep the original message body and disable per-event attribute mapping:
 
 ```ferron
 {
@@ -240,9 +232,7 @@ example.com {
 }
 ```
 
-## Prometheus metrics monitoring
-
-Use this when you want to expose metrics for Prometheus scraping:
+## Export Prometheus metrics
 
 ```ferron
 {
@@ -258,9 +248,9 @@ example.com {
 }
 ```
 
-This starts a metrics endpoint at `http://localhost:8889/metrics` that Prometheus can scrape.
+Prometheus can scrape `http://localhost:8889/metrics`.
 
-### Production Prometheus setup
+For a protected endpoint:
 
 ```ferron
 {
@@ -277,10 +267,9 @@ example.com {
 }
 ```
 
-### Multiple hosts with different metrics ports
+### Separate metrics ports per host
 
 ```ferron
-# Main website
 example.com {
     observability {
         provider prometheus
@@ -289,7 +278,6 @@ example.com {
     root /var/www/example
 }
 
-# API service
 api.example.com {
     observability {
         provider prometheus
@@ -299,9 +287,9 @@ api.example.com {
 }
 ```
 
-## Hybrid setup: local fallback and OTLP
+## Keep local logs and export OTLP
 
-A practical migration strategy is to keep file logs for local troubleshooting while also exporting telemetry centrally:
+Keep file logs for local troubleshooting and export telemetry at the same time:
 
 ```ferron
 {
@@ -325,19 +313,15 @@ example.com {
 }
 ```
 
-### Hybrid setup: Prometheus and OTLP
-
-You can combine both Prometheus and OTLP for maximum flexibility:
+### Combine Prometheus and OTLP
 
 ```ferron
 {
-    # Local Prometheus metrics
     observability {
         provider prometheus
         endpoint_listen "127.0.0.1:8889"
     }
 
-    # Centralized OTLP export
     observability {
         provider otlp
         service_name ferron-prod
@@ -352,3 +336,6 @@ example.com {
     root /var/www/html
 }
 ```
+
+> [!info]
+> For OTLP options, see [OTLP observability](/docs/configuration/observability/otlp). For metric names and attributes, see [Metrics](/docs/configuration/observability/metrics).

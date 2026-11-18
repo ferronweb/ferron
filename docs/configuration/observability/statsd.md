@@ -1,15 +1,11 @@
 ---
 title: "Configuration: StatsD metrics"
-description: "StatsD metrics export configuration for sending Ferron metrics to a StatsD server."
+description: "Send Ferron metrics to a StatsD server over UDP, with optional DogStatsD extensions."
 ---
 
-This page documents the StatsD metrics export configuration for Ferron. The `observability-statsd` module sends the internal metrics of Ferron to a StatsD server over UDP. This lets you integrate with StatsD-compatible monitoring stacks, such as Graphite, Telegraf, and Datadog Agent.
-
-The module supports the [StatsD protocol](https://github.com/statsd/statsd) and optional [DogStatsD extensions](https://docs.datadoghq.com/developers/dogstatsd/). You can enable the DogStatsD extensions with the `datadog` directive.
+The `observability-statsd` module sends Ferron metrics to a StatsD server over UDP. It supports the [StatsD protocol](https://github.com/statsd/statsd) and optional [DogStatsD extensions](https://docs.datadoghq.com/developers/dogstatsd/), which you enable with `datadog`.
 
 ## Directives
-
-You configure StatsD metrics in `observability` blocks with `provider statsd`:
 
 ```ferron
 example.com {
@@ -23,60 +19,58 @@ example.com {
 }
 ```
 
-### Configuration directives
-
 | Directive  | Arguments    | Description                                                             | Default       |
 | ---------- | ------------ | ----------------------------------------------------------------------- | ------------- |
-| `provider` | `"statsd"`   | Specifies the StatsD observability provider. Required.                  | none          |
+| `provider` | `"statsd"`   | Selects the StatsD provider. Required.                                  | none          |
 | `host`     | `<hostname>` | Hostname or IP address of the StatsD server.                            | `"127.0.0.1"` |
-| `port`     | `<number>`   | UDP port of the StatsD server. Must be between 1 and 65535.             | `8125`        |
-| `prefix`   | `<string>`   | Prefix prepended to every metric name with a `.` separator.             | none          |
-| `datadog`  | `<bool>`     | Enable DogStatsD extensions: metric tags and the histogram metric type. | `false`       |
+| `port`     | `<number>`   | UDP port of the StatsD server, from 1 to 65535.                         | `8125`        |
+| `prefix`   | `<string>`   | Prefix for every metric name, separated by a `.`.                       | none          |
+| `datadog`  | `<bool>`     | Enable DogStatsD extensions: metric tags and the histogram type.        | `false`       |
 | `baggage`  | `{ ... }`    | Promote W3C Baggage keys into DogStatsD tags.                           | none          |
 
-The server sends each metric as a separate UDP datagram. The module does not wait for acknowledgments, so a missing or slow StatsD server does not slow down Ferron.
+Ferron sends each metric as a separate UDP datagram and does not wait for acknowledgments. A missing or slow StatsD server does not slow down Ferron.
 
 > [!note]
-> UDP is a best-effort protocol. A StatsD server that is unreachable drops metric datagrams silently. Monitor the StatsD server health separately.
+> UDP is a best-effort protocol. An unreachable StatsD server drops metric datagrams silently. Monitor the StatsD server health separately.
 
 ## Metric name prefixes
 
-The `prefix` directive prepends a namespace to every metric name. This is useful when several services share one StatsD server. With `prefix "myapp"`, the metric `ferron.http.server.request_count` becomes `myapp.ferron.http.server.request_count`.
+`prefix` prepends a namespace and a `.` to every metric name. This separates services that share one StatsD server. With `prefix myapp`, the metric `ferron.http.server.request_count` becomes `myapp.ferron.http.server.request_count`.
 
-Without a `prefix` directive, the module sends metric names as-is. Ferron metric names already start with `ferron.`, so you usually do not need a prefix.
+Without `prefix`, the module sends metric names unchanged. Ferron metric names already start with `ferron.`, so you usually do not need a prefix.
 
 > [!note]
 > The prefix must not contain the StatsD reserved characters `:`, `|`, `#`, or `@`.
 
 ## Metric type mapping
 
-Ferron emits OpenTelemetry-style metric events. The module maps them to StatsD types:
+Ferron maps its OpenTelemetry-style metric events to StatsD types:
 
 | Ferron metric type | StatsD type | Value semantics                   |
 | ------------------ | ----------- | --------------------------------- |
 | `Counter`          | `c`         | Increment delta                   |
 | `Gauge`            | `g`         | Absolute value                    |
 | `UpDownCounter`    | `g`         | Signed delta (`+3\|g` or `-3\|g`) |
-| `Histogram`        | `ms` or `h` | Single observation (see below)    |
+| `Histogram`        | `ms` or `h` | Single observation                |
 
-Histogram metrics become timers with the `ms` type. When the metric unit is seconds, the module converts the value to milliseconds. This matches the StatsD timer convention.
+Histogram metrics become timers with the `ms` type. When the metric unit is seconds, the module converts the value to milliseconds, which matches the StatsD timer convention.
 
-In Datadog mode (`datadog true`), histogram metrics use the DogStatsD histogram type `h` instead of `ms`. The module does not convert the unit in Datadog mode, because DogStatsD applies its own histogram aggregations.
+With `datadog true`, histograms use the DogStatsD histogram type `h` instead of `ms`. The module does not convert the unit in Datadog mode because DogStatsD applies its own histogram aggregation.
 
 ## Datadog extensions
 
-Set `datadog true` to enable DogStatsD extensions:
+`datadog true` enables two extensions:
 
-- **Metric tags**. The module renders metric attributes as DogStatsD tags, for example `|#ferron.host:localhost,http.response.status_code:200`. Control plane metadata becomes tags with the `ferron_control_plane_` key prefix.
-- **Histogram metric type**. Histogram metrics use the DogStatsD histogram type `h`.
+- Metric tags. The module renders metric attributes as DogStatsD tags, for example `|#ferron.host:localhost,http.response.status_code:200`. Control plane metadata keys use the `ferron_control_plane_` prefix.
+- Histogram metric type. Histograms use the DogStatsD type `h`.
 
-Tag values are sanitized for the DogStatsD tag syntax. The reserved characters `,`, `#`, and `:` become `?`. This prevents tag injection.
+Tag values are sanitized for DogStatsD syntax. The reserved characters `,`, `#`, and `:` become `?`, which prevents tag injection.
 
-Without `datadog`, the module does not add tags and sends all histogram metrics as `ms` timers.
+Without `datadog`, the module adds no tags and sends all histograms as `ms` timers.
 
 ## Baggage promotion
 
-The `baggage` sub-directive promotes specific W3C Baggage keys into DogStatsD tags. This is useful for adding request-scoped context (such as tenant IDs or user roles) to your metrics without custom instrumentation. Promoted keys are only emitted when `datadog` is enabled, because vanilla StatsD has no tag syntax.
+The `baggage` sub-directive promotes W3C Baggage keys into DogStatsD tags. Use it to add request-scoped context, such as tenant IDs or user roles, without custom instrumentation. Promoted keys are emitted only when `datadog` is enabled, because vanilla StatsD has no tag syntax.
 
 ```ferron
 example.com {
@@ -94,16 +88,16 @@ example.com {
 }
 ```
 
-Each `key` entry configures one baggage key to promote:
+Each `key` entry configures one baggage key:
 
-| Nested directive | Arguments           | Description                                                                           | Default                 |
-| ---------------- | ------------------- | ------------------------------------------------------------------------------------- | ----------------------- |
-| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                             | none                    |
-| `attribute`      | `<string>`          | The DogStatsD tag name to use.                                                        | same as the baggage key |
-| `max_distinct`   | `<number> \| false` | Maximum distinct tag values before dropping. Prevents high-cardinality tag explosion. | 100                     |
+| Directive      | Arguments           | Description                                                                           | Default                 |
+| -------------- | ------------------- | ------------------------------------------------------------------------------------- | ----------------------- |
+| `key`          | `<string>`          | W3C Baggage key to extract. Required.                                                 | none                    |
+| `attribute`    | `<string>`          | DogStatsD tag name.                                                                   | same as the baggage key |
+| `max_distinct` | `<number> \| false` | Maximum distinct tag values before dropping. Prevents high-cardinality tag explosion.  | 100                     |
 
 > [!warning]
-> StatsD tags with high-cardinality values can cause significant performance issues in the receiving backend. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are dropped.
+> Tags with high-cardinality values can reduce performance in the receiving backend. Always set `max_distinct` on baggage keys with unbounded values, such as user IDs or request IDs. Values above the cap are dropped.
 
 ## Example
 
@@ -120,4 +114,7 @@ example.com {
 
 This configuration sends metrics such as `web.ferron.http.server.request_count:1|c` to `statsd.internal.example.com:8125`.
 
-For more information about the metrics Ferron emits, see [Metrics](/docs/configuration/observability/metrics).
+## See also
+
+- [Metrics](/docs/configuration/observability/metrics): metrics that Ferron emits
+- [DogStatsD extensions](https://docs.datadoghq.com/developers/dogstatsd/): tag and histogram syntax

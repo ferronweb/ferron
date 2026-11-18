@@ -3,25 +3,28 @@ title: "Configuration doctor"
 description: "Using ferron doctor to detect best-practice violations and security misconfigurations."
 ---
 
-This page documents the `ferron doctor` command, which extends configuration validation with best-practice checks for security, reliability, and operational hygiene.
+`ferron doctor` extends configuration validation with best-practice checks for security, reliability, and operational hygiene.
 
 ## The doctor command
 
-The `doctor` command runs the same structural validation as `ferron validate`. It also checks for configuration patterns that are technically valid but deviate from recommended practices.
+The `doctor` command runs the same structural validation as `ferron validate`. It also reports configuration patterns that are valid but differ from recommended practice.
 
 ```bash
 ferron doctor -c ferron.conf
 ```
 
-If the configuration is valid and contains no best-practice violations, the command exits with code 0. If it finds violations, it still exits with code 0 (they are advisory, not errors). If it finds structural errors, it exits with code 1.
+Exit codes:
+
+- `0`: no findings, or only best-practice violations.
+- `1`: structural errors.
 
 > [!note]
+> Best-practice violations are advisory and do not block startup. Treat the findings as guidance, not as absolute rules.
 >
-> - Best-practice violations are advisory and do not prevent the server from starting. Treat the findings as opinionated guidance, not absolute truth.
-> - The `ferron validate` command suppresses doctor diagnostics. Use `ferron doctor` to see them.
+> `ferron validate` suppresses doctor diagnostics. Use `ferron doctor` to see them.
 
 > [!tip]
-> Some checks are contextual and only fire when the doctor detects specific directive combinations. The doctor cannot detect all security-relevant patterns at configuration time. Runtime monitoring and network controls remain important. For the full list of detected best-practice violations, see the respective documentation pages in the "Configuration" category.
+> Some checks are contextual and fire only on specific directive combinations. The doctor cannot catch every security-relevant pattern at configuration time. Runtime monitoring and network controls still matter. For the full list of checks, see the pages in the "Configuration" category.
 
 ### Log output
 
@@ -55,7 +58,7 @@ ferron doctor -c ferron.conf --json
 ```
 
 > [!note]
-> The JSON output format is stable and suitable for programmatic consumption by tools and CI pipelines.
+> The JSON output format is stable and safe for tools and CI pipelines to parse.
 
 ## How it differs from validate
 

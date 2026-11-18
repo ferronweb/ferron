@@ -1,23 +1,18 @@
 ---
 title: "Configuration: security and TLS"
-description: "Certificate and key paths, cipher suites, ECDH curves, TLS protocol versions, and client certificate authentication (mTLS)."
+description: "Certificate and key files, cipher suites, ECDH curves, TLS versions, and client certificate authentication (mTLS)."
 ---
 
-This page documents the TLS crypto directives available inside a `tls { ... }` block. These settings are optional. Ferron uses safe defaults when you omit a setting. The TLS crypto configuration applies to all TLS providers: `manual`, `acme`, and `local`.
+TLS options live in a `tls { ... }` block and apply to every provider: `manual`, `acme`, `http`, and `local`. Ferron uses safe defaults when you omit a setting.
 
-## Directives
+## Certificate and key
 
-### Certificate and private key
+| Directive | Value     | Description                                                       |
+| --------- | --------- | ----------------------------------------------------------------- |
+| `cert`    | `<path>`  | PEM certificate chain. Leaf certificate first, then intermediates. |
+| `key`     | `<path>`  | PEM private key.                                                  |
 
-- `cert <path: string>`
-  - This directive specifies the path to the server certificate file. The file must be PEM format and include the leaf certificate and any intermediate certificates your CA requires.
-- `key <path: string>`
-  - This directive specifies the path to the server private key file. The file must be PEM format.
-
-These directives are required for the `manual` provider. Make sure Ferron can read both files. The certificate and private key must match.
-If they do not match, TLS handshakes fail. You can use environment variable interpolation for the paths.
-
-**Configuration example:**
+The `manual` provider requires both directives. Ferron must read both files, and the certificate and key must match. A mismatch makes every TLS handshake fail. Both paths accept environment variable interpolation.
 
 ```ferron
 example.com {
@@ -29,12 +24,9 @@ example.com {
 }
 ```
 
-### Cipher suites
+## Cipher suites
 
-- `cipher_suite <suite: string>`
-  - This directive specifies a cipher suite to add to the allowed list. Repeatable. Each occurrence adds one suite. When you omit it, rustls defaults apply. Default: rustls defaults.
-
-**Configuration example:**
+`cipher_suite <suite>` adds one suite to the allowed list. Repeat the directive to add more suites. When you omit it, the rustls defaults apply.
 
 ```ferron
 example.com {
@@ -48,7 +40,7 @@ example.com {
 }
 ```
 
-#### Supported cipher suites
+### Supported cipher suites
 
 | Suite                                           | Protocol | Key exchange  | Notes                               |
 | ----------------------------------------------- | -------- | ------------- | ----------------------------------- |
@@ -63,14 +55,13 @@ example.com {
 | `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256`   | TLS 1.2  | ECDHE + RSA   | RSA certificate                     |
 
 > [!note]
-> TLS 1.2 cipher suites are only effective when `min_version` allows TLS 1.2.
+> TLS 1.2 cipher suites take effect only when `min_version` allows TLS 1.2.
 
-### ECDH curves
+## ECDH curves
 
-- `ecdh_curve <curve: string>`
-  - This directive specifies an ECDH key exchange group to add to the allowed list, in priority order. Repeatable. Each occurrence adds one curve. When you omit it, rustls defaults apply. Default: rustls defaults.
+`ecdh_curve <curve>` adds one key exchange group to the allowed list, in priority order. Repeat the directive to add more curves. When you omit it, the rustls defaults apply.
 
-#### Supported curves
+### Supported curves
 
 | Curve            | Type                   | Notes                                              |
 | ---------------- | ---------------------- | -------------------------------------------------- |
@@ -80,14 +71,14 @@ example.com {
 | `x25519mlkem768` | Hybrid (ECDH + ML-KEM) | Post-quantum hybrid with `x25519`                  |
 | `mlkem768`       | ML-KEM                 | Pure post-quantum KEM                              |
 
-### TLS protocol version
+## TLS protocol versions
 
-- `min_version <version: string>`
-  - This directive specifies the minimum allowed TLS version. Supported values: `TLSv1.2`, `TLSv1.3`. Default: `min_version TLSv1.2`
-- `max_version <version: string>`
-  - This directive specifies the maximum allowed TLS version. Supported values: `TLSv1.2`, `TLSv1.3`. Default: `max_version TLSv1.3`
+| Directive     | Values              | Default   |
+| ------------- | ------------------- | --------- |
+| `min_version` | `TLSv1.2`, `TLSv1.3` | `TLSv1.2` |
+| `max_version` | `TLSv1.2`, `TLSv1.3` | `TLSv1.3` |
 
-**Configuration example: TLS 1.3 only**
+Omitting both keeps the TLS 1.2 to 1.3 range. Setting only `min_version` restricts the lower bound. Setting only `max_version` restricts the upper bound. Ferron rejects a `max_version` older than `min_version`.
 
 ```ferron
 example.com {
@@ -101,18 +92,19 @@ example.com {
 }
 ```
 
-If you omit both, Ferron uses the safe default range (TLS 1.2 to 1.3). Setting only `min_version` restricts the lower bound. Setting only `max_version` restricts the upper bound. Ferron returns an error if `max_version` is older than `min_version`.
+## Client certificate authentication (mTLS)
 
-### Client certificate authentication (mTLS)
+| Directive              | Value                          | Default  | Description                                                  |
+| ---------------------- | ------------------------------ | -------- | ------------------------------------------------------------ |
+| `client_auth`          | `[bool]`                       | `false`  | Turn client certificate authentication on or off.            |
+| `client_auth_required` | `[bool]`                       | `true`   | Require a valid client certificate when mTLS is enabled.      |
+| `client_auth_ca`       | path, `system`, or `webpki`    | `webpki` | Source of trusted CA certificates for client verification.   |
 
-- `client_auth [bool: boolean]`
-  - This directive turns client certificate authentication on or off. Default: `client_auth false`
-- `client_auth_required [bool: boolean]`
-  - This directive specifies whether clients must present a valid certificate if mTLS is enabled. Default: `client_auth_required true`
-- `client_auth_ca <source: string>`
-  - This directive specifies the source of trusted CA certificates for verifying client certificates. Supported values: a file path (`"/path/ca-cert.pem"`), `system` (OS native root store, requires `native-certs` feature), `webpki` (Mozilla root bundle). Default: `client_auth_ca webpki`
+`client_auth_ca` accepts these values:
 
-**Configuration example: full mTLS**
+- A file path loads the CA certificates in that PEM file.
+- `system` uses the OS root store. It requires the `native-certs` feature.
+- `webpki` uses the Mozilla root bundle.
 
 ```ferron
 api.example.com {
@@ -136,28 +128,24 @@ api.example.com {
 }
 ```
 
-> [!note]
->
-> - Client certificate verification uses the same trust model as server-side TLS. The client cert chain must validate against the configured CA roots.
-> - When `client_auth_ca` points to a file with multiple CA certificates (a bundle), Ferron loads all of them into the trust store.
-> - The `system` trust store includes all OS-trusted root CAs. Use it only when you want to accept client certificates from any publicly trusted CA. This is rarely the right choice for mTLS.
-> - For internal mTLS deployments, use a private CA and set `client_auth_ca` to the CA bundle file path.
+Client certificate verification uses the same trust model as server-side TLS. The client chain must validate against the configured CA roots.
+
+A `client_auth_ca` file can hold multiple CA certificates. Ferron loads all of them into the trust store.
+
+The `system` trust store includes every OS-trusted root CA. Use it only when you want to accept client certificates from any publicly trusted CA, which is rarely right for mTLS. For internal mTLS, use a private CA and point `client_auth_ca` at the CA bundle file.
 
 > [!tip]
+> If client certificate handshakes fail:
 >
-> If you see client certificate handshake failures:
->
-> - Verify the client certificate chain validates against the CA specified in `client_auth_ca`.
-> - Check that the CA certificate file is a valid PEM and has not expired.
-> - If you use `client_auth_ca system`, make sure the OS trusts the issuing CA.
+> - Verify that the client certificate chain validates against the CA in `client_auth_ca`.
+> - Check that the CA certificate file is valid PEM and has not expired.
+> - With `client_auth_ca system`, check that the OS trusts the issuing CA.
 
-## Observability
-
-### Metrics
+## Metrics
 
 | Metric                             | Type  | Attributes                                                                        | Description                                  |
 | ---------------------------------- | ----- | --------------------------------------------------------------------------------- | -------------------------------------------- |
-| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (`http`), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
+| `ferron.tls.certificate_not_after` | Gauge | `ferron.host`, `ferron.tls.provider` (provider name), `crypto.certificate.serial_number` | Certificate `notAfter` as Unix epoch seconds |
 
 ## See also
 
@@ -169,10 +157,10 @@ api.example.com {
 
 `ferron doctor` reports the following best-practice checks for directives on this page.
 
-- **`max_version TLSv1.2`**: Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
-- **`client_auth` with public trust store**: Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS instead.
-- **`client_auth_required false`**: This directive setting allows unauthenticated connections. If possible, prefer denying unauthenticated connections for better access control.
-- **`ocsp` disabled**: OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
-- **`ticket_keys` without `auto_rotate`**: Session ticket keys should rotate automatically in production to limit the impact of key compromise.
-- **`ticket_keys.max_keys` outside 2–5**: The optimal range keeps enough old keys for rotation without interruption and without excessive retention.
-- **`ticket_keys.rotation_interval` > 24h**: Rotate session ticket keys every 12–24 hours in production.
+- `max_version TLSv1.2`: Disabling TLS 1.3 reduces security and performance. Allow TLS 1.3 unless legacy clients require TLS 1.2 only.
+- `client_auth` with public trust store: Using `system` or `webpki` roots for mTLS client authentication trusts any certificate from the public PKI. Use a private CA bundle file for mTLS instead.
+- `client_auth_required false`: This setting allows unauthenticated connections. If possible, deny unauthenticated connections for better access control.
+- `ocsp` disabled: OCSP stapling improves TLS privacy, performance, and revocation behavior. Keep it enabled.
+- `ticket_keys` without `auto_rotate`: Session ticket keys should rotate automatically in production to limit the impact of key compromise.
+- `ticket_keys.max_keys` outside 2-5: The optimal range keeps enough old keys for rotation without interruption and without excessive retention.
+- `ticket_keys.rotation_interval` longer than 24h: Rotate session ticket keys every 12-24 hours in production.

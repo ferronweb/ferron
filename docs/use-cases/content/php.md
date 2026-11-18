@@ -1,45 +1,44 @@
 ---
 title: PHP hosting
-description: "Host PHP sites on Ferron using CGI or FastCGI (PHP-FPM or PHP-CGI), with Ferron configuration examples and troubleshooting notes."
+description: "Run PHP with FastCGI or CGI, disable PHP for selected paths, and pass trace context to the application."
 ---
 
-Ferron can run PHP applications through CGI or FastCGI. FastCGI is the recommended approach for most deployments. PHP worker processes stay alive between requests. This reduces process startup overhead and improves throughput.
+Ferron runs PHP through FastCGI or CGI. Use FastCGI for production. PHP worker processes stay alive between requests, so throughput is higher and startup cost is lower.
 
-## PHP through FastCGI (recommended)
+## FastCGI with PHP-FPM
 
-To run PHP with FastCGI (commonly PHP-FPM), use `fcgi_php`:
+Point `fcgi_php` to the PHP-FPM socket or TCP address:
 
 ```ferron
-# Example configuration with PHP through FastCGI. Replace "example.com" with your domain name.
 example.com {
-    root /var/www/html # Replace "/var/www/html" with your PHP app directory
-    fcgi_php unix:///run/php/php8.4-fpm.sock # Replace with your PHP FastCGI socket or TCP URL
-
-    # If using PHP-FPM over a Unix socket, ensure the socket is accessible by Ferron.
-    # For example, in your PHP-FPM pool configuration:
-    #   listen.owner = ferron
-    #   listen.group = ferron
+    root /var/www/html
+    fcgi_php unix:///run/php/php8.4-fpm.sock
 }
 ```
 
-You can also point `fcgi_php` to TCP listeners (for example `tcp://127.0.0.1:9000/`). Use this when your PHP FastCGI server does not use a Unix socket.
+The socket must be readable and writable by the user that runs Ferron. In the PHP-FPM pool configuration:
 
-### Disabling PHP in specific locations
+```ini
+listen.owner = ferron
+listen.group = ferron
+```
 
-You can disable PHP FastCGI for specific locations within a domain that has `fcgi_php` enabled globally. Use `fcgi_php false` in a `location` block. This stops the PHP backend from processing `.php` files in that scope:
+You can also use a TCP listener, for example `fcgi_php tcp://127.0.0.1:9000/`.
+
+## Disable PHP for a path
+
+A host with `fcgi_php` sends every `.php` file to PHP. Disable that for static paths or proxied API paths with `fcgi_php false`:
 
 ```ferron
 example.com {
     root /var/www/html
     fcgi_php unix:///run/php/php8.4-fpm.sock
 
-    # Disable PHP execution for static file paths
     location /static {
         fcgi_php false
         root /var/www/static
     }
 
-    # Disable PHP for API/proxy endpoints
     location /api {
         fcgi_php false
         proxy http://localhost:3000
@@ -47,41 +46,45 @@ example.com {
 }
 ```
 
-This is useful when you have a mixed deployment. For example, a PHP application that serves static files or proxies to another backend for certain paths. Without `fcgi_php false`, Ferron attempts to process `.php` files in those locations through the PHP backend. This could cause unexpected behavior.
+Without `fcgi_php false`, Ferron sends `.php` files in those locations to the PHP backend. A mixed deployment can then run the wrong handler.
 
-## PHP through CGI
+## CGI
 
-If you specifically want classic CGI execution, enable `cgi` and map the `.php` extension:
+For classic CGI, set the `cgi` block and map the `.php` extension:
 
 ```ferron
-# Example configuration with PHP through CGI. Replace "example.com" with your domain name.
 example.com {
-    root /var/www/html # Replace "/var/www/html" with your PHP app directory
+    root /var/www/html
     cgi {
         extension ".php"
     }
 }
 ```
 
-CGI is functional but usually slower than FastCGI for production workloads. Ferron starts a PHP process per request. For more control, see [Configuration: FastCGI support](/docs/configuration/content/fastcgi).
+CGI starts a PHP process for each request. It is slower than FastCGI under load. For interpreter options, see [Configuration: CGI](/docs/configuration/content/cgi).
 
 > [!tip]
+> If PHP files download instead of execute, check that the host or location has `fcgi_php` or `cgi` and `extension ".php"`.
 >
-> - If you use PHP-CGI with the CGI module, you may need `cgi.force_redirect = 0` in your CGI `php.ini`. Without this setting, requests can fail with a force-cgi-redirect warning.
-> - If PHP files download instead of executing, verify you enabled either `fcgi_php` or `cgi` + `extension ".php"` in the correct domain/location block.
+> If PHP-CGI reports a force-cgi-redirect warning, set `cgi.force_redirect = 0` in the CGI `php.ini`.
 
-## Distributed tracing with PHP
+## Distributed tracing
 
-PHP applications that use CGI or FastCGI automatically receive W3C Trace Context headers (`traceparent`, `tracestate`, and `baggage`) when tracing is enabled in Ferron. These headers appear as CGI environment variables (`HTTP_TRACEPARENT`, `HTTP_TRACESTATE`, `HTTP_BAGGAGE`).
+When tracing is enabled, Ferron sends W3C Trace Context headers to CGI and FastCGI applications:
 
-With the official [OpenTelemetry SDK for PHP](https://opentelemetry.io/docs/languages/php/), these headers enable distributed tracing out of the box. The SDK reads the incoming `traceparent` header and creates child spans. This connects your PHP backend traces to the rest of your infrastructure.
+- `HTTP_TRACEPARENT`
+- `HTTP_TRACESTATE`
+- `HTTP_BAGGAGE`
 
-> [!info]
-> You need only install and configure the OpenTelemetry SDK. No other PHP-side configuration is required. See [Tracing configuration](/docs/configuration/observability/tracing) for details on enabling trace generation and sampling in Ferron.
+The [OpenTelemetry SDK for PHP](https://opentelemetry.io/docs/languages/php/) reads `traceparent` and creates child spans. No other PHP-side configuration is required.
 
 > [!important]
-> Keep upload/download directories outside of `cgi-bin` when using CGI to avoid accidental CGI execution of uploaded files.
+> Keep upload and download directories outside `cgi-bin`. CGI must not execute files that users can upload.
+>
+> See [Tracing configuration](/docs/configuration/observability/tracing) to enable trace generation and sampling in Ferron.
 
 ## See also
 
-- [PHP edge caching (LSCache)](/docs/use-cases/content/php-edge-cache): Use Ferron as an edge caching proxy in front of Apache. This setup supports the LSCache plugin for PHP hosting.
+- [PHP edge caching (LSCache)](/docs/use-cases/content/php-edge-cache): use Ferron as an edge cache in front of Apache with the LSCache plugin.
+- [Configuration: FastCGI](/docs/configuration/content/fastcgi)
+- [Configuration: CGI](/docs/configuration/content/cgi)

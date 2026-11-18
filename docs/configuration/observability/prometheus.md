@@ -1,13 +1,11 @@
 ---
 title: "Configuration: Prometheus metrics"
-description: "Prometheus metrics export configuration for monitoring Ferron server performance and health."
+description: "Export Ferron metrics in Prometheus format over an HTTP endpoint."
 ---
 
-This page documents the Prometheus metrics export configuration for Ferron. The `observability-prometheus` module exports the internal metrics of Ferron in Prometheus format. This lets you integrate with Prometheus servers, Grafana dashboards, and other monitoring systems that support the OpenMetrics format.
+The `observability-prometheus` module serves Ferron metrics in Prometheus format over HTTP. Prometheus, Grafana, and other OpenMetrics-compatible systems can scrape the endpoint.
 
 ## Directives
-
-You configure Prometheus metrics in `observability` blocks with `provider prometheus`:
 
 ```ferron
 example.com {
@@ -20,62 +18,51 @@ example.com {
 }
 ```
 
-### Configuration directives
-
-| Directive                    | Arguments          | Description                                                                                                                                                                                                                              | Default                        |
-| ---------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `provider`                   | `"prometheus"`     | Specifies the Prometheus observability provider. Required.                                                                                                                                                                               | none                           |
-| `endpoint_listen`            | `<socket_address>` | Socket address to listen on for Prometheus metrics requests. Supports IPv4, IPv6, and port specifications.                                                                                                                               | `"127.0.0.1:8889"`             |
-| `endpoint_format`            | `<format>`         | Output format for metrics. Supported values: `"text"` (Prometheus text format), `"protobuf"` (Prometheus protobuf format).                                                                                                               | `"text"`                       |
-| `endpoint_native_histograms` | `<bool>`           | Enable native exponential histograms in protobuf format. When enabled, histogram metrics include both classic buckets and native histogram data in protobuf output. Text format always shows classic buckets regardless of this setting. | `false`                        |
-| `endpoint_auth_token`        | `<token>`          | Bearer token for authenticating Prometheus scrape requests. When set, scrapers must send `Authorization: Bearer <token>` header.                                                                                                         | none (authentication disabled) |
+| Directive                    | Arguments          | Description                                                        | Default                        |
+| ---------------------------- | ------------------ | ------------------------------------------------------------------ | ------------------------------ |
+| `provider`                   | `"prometheus"`     | Selects the Prometheus provider. Required.                         | none                           |
+| `endpoint_listen`            | `<socket_address>` | Listen address for scrape requests. Supports IPv4, IPv6, and port-only forms. | `"127.0.0.1:8889"` |
+| `endpoint_format`            | `<format>`         | Output format: `"text"` or `"protobuf"`.                           | `"text"`                       |
+| `endpoint_native_histograms` | `<bool>`           | Add native exponential histograms to protobuf output.              | `false`                        |
+| `endpoint_auth_token`        | `<token>`          | Require `Authorization: Bearer <token>` on scrape requests.        | none (authentication disabled) |
 
 ### Socket address format
 
-The `endpoint_listen` directive accepts standard Rust socket address syntax:
+`endpoint_listen` accepts standard Rust socket address syntax:
 
 - IPv4: `"127.0.0.1:8889"`, `"0.0.0.0:8889"`
 - IPv6: `"[::1]:8889"`, `"[::]:8889"`
-- Port-only: `":8889"` (binds to all interfaces)
+- Port only: `":8889"`, which binds to all interfaces
 
 > [!warning]
-> Binding to `0.0.0.0` or `[::]` exposes the metrics endpoint to all network interfaces. For production deployments, consider:
->
-> - Binding to localhost only (`127.0.0.1` or `::1`)
-> - Using firewall rules to restrict access
-> - Placing Ferron behind a reverse proxy with authentication
-
-### Format options
-
-- **`"text"`**: standard Prometheus text exposition format (default)
-- **`"protobuf"`**: Prometheus protobuf format for more efficient scraping
+> Binding to `0.0.0.0` or `[::]` exposes the metrics endpoint to all network interfaces. Bind to localhost (`127.0.0.1` or `::1`), restrict access with firewall rules, or place Ferron behind an authenticated reverse proxy.
 
 ### Native histograms
 
-When you set `endpoint_native_histograms` and `endpoint_format` is `"protobuf"`, histogram metrics include native exponential histogram data alongside classic bucket histograms. Native histograms give high-resolution percentile data across deep orders of magnitude (1ms to 100s) without manual bucket allocation.
+Set `endpoint_native_histograms` and `endpoint_format "protobuf"` to include native exponential histogram data alongside classic bucket histograms. Native histograms give high-resolution percentiles from 1ms to 100s without manual bucket allocation.
 
-Text format always exposes classic bucket histograms regardless of this setting. The OpenMetrics text format does not support native histograms.
+Text format exposes classic bucket histograms only. The OpenMetrics text format does not support native histograms.
 
 > [!note]
-> Native histograms require Prometheus 2.40+ or compatible clients that support the OpenMetrics native histogram protocol. Older Prometheus versions silently ignore the native histogram data and use the classic buckets.
+> Native histograms require Prometheus 2.40+ or a compatible client. Older Prometheus versions ignore the native histogram data and use the classic buckets.
 
 ### Metric exemplars
 
-When a request has an active trace context (trace ID and span ID), the Prometheus module attaches exemplars to observations. It applies to both counter and histogram observations. Exemplars link a specific metric observation to a trace. They let you drill down from a metric spike to the specific request that caused it.
+When a request has an active trace context, the Prometheus module attaches exemplars to counter and histogram observations. An exemplar links a metric observation to a specific trace, so you can move from a metric spike to the request that caused it.
 
 Each exemplar contains:
 
 - `trace_id`: the W3C trace ID of the request
 - `span_id`: the W3C span ID of the request
 
-Ferron enables exemplars by default for all counter metrics. For histograms, exemplars are active when `endpoint_native_histograms` is `false` (the default). Native histograms and exemplars are mutually exclusive in the Ferron Prometheus module.
+Counters carry exemplars by default. Histograms carry exemplars when `endpoint_native_histograms` is `false` (the default). Native histograms and exemplars are mutually exclusive in the Ferron Prometheus module.
 
 > [!note]
-> Exemplars appear in the OpenMetrics text format as comments at the end of the metric line. The Prometheus protobuf format supports them natively. Prometheus 2.26+ and Grafana can display exemplars for trace-to-metrics correlation.
+> In OpenMetrics text format, exemplars appear as comments at the end of the metric line. The protobuf format supports them natively. Prometheus 2.26+ and Grafana can display exemplars for trace-to-metric correlation.
 
 ### Baggage promotion
 
-The `baggage` sub-directive promotes specific W3C Baggage keys into Prometheus metric labels. This is useful for adding request-scoped context (such as tenant IDs or user roles) to your metrics without custom instrumentation.
+The `baggage` sub-directive promotes W3C Baggage keys into Prometheus metric labels. Use it to add request-scoped context, such as tenant IDs or user roles, without custom instrumentation.
 
 ```ferron
 example.com {
@@ -92,26 +79,26 @@ example.com {
 }
 ```
 
-Each `key` entry configures one baggage key to promote:
+Each `key` entry configures one baggage key:
 
-| Nested directive | Arguments           | Description                                                                               | Default                 |
-| ---------------- | ------------------- | ----------------------------------------------------------------------------------------- | ----------------------- |
-| `key`            | `<string>`          | The W3C Baggage key to extract. Required.                                                 | none                    |
-| `attribute`      | `<string>`          | The Prometheus label name to use.                                                         | same as the baggage key |
-| `max_distinct`   | `<number> \| false` | Maximum distinct label values before dropping. Prevents high-cardinality label explosion. | 100                     |
+| Directive      | Arguments           | Description                                                                               | Default                 |
+| -------------- | ------------------- | ----------------------------------------------------------------------------------------- | ----------------------- |
+| `key`          | `<string>`          | W3C Baggage key to extract. Required.                                                     | none                    |
+| `attribute`    | `<string>`          | Prometheus label name.                                                                    | same as the baggage key |
+| `max_distinct` | `<number> \| false` | Maximum distinct label values before dropping. Prevents high-cardinality label explosion.  | 100                     |
 
 > [!warning]
-> Prometheus metrics with high-cardinality labels can cause significant performance issues and memory consumption. Always set `max_distinct` on baggage keys with unbounded values (such as user IDs or request IDs). Values exceeding the distinct cap are dropped.
+> High-cardinality labels can reduce performance and increase memory use in Prometheus. Always set `max_distinct` on baggage keys with unbounded values, such as user IDs or request IDs. Values above the cap are dropped.
 
 ## Metrics endpoint
 
-When configured, the Prometheus module starts an HTTP server that exposes metrics at the `/metrics` endpoint:
+When configured, the module starts an HTTP server and exposes metrics at `/metrics`:
 
 ```bash
 curl http://localhost:8889/metrics
 ```
 
-Example output (text format):
+Example output in text format:
 
 ```text
 # HELP http_server_active_requests Number of active HTTP requests
@@ -137,19 +124,15 @@ http_server_request_duration_seconds_count{http_request_method="GET"} 195
 ```
 
 > [!tip]
->
-> - If the metrics endpoint fails to start, check for port conflicts with `netstat -tuln | grep 8889` or similar.
-> - Make sure your firewall allows traffic to the metrics port if binding to non-localhost addresses.
+> If the metrics endpoint does not start, check for a port conflict with `netstat -tuln | grep 8889`. If you bind to a non-loopback address, allow traffic to the metrics port in the firewall.
 
 ### Metric naming
 
-Ferron metrics follow OpenTelemetry semantic conventions and use automatic conversion to Prometheus format:
+Ferron converts OpenTelemetry metric names and types to Prometheus format:
 
-- Ferron converts OpenTelemetry metric names to snake_case
-- Attributes become Prometheus labels
-- Counter metrics become Prometheus counters
-- Gauge metrics become Prometheus gauges
-- Histogram metrics become Prometheus histograms
+- OpenTelemetry metric names become snake_case.
+- Attributes become Prometheus labels.
+- Counters, gauges, and histograms keep their type.
 
 ## Configuration examples
 
@@ -160,29 +143,6 @@ example.com {
     observability {
         provider prometheus
         endpoint_listen 127.0.0.1:8889
-    }
-}
-```
-
-### Production monitoring with all interfaces
-
-```ferron
-example.com {
-    observability {
-        provider prometheus
-        endpoint_listen 0.0.0.0:8889
-        endpoint_format text
-    }
-}
-```
-
-### IPv6 monitoring
-
-```ferron
-example.com {
-    observability {
-        provider prometheus
-        endpoint_listen [::]:8889
     }
 }
 ```
@@ -205,35 +165,9 @@ api.example.com {
 }
 ```
 
-### Baggage promotion with cardinality control
-
-```ferron
-example.com {
-    observability {
-        provider prometheus
-        endpoint_listen 127.0.0.1:8889
-
-        baggage {
-            key tenant.id {
-                attribute tenant.id
-                max_distinct 50
-            }
-
-            key user.role {
-                attribute ferron.user_role
-                max_distinct 10
-            }
-        }
-    }
-}
-```
-
-> [!tip]
-> Be aware of high-cardinality labels that could cause performance issues in Prometheus. Use `max_distinct` on `baggage` keys to cap distinct label values and prevent label explosion.
-
 ## Prometheus server configuration
 
-Add the following to your `prometheus.yml` to scrape Ferron metrics:
+Add this to `prometheus.yml` to scrape Ferron metrics:
 
 ```yaml
 scrape_configs:
@@ -246,17 +180,17 @@ scrape_configs:
 
 ## Best practices
 
-`ferron doctor` reports the following best-practice checks for directives on this page.
+`ferron doctor` reports these checks for directives on this page:
 
 ### Endpoint authentication
 
-- **`endpoint_listen` on non-loopback address without `endpoint_auth_token`**: The metrics endpoint allows unauthenticated access from all network interfaces. Bind to a loopback address, use `endpoint_auth_token` to require a bearer token, or restrict access via network controls.
+- **`endpoint_listen` on a non-loopback address without `endpoint_auth_token`**: the metrics endpoint allows unauthenticated access from all network interfaces. Bind to a loopback address, set `endpoint_auth_token` to require a bearer token, or restrict access with network controls.
 
-### `max_distinct` high cardinality prevention
+### High cardinality
 
-- **`max_distinct false` inside Baggage configuration** - do not set high-cardinality attributes in baggage. They can lead to excessive memory usage and performance issues.
+- **`max_distinct false` in baggage**: do not set high-cardinality attributes in baggage. They can increase memory use and reduce performance.
 
 ## See also
 
-- [Observability and logging](/docs/configuration/observability/logging) for general observability configuration
-- [OTLP export](/docs/configuration/observability/logging#otlp-export) for OpenTelemetry-based monitoring
+- [Observability and logging](/docs/configuration/observability/logging): general observability configuration
+- [OTLP export](/docs/configuration/observability/otlp): OpenTelemetry-based monitoring

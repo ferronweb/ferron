@@ -3,80 +3,72 @@ title: Installation via Linux installer
 description: "Install Ferron 3 on Linux using the installer script: run the command, choose your install method, and manage the service."
 ---
 
-You can install Ferron on Linux systems with an interactive installer script. The installer detects your distribution, architecture, and C library. Then it offers a choice between installing via a package manager or as a standalone archive.
+An interactive installer script installs Ferron on Linux. It detects the distribution, architecture, and C library, then offers a package manager install or a standalone archive.
 
 ## Installation steps
 
 ### 1. Run the installer
 
-To install Ferron, run the following command:
-
 ```bash
 sudo bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
 ```
 
-The installer prompts you to choose the installation type. If packages are available for your distribution, the installer offers to install Ferron via your package manager. Otherwise, it installs the archive version directly.
+The installer asks for the installation type. When packages exist for the distribution, it offers the package manager install. Otherwise it installs the archive directly.
 
 > [!note]
-> On RHEL/Fedora systems, the installer automatically configures SELinux contexts and booleans for Ferron. If you encounter permission issues, verify that SELinux is properly configured.
+> On RHEL/Fedora, the installer configures SELinux contexts and booleans for Ferron. If permission errors appear, check the SELinux configuration.
 
 ### 2. Access the web server
 
-By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server runs and serves the default `index.html` file.
+Ferron serves content from `/var/www/ferron` by default. Open `http://localhost` in a browser to check that the server serves the default `index.html`.
 
-If you see the "Ferron is ready to serve." message on the page, the web server works correctly.
+The page shows "Ferron is ready to serve." when the server works.
 
 > [!tip]
-> If you cannot access the server from another machine, make sure your firewall allows incoming connections on port 80. If you use a different port, allow connections on that port. If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
+> If you cannot reach the server from another machine, check that the firewall allows connections on the configured port, port 80 by default. If port 80 is already in use, change the listen port in `/etc/ferron/ferron.conf` and reload the service.
 
 ## File structure
 
-The installer for Linux creates the following file structure:
+The Linux installer creates these files:
 
-- `/usr/sbin/ferron` - Ferron web server
-- `/usr/sbin/ferron-fmt` - Ferron configuration formatter
-- `/usr/sbin/ferron-kdl2ferron` - Ferron configuration conversion tool
-- `/usr/sbin/ferron-passwd` - Ferron user password generation tool
-- `/usr/sbin/ferron-precompress` - Ferron static files precompression tool
-- `/usr/sbin/ferron-serve` - Ferron zero-configuration static file serving
-- `/var/log/ferron/access.log` - Ferron access log in Combined Log Format
-- `/var/log/ferron/error.log` - Ferron error log
-- `/var/www/ferron` - the web root for Ferron
-- `/etc/ferron/ferron.conf` - Ferron configuration
+- `/usr/sbin/ferron`: Ferron web server
+- `/usr/sbin/ferron-fmt`: configuration formatter
+- `/usr/sbin/ferron-kdl2ferron`: configuration conversion tool
+- `/usr/sbin/ferron-passwd`: user password generation tool
+- `/usr/sbin/ferron-precompress`: static file precompression tool
+- `/usr/sbin/ferron-serve`: zero-configuration static file serving
+- `/var/log/ferron/access.log`: access log in Combined Log Format
+- `/var/log/ferron/error.log`: error log
+- `/var/www/ferron`: web root
+- `/etc/ferron/ferron.conf`: configuration
 
 ## Updating Ferron
 
-To update Ferron to the latest version, run the installer script again:
+Run the installer script again to update Ferron:
 
 ```bash
 sudo bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
 ```
 
-The installer detects existing installations and offers to update them.
+The installer detects an existing installation and offers to update it.
 
 ## Managing the Ferron service
 
-### Stopping the service
-
-To stop the Ferron service, run:
+Stop the service:
 
 ```sh
 sudo systemctl stop ferron # For systemd systems
 sudo /etc/init.d/ferron stop # For non-systemd systems
 ```
 
-### Restarting the service
-
-To restart the service:
+Restart the service:
 
 ```sh
 sudo systemctl restart ferron # For systemd systems
 sudo /etc/init.d/ferron restart # For non-systemd systems
 ```
 
-### Reloading the configuration
-
-To reload the configuration without restarting the service:
+Reload the configuration without a restart:
 
 ```sh
 sudo systemctl reload ferron # For systemd systems
@@ -85,7 +77,7 @@ sudo /etc/init.d/ferron reload # For non-systemd systems
 
 ## Environment variables
 
-The installer supports several environment variables for automation and advanced use cases. Set them before running the installer script.
+Set these variables before running the installer to automate the install or change its behavior.
 
 | Variable                | Description                                                                                                                                 | Example                                             |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
@@ -98,21 +90,21 @@ The installer supports several environment variables for automation and advanced
 
 ### Examples
 
-**Install from a locally downloaded archive:**
+Install from a locally downloaded archive:
 
 ```bash
 sudo FERRON_ARCHIVE_PATH=/tmp/ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz \
     bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
 ```
 
-**Install a specific version:**
+Install a specific version:
 
 ```bash
 sudo FERRON_VERSION=3.0.0 \
     bash -c "$(curl -fsSL https://get.ferron.sh/v3)"
 ```
 
-**Non-interactive update:**
+Update without prompts:
 
 ```bash
 sudo FERRON_INSTALL_MODE=update \

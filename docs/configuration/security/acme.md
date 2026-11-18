@@ -1,17 +1,17 @@
 ---
 title: "Configuration: ACME automatic TLS"
-description: "Automatic TLS certificate issuance via ACME, including HTTP-01, TLS-ALPN-01, and DNS-01 challenges."
+description: "Automatic certificate issuance and renewal through ACME, with HTTP-01, TLS-ALPN-01, and DNS-01 challenges."
 ---
 
-This page documents the ACME TLS provider (the `tls-acme` module). It automatically gets TLS certificates from ACME-compatible Certificate Authorities (CAs) such as Let's Encrypt. The provider supports both eager (startup-time) and on-demand (lazy, first-connection) certificate issuance. It offers three challenge types:
+Ferron obtains and renews certificates from ACME CAs such as Let's Encrypt. Issuance runs at startup (eager mode) or on the first handshake for a hostname (`on_demand`). Ferron caches certificates in memory and on disk, and renews them before they expire.
 
-- **HTTP-01**: serves a token at `/.well-known/acme-challenge/` (default)
-- **TLS-ALPN-01**: responds with a self-signed cert during the TLS handshake
-- **DNS-01**: creates a TXT record at `_acme-challenge.<domain>`
+| Challenge                  | How it works                                                              | Requirement                          |
+| -------------------------- | ------------------------------------------------------------------------- | ------------------------------------ |
+| `http-01` (default)        | Ferron serves a token at `/.well-known/acme-challenge/`.                  | Port 80 reachable by the CA.          |
+| `tls-alpn-01`              | Ferron answers the handshake with a self-signed `acme-tls/1` certificate. | Port 443 reachable. No wildcards.     |
+| `dns-01`                   | Ferron creates a `_acme-challenge.<domain>` TXT record.                   | A DNS provider. Supports wildcards.   |
 
-Ferron caches certificates (both in-memory and file-based) and renews them automatically before expiration.
-
-Ferron enables automatic TLS via ACME by default for public hosts:
+Ferron enables ACME automatically for public hosts:
 
 ```ferron
 example.com {
@@ -19,13 +19,11 @@ example.com {
 }
 ```
 
-## Directives
+## Challenge types
 
-### Challenge types
+### HTTP-01
 
-#### HTTP-01 (default)
-
-The simplest challenge type. The server listens on port 80 to serve `/.well-known/acme-challenge/<token>`.
+Ferron listens on port 80 and serves `/.well-known/acme-challenge/<token>`. The CA must reach port 80 to validate the challenge.
 
 ```ferron
 example.com {
@@ -37,27 +35,15 @@ example.com {
 }
 ```
 
-**Requirements:** The server must be reachable on port 80 for the ACME CA to validate the challenge.
+### TLS-ALPN-01
 
-#### TLS-ALPN-01
+Ferron responds with a self-signed certificate when the CA connects with the `acme-tls/1` ALPN protocol. It needs no extra port. The server must be reachable on port 443. This challenge does not support wildcard domains.
 
-The server responds with a self-signed certificate when the CA connects with the `acme-tls/1` ALPN protocol. It needs no additional port.
+Set it with `challenge tls-alpn-01`.
 
-```ferron
-example.com {
-    tls {
-        provider acme
-        challenge tls-alpn-01
-        contact admin@example.com
-    }
-}
-```
+### DNS-01
 
-**Requirements:** The server must be reachable on port 443. Does not support wildcard domains.
-
-#### DNS-01 (required for wildcard domains)
-
-Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge type that supports wildcard certificates.
+Ferron creates a TXT record through a DNS provider. This is the only challenge type that supports wildcard certificates.
 
 ```ferron
 *.example.com {
@@ -73,33 +59,34 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 }
 ```
 
-**Requirements:** Configure a DNS provider module. The module supports wildcard domains. The `dns` block must specify the `provider` name and any provider-specific credentials. See [DNS providers](/docs/configuration/security/dns-providers) for the full list of supported providers and their directives.
+The `dns` block must name a `provider` and supply its credentials. See [DNS providers](/docs/configuration/security/dns-providers) for the supported providers and their directives.
 
-After creating the record, Ferron queries every address of the zone's authoritative nameservers every 2 seconds. It asks the CA to validate as soon as they all serve the record, or after 60 seconds at most. If Ferron can't resolve the zone's nameservers (for example, for a private zone), it waits the full 60 seconds. Ferron sends these queries from its own network, so for anycast nameservers it only sees the sites nearest to it.
+After creating the record, Ferron queries every address of the zone's authoritative nameservers every 2 seconds. It asks the CA to validate as soon as all of them serve the record, or after 60 seconds at most. If Ferron cannot resolve the zone's nameservers, for example for a private zone, it waits the full 60 seconds. Ferron sends these queries from its own network, so with anycast nameservers it only sees the sites nearest to it.
 
-### Configuration parameters
+> [!note]
+> If the log shows `DNS-01 record for ... isn't served by all authoritative nameservers after 60 seconds`, the provider is slow to publish, or Ferron cannot query the nameservers directly. Check that outbound DNS is allowed. Ferron requests validation anyway. If validation fails, it retries on later cycles.
+
+## Options
 
 | Parameter                       | Type                               | Default                                                                       | Description                                           |
 | ------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `provider`                      | `acme`                             | none                                                                          | Must be `"acme"`                                      |
-| `challenge`                     | `http-01`, `tls-alpn-01`, `dns-01` | `http-01`                                                                     | ACME challenge type                                   |
-| `contact`                       | `<string>`                         | none                                                                          | Email for ACME account                                |
-| `directory`                     | `<string>`                         | LE Production                                                                 | ACME directory URL                                    |
-| `profile`                       | `<string>`                         | none                                                                          | ACME profile name (optional)                          |
-| `eab`                           | `"<key-id>" "<hmac>"`              | none                                                                          | External Account Binding                              |
-| `cache`                         | `<string>`                         | `/var/cache/ferron-acme` if on Unix and writable, otherwise platform data dir | Path for file-based certificate caching               |
-| `save`                          | `<cert> [key]`                     | none                                                                          | Save cert (and optionally key) to disk                |
-| `post_obtain_command`           | `<string>`                         | none                                                                          | Command to run after certificate issuance             |
-| `no_verification`               | `<bool>`                           | `false`                                                                       | Skip ACME directory TLS verification                  |
-| `on_demand`                     | `<bool>`                           | `false`                                                                       | Enable on-demand certificate issuance                 |
-| `on_demand_ask`                 | `<string>`                         | none                                                                          | Approval endpoint URL                                 |
-| `on_demand_ask_auth`            | `<string>`                         | none                                                                          | Authorization header for approval endpoint (optional) |
-| `on_demand_ask_no_verification` | `<bool>`                           | `false`                                                                       | Skip TLS verification for approval endpoint           |
-| `fallback`                      | `{ ... }`                          | none                                                                          | Fallback provider block (repeatable)                  |
-| `key_algo` | `<string>` | `PKCS_ECDSA_P256_SHA256` when `key_size` is not specified, otherwise `PKCS_RSA_SHA256` | Key algorithm to use for certificate signing |
-| `key_size`                      | `<int>`                           | none                                                                          | RSA key size in bits (optional). Supported values: `2048`, `3072`, `4096`. Not supported with non-RSA key algorithms                          |
-
-**Configuration example:**
+| `provider`                      | `acme`                             | none                                                                          | Must be `acme`.                                       |
+| `challenge`                     | `http-01`, `tls-alpn-01`, `dns-01` | `http-01`                                                                     | ACME challenge type.                                  |
+| `contact`                       | `<string>`                         | none                                                                          | Email for the ACME account.                           |
+| `directory`                     | `<string>`                         | Let's Encrypt production                                                      | ACME directory URL.                                   |
+| `profile`                       | `<string>`                         | none                                                                          | ACME profile name (optional).                         |
+| `eab`                           | `"<key-id>" "<hmac>"`              | none                                                                          | External Account Binding.                             |
+| `cache`                         | `<string>`                         | `/var/cache/ferron-acme` if on Unix and writable, otherwise platform data dir | Path for file-based certificate caching.              |
+| `save`                          | `<cert> [key]`                     | none                                                                          | Save the certificate, and optionally the key, to disk. |
+| `post_obtain_command`           | `<string>`                         | none                                                                          | Command to run after certificate issuance.            |
+| `no_verification`               | `<bool>`                           | `false`                                                                       | Skip ACME directory TLS verification.                 |
+| `on_demand`                     | `<bool>`                           | `false`                                                                       | Issue certificates on the first handshake.            |
+| `on_demand_ask`                 | `<string>`                         | none                                                                          | Approval endpoint URL.                                |
+| `on_demand_ask_auth`            | `<string>`                         | none                                                                          | Authorization header for the approval endpoint (optional). |
+| `on_demand_ask_no_verification` | `<bool>`                           | `false`                                                                       | Skip TLS verification for the approval endpoint.      |
+| `fallback`                      | `{ ... }`                          | none                                                                          | Fallback provider block (repeatable).                 |
+| `key_algo`                      | `<string>`                         | `PKCS_ECDSA_P256_SHA256`, or `PKCS_RSA_SHA256` when `key_size` is set          | Key algorithm for certificate signing.                |
+| `key_size`                      | `<int>`                            | none                                                                          | RSA key size in bits: `2048`, `3072`, `4096`. RSA algorithms only. |
 
 ```ferron
 example.com {
@@ -124,45 +111,36 @@ example.com {
 
 ### Supported key algorithms
 
-| Identifier | Description                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------------ |
-| `PKCS_ECDSA_P256_SHA256`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-256 curve and SHA-256 hash function                                                           |
-| `PKCS_ECDSA_P384_SHA384`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-384 curve and SHA-384 hash function                                                           |
-| `PKCS_ECDSA_P521_SHA256`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-521 curve and SHA-256 hash function                                                           |
-| `PKCS_ECDSA_P521_SHA384`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-521 curve and SHA-384 hash function                                                           |
-| `PKCS_ECDSA_P521_SHA512`  | ECDSA (Elliptic Curve Digital Signature Algorithm) using P-521 curve and SHA-512 hash function                                                           |
-| `PKCS_ED25519`   | ED25519 key algorithm                                   |
-| `PKCS_ML_DSA_44` | Post-quantum ML-DSA-44 (Module-Lattice-Based Digital Signature Algorithm) |
-| `PKCS_ML_DSA_65` | Post-quantum ML-DSA-65 (Module-Lattice-Based Digital Signature Algorithm) |
-| `PKCS_ML_DSA_87` | Post-quantum ML-DSA-87 (Module-Lattice-Based Digital Signature Algorithm) |
-| `PKCS_RSA_SHA256`   | RSA key algorithm with SHA-256 hash function                                   |
-| `PKCS_RSA_SHA384`   | RSA key algorithm with SHA-384 hash function                                   |
-| `PKCS_RSA_SHA512`   | RSA key algorithm with SHA-512 hash function                                   |
-| `ECDSA` | Alias for `PKCS_ECDSA_P256_SHA256` |
-| `RSA` | Alias for `PKCS_RSA_SHA256` |
+| Identifier               | Description                                  |
+| ------------------------ | -------------------------------------------- |
+| `PKCS_ECDSA_P256_SHA256` | ECDSA P-256 with SHA-256                     |
+| `PKCS_ECDSA_P384_SHA384` | ECDSA P-384 with SHA-384                     |
+| `PKCS_ECDSA_P521_SHA256` | ECDSA P-521 with SHA-256                     |
+| `PKCS_ECDSA_P521_SHA384` | ECDSA P-521 with SHA-384                     |
+| `PKCS_ECDSA_P521_SHA512` | ECDSA P-521 with SHA-512                     |
+| `PKCS_ED25519`           | Ed25519                                      |
+| `PKCS_ML_DSA_44`         | Post-quantum ML-DSA-44                       |
+| `PKCS_ML_DSA_65`         | Post-quantum ML-DSA-65                       |
+| `PKCS_ML_DSA_87`         | Post-quantum ML-DSA-87                       |
+| `PKCS_RSA_SHA256`        | RSA with SHA-256                             |
+| `PKCS_RSA_SHA384`        | RSA with SHA-384                             |
+| `PKCS_RSA_SHA512`        | RSA with SHA-512                             |
+| `ECDSA`                  | Alias for `PKCS_ECDSA_P256_SHA256`           |
+| `RSA`                    | Alias for `PKCS_RSA_SHA256`                  |
 
-## Eager mode (recommended for known domains)
+## Modes
 
-Eager mode gets certificates at server startup, before any client traffic arrives. This is ideal for static configurations where you know all domain names in advance.
+### Eager mode
 
-## On-demand mode
+Eager mode obtains certificates at startup, before client traffic arrives. Ferron uses it unless `on_demand` is set. It fits static configurations where you know every domain name in advance.
 
-On-demand mode defers certificate issuance when doing the first TLS handshake for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when you do not know the domains at startup.
+### On-demand mode
 
-```ferron
-*.example.com {
-    tls {
-        provider acme
-        challenge dns-01
-        contact admin@example.com
-        on_demand
-    }
-}
-```
+On-demand mode issues a certificate during the first TLS handshake for a hostname. Use it for wildcard domains, multi-tenant hosting, or domains you do not know at startup.
 
-### On-demand approval endpoint
+### Approval endpoint
 
-To prevent abuse, you can configure an approval endpoint. Before issuing a certificate, Ferron sends an HTTP GET request to the endpoint with `?domain=<sni>` as a query parameter. If the response is `200`, Ferron issues the certificate.
+To prevent abuse, configure an approval endpoint. Before issuing a certificate, Ferron sends an HTTP GET request to the endpoint with `?domain=<sni>`. A `200` response authorizes issuance.
 
 ```ferron
 *.example.com {
@@ -178,13 +156,7 @@ To prevent abuse, you can configure an approval endpoint. Before issuing a certi
 
 ## Certificate caching
 
-### In-memory cache (default)
-
-Without a `cache` path, Ferron stores certificates and account data in memory.
-
-### File-based cache
-
-Setting a `cache` path persists certificates and accounts to disk, surviving restarts:
+Ferron writes certificates and account data to a file cache by default. On Unix it uses `/var/cache/ferron-acme` when that directory exists and is writable. Otherwise it uses the platform data directory. Without a writable location, the cache stays in memory and does not survive a restart.
 
 ```ferron
 example.com {
@@ -197,7 +169,7 @@ example.com {
 }
 ```
 
-The cache directory structure:
+### Cache layout
 
 ```text
 /var/cache/ferron-acme/
@@ -208,53 +180,44 @@ The cache directory structure:
 └── lock_certificate_<hash> # Provisioning lockfile (distributed mode)
 ```
 
-### Cache key derivation
+### Cache keys
 
-- **Account cache key**: hash of `contact emails + directory URL`
-- **Certificate cache key**: hash of `sorted domains + profile name`
-- **Challenge keys**: hash of the challenge `token` (`challenge_http_*`) or identifier (`challenge_tls_*`)
-- **Lock keys**: `lock_` + the paired `certificate_*` / `account_*` / `hostname_*` key, so `ls lock_*` groups all locks
+- Account cache key: hash of `contact emails + directory URL`.
+- Certificate cache key: hash of `sorted domains + profile name`.
+- Challenge keys: hash of the challenge `token` (`challenge_http_*`) or identifier (`challenge_tls_*`).
+- Lock keys: `lock_` plus the paired `certificate_*`, `account_*`, or `hostname_*` key, so `ls lock_*` groups all locks.
 
-## Distributed mode (shared filesystem)
+## Distributed cache
 
-Point every Ferron instance at the same shared `cache` directory (NFS, EFS, CephFS) to run ACME behind a load balancer:
+Point every Ferron instance at the same shared `cache` directory (NFS, EFS, or CephFS) to run ACME behind a load balancer. Use the file cache settings above and give every node the same path.
 
-```ferron
-example.com {
-    tls {
-        provider acme
-        challenge http-01
-        contact admin@example.com
-        cache /var/cache/ferron-acme
-    }
-}
-```
+- Challenge sync: the node that creates an order publishes `challenge_http_*` or `challenge_tls_*` files with a 15-minute TTL. Peers serve CA validation from these files when their in-memory locks miss, so validation succeeds whichever node the CA reaches.
+- One order at a time: before ordering, a node takes the paired `lock_certificate_*` lockfile with an atomic create. Peers skip that cycle and pick up the resulting `certificate_*` file later. On-demand `hostname_*` appends take `lock_hostname_*` the same way.
+- Self-healing locks: the holder refreshes a heartbeat every 30 seconds. A lock without a heartbeat for 5 minutes is treated as stale and broken by the next contender, which logs a warning. A configuration reload cancels an order and removes its lock at once, so the next cycle can order again. A release deletes only its own lock, never a peer's.
+- Herd damping: skipped cycles return to the 10-second loop, and cycle sleeps include jitter so restarted nodes desynchronize.
 
-**How it works:**
+All nodes need one writable `cache` path with atomic create and rename semantics, and roughly synchronized clocks. In-memory caching cannot coordinate nodes.
 
-- **Challenge sync**: the node creating the order publishes `challenge_http_*` / `challenge_tls_*` files (15-minute TTL). Peers serve CA validation from these files when their in-memory locks miss, so validation succeeds no matter which node the CA reaches.
-- **One order at a time**: before ordering, a node takes the paired `lock_certificate_*` lockfile (atomic create). Peers skip that cycle and pick up the resulting `certificate_*` file later. On-demand `hostname_*` appends take `lock_hostname_*` the same way.
-- **Self-healing locks**: the holder refreshes a heartbeat every 30 seconds. A lock without heartbeat for 5 minutes is treated as stale (crashed holder) and broken by the next contender, which logs a warning. An order cancelled by a configuration reload removes its lock at once, so the next cycle can order again. Releases only delete their own lock, never a peer's.
-- **Herd damping**: skipped cycles return to the 10-second loop, and cycle sleeps include jitter so restarted nodes desynchronize.
+Challenge and key material is `0600` on Unix, but any node with cache access can read it. Restrict cache access to your Ferron hosts.
 
-**Requirements and notes:**
+DNS-01 needs no challenge files because the TXT record is already shared. The provisioning lock still prevents duplicate orders.
 
-- All nodes must share one writable `cache` path with atomic create/rename semantics and roughly synchronized clocks. In-memory caching cannot coordinate.
-- Challenge and key material is `0600` on Unix, but any node with cache access can read it. Restrict cache access to your Ferron hosts.
-- DNS-01 needs no challenge files (the TXT record is already shared), meaning the provisioning lock still prevents duplicate orders.
-- Debug with `ls lock_*` (stuck entries show the owner `host-pid`) and the `ACME lock stale, broken` / `ACME provisioning skipped, peer holds lock` log messages.
+To debug, run `ls lock_*`. Stuck entries show the owner as `host-pid`. Also check the `ACME lock stale, broken` and `ACME provisioning skipped, peer holds lock` log messages.
 
-## Certificate renewal
+## Renewal
 
-Ferron automatically renews certificates before expiration. The renewal check runs every 10 seconds in the background. Ferron uses the ACME `renewalInfo` endpoint (RFC 9773) when available. Otherwise it falls back to a heuristic of 50% of certificate lifetime, capped at 24 hours before expiry.
+Ferron checks for renewal in the background every 10 seconds. It uses the ACME `renewalInfo` endpoint (RFC 9773) when available. Otherwise it falls back to half of the certificate lifetime, capped at 24 hours before expiry.
 
-A configuration reload doesn't cancel an order in progress. The order finishes under the previous configuration, or is cancelled if it's still running after 5 minutes. With a file-based `cache` (the default), the reloaded configuration then installs the certificate from the cache.
+A configuration reload does not cancel an order in progress. The order finishes under the previous configuration, or is cancelled if it is still running after 5 minutes. With a file-based `cache` (the default), the reloaded configuration then installs the certificate from the cache.
 
-The background task obtains and renews up to 4 certificates at once. Within one Ferron instance, orders that use the same ACME account create it only once, and orders that share a name (for example, `example.com` and `*.example.com` in separate host blocks, which share an `_acme-challenge` record) run one after another.
+The background task obtains and renews up to 4 certificates at once. Within one Ferron instance, orders that use the same ACME account create it only once. Orders that share a name run one after another, for example `example.com` and `*.example.com` in separate host blocks, because they share an `_acme-challenge` record.
+
+> [!warning]
+> `ACME certificate provisioning error: ...` means issuance failed. The message includes the affected domains. Check DNS resolution and the ACME server response. At debug log level, Ferron also logs each step: account loading, order creation, challenge solving, and certificate installation.
 
 ## External Account Binding (EAB)
 
-Some CAs (especially enterprise/internal ACME servers) require External Account Binding. Set the key ID and HMAC secret:
+Some CAs, especially enterprise or internal ACME servers, require External Account Binding. Set the key ID and HMAC secret:
 
 ```ferron
 example.com {
@@ -268,11 +231,11 @@ example.com {
 }
 ```
 
-The HMAC secret must be base64url-encoded (without padding).
+The HMAC secret must be base64url-encoded without padding.
 
 ## Fallback providers
 
-When high availability is critical, you can configure fallback ACME providers. If the primary provider fails (for example, the CA is down or unreachable), Ferron tries the next configured fallback provider when certificate provisioning fails.
+If the primary provider fails, Ferron tries the configured fallback providers in order. A failure can be an unreachable CA or a failed provisioning attempt.
 
 ```ferron
 example.com {
@@ -296,31 +259,11 @@ example.com {
 }
 ```
 
-Each `fallback` block accepts the same provider-level directives as the primary configuration: `directory`, `contact`, `eab`, and `profile`. The `fallback` block inherits the settings of the primary provider. You only need to specify the fields that differ.
+Each `fallback` block accepts `directory`, `contact`, `eab`, and `profile`. It inherits the primary provider settings, so specify only the fields that differ.
 
-### Example: primary with staging fallback
+## Save certificates
 
-A common pattern is to configure production as the primary and staging as a fallback. Use this for testing or when production is unavailable:
-
-```ferron
-example.com {
-    tls {
-        provider acme
-        challenge http-01
-        contact admin@example.com
-        directory https://acme-v02.api.letsencrypt.org/directory
-
-        fallback {
-            directory https://acme-staging-v02.api.letsencrypt.org/directory
-            contact admin@example.com
-        }
-    }
-}
-```
-
-## Saving certificates to disk
-
-To persist certificates you get for use by other tools or backup:
+Use `save` to write certificates for other tools or for backup:
 
 ```ferron
 example.com {
@@ -333,27 +276,9 @@ example.com {
 }
 ```
 
-If you give only one path, the key path defaults to the certificate path with a `.key` extension. After Ferron gets a certificate, it writes the private key with `0600` permissions on Unix.
+With one path, the key path is the certificate path with a `.key` extension. After issuance, Ferron writes the private key with `0600` permissions on Unix.
 
-## Security considerations
-
-- **Private keys are never logged** or exposed in error messages.
-- When saved to disk, Ferron writes keys with `0600` permissions on Unix.
-- When using on-demand mode, always configure an `on_demand_ask` endpoint in production to prevent certificate issuance for arbitrary hostnames.
-
-## Troubleshooting
-
-### "ACME certificate provisioning error: ..."
-
-Certificate issuance failed. The log message includes the affected domains. Check the error message for details (DNS resolution, ACME server errors, and so on). At debug log level, you will also see per-step messages for account loading, order creation, challenge solving, and certificate installation.
-
-### DNS-01 issues
-
-- Make sure you configure the DNS provider correctly with valid credentials.
-- Check that the provider has permission to create TXT records for the domain.
-- If the log shows `DNS-01 record for ... isn't served by all authoritative nameservers after 60 seconds`, either the provider is slow to publish records, or Ferron can't query the nameservers directly (for example, because outbound DNS is blocked). Ferron then requests validation anyway, as without the check. If validation fails, Ferron retries on later cycles.
-
-### Verifying certificates
+## Verify certificates
 
 ```bash
 # Check the certificate served by Ferron
@@ -363,12 +288,18 @@ echo | openssl s_client -connect example.com -servername example.com 2>/dev/null
 openssl s_client -connect example.com -status -servername example.com </dev/null 2>/dev/null | grep -A 5 "OCSP response"
 ```
 
+## Security
+
+- Ferron never logs private keys or exposes them in error messages.
+- When Ferron saves keys to disk, it writes them with `0600` permissions on Unix.
+- In on-demand mode, always configure `on_demand_ask` in production. Without it, clients can request certificates for arbitrary hostnames.
+
 ## Observability
 
-The ACME background task emits log events and metrics through the configured observability pipeline:
+The ACME background task emits log events and metrics through the configured observability pipeline.
 
 > [!note]
-> The ACME log events are global-only. Ferron does not emit them via per-host observability sinks.
+> ACME log events are global-only. Ferron does not emit them through per-host observability sinks.
 
 ### Logs
 
@@ -381,7 +312,7 @@ The ACME background task emits log events and metrics through the configured obs
 | `INFO`  | `ACME account created for directory ..., contact: ...`                    | New ACME account registration           |
 | `INFO`  | `Post-obtain command started for ...: <cmd>`                              | Post-obtain hook execution              |
 | `WARN`  | `ACME certificate provisioning error for ...: <error>`                    | Certificate issuance failure            |
-| `WARN`  | `ACME account not found on server for ..., recreating`                    | Account expired/removed on CA side      |
+| `WARN`  | `ACME account not found on server for ..., recreating`                    | Account expired or removed on CA side   |
 | `WARN`  | `Post-obtain command failed for ...: <error>`                             | Post-obtain hook error                  |
 | `WARN`  | `Post-obtain command has malformed quoting for ...`                       | Post-obtain hook malformed command      |
 | `WARN`  | `Failed to save ACME account cache: <error>`                              | Account cache write failure             |
@@ -472,8 +403,8 @@ In OTLP `log_style modern`, the `summary` field acts as the log body and Ferron 
 
 `ferron doctor` reports the following best-practice checks for directives on this page.
 
-- **`no_verification` for ACME directory**: Only disable TLS verification for the ACME directory in testing.
-- **`on_demand` without `on_demand_ask`**: On-demand certificate issuance without an approval endpoint allows certificate issuance for arbitrary hostnames. Configure `on_demand_ask` to approve requests.
-- **`on_demand_ask_no_verification`**: Only disable TLS verification for the approval endpoint on strictly internal and otherwise authenticated endpoints.
-- **Missing `contact`**: Without an ACME account email, the certificate authority cannot send expiry or account notices.
-- **Non-public domain**: Domains using non-public TLDs (`.local`, `.internal`, `.home`, `.lan`, `.test`, `.localhost`) or bare IP addresses are unlikely to be publicly resolvable. Certificate issuance via ACME will fail because the CA cannot complete domain validation. This check applies to both explicit `domains` directives and to the host block's hostname when you use `on_demand` TLS.
+- `no_verification` for ACME directory: Only disable TLS verification for the ACME directory in testing.
+- `on_demand` without `on_demand_ask`: On-demand issuance without an approval endpoint allows certificate issuance for arbitrary hostnames. Configure `on_demand_ask` to approve requests.
+- `on_demand_ask_no_verification`: Only disable TLS verification for the approval endpoint on strictly internal and otherwise authenticated endpoints.
+- Missing `contact`: Without an ACME account email, the certificate authority cannot send expiry or account notices.
+- Non-public domain: Domains with non-public TLDs (`.local`, `.internal`, `.home`, `.lan`, `.test`, `.localhost`) or bare IP addresses are unlikely to be publicly resolvable. ACME issuance fails because the CA cannot complete domain validation. This check applies to explicit `domains` directives and to the host block hostname when you use `on_demand` TLS.

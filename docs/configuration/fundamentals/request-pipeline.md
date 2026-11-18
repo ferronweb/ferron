@@ -3,7 +3,7 @@ title: "Configuration: request pipeline order"
 description: "The order in which Ferron resolves configuration and runs request pipeline stages."
 ---
 
-This page states the order in which Ferron resolves configuration and runs request pipeline stages. Use it when rewrite rules, `location` blocks, maps, or proxy and file handling interact in unexpected ways.
+Ferron resolves configuration and runs pipeline stages in a fixed order. The order below matters when rewrite rules, `location` blocks, maps, or proxy and file handling interact in unexpected ways.
 
 > [!info]
 > For `location` and conditional matching, see [Routing and URL processing](/docs/configuration/routing/url-processing). For rewrite reference, see [URL rewriting](/docs/configuration/routing/rewrite). For maps, see [HTTP map](/docs/configuration/routing/map).
@@ -24,7 +24,7 @@ After resolution, Ferron strips the matched `location` prefix from the request p
 
 ## Pipeline stage order
 
-Stages run in a fixed partial order. The list below shows the typical sequence for an HTTP request. Some stages skip the request when their directives are absent. The list below is not exhaustive and may vary based on configuration and Ferron version.
+Stages run in a fixed partial order. The list below shows the typical sequence for an HTTP request. Some stages skip the request when their directives are absent. The list is not exhaustive, and the order can vary with configuration and Ferron version.
 
 1. ACME HTTP-01 challenge answer. It handles `/.well-known/acme-challenge/*` before other work.
 2. Client IP resolution (`client_ip_from_header`).
@@ -33,7 +33,7 @@ Stages run in a fixed partial order. The list below shows the typical sequence f
 5. Variable setting (`set_var`).
 6. Map evaluation (`map`). Maps can use variables from steps 4 and 5.
 7. Response control (`status`, `abort`, `allow`, `block`).
-8. URL rewriting (`rewrite`). Rules can use variables from steps 4 through 6. Rules see the location stripped path.
+8. URL rewriting (`rewrite`). Rules can use variables from steps 4 through 6. Rules see the stripped path.
 9. Request body buffering (`buffer`).
 10. Abuse protection, rate limiting, and authentication (`basic_auth`, forwarded auth).
 11. Cache lookup.

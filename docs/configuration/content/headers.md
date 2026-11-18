@@ -1,25 +1,19 @@
 ---
 title: "Configuration: HTTP headers and CORS"
-description: "Response header manipulation and Cross-Origin Resource Sharing (CORS) directives."
+description: "Add, replace, or remove response headers, and configure Cross-Origin Resource Sharing."
 ---
 
-This page documents the `header` and `cors` directives for configuring response header manipulation and Cross-Origin Resource Sharing (CORS) handling.
+`header` changes response headers before Ferron sends them. `cors` adds Cross-Origin Resource Sharing headers and answers preflight requests.
 
-## Directives
+## `header`
 
-### `header`
+| Syntax                 | Effect                                        |
+| ---------------------- | --------------------------------------------- |
+| `header +Name "value"` | Add a header. Existing headers stay.          |
+| `header -Name`         | Remove every instance of the header.          |
+| `header Name "value"`  | Replace the header with a single value.       |
 
-The `header` directive manipulates response headers before sending to the client. The directive supports three forms:
-
-| Syntax                 | Effect                                            |
-| ---------------------- | ------------------------------------------------- |
-| `header +Name "value"` | Add header (appends, allows duplicates)           |
-| `header -Name`         | Remove all instances of the header                |
-| `header Name "value"`  | Replace header (removes existing, sets new value) |
-
-Header values support interpolation with `{{...}}` syntax.
-
-**Configuration example:**
+Header values support `{{...}}` interpolation.
 
 ```ferron
 example.com {
@@ -29,29 +23,23 @@ example.com {
 }
 ```
 
-#### Interpolation variables
+### Interpolation variables
 
-| Variable             | Description                        |
+| Variable             | Value                              |
 | -------------------- | ---------------------------------- |
-| `{{remote.ip}}`      | IP address of the client           |
-| `{{remote.port}}`    | Port of the client                 |
-| `{{server.ip}}`      | Listening IP address of the server |
-| `{{server.port}}`    | Listening port of the server       |
-| `{{request.host}}`   | The matched hostname               |
-| `{{request.scheme}}` | `http` or `https`                  |
-| `{{env.NAME}}`       | Environment variable `NAME`        |
+| `{{remote.ip}}`      | Client IP address.                 |
+| `{{remote.port}}`    | Client port.                       |
+| `{{server.ip}}`      | Listening IP address.              |
+| `{{server.port}}`    | Listening port.                    |
+| `{{request.host}}`   | Matched hostname.                  |
+| `{{request.scheme}}` | `http` or `https`.                 |
+| `{{env.NAME}}`       | Environment variable `NAME`.       |
 
-> [!note]
-> For header interpolation, `remote.ip` and `server.ip` automatically canonicalize IPv4-mapped IPv6 addresses to IPv4. See [Conditionals and variables](../fundamentals/conditionals.md#ip-canonicalization) and [HTTP host directives](/docs/configuration/server/host) for details.
+For header interpolation, `remote.ip` and `server.ip` convert IPv4-mapped IPv6 addresses to IPv4. See [Conditionals and variables](../fundamentals/conditionals.md#ip-canonicalization) and [HTTP host directives](/docs/configuration/server/host) for details. For the full variable reference, see [Conditionals and variables](../fundamentals/conditionals.md#built-in-variables).
 
-> [!info]
-> For the complete variable reference, see [Conditionals and variables](../fundamentals/conditionals.md#built-in-variables).
+Ferron leaves an unresolved variable as `{{name}}` in the output.
 
-Ferron leaves unresolved variables as `{{name}}` in the output.
-
-### `cors`
-
-The `cors` directive configures Cross-Origin Resource Sharing behavior.
+## `cors`
 
 ```ferron
 example.com {
@@ -66,27 +54,29 @@ example.com {
 }
 ```
 
-| Nested directive | Arguments     | Description                                                                                                                                        | Default              |
-| ---------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `origins`        | `<string>...` | Allowed origins. Use `"*"` to allow all. Accepts variable interpolations (for example `{{request.header.origin}}` for `Origin` header reflection). | none (CORS disabled) |
-| `methods`        | `<string>...` | Allowed HTTP methods for preflight.                                                                                                                | none                 |
-| `headers`        | `<string>...` | Allowed request headers for preflight.                                                                                                             | none                 |
-| `credentials`    | `<bool>`      | Allow credentials (cookies, auth headers).                                                                                                         | `false`              |
-| `max_age`        | `<number>`    | Preflight cache duration in seconds.                                                                                                               | none                 |
-| `expose_headers` | `<string>...` | Headers exposed to the browser in responses.                                                                                                       | none                 |
+| Nested directive | Arguments     | Description                                     | Default              |
+| ---------------- | ------------- | ----------------------------------------------- | -------------------- |
+| `origins`        | `<string>...` | Allowed origins. Use `"*"` for all.             | none (CORS disabled) |
+| `methods`        | `<string>...` | Allowed methods for preflight.                  | none                 |
+| `headers`        | `<string>...` | Allowed request headers for preflight.          | none                 |
+| `credentials`    | `<bool>`      | Allow credentials such as cookies and auth headers. | `false`          |
+| `max_age`        | `<number>`    | Preflight cache duration in seconds.            | none                 |
+| `expose_headers` | `<string>...` | Response headers exposed to the browser.        | none                 |
 
-#### Behavior
+`origins` accepts interpolation, for example `{{request.header.origin}}` to reflect the `Origin` header. With no `origins` value, CORS stays disabled.
 
-1. **Preflight handling**: When an `OPTIONS` request includes `Origin` and `Access-Control-Request-Method` headers, the module returns `204 No Content` with the appropriate CORS response headers.
+### Preflight and response headers
 
-2. **Response headers**: When enabled, the module adds CORS headers to all responses (including error responses). The headers include `Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, `Access-Control-Max-Age`, `Access-Control-Expose-Headers`, and `Vary: Origin`.
+Ferron answers a preflight request when an `OPTIONS` request has both `Origin` and `Access-Control-Request-Method`. The response is `204 No Content` with the CORS headers.
 
-#### Origin matching
+With CORS enabled, Ferron adds CORS headers to all responses, including error responses: `Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, `Access-Control-Max-Age`, `Access-Control-Expose-Headers`, and `Vary: Origin`.
 
-- If `origins` contains `"*"`, the module allows any origin and sets `Access-Control-Allow-Origin` to `*`.
-- Otherwise, the module compares the incoming `Origin` header against the list. If it matches, the module echoes the header back. If it does not match, the module adds no CORS headers.
+### Origin matching
 
-**Configuration example: allow all origins**
+- With `"*"` in `origins`, Ferron allows any origin and sets `Access-Control-Allow-Origin` to `*`.
+- Otherwise, Ferron compares the request `Origin` with the list. On a match it echoes the origin back. On a mismatch it adds no CORS headers.
+
+Allow all origins:
 
 ```ferron
 api.example.com {
@@ -100,7 +90,7 @@ api.example.com {
 }
 ```
 
-**Configuration example: specific origins with credentials**
+Allow specific origins with credentials:
 
 ```ferron
 api.example.com {
@@ -115,20 +105,19 @@ api.example.com {
 }
 ```
 
-> [!note]
-> If CORS headers do not appear in responses, verify that you set `origins`. Ferron disables CORS by default if `origins` is empty.
+If CORS headers do not appear, check that you set `origins`.
 
 ## Best practices
 
-`ferron doctor` reports the following best-practice check for directives on this page.
+`ferron doctor` reports this check for directives on this page.
 
-- **`cors { credentials true }` with `origins "*"`**. Allowing credentials with wildcard origins defeats browser same-origin protection. Use explicit trusted origins when you allow credentials.
+- `cors { credentials true }` with `origins "*"`: credentials plus wildcard origins defeat browser same-origin protection. Use explicit trusted origins when you allow credentials.
 
 ## Observability
 
 ### Trace spans
 
-The headers stage sets the following attributes on its `ferron.stage.headers` span:
+The headers stage sets these attributes on its `ferron.stage.headers` span.
 
 | Attribute              | Type | Description                         |
 | ---------------------- | ---- | ----------------------------------- |

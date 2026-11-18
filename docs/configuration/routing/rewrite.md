@@ -1,34 +1,27 @@
 ---
 title: "Configuration: URL rewriting"
-description: "The `rewrite` directive for transforming request URLs using regular expression patterns."
+description: "The `rewrite` directive for transforming request URLs with regular expression patterns."
 ---
 
-This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Ferron applies rewrites in the request pipeline, before proxying or static file serving, so later stages use the rewritten URL.
+`rewrite` transforms the request URL with a regular expression before proxying or static file serving. Later stages use the rewritten URL.
 
 > [!important]
-> Rewrites do not trigger a new round of `location` matching. Ferron selects the `location` block once, on the original URL, and strips the matched prefix before rewrite rules run. Rules therefore see the location-stripped path. Use `match` blocks with `if` or `if_not` for regex routing. See [Request pipeline order](/docs/configuration/fundamentals/request-pipeline).
+> A rewrite does not trigger a new round of `location` matching. Ferron selects the `location` block once, on the original URL, and strips the matched prefix before rewrite rules run. Rules therefore see the location-stripped path. Use `match` blocks with `if` or `if_not` for regex routing. See [Request pipeline order](/docs/configuration/fundamentals/request-pipeline).
 
 > [!info]
-> For `url_sanitize` interaction, see [Routing and URL processing](/docs/configuration/routing/url-processing#url-sanitation-and-redirects). For static file serving, see [Static file serving](/docs/configuration/content/static-files).
+> For `url_sanitize` interaction, see [HTTP protocol settings](/docs/configuration/server/host#http-protocol-settings). For static file serving, see [Static file serving](/docs/configuration/content/static-files).
 
-## Directives
+## `rewrite`
 
-### `rewrite`
-
-- `rewrite <regex: string> <replacement: string>`
-  - This directive specifies a regular expression pattern and replacement string for URL rewriting. You can reference regex capture groups in the replacement string (`$1`, `$2`, and so on). Default: none
-
-#### Block options
+`rewrite <regex: string> <replacement: string>` matches a regular expression and replaces the URL. Capture groups are available in the replacement as `$1`, `$2`, and so on. Default: none.
 
 | Option                 | Arguments  | Description                                                                                                           | Default                    |
 | ---------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `last`                 | `<bool>`   | When `true`, stop processing further rewrite rules after this one matches.                                            | `false`                    |
-| `directory`            | `<bool>`   | When `true`, apply this rule when the URL corresponds to a directory.                                                 | `true`                     |
-| `file`                 | `<bool>`   | When `true`, apply this rule when the URL corresponds to a file.                                                      | `true`                     |
-| `allow_double_slashes` | `<bool>`   | When `true`, preserve double slashes (`//`) in the URL instead of collapsing them.                                    | `false`                    |
-| `name`                 | `<string>` | Operator-chosen rule identifier, surfaced in rewrite observability output. Must be a plain string (no interpolation). | derived from rule position |
-
-**Configuration example:**
+| `last`                 | `<bool>`   | Stop processing further rewrite rules after this rule matches.                                                        | `false`                    |
+| `directory`            | `<bool>`   | Apply this rule when the URL corresponds to a directory.                                                              | `true`                     |
+| `file`                 | `<bool>`   | Apply this rule when the URL corresponds to a file.                                                                   | `true`                     |
+| `allow_double_slashes` | `<bool>`   | Preserve double slashes (`//`) in the URL instead of collapsing them.                                                 | `false`                    |
+| `name`                 | `<string>` | Rule identifier for rewrite observability output. Must be a plain string without interpolation.                       | derived from rule position |
 
 ```ferron
 example.com {
@@ -36,20 +29,12 @@ example.com {
 }
 ```
 
-#### Simple rewrite
-
-```ferron
-example.com {
-    rewrite r"^/old-path/(.*)" "/new-path/$1"
-}
-```
-
-Ferron internally rewrites all `/old-path/anything` requests to `/new-path/anything`. The client sees no redirect. The rewrite is transparent.
+Ferron rewrites `/old-path/anything` to `/new-path/anything` internally. The client sees no redirect.
 
 > [!tip]
-> If you get unexpected routing behavior, check the order of the rewrite rules. Rules with `last` stop further processing.
+> If routing behaves unexpectedly, check rule order. A rule with `last` stops further processing.
 
-#### Stop processing with `last`
+### Stop processing with `last`
 
 ```ferron
 example.com {
@@ -60,20 +45,11 @@ example.com {
 }
 ```
 
-Ferron rewrites `/api/v1/users` requests to `/api/v2/users` and then stops. The second rule never sees the `/api/v2/` prefix.
+Ferron rewrites `/api/v1/users` to `/api/v2/users` and stops. The second rule never sees the `/api/v2/` path.
 
-#### Chained rules without `last`
+### Chain rules
 
-```ferron
-example.com {
-    rewrite r"^/legacy/(.*)" "/modern/$1"
-    rewrite r"^/modern/(.*)" "/current/$1"
-}
-```
-
-Ferron first rewrites a `/legacy/foo` request to `/modern/foo`. Then the second rule rewrites it to `/current/foo`.
-
-When several rules share a host, give them `name` values so observability output tells them apart:
+Without `last`, the next rule can rewrite the result again:
 
 ```ferron
 example.com {
@@ -86,9 +62,11 @@ example.com {
 }
 ```
 
-#### File/directory-specific rules
+Ferron rewrites `/legacy/foo` to `/modern/foo`, then the second rule rewrites it to `/current/foo`. Give rules `name` values when several share a host, so observability output distinguishes them.
 
-`file false` and `directory false` skip the rule when the URL maps to a real file or directory under `root`. Use both guards for fallback patterns such as single-page apps and front controllers. Without the guards, a broad pattern rewrites static asset requests too, and scripts, styles, and images break.
+### Guard file and directory requests
+
+`file false` and `directory false` skip the rule when the URL maps to a real file or directory under `root`. Use both guards for fallback patterns such as single-page apps and front controllers. Without the guards, a broad pattern also rewrites static asset requests, which breaks scripts, styles, and images.
 
 ```ferron
 example.com {
@@ -104,12 +82,9 @@ example.com {
 > [!tip]
 > Start every catch-all fallback rule with `file false` and `directory false`. Add `last` to stop rule processing after the fallback matches. Enable `rewrite_log true` while you test the guards.
 
-### `rewrite_log`
+## `rewrite_log`
 
-- `rewrite_log <bool>`
-  - This directive specifies whether Ferron logs each URL rewrite operation to the error log. Default: `rewrite_log false`
-
-**Configuration example:**
+`rewrite_log <bool>` logs each URL rewrite operation to the error log. Default: `false`.
 
 ```ferron
 example.com {
@@ -125,28 +100,28 @@ URL rewritten from "/old-path/users" to "/new-path/users"
 
 ## Regex syntax
 
-The regular expression engine used is [`regex`](https://crates.io/crates/regex), which executes regular expressions in linear time (no support for backtracking). This means that regular expressions are executed efficiently without backtracking, mitigating potential ReDoS and catastrophic backtracking attacks.
+The engine is [`regex`](https://crates.io/crates/regex), which runs regular expressions in linear time without backtracking. This mitigates ReDoS and catastrophic backtracking attacks.
 
-However, this also means you cannot use syntax listed below:
+These constructs are not available:
 
-- Lookahead statements (`(?= ...)`, `(?! ...)`)
-- Lookbehind statements (`(?<= ...)`, `(?<! ...)`)
-- Backreferences to capture groups (`\1`)
+- Lookahead: `(?= ...)`, `(?! ...)`
+- Lookbehind: `(?<= ...)`, `(?<! ...)`
+- Backreferences to capture groups: `\1`
 
-If you have to negate a condition, you can use negated variants of some directives, such as `if_not` blocks instead of `if`, or `!~` in matchers instead of `~`.
+To negate a condition, use a negated variant such as `if_not` instead of `if`, or `!~` in matchers instead of `~`.
 
-The matching is case-insensitive on Windows and case-sensitive on other platforms.
+Matching is case-insensitive on Windows and case-sensitive on other platforms.
 
 ## Observability
 
-Rule positions below are 1-based: the first `rewrite` directive in a block is rule 1. Give rules `name` values when you need readable identifiers instead of positions.
+Rule positions are 1-based. The first `rewrite` directive in a block is rule 1. Give rules `name` values when you need readable identifiers instead of positions.
 
 ### Metrics
 
 | Metric                            | Type    | Attributes                                                           | Description                                                                                    |
 | --------------------------------- | ------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `ferron.rewrite.rewrites_applied` | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named) | Rewrite rule firings (one increment per matched rule, so chained rewrites count once per step) |
-| `ferron.rewrite.invalid`          | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named) | Rewrite rules that produced an invalid path (resulting in a 400 response)                      |
+| `ferron.rewrite.rewrites_applied` | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named) | Rewrite rule firings. One increment per matched rule, so chained rewrites count once per step. |
+| `ferron.rewrite.invalid`          | Counter | `ferron.rewrite.rule_index`, `ferron.rewrite.rule_name` (when named) | Rewrite rules that produced an invalid path, which results in a 400 response.                  |
 
 ### Logs
 
@@ -156,11 +131,11 @@ When `rewrite_log` is on, Ferron logs each rewrite operation to the error log at
 
 | Description (summary) | Level | Attributes                                                                                                                                                                                                                                                                                                                                                                     |
 | --------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| URL rewritten         | INFO  | `ferron.rewrite.from` (string) shows the path + query string before the step. `ferron.rewrite.to` (string) shows the path + query string after the step. `ferron.rewrite.rule_index` (int) identifies the fired rule. `ferron.rewrite.rule_name` (string) is present when the rule is named. One line is emitted per fired rule, so chained rewrites produce one line per step |
+| URL rewritten         | INFO  | `ferron.rewrite.from` (string): path and query string before the step. `ferron.rewrite.to` (string): path and query string after the step. `ferron.rewrite.rule_index` (int): the fired rule. `ferron.rewrite.rule_name` (string): present when the rule is named. Ferron emits one line per fired rule, so chained rewrites produce one line per step.                       |
 
 ### Access log fields
 
-The rewrite module contributes the following fields to the HTTP access log line:
+The rewrite module adds these fields to the HTTP access log line:
 
 | Field                          | Type   | Description                                          |
 | ------------------------------ | ------ | ---------------------------------------------------- |
@@ -171,12 +146,12 @@ The rewrite module contributes the following fields to the HTTP access log line:
 
 ### Trace spans
 
-The rewrite stage sets the following attributes on its `ferron.stage.rewrite` span:
+The rewrite stage sets these attributes on its `ferron.stage.rewrite` span:
 
 | Attribute                           | Type   | Description                                                      |
 | ----------------------------------- | ------ | ---------------------------------------------------------------- |
 | `ferron.rewrite.applied`            | bool   | Whether Ferron applied a rewrite rule to the request.            |
-| `ferron.rewrite.pattern_count`      | int    | Number of rewrite rules evaluated (not the number that matched). |
+| `ferron.rewrite.pattern_count`      | int    | Number of rewrite rules evaluated, not the number that matched.  |
 | `ferron.rewrite.matched_rule_count` | int    | Number of rewrite rules that fired for the request.              |
 | `ferron.rewrite.rule_index`         | int    | 1-based position of the first fired rule.                        |
 | `ferron.rewrite.rule_name`          | string | Name of the first fired rule, when it sets `name`.               |

@@ -3,20 +3,18 @@ title: "Configuration validation"
 description: "Using ferron validate to check your configuration, understanding diagnostics, and working with JSON validation output."
 ---
 
-This page covers the `ferron validate` command, the types of diagnostics it produces, and how to interpret validation output.
+`ferron validate` checks a configuration without starting the server. It reports the diagnostic kinds below and can write JSON output.
 
 ## The validate command
-
-The `validate` command checks your configuration file for errors and unknown directives without starting the server.
 
 ```bash
 ferron validate -c ferron.conf
 ```
 
-If the configuration is valid, the command exits with code 0. If there are errors, it exits with code 1.
+The command exits with code `0` for a valid configuration and `1` for errors.
 
 > [!note]
-> Validation is module-aware: a directive recognized by a loaded module is valid. The server flags an unrecognized directive as unknown. Validation does not guarantee runtime correctness (some issues can only surface at runtime).
+> Validation is module-aware. A directive from a loaded module is valid, and a directive from no loaded module is unknown. Validation cannot prove runtime correctness, because some problems surface only at runtime.
 
 ### Log output
 
@@ -33,11 +31,11 @@ $ ferron validate -c ferron.conf
 [2026-05-30 07:18:34.372 WARN] Unknown directive (block 'http port 443' in file '/home/.../ferron.conf' at line 1, column 7): `tlss` is unused in the block
 ```
 
-The configuration above is still structurally valid (`tlss` is an unrecognized directive, but it does not prevent the server from starting). Validation exits with code 0 in this case.
+The configuration above is still structurally valid. `tlss` is unknown, so it does not prevent startup, and validation exits with code `0`.
 
 ### JSON output
 
-Use the `--json` (or `-j`) flag to get machine-readable output:
+Use the `--json` (or `-j`) flag for machine-readable output:
 
 ```bash
 ferron validate -c ferron.conf --json
@@ -85,7 +83,7 @@ Each diagnostic entry contains:
 
 ### Unknown directive
 
-A directive in the configuration is not recognized by any loaded module. The server reports this as a **warning**: the server can still start.
+A directive in the configuration belongs to no loaded module. Ferron reports this as a warning, and the server can still start.
 
 ```ferron
 example.com {
@@ -109,7 +107,7 @@ example.com {
 
 ### Invalid configuration
 
-A recognized directive has invalid arguments or a misconfigured value. This is an **error**: validation fails and the server cannot start with this configuration.
+A recognized directive has invalid arguments or a misconfigured value. Ferron reports this as an error. Validation fails and the server does not start.
 
 ```ferron
 # INVALID: bogus TLS provider
@@ -138,7 +136,7 @@ When `valid` is `false`, the command exits with code 1.
 
 ### Best practice violation
 
-A configuration pattern is technically valid but deviates from recommended practices. This is an advisory diagnostic, meaning that `ferron validate` suppresses it, and `ferron doctor` reports it. The server can start with these patterns.
+A configuration pattern is valid but differs from recommended practice. The diagnostic is advisory. `ferron validate` suppresses it and `ferron doctor` reports it. The server can start with these patterns.
 
 ```ferron
 example.com {
@@ -162,7 +160,7 @@ example.com {
 
 ## Span metadata
 
-The `span` field pinpoints the exact location of the diagnostic in the configuration file:
+The `span` field gives the exact location of the diagnostic in the configuration file:
 
 | Field    | Type             | Description                                                                         |
 | -------- | ---------------- | ----------------------------------------------------------------------------------- |
@@ -172,35 +170,35 @@ The `span` field pinpoints the exact location of the diagnostic in the configura
 
 ## Validation scope
 
-Validation runs against two levels:
+Validation runs at two levels:
 
-- **Global configuration**: directives inside the top-level `{ ... }` block
-- **Per-protocol blocks**: host blocks such as `example.com`, `*:443`, `http *:8080`
+- Global configuration: directives inside the top-level `{ ... }` block.
+- Per-protocol blocks: host blocks such as `example.com`, `*:443`, and `http *:8080`.
 
-Each protocol registers its own validators via the module system. If a module is not loaded, its directives appear as unknown. A custom build with a reduced feature set may trigger this.
+Each protocol registers its own validators through the module system. Without a module, its directives appear as unknown. A custom build with fewer features can trigger this.
 
 ## Configuration adapters and validation
 
-The `validate` command works with any configuration adapter. The adapter is auto-detected from the file extension:
+The `validate` command works with any configuration adapter. Ferron detects the adapter from the file extension:
 
 ```bash
 ferron validate -c ferron.conf    # uses config-ferronconf adapter
 ferron validate -c config.json    # uses config-json adapter
 ```
 
-You can also specify an adapter explicitly:
+You can also name the adapter:
 
 ```bash
 ferron validate -c config.json --config-adapter json
 ```
 
-Validation runs after the adapter has loaded and parsed the configuration. If the configuration file has parse errors, validation reports the parse error directly.
+Validation runs after the adapter loads and parses the configuration. A parse error is reported directly.
 
 ## Related commands
 
 ### ferron doctor
 
-The `doctor` command extends validation with best-practice checks for security, reliability, and operational hygiene. It reports advisory diagnostics for patterns that are technically valid but deviate from recommended practices:
+The `doctor` command adds best-practice checks for security, reliability, and operational hygiene. It reports advisory diagnostics for patterns that are valid but differ from recommended practice:
 
 ```bash
 ferron doctor -c ferron.conf
@@ -211,14 +209,14 @@ ferron doctor -c ferron.conf
 
 ### ferron adapt
 
-The `adapt` command outputs the parsed configuration as JSON without running validators. This is useful for inspecting how Ferron interprets your configuration:
+The `adapt` command writes the parsed configuration as JSON and runs no validators. Use it to inspect how Ferron reads a configuration:
 
 ```bash
 ferron adapt -c ferron.conf
 ```
 
 > [!tip]
-> The JSON output format is stable and suitable for programmatic consumption by tools and CI pipelines.
+> The JSON output format is stable and safe for tools and CI pipelines to parse.
 
 > [!info]
 > See [JSON configuration and adapt command](/docs/configuration/fundamentals/json-config) for details.
@@ -228,7 +226,7 @@ ferron adapt -c ferron.conf
 The `run` command runs the same validation during startup. If validation fails, the server exits with an error.
 
 > [!note]
-> Unknown directives produce warnings, not errors (the server can start, but the directive is silently ignored). Invalid configurations produce errors (the server does not start).
+> An unknown directive produces a warning. The server starts and ignores the directive. An invalid configuration produces an error and the server does not start.
 
 ## See also
 
