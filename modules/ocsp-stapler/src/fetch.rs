@@ -241,7 +241,7 @@ async fn fetch_ocsp_response_inner(
             Some(min) => nu.min(min),
             None => nu,
         });
-        cert_status = Some(single_res.cert_status.clone());
+        cert_status = Some(single_res.cert_status);
     }
 
     let next_update =

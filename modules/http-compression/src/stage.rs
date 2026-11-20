@@ -379,11 +379,7 @@ fn has_broken_compression(user_agent: &str, content_type: Option<&str>) -> bool 
     }
 
     // w3m browser has broken HTML compression
-    if user_agent.starts_with("w3m/") && content_type == Some("text/html") {
-        return true;
-    }
-
-    false
+    user_agent.starts_with("w3m/") && content_type == Some("text/html")
 }
 
 /// Determine the best compression algorithm based on Accept-Encoding header.

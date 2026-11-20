@@ -98,7 +98,7 @@ fn parse_users_block(
         for entry in entries {
             if let Some(hash_val) = entry.args.first() {
                 if let Some(hash_str) = hash_val.as_string_with_interpolations(vars) {
-                    users.insert(username.clone(), hash_str.to_string());
+                    users.insert(username.clone(), hash_str);
                 }
             }
         }

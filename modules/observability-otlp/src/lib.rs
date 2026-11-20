@@ -349,7 +349,7 @@ impl Module for OtlpObservabilityModule {
                     )
                 });
                 let metrics = metric_pipelines
-                    .entry(cache_key.clone())
+                    .entry(cache_key)
                     .or_insert_with(|| {
                         MetricPipelineEntry::init(
                             &config,

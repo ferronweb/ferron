@@ -96,7 +96,7 @@ pub async fn background_ocsp_task(
                         LOG_TARGET,
                         vec![(
                             "ferron.ocsp.cert.subject",
-                            LogAttributeValue::String(ident.clone()),
+                            LogAttributeValue::String(ident),
                         )],
                     );
                     known_certs.insert(key.clone(), chain.clone());

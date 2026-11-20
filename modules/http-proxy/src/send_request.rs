@@ -183,10 +183,7 @@ impl SendRequestWrapper {
         std::future::poll_fn(|cx| match &mut self.inner {
             Some(i) => match i.poll_ready(cx) {
                 Poll::Ready(Ok(_)) => {
-                    if timeout.is_some_and(|t| self.last_used.elapsed() > t) {
-                        return Poll::Ready(false);
-                    }
-                    Poll::Ready(true)
+                    Poll::Ready(!timeout.is_some_and(|t| self.last_used.elapsed() > t))
                 }
                 Poll::Ready(Err(_)) => Poll::Ready(false),
                 Poll::Pending => Poll::Pending,

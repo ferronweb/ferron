@@ -45,7 +45,7 @@ impl ScgiConfiguration {
                         .next()
                         .and_then(|v| v.as_string_with_interpolations(ctx))
                     {
-                        environment.insert(name.to_string(), value.to_string());
+                        environment.insert(name.to_string(), value);
                     }
                 }
             }

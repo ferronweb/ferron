@@ -48,7 +48,7 @@ pub fn parse_proxy_config(
         if let Some(url) = arg.as_string_with_interpolations(ctx) {
             cfg.upstreams.push(crate::types::upstream::Upstream::Static(
                 crate::types::upstream::StaticUpstream {
-                    url: url.clone(),
+                    url: url,
                     unix_socket: None,
                     health_check_config: crate::types::health::UpstreamHealthCheckConfig::default(),
                     inner: crate::types::upstream::UpstreamInner {

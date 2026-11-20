@@ -547,7 +547,7 @@ pub fn process_block(
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
                             trailing_comment: None,
-                            name: name.to_string(),
+                            name: name,
                             args: vec![ferronconf::Value::String(
                                 val,
                                 ferronconf::Span { line: 0, column: 0 },
@@ -3474,7 +3474,7 @@ pub fn process_block(
                         trailing_comment: None,
                         name: "if".to_string(),
                         args: vec![ferronconf::Value::String(
-                            match_id_str.to_string(),
+                            match_id_str,
                             ferronconf::Span { line: 0, column: 0 },
                         )],
                         block: Some(process_block(
@@ -4148,7 +4148,7 @@ pub fn process_block(
     for (key, block) in nested_directives {
         statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
             trailing_comment: None,
-            name: key.to_string(),
+            name: key,
             args: vec![],
             block: Some(block),
             span: ferronconf::Span { line: 0, column: 0 },
