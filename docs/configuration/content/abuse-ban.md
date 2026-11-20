@@ -38,7 +38,7 @@ Place the `abuse_protection` block inside an HTTP host block. A bare `abuse_prot
 
 You can specify `allowlist` more than once. Ban starts and expirations always log. Per-request rejections stay quiet by default because a ban wave would flood the log. Set `log_rejections` to get `DEBUG` rejection logs, and watch the `ferron.abuseban.rejected` counter for rejection volume.
 
-### Threshold blocks
+## Threshold blocks
 
 `rate_limit_threshold`, `brute_force_threshold`, and `custom_threshold` share the same shape. A threshold fires when the event count inside the window reaches `events`. Ferron bans the IP immediately.
 

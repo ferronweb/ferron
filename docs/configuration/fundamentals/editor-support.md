@@ -105,6 +105,7 @@ The [ferronweb/ferron-zed](https://github.com/ferronweb/ferron-zed) repository h
    ```
 
 2. Install it as a development extension with the "Install Dev Extension" button in Extensions.
+
 3. Restart Zed.
 
 The extension bundles the tree-sitter grammar and configures the language server automatically.

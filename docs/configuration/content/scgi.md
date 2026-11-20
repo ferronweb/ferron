@@ -23,7 +23,7 @@ example.com {
 | `scgi { ... }`               | Enables SCGI and configures nested directives. |
 | `scgi false`                 | Disables SCGI for the current scope.          |
 
-### `backend`
+## `backend`
 
 | Nested directive | Arguments       | Description                                                        | Default |
 | ---------------- | --------------- | ------------------------------------------------------------------ | ------- |

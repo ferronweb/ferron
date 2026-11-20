@@ -43,7 +43,7 @@ You can define several `rate_limit` blocks to apply several rules at once, for e
 
 Without `log_rejections`, Ferron logs only the first rejection for a key, then at most one per minute.
 
-### Key types
+## Key types
 
 | Value                   | Bucket key                                                          |
 | ----------------------- | ------------------------------------------------------------------- |

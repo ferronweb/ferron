@@ -24,7 +24,7 @@ example.com {
 | `cgi false`   | Disables CGI for the current scope.           |
 | `cgi { ... }` | Enables CGI and configures nested directives. |
 
-### `extension`
+## `extension`
 
 | Nested directive | Arguments  | Description                                                        | Default |
 | ---------------- | ---------- | ------------------------------------------------------------------ | ------- |

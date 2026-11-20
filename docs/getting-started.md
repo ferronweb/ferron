@@ -58,7 +58,9 @@ Ferron strips the matched `location` prefix before the next stage runs. A reques
    - [Manual installation](/docs/installation/manual-installation)
    - [Build from source with default modules](/docs/installation/source/default-modules)
    - [Build from source with custom modules](/docs/installation/source/custom-modules)
+
 2. Start with one of the configurations above.
+
 3. Validate the configuration before you reload or restart Ferron:
 
    ```bash

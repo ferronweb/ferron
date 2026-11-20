@@ -27,7 +27,7 @@ You can repeat `fcgi` and `fcgi_php` directives to configure several backends.
 | `fcgi <url: string> { ... }` | Enables FastCGI, sets the URL, and configures nested directives. |
 | `fcgi { ... }`               | Enables FastCGI and configures nested directives.               |
 
-### `backend`
+## `backend`
 
 | Nested directive | Arguments       | Description                                                        | Default |
 | ---------------- | --------------- | ------------------------------------------------------------------ | ------- |
