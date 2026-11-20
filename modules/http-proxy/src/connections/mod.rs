@@ -192,9 +192,10 @@ impl ConnectionManager {
         &self,
         upstream: Arc<ResolvedUpstream>,
         local_limit: Option<usize>,
+        evict: bool,
     ) {
         // Try evicting idle connections first for global limit being hit
-        if local_limit.is_none() {
+        if evict && local_limit.is_none() {
             let at_global_limit = TLS_POOLS.with(|c| {
                 let ptr = c.get();
                 let opt = unsafe { &mut *ptr };
@@ -302,7 +303,8 @@ impl ConnectionManager {
                 return conn;
             }
 
-            self.wait_until_available(upstream.clone(), None).await;
+            self.wait_until_available(upstream.clone(), None, true)
+                .await;
         }
     }
 
@@ -329,7 +331,7 @@ impl ConnectionManager {
                 return conn;
             }
 
-            self.wait_until_available(upstream.clone(), local_limit)
+            self.wait_until_available(upstream.clone(), local_limit, true)
                 .await;
         }
     }
@@ -343,15 +345,17 @@ impl ConnectionManager {
         idle_timeout: Duration,
     ) -> PooledConnection {
         loop {
-            if let Some(conn) = self
-                .try_pull(upstream.clone(), client_ip, idle_timeout)
-                .filter(|c| c.inner().is_some())
-            {
-                // Pool not under capacity.
-                return conn;
+            let mut evict = true;
+
+            if let Some(conn) = self.try_pull(upstream.clone(), client_ip, idle_timeout) {
+                evict = false;
+                if conn.inner().is_some() {
+                    return conn;
+                }
             }
 
-            self.wait_until_available(upstream.clone(), None).await;
+            self.wait_until_available(upstream.clone(), None, evict)
+                .await;
         }
     }
 
@@ -368,15 +372,19 @@ impl ConnectionManager {
         idle_timeout: Duration,
     ) -> PooledConnection {
         loop {
+            let mut evict = true;
+
             if let Some(conn) = self
                 .try_pull_with_local_limit(upstream.clone(), client_ip, local_limit, idle_timeout)
                 .filter(|c| c.inner().is_some())
             {
-                // Pool not under capacity.
-                return conn;
+                evict = false;
+                if conn.inner().is_some() {
+                    return conn;
+                }
             }
 
-            self.wait_until_available(upstream.clone(), local_limit)
+            self.wait_until_available(upstream.clone(), local_limit, evict)
                 .await;
         }
     }
