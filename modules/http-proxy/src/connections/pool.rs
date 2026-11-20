@@ -92,23 +92,24 @@ where
         state.max_size = new_capacity;
 
         if new_capacity < old_max {
-            self.evict_excess_idle(new_capacity);
+            self.evict_excess_idle();
         }
     }
 
-    /// Evicts excess idle connections to fit within the given capacity.
+    /// Evicts excess idle connections to fit within the capacity.
     ///
     /// This removes idle connections to fit within the limit.
     /// Outstanding (in-flight) connections are not affected.
     #[inline]
-    fn evict_excess_idle(&self, max_capacity: usize) {
+    pub fn evict_excess_idle(&self) -> usize {
         let state = unsafe { &mut *self.inner.get() };
         let current_idle = state.idle_total;
+        let max_capacity = state.max_size;
 
         let max_idle = max_capacity.saturating_sub(state.outstanding);
 
         if current_idle <= max_idle {
-            return; // No eviction needed.
+            return 0; // No eviction needed.
         }
 
         let mut to_evict = current_idle - max_idle;
@@ -132,6 +133,8 @@ where
         state.idle_total = state.idle_total.saturating_sub(evicted);
 
         state.idle.retain(|_, conns| !conns.is_empty());
+
+        evicted
     }
 
     /// Returns the number of idle connections for a given key.
@@ -172,7 +175,7 @@ where
 
     /// Checks if the pool is at its global capacity limit for new connection creation.
     #[inline]
-    fn is_at_global_limit(&self) -> bool {
+    pub fn is_at_global_limit(&self) -> bool {
         let state = unsafe { &mut *self.inner.get() };
         if state.unbounded {
             false
@@ -222,26 +225,28 @@ where
 
     /// Pulls an item from the pool, returning it immediately.
     ///
-    /// Returns `None` if the global limit is reached (caller should establish a new connection).
+    /// Returns `None` if the global limit is reached (caller should establish a new connection),
+    /// or `Some` with the pull item and additional items evicted otherwise.
     #[inline]
     pub fn pull(
         self: &Rc<Self>,
         key: K,
         readiness_fn: impl Fn(&mut I) -> (bool, bool),
-    ) -> Option<PoolItem<K, L, I>> {
+    ) -> Option<(PoolItem<K, L, I>, usize)> {
         self.pull_with_local_limit(key, None, readiness_fn)
     }
 
     /// Pulls an item from the pool with a local limit applied.
     ///
-    /// Returns `None` if either the global limit or local limit is reached.
+    /// Returns `None` if either the global limit or local limit is reached,
+    /// or `Some` with the pull item and additional items evicted otherwise.
     #[inline]
     pub fn pull_with_local_limit(
         self: &Rc<Self>,
         key: K,
         local_limit: Option<(L, usize)>,
         readiness_fn: impl Fn(&mut I) -> (bool, bool),
-    ) -> Option<PoolItem<K, L, I>> {
+    ) -> Option<(PoolItem<K, L, I>, usize)> {
         let state = unsafe { &mut *self.inner.get() };
         let local_limit_key = local_limit.as_ref().map(|(limit_key, _)| limit_key.clone());
 
@@ -251,7 +256,8 @@ where
             }
         }
 
-        let inner = if let Some(idle_conns) = state.idle.get_mut(&key) {
+        let (inner, evicted) = if let Some(idle_conns) = state.idle.get_mut(&key) {
+            let mut evicted = 0;
             let mut removed_conns = Vec::with_capacity(idle_conns.len());
             let mut found_conn = None;
             while let Some(mut inner) = idle_conns.pop() {
@@ -261,20 +267,25 @@ where
                     break;
                 } else if should_keep_in_pool {
                     removed_conns.push(inner);
+                } else {
+                    evicted += 1;
                 }
             }
             if found_conn.is_none() && self.is_at_global_limit() {
                 found_conn = removed_conns.pop();
             }
             idle_conns.extend(removed_conns.into_iter().rev());
-            found_conn
+            (found_conn, evicted)
         } else {
-            None
+            (None, 0)
         };
+
+        state.idle_total = state.idle_total.saturating_sub(evicted);
 
         if inner.is_some() {
             state.idle_total = state.idle_total.saturating_sub(1);
         } else if self.is_at_global_limit() {
+            // If it was still at global limit, nothing would be evicted...
             return None;
         }
 
@@ -284,12 +295,15 @@ where
             self.increment_local_outstanding(limit_key);
         }
 
-        Some(PoolItem {
-            pool: self.clone(),
-            key: Some(key),
-            inner,
-            local_limit_key,
-        })
+        Some((
+            PoolItem {
+                pool: self.clone(),
+                key: Some(key),
+                inner,
+                local_limit_key,
+            },
+            evicted,
+        ))
     }
 
     /// Returns a connection to the pool.
@@ -471,7 +485,7 @@ mod tests {
         let pool = Rc::new(SingleThreadPool::<String, String, u32>::new(10));
 
         // Pull an item (will be None since no connections stored)
-        let item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+        let (item, _) = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
         assert!(item.inner().is_none());
         assert_eq!(pool.outstanding_count(), 1);
 
@@ -489,7 +503,7 @@ mod tests {
         assert_eq!(pool.idle_count(&"key1".to_string()), 1);
 
         // Pull it back
-        let item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+        let (item, _) = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
         assert_eq!(item.inner(), &Some(42));
         assert_eq!(pool.outstanding_count(), 1);
         assert_eq!(pool.idle_count(&"key1".to_string()), 0);
@@ -550,7 +564,7 @@ mod tests {
 
         pool.return_connection("key1".to_string(), 42);
 
-        let item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+        let (item, _) = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
         let value = item.take().unwrap();
         assert_eq!(value, 42);
 
@@ -658,7 +672,7 @@ mod tests {
         assert_eq!(pool.total_idle_count(), 1);
 
         // Reusing the idle connection is allowed even though the pool is at capacity.
-        let item = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+        let (item, _) = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
         assert_eq!(item.inner(), &Some(7));
         assert_eq!(pool.total_idle_count(), 0);
 
@@ -709,7 +723,7 @@ mod tests {
         let pool_rc_before = Rc::strong_count(&pool);
 
         // Pull an empty slot (inner is None, outstanding becomes 1).
-        let mut item = pool
+        let (mut item, _) = pool
             .pull_with_local_limit(
                 (Arc::clone(&inner), None),
                 Some((Arc::clone(&limit_key), 10)),
@@ -748,6 +762,50 @@ mod tests {
     }
 
     #[test]
+    fn test_idle_eviction_stats_recorded() {
+        let pool = Rc::new(SingleThreadPool::<String, String, u32>::new(10));
+
+        {
+            let (mut item, evictions) = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+            assert!(item.inner().is_none());
+            assert_eq!(evictions, 0);
+            assert_eq!(pool.total_idle_count(), 0);
+            assert_eq!(pool.outstanding_count(), 1);
+            *item.inner_mut() = Some(42);
+        }
+
+        assert_eq!(pool.total_idle_count(), 1);
+        assert_eq!(pool.outstanding_count(), 0);
+
+        {
+            let (item, evictions) = pool.pull("key1".to_string(), |_| (true, true)).unwrap();
+            assert_eq!(*item.inner(), Some(42));
+            assert_eq!(evictions, 0);
+            assert_eq!(pool.total_idle_count(), 0);
+            assert_eq!(pool.outstanding_count(), 1);
+        }
+        {
+            let evict = std::cell::RefCell::new(true);
+            let (item, evictions) = pool
+                .pull("key1".to_string(), |_| {
+                    let mut evict = evict.borrow_mut();
+                    if *evict {
+                        *evict = false;
+                        (false, false)
+                    } else {
+                        (true, true)
+                    }
+                })
+                .unwrap();
+            assert!(item.inner().is_none());
+            assert_eq!(pool.total_idle_count(), 0);
+            assert_eq!(pool.outstanding_count(), 1);
+            // The only item stored would be evicted
+            assert_eq!(evictions, 1);
+        }
+    }
+
+    #[test]
     fn test_disarm_repeated_cycles_do_not_accumulate() {
         use std::net::IpAddr;
         use std::sync::Arc;
@@ -761,7 +819,7 @@ mod tests {
         for i in 0..1000 {
             let inner = Arc::new("key".to_string());
             let weak = Arc::downgrade(&inner);
-            let mut item = pool
+            let (mut item, _) = pool
                 .pull((Arc::clone(&inner), None), |_| (true, true))
                 .unwrap();
             // Per-request key clone is moved out, like PoolReturnInfo::from_item.

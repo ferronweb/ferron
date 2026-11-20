@@ -193,6 +193,48 @@ impl ConnectionManager {
         upstream: Arc<ResolvedUpstream>,
         local_limit: Option<usize>,
     ) {
+        // Try evicting idle connections first for global limit being hit
+        if local_limit.is_none() {
+            let at_global_limit = TLS_POOLS.with(|c| {
+                let ptr = c.get();
+                let opt = unsafe { &mut *ptr };
+                if let Some(pool) = opt {
+                    let (evicted, at_limit) = if upstream.proxy_unix.is_some() {
+                        #[cfg(unix)]
+                        let evicted = pool.unix_pool.evict_excess_idle();
+                        #[cfg(not(unix))]
+                        let evicted: usize = 0;
+
+                        #[cfg(unix)]
+                        let at_limit = pool.unix_pool.is_at_global_limit();
+                        #[cfg(not(unix))]
+                        let at_limit = false;
+
+                        (evicted, at_limit)
+                    } else {
+                        let evicted = pool.tcp_pool.evict_excess_idle();
+                        let at_limit = pool.tcp_pool.is_at_global_limit();
+
+                        (evicted, at_limit)
+                    };
+
+                    if evicted > 0 {
+                        let thread_id = get_tls_thread_id();
+                        POOL_STATS.record_idle_eviction(thread_id, &upstream, evicted);
+                    }
+
+                    at_limit
+                } else {
+                    false
+                }
+            });
+
+            if !at_global_limit {
+                // No need to wait after eviction
+                return;
+            }
+        }
+
         // Check if local limit is exceeded
         let at_local_limit = if let Some(ll) = local_limit {
             TLS_POOLS.with(|c| {
@@ -401,12 +443,13 @@ impl ConnectionManager {
                 .pull(key, |c| c.check_ready(Some(idle_timeout)))
         });
 
-        if let Some(result) = &result {
+        if let Some((item, evicted)) = &result {
             let thread_id = get_tls_thread_id();
-            POOL_STATS.record_pull(thread_id, &upstream_for_stats, result.inner().is_some());
+            POOL_STATS.record_idle_eviction(thread_id, &upstream_for_stats, *evicted);
+            POOL_STATS.record_pull(thread_id, &upstream_for_stats, item.inner().is_some());
         }
 
-        result.map(PooledConnection::new)
+        result.map(|(item, _)| PooledConnection::new(item))
     }
 
     /// Pull a connection with a local limit applied, returning immediately.
@@ -474,12 +517,13 @@ impl ConnectionManager {
                 .pull_with_local_limit(key, limit, |c| c.check_ready(Some(idle_timeout)))
         });
 
-        if let Some(result) = &result {
+        if let Some((item, evicted)) = &result {
             let thread_id = get_tls_thread_id();
-            POOL_STATS.record_pull(thread_id, &upstream_for_stats, result.inner().is_some());
+            POOL_STATS.record_idle_eviction(thread_id, &upstream_for_stats, *evicted);
+            POOL_STATS.record_pull(thread_id, &upstream_for_stats, item.inner().is_some());
         }
 
-        result.map(PooledConnection::new)
+        result.map(|(item, _)| PooledConnection::new(item))
     }
 }
 

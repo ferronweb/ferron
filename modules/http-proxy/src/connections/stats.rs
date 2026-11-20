@@ -34,6 +34,28 @@ impl PoolStatsCollector {
     }
 
     #[inline]
+    pub fn record_idle_eviction(
+        &self,
+        thread_id: ThreadId,
+        upstream: &Arc<ResolvedUpstream>,
+        evicted: usize,
+    ) {
+        if evicted == 0 {
+            return;
+        }
+        let key = (thread_id, upstream.clone());
+        let entry = if let Some(entry) = self.inner.get(&key) {
+            entry
+        } else {
+            self.inner
+                .entry(key)
+                .or_insert_with(|| (AtomicUsize::new(0), AtomicUsize::new(0)))
+                .downgrade()
+        };
+        entry.value().0.fetch_sub(evicted, Ordering::Relaxed);
+    }
+
+    #[inline]
     pub fn record_pull(
         &self,
         thread_id: ThreadId,

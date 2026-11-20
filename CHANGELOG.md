@@ -17,6 +17,10 @@
 - **Many HTTP correctness improvements**: improved overall HTTP protocol correctness (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0416)).
 - **Proper extended CONNECT support**: previously, extended CONNECT requests for HTTP/2 and HTTP/3 were not handled correctly, which could lead to connection stalls or dropped connections. This has been fixed.
 
+#### Reverse proxy
+
+- **Reverse proxy stall fix**: after some closed idle connections get evicted from the connection pool, the idle connection count did not decrease. This would cause the reverse proxy pool selection to hang, because the pool was wrongfully marked as at capacity.
+
 ## Ferron 3.0.0-rc.11
 
 **Released in November 8, 2026**
