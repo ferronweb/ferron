@@ -4,13 +4,28 @@
 
 **Not yet released**
 
+### Added
+
+#### Automatic TLS
+
+- **Catch-all on-demand TLS**: a host block without a hostname (for example `*:443`) can now use on-demand ACME issuance, so Ferron can get certificates for customer domains that aren't known in advance. Such a block requires `on_demand_ask`. It applies only to hostnames that no other host block matches.
+
 ### Changed
+
+#### Automatic TLS
+
+- **Denied on-demand hostnames are asked again**: when the approval endpoint denies a hostname or can't be reached, Ferron now asks again after 60 seconds instead of refusing the hostname until the next reload. Ferron remembers at most 10,000 denied hostnames at a time.
+- **Bounded on-demand request queue**: Ferron now queues at most 1,024 on-demand certificate requests and gives the approval endpoint 10 seconds to respond. Previously, a client sending many unknown SNI hostnames could grow the queue without limit, and a stalled approval endpoint stopped all on-demand issuance.
 
 #### Reverse proxy
 
 - **Extended CONNECT support for HTTP/2 backends**: the reverse proxy now "upgrades" HTTP/2 requests via extended CONNECT, if the request specifies an HTTP upgrade.
 
 ### Fixed
+
+#### Automatic TLS
+
+- **Cached on-demand certificates on ports other than 443**: after a restart, Ferron no longer asks the approval endpoint again and orders a second certificate for a cached on-demand hostname on a port other than 443.
 
 #### HTTP server core
 
