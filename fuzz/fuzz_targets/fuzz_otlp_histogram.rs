@@ -1,17 +1,3 @@
-//! Fuzz target for the Base2 exponential histogram accumulator.
-//!
-//! Records arbitrary values (raw bit patterns, huge magnitudes, fractional
-//! values, NaN and infinities) into an [`ExpoHistogram`] and checks the
-//! exporter-side invariants of the resulting data point:
-//!
-//! - count == zero_count + positive bucket counts + negative bucket counts;
-//! - min <= max, and the mean (sum / count) falls inside [min, max];
-//! - scale stays within the configured bounds.
-//!
-//! NaN and infinite inputs are passed through to [`ExpoHistogram::record`],
-//! which drops them: they are never counted, so the invariants above hold
-//! regardless of how the fuzzer mixes them in.
-
 #![no_main]
 
 use ferron_observability_otlp::pipeline::metrics::histogram::{

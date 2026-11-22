@@ -1,14 +1,3 @@
-//! Fuzz target for the OTLP/HTTP request encoding paths
-//! (CUSTOM_EXPORTER_REWRITE.md §7.3).
-//!
-//! Exercises:
-//! - the protobuf decode → encode → decode round-trip of an
-//!   `ExportTraceServiceRequest`;
-//! - the OTLP/HTTP JSON encoding (`request_to_json`, including the hex-ID
-//!   rewrite) — must not panic, must be deterministic, and must re-serialize;
-//! - `hexify_id_fields` over arbitrary JSON values — must not panic and must
-//!   be idempotent.
-
 #![no_main]
 
 use ferron_observability_otlp::proto::opentelemetry::proto::collector::trace::v1::ExportTraceServiceRequest;
