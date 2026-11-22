@@ -93,7 +93,6 @@ target_to_fallback_gcc() {
 	esac
 }
 
-
 # GNU tuple used for library directories (usr/lib/<gnu_arch>/, /lib/<gnu_arch>/)
 target_to_gnu_arch() {
 	local target="$1"

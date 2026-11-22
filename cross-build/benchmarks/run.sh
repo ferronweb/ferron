@@ -109,9 +109,13 @@ target_to_arch() {
 }
 
 obtain_sysroot_ld_library_paths() {
-	# Also, interpret "include /path/to/ld.so.conf/*" as a path to include
+	# /etc/ld.so.conf files look like this (from the manpage):
+	#   /lib
+    #   /usr/lib
+    #   /usr/local/lib
+    #   include /etc/ld.so.conf.d/*.conf
 	local sysroot="$1"
-	sysroot="${sysroot%/}" # Remove trailing "/" from sysroot
+	sysroot="${sysroot%/}"
 	local ld_library_paths=()
     local ld_so_conf_files
     if [[ -f "${sysroot}/etc/ld.so.conf" ]]; then
@@ -124,18 +128,18 @@ obtain_sysroot_ld_library_paths() {
     while [[ -n "${ld_so_conf_file}" ]]; do
         local sanitized_ld_so_conf
         sanitized_ld_so_conf=$(cat "${ld_so_conf_file}" | grep -vE '^(#.*)?$')
-        # Extract includes
+
         local ld_so_conf_includes
         local ld_so_conf_includes_str
         ld_so_conf_includes_str=$(echo "${sanitized_ld_so_conf}" | grep -E '^include' | sed -E 's/^include\s*//' | xargs)
         IFS=' ' read -r -a ld_so_conf_includes <<< "${ld_so_conf_includes_str}"
-        ld_so_conf_includes=( "${ld_so_conf_includes[@]/#/${sysroot}}" ) # Prepend sysroot to include paths
-        # Extract non-include lines
+        ld_so_conf_includes=( "${ld_so_conf_includes[@]/#/${sysroot}}" )
+
         local ld_so_conf_paths
         local ld_so_conf_paths_str
         ld_so_conf_paths_str=$(echo "${sanitized_ld_so_conf}" | grep -vE '^include' | xargs)
         IFS=' ' read -r -a ld_so_conf_paths <<< "${ld_so_conf_paths_str}"
-        ld_so_conf_paths=( "${ld_so_conf_paths[@]/#/${sysroot}}" ) # Prepend sysroot to library paths
+        ld_so_conf_paths=( "${ld_so_conf_paths[@]/#/${sysroot}}" )
 
         ld_library_paths+=(${ld_so_conf_paths[@]})
         ld_so_conf_files+=(${ld_so_conf_includes[@]})
@@ -164,13 +168,11 @@ generate_self_signed_cert() {
 create_bench_files() {
 	local bench_dir="$1"
 
-	# Create 1KB static file
 	mkdir -p "${bench_dir}/static"
 	dd if=/dev/urandom bs=1024 count=1 2>/dev/null | base64 > "${bench_dir}/static/1k.txt.tmp"
  head -c 1024 "${bench_dir}/static/1k.txt.tmp" > "${bench_dir}/static/1k.txt"
 	rm -f "${bench_dir}/static/1k.txt.tmp"
 
-	# Create 1MB static file
 	dd if=/dev/urandom bs=1024 count=1024 2>/dev/null | base64 > "${bench_dir}/static/1m.txt.tmp"
  head -c 1048576 "${bench_dir}/static/1m.txt.tmp" > "${bench_dir}/static/1m.txt"
 	rm -f "${bench_dir}/static/1m.txt.tmp"
@@ -189,7 +191,8 @@ create_ferron_config() {
 
 	if [[ "${cross_compiled}" == "true" ]]; then
 		# Disable io_uring for cross-compiled binaries
-		# (tokio file I/O crashes under QEMU under high concurrency)
+		# (it could cause I/O crashes under QEMU under high concurrency,
+		# not sure if this is still needed...)
 		cat > "${config_file}" <<EOF
 {
     log /dev/null
@@ -278,7 +281,7 @@ start_backend_server() {
 	local bench_dir="$1"
 	local port="$2"
 
-	# Use Python's built-in HTTP server as a simple backend
+	# Python's built-in HTTP server should work just fine.
 	if command -v python3 &>/dev/null; then
 		(cd "${bench_dir}" && python3 -m http.server "${port}" &>/dev/null) &
 		BACKEND_PID=$!
@@ -319,7 +322,7 @@ run_h2load() {
 	local connections="${4:-100}"
 	local threads="${5:-4}"
 
-	# Calculate number of requests (high number to ensure duration-based run)
+	# High number to ensure duration-based run
 	local requests=$((connections * 10 * duration))
 
 	log_info "Running h2load: ${label}"
@@ -391,7 +394,7 @@ main() {
 		exit 1
 	fi
 
-	# Check required tools (only needed for native builds)
+	# Required tools only needed for native builds
 	local host
 	host=$(host_arch)
 	local target_arch
@@ -422,7 +425,6 @@ main() {
 	local target_arch
 	target_arch=$(target_to_arch "${target}")
 
-	# Set LD_LIBRARY_PATH
 	if [[ -d "${QEMU_LD_PREFIX:-}" ]]; then
 	    # Obtain paths from etc/ld.so.conf and etc/ld.so.conf.d/*, if available
 		# Ignore empty lines and lines starting from "#" (comments)
@@ -468,7 +470,6 @@ main() {
 		log_info "LD_LIBRARY_PATH: ${ld_library_path}"
 	fi
 
-	# Setup temporary directory
 	local work_dir
 	work_dir=$(mktemp -d)
 	trap cleanup EXIT
@@ -483,7 +484,6 @@ main() {
 	BENCH_LOG="${work_dir}/bench.log"
 	touch "${BENCH_LOG}"
 
-	# Set PGO data directory
 	if [[ -z "${pgo_data_dir}" ]]; then
 		pgo_data_dir="${work_dir}/pgo-data"
 	fi
@@ -491,14 +491,9 @@ main() {
 	export LLVM_PROFILE_FILE="${pgo_data_dir}/ferron-%p-%m.profraw"
 
 	log_step "Preparing benchmark environment"
-
-	# Generate TLS certificate
 	generate_self_signed_cert "${cert_dir}"
-
-	# Create benchmark files
 	create_bench_files "${bench_dir}"
 
-	# Create ferron config
 	local config_file="${work_dir}/ferron.conf"
 	local cross_compiled="false"
 	if [[ "${host}" != "${target_arch}" ]]; then
@@ -509,13 +504,11 @@ main() {
     # Raise file descriptor limit to prevent file descriptor exhaustion
     ulimit -n $(ulimit -n -H)
 
-	# Start backend server
 	start_backend_server "${bench_dir}" "${backend_port}"
 
 	# Wait for backend to start
 	sleep 1
 
-	# Start ferron
 	log_step "Starting Ferron"
 
 	# shellcheck disable=SC2086
@@ -544,8 +537,8 @@ main() {
 
 	if [[ "${cross_compiled}" == "true" ]]; then
 	    local curl_pids=()
-		# Use curl loops for cross-compiled binaries — wrk's high concurrency
-		# triggers tokio::fs crashes under QEMU
+		# Use curl loops for cross-compiled binaries, as wrk's high concurrency
+		# can trigger tokio::fs crashes under QEMU
 		log_info "Running curl-based PGO training (cross-compiled target)"
 
 		log_info "  Scenario: Small static files (1KB) - HTTP/1.1"
@@ -554,7 +547,7 @@ main() {
     			curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1k.txt" 2>/dev/null &
     			curl_pids+=($!)
 		    done
-			# Wait for first 5 curl processes to complete
+			# Wait for first 5 curl processes to complete in the meantime
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
@@ -568,7 +561,7 @@ main() {
 				curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1m.txt" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
-			# Wait for first 5 curl processes to complete
+			# Wait for first 5 curl processes to complete in the meantime
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
@@ -582,7 +575,7 @@ main() {
 				curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/static/1k.txt?cache=1" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
-			# Wait for first 5 curl processes to complete
+			# Wait for first 5 curl processes to complete in the meantime
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
@@ -596,7 +589,7 @@ main() {
 				curl -s -o /dev/null "http://127.0.0.1:${ferron_port}/proxy/static/1k.txt" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
-			# Wait for first 5 curl processes to complete
+			# Wait for first 5 curl processes to complete in the meantime
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
@@ -610,7 +603,7 @@ main() {
 				curl --http2 -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
-			# Wait for first 5 curl processes to complete
+			# Wait for first 5 curl processes to complete in the meantime
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
@@ -624,7 +617,7 @@ main() {
 				curl --http3-only --max-time 0.1 -k -s -o /dev/null "https://127.0.0.1:${tls_port}/proxy/static/1k.txt" 2>/dev/null &
 			    curl_pids+=($!)
 		    done
-			# Wait for first 5 curl processes to complete
+			# Wait for first 5 curl processes to complete in the meantime
 			local curl_pid_to_wait=(${curl_pids[@]:0:5})
 			curl_pids=(${curl_pids[@]:5})
 			for pid in "${curl_pid_to_wait[@]}"; do
@@ -706,7 +699,6 @@ main() {
 		wait "${BACKEND_PID}" 2>/dev/null || true
 	fi
 
-	# Show PGO data
 	local profraw_count
 	profraw_count=$(find "${pgo_data_dir}" -name "*.profraw" 2>/dev/null | wc -l)
 
@@ -720,7 +712,7 @@ main() {
 
 	log_info "Benchmark log: ${BENCH_LOG}"
 
-	# Cleanup
+	# Final cleanup
 	rm -rf "${work_dir}"
 }
 

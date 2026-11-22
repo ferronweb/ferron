@@ -262,7 +262,6 @@ setup_env_gnu() {
 	log_info "  Sysroot: ${sysroot}"
 	log_info "  Cross prefix: ${cross_prefix:-native}"
 
-	# Create clang wrappers
 		log_info "Creating clang wrappers for ${target}"
 
 		local wrapper_dir="${sysroot}/bin"
@@ -858,7 +857,6 @@ main() {
 		exit 1
 	fi
 
-	# Ensure Rust target is installed
 	check_rust_target "${target}"
 
 	# Setup build environment

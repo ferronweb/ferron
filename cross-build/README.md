@@ -28,12 +28,12 @@ Cross-compilation build files for Linux targets, runnable on Linux hosts of any 
 
 ### Optional (for PGO)
 
-- **wrk** — HTTP benchmarking tool
-- **h2load** — HTTP/2 benchmarking tool
-- **openssl** — for self-signed TLS certificates
-- **Python 3** — for the reverse proxy backend server
-- **llvm-profdata** — for merging PGO profiles
-- **qemu-user** — for running cross-compiled binaries
+- **wrk**: HTTP benchmarking tool
+- **h2load**: HTTP/2 benchmarking tool
+- **openssl**: for self-signed TLS certificates
+- **Python 3**: for the reverse proxy backend server
+- **llvm-profdata**: for merging PGO profiles
+- **qemu-user**: for running cross-compiled binaries
 
 ### Install by distro
 
@@ -160,19 +160,7 @@ The sysroot is created at `cross-build/sysroots/musl-<arch>/` and contains:
 
 ### Output
 
-Binaries are placed in `dist/<target>/`:
-
-```
-dist/aarch64-unknown-linux-gnu/
-├── ferron
-├── ferron-fmt
-├── ferron-passwd
-├── ferron-precompress
-├── ferron-kdl2ferron
-├── ferron-serve
-├── ferron.conf
-└── wwwroot/
-```
+Binaries (such as `ferron` or `ferron-passwd`) are placed in `target/<target>/release`.
 
 ## Profile-Guided Optimization (PGO)
 
@@ -186,10 +174,10 @@ PGO can improve performance by 10-20% by optimizing based on actual runtime beha
 
 This runs a 4-phase process:
 
-1. **Instrumented build** — Compiles with `-Cprofile-generate`
-2. **Training benchmarks** — Runs wrk/h2load scenarios to generate profile data
-3. **Profile merge** — Merges `.profraw` files with `llvm-profdata`
-4. **Optimized build** — Compiles with `-Cprofile-use`
+1. **Instrumented build**: compiles with `-Cprofile-generate`
+2. **Training benchmarks**: runs wrk/h2load scenarios to generate profile data
+3. **Profile merge**: merges `.profraw` files with `llvm-profdata`
+4. **Optimized build**: compiles with `-Cprofile-use`
 
 ### PGO workflow details
 

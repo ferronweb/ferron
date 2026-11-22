@@ -1,6 +1,3 @@
--- wrk Lua script for small static file benchmarking
--- Requests small (1KB) static files with path randomization
-
 request = function()
     local paths = { "/static/1k.txt" }
     local path = paths[math.random(#paths)]
