@@ -7,9 +7,9 @@ Serves:
 - gRPC OTLP services (TraceService, MetricsService, LogsService) on port 4317.
 
 Decoded payloads and request metadata are exposed through /received as JSON
-so the Rust tests can assert on decoded telemetry (see
-e2e/tests/observability/*.rs).
+so the Rust tests can assert on decoded telemetry.
 """
+
 import gzip
 import json
 import threading
@@ -131,7 +131,9 @@ def _decode_metrics(data):
                 if metric.HasField("sum"):
                     entry["kind"] = "sum"
                     entry["is_monotonic"] = metric.sum.is_monotonic
-                    entry["aggregation_temporality"] = metric.sum.aggregation_temporality
+                    entry["aggregation_temporality"] = (
+                        metric.sum.aggregation_temporality
+                    )
                     for point in metric.sum.data_points:
                         entry["points"].append(
                             {
@@ -169,7 +171,9 @@ def _decode_metrics(data):
                         )
                 elif metric.HasField("histogram"):
                     entry["kind"] = "histogram"
-                    entry["aggregation_temporality"] = metric.histogram.aggregation_temporality
+                    entry["aggregation_temporality"] = (
+                        metric.histogram.aggregation_temporality
+                    )
                     for point in metric.histogram.data_points:
                         entry["points"].append(
                             {
@@ -204,7 +208,9 @@ def _decode_logs(data):
                     _decoded_logs.append(
                         {
                             "scope": scope,
-                            "body": record.body.string_value if record.HasField("body") else None,
+                            "body": record.body.string_value
+                            if record.HasField("body")
+                            else None,
                             "severity_text": record.severity_text,
                             "severity_number": record.severity_number,
                             "trace_id": record.trace_id.hex(),
@@ -242,13 +248,12 @@ def _decode_spans(data):
         return
     for resource_spans in req.resource_spans:
         resource_attrs = {
-            attr.key: _attribute(attr.value) for attr in resource_spans.resource.attributes
+            attr.key: _attribute(attr.value)
+            for attr in resource_spans.resource.attributes
         }
         for scope_spans in resource_spans.scope_spans:
             for span in scope_spans.spans:
-                attrs = {
-                    attr.key: _attribute(attr.value) for attr in span.attributes
-                }
+                attrs = {attr.key: _attribute(attr.value) for attr in span.attributes}
                 with _lock:
                     _decoded_spans.append(
                         {
@@ -313,7 +318,9 @@ def _decode_json_spans(payload):
                                     "span_id": link.get("spanId", "").lower(),
                                     "trace_state": link.get("traceState", ""),
                                     "flags": link.get("flags", 0),
-                                    "attributes": _json_attr_map(link.get("attributes", [])),
+                                    "attributes": _json_attr_map(
+                                        link.get("attributes", [])
+                                    ),
                                 }
                                 for link in span.get("links", [])
                             ],
@@ -321,7 +328,9 @@ def _decode_json_spans(payload):
                                 {
                                     "name": event.get("name"),
                                     "time_unix_nano": event.get("timeUnixNano", "0"),
-                                    "attributes": _json_attr_map(event.get("attributes", [])),
+                                    "attributes": _json_attr_map(
+                                        event.get("attributes", [])
+                                    ),
                                 }
                                 for event in span.get("events", [])
                             ],
@@ -380,7 +389,9 @@ def _decode_json_metrics(payload):
         for scope_metrics in resource_metrics.get("scopeMetrics", []):
             for metric in scope_metrics.get("metrics", []):
                 with _lock:
-                    _decoded_metrics.append({"name": metric.get("name"), "kind": "json", "points": []})
+                    _decoded_metrics.append(
+                        {"name": metric.get("name"), "kind": "json", "points": []}
+                    )
 
 
 def _decode_json_logs(payload):
@@ -430,7 +441,9 @@ class _LogsServicer(logs_service_pb2_grpc.LogsServiceServicer):
 def serve_grpc():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=8))
     trace_service_pb2_grpc.add_TraceServiceServicer_to_server(_TraceServicer(), server)
-    metrics_service_pb2_grpc.add_MetricsServiceServicer_to_server(_MetricsServicer(), server)
+    metrics_service_pb2_grpc.add_MetricsServiceServicer_to_server(
+        _MetricsServicer(), server
+    )
     logs_service_pb2_grpc.add_LogsServiceServicer_to_server(_LogsServicer(), server)
     server.add_insecure_port("0.0.0.0:4317")
     server.start()

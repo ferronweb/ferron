@@ -4,7 +4,6 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 
-# Cryptography imports
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
@@ -37,7 +36,6 @@ def write_pem(path, data):
 
 
 def generate():
-    # If certs already present, skip generation
     if (
         os.path.exists(SERVER_CRT)
         and os.path.exists(SERVER_KEY)
@@ -47,7 +45,6 @@ def generate():
         print("certs already present")
         return
 
-    # Generate CA key & cert
     ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Test CA")])
     ca_cert = (
@@ -72,7 +69,8 @@ def generate():
     )
     write_pem(CA_CRT, ca_cert.public_bytes(serialization.Encoding.PEM))
 
-    # Generate server key & cert with SAN=localhost and AIA OCSP pointing to ocsp container hostname
+    # Generate server key & cert with SAN=localhost and AIA OCSP pointing to ocsp container
+    # hostname for OCSP stapling to work.
     server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     server_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
     san = x509.SubjectAlternativeName([x509.DNSName("localhost")])
@@ -107,7 +105,8 @@ def generate():
         SERVER_NOCHAIN_CRT,
         server_cert.public_bytes(serialization.Encoding.PEM),
     )
-    # Write server cert along with the CA certificate as certificate chain
+    # Write server cert along with the CA certificate as certificate chain, so the web server
+    # can use it.
     write_pem(
         SERVER_CRT,
         server_cert.public_bytes(serialization.Encoding.PEM)
@@ -115,7 +114,6 @@ def generate():
     )
 
     if OCSP_CRT != CA_CRT:
-        # Generate OCSP responder key and certificate
         ocsp_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         eku = x509.ExtendedKeyUsage([x509.OID_OCSP_SIGNING])
 
@@ -181,7 +179,6 @@ def make_ocsp_response_for(cert, issuer, algo, status=OCSPCertStatus.GOOD):
         revocation_reason=None,
     )
 
-    # "Forge" the signature if an environment variable is set to 1
     if os.environ.get("FERRON_E2E_OCSP_FORGE_SIGNATURE") == "1":
         # Simulate forged OCSP response
         forged_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -252,14 +249,11 @@ def ocsp():
             encoding=serialization.Encoding.DER, format=serialization.PublicFormat.PKCS1
         )
 
-        # Determine hash algorithm
         if hash == "sha256":
-            # sha256
             name_hash = hashlib.sha256(issuer_name_der).digest()
             key_hash = hashlib.sha256(pubkey_bitstring).digest()
             algo = hashes.SHA256()
         elif hash == "sha1":
-            # sha1
             name_hash = hashlib.sha1(issuer_name_der).digest()
             key_hash = hashlib.sha1(pubkey_bitstring).digest()
             algo = hashes.SHA1()
@@ -269,7 +263,7 @@ def ocsp():
             key_hash = hashlib.sha1(pubkey_bitstring).digest()
             algo = hashes.SHA1()
 
-        # Ensure issuer binding matches
+        # Ensure issuer binding matches (just like production OCSP endpoints)
         if name_hash != issuer_name_hash or key_hash != issuer_key_hash:
             print("Issuer binding does not match CA cert")
             return ("", 400)
@@ -279,7 +273,6 @@ def ocsp():
         )
 
         if serial != server_cert.serial_number:
-            # Return a successful OCSP response but with UNKNOWN status for the requested serial
             resp = make_ocsp_response_for(
                 server_cert,
                 ca_asn,
@@ -288,7 +281,6 @@ def ocsp():
             )
             return Response(resp, content_type="application/ocsp-response")
 
-        # Serial matches; return GOOD
         resp = make_ocsp_response_for(
             server_cert,
             ca_asn,

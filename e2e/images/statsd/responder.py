@@ -3,8 +3,9 @@
 
 Listens for UDP StatsD datagrams on port 8125 and serves the collected
 datagrams through the /received HTTP endpoint on port 8080 so the Rust tests
-can assert on the emitted metrics (see e2e/tests/observability/statsd.rs).
+can assert on the emitted metrics.
 """
+
 import socket
 import threading
 
