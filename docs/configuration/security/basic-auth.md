@@ -109,6 +109,8 @@ When brute-force protection is active:
 - During lockout, the stage rejects all authentication attempts for that IP and returns `429 Too Many Requests` with a `Retry-After` header.
 - After `lockout_duration`, the lockout expires and the stage resets the attempt history.
 
+### Forward proxy (CONNECT) support
+
 For a CONNECT request, failed authentication returns `407 Proxy Authentication Required` instead of `401`.
 
 ## Examples

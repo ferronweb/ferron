@@ -392,6 +392,8 @@ The `observability` block configures per-host event sinks for logging and metric
 
 Default: none.
 
+### provider console
+
 ```ferron
 example.com {
     observability {
@@ -401,6 +403,8 @@ example.com {
 ```
 
 The `console` provider takes no subdirectives. It writes supported observability events to Ferron logs.
+
+### provider file
 
 The `file` provider writes observability events to log files:
 

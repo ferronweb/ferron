@@ -103,7 +103,11 @@ The endpoint must return a JSON object:
 - `certificate`: PEM-encoded certificate chain, with the leaf certificate first and intermediates after it.
 
 > [!warning]
-> A response that is not valid JSON, or PEM data that does not parse, makes the refresh fail. Check that the endpoint returns `application/json` without a BOM, that the chain starts with `-----BEGIN CERTIFICATE-----`, and that the key starts with `-----BEGIN PRIVATE KEY-----` or a supported equivalent.
+> A refresh fails when the endpoint returns invalid JSON, or when PEM data does not parse. The log reports one of these messages:
+>
+> - `Failed to parse the HTTP response from TLS certificate endpoint: ...`: the response is not valid JSON. Check that the endpoint returns `application/json` without a BOM, and that the body has `private_key` and `certificate` fields.
+> - `Failed to parse the TLS certificate chain from TLS endpoint response: ...`: the `certificate` field is not valid PEM. Check that it starts with `-----BEGIN CERTIFICATE-----`, with the leaf certificate first and intermediates after it.
+> - `Failed to parse the TLS private key from TLS endpoint response: ...`: the `private_key` field is not valid PEM. Check that it starts with `-----BEGIN PRIVATE KEY-----` or a supported equivalent, and that the key is RSA, EC, or Ed25519.
 
 ## Refresh behavior
 

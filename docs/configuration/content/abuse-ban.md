@@ -140,6 +140,8 @@ Place `abuse_event` inside an HTTP host block. Use it to protect a site from aut
 
 ## Behavior
 
+### Event tracking
+
 Ferron tracks events per IP address and per event type:
 
 - Rate limit events: emitted by the rate limiting module when a client exceeds its limit.
@@ -148,6 +150,8 @@ Ferron tracks events per IP address and per event type:
 - Error rate events: counted by the abuse protection module after the pipeline completes, when the final status code matches `status_codes`. For example, 404 and 403.
 
 Events sit in a sliding window. When the count inside the window reaches the threshold, Ferron bans the IP.
+
+### Ban mechanics
 
 Bans have these properties:
 
@@ -160,6 +164,8 @@ Bans have these properties:
 > You cannot lift a ban manually. Wait for it to expire.
 
 If Ferron bans your own IP immediately, check the thresholds. `events 1`, `events 2`, or a short `window` such as 10 seconds are easy to trip. Increase `events` to require more violations, or lower `ban_duration` to shorten the ban.
+
+### Allowlist behavior
 
 The allowlist check runs before the ban check. Matching IPs skip ban checks entirely.
 
