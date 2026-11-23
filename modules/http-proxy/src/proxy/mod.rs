@@ -112,7 +112,9 @@ pub async fn execute_proxy(
         return Ok((HttpResponse::BuiltinError(502, None), metrics));
     }
 
-    let affinity_key = extract_affinity_key(&config.affinity, ctx);
+    let affinity = extract_affinity_key(&config.affinity, ctx);
+    let cookie_set = affinity.as_ref().is_some_and(|(_, c)| *c);
+    let affinity_key = affinity.map(|(k, _)| k);
 
     let event_sink = ctx.events.clone();
     let mut backend_set = BackendSet::new(
@@ -261,13 +263,17 @@ pub async fn execute_proxy(
                         }
                     }
 
-                    let resp = maybe_set_affinity_cookie(
-                        resp,
-                        &config.affinity,
-                        affinity_key
-                            .as_deref()
-                            .map(|k| String::from_utf8_lossy(k).to_string()),
-                    );
+                    let resp = if !cookie_set {
+                        maybe_set_affinity_cookie(
+                            resp,
+                            &config.affinity,
+                            affinity_key
+                                .as_deref()
+                                .map(|k| String::from_utf8_lossy(k).to_string()),
+                        )
+                    } else {
+                        resp
+                    };
 
                     if let Some(budget) = retry_budget {
                         budget.record_request();

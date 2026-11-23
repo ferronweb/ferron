@@ -4,43 +4,49 @@ use ferron_http::variables::resolve_variable;
 
 use crate::types::affinity::AffinityType;
 
-/// Extract the affinity key from the request.
+/// Extract the affinity key + cookie status from the request.
 #[inline]
 pub fn extract_affinity_key(
     affinity: &Option<crate::config::AffinityConfig>,
     ctx: &ferron_http::HttpContext,
-) -> Option<Vec<u8>> {
+) -> Option<(Vec<u8>, bool)> {
     let affinity = affinity.as_ref()?;
 
-    let key = match &affinity.affinity_type {
+    let (key, cookie_set) = match &affinity.affinity_type {
         AffinityType::Cookie(cfg) => {
             let req = ctx.req.as_ref()?;
-            req.headers()
+            let cookie = req
+                .headers()
                 .get(http::header::COOKIE)
                 .and_then(|h| h.to_str().ok())
-                .and_then(|v| parse_cookie_value(v, &cfg.name))
-                .unwrap_or_else(|| {
-                    // Randomly generate a string...
-                    let random_bytes: [u8; 8] = rand::random();
-                    let mut result = String::new();
-                    for byte in &random_bytes {
-                        result.push_str(&format!("{:02x}", byte));
-                    }
-                    result
-                })
-                .as_bytes()
-                .to_vec()
+                .and_then(|v| parse_cookie_value(v, &cfg.name));
+            let cookie_set = cookie.is_some();
+            (
+                cookie
+                    .unwrap_or_else(|| {
+                        // Randomly generate a string...
+                        let random_bytes: [u8; 8] = rand::random();
+                        let mut result = String::new();
+                        for byte in &random_bytes {
+                            result.push_str(&format!("{:02x}", byte));
+                        }
+                        result
+                    })
+                    .as_bytes()
+                    .to_vec(),
+                cookie_set,
+            )
         }
         AffinityType::Header(header_name) => {
             let req = ctx.req.as_ref()?;
             let header_value = req.headers().get(header_name)?;
-            header_value.as_bytes().to_vec()
+            (header_value.as_bytes().to_vec(), false)
         }
-        AffinityType::Ip => ctx.remote_address?.ip().to_string().into_bytes(),
+        AffinityType::Ip => (ctx.remote_address?.ip().to_string().into_bytes(), false),
         AffinityType::Hash { variable, .. } => {
             // For hash affinity, use the variable value as the key
             // Variables are resolved from the request context
-            resolve_variable(variable, ctx)?.into_bytes()
+            (resolve_variable(variable, ctx)?.into_bytes(), false)
         }
     };
 
@@ -48,7 +54,7 @@ pub fn extract_affinity_key(
         return None;
     }
 
-    Some(key)
+    Some((key, cookie_set))
 }
 
 /// Parse a specific cookie value from a Cookie header string.

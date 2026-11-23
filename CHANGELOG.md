@@ -19,6 +19,7 @@
 
 #### Reverse proxy
 
+- **Cookie affinity fix**: the reverse proxy no longer sets an affinity cookie when using cookie-based affinity and it is already set.
 - **Reverse proxy stall fix**: after some closed idle connections get evicted from the connection pool, the idle connection count did not decrease. This would cause the reverse proxy pool selection to hang, because the pool was wrongfully marked as at capacity.
 
 ## Ferron 3.0.0-rc.11
