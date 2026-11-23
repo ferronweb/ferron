@@ -66,29 +66,12 @@ async fn create_otlp_container(
     }
 }
 
-/*
-fn write_config(path: &mut std::path::PathBuf, content: &str) {
-    let mut file = std::fs::File::create(path).unwrap();
-    file.write_all(content.as_bytes()).unwrap();
-}
-*/
-
 #[tokio::test]
 async fn test_control_plane_global_metadata_in_traces() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -135,14 +118,12 @@ async fn test_control_plane_global_metadata_in_traces() {
 
     let client = reqwest::Client::new();
 
-    // Trigger a request to produce a trace
     let _ = client
         .get(format!("http://localhost:{}/index.html", http_port))
         .send()
         .await
         .unwrap();
 
-    // Poll the OTLP mock collector until it reports decoded spans with control plane metadata
     let received_url = format!("http://localhost:{}/received", otlp_port);
     let mut found = false;
     for _ in 0..60 {
@@ -186,18 +167,8 @@ async fn test_control_plane_global_metadata_in_traces() {
 async fn test_control_plane_per_host_metadata_precedence() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     // Global sets org_id to "global", host example.com overrides to "host-specific"
     config_file
@@ -252,7 +223,6 @@ example.com:80 {
 
     let client = reqwest::Client::new();
 
-    // Request with Host: example.com to trigger per-host metadata
     let _ = client
         .get(format!("http://localhost:{}/index.html", http_port))
         .header("Host", "example.com")
@@ -299,18 +269,8 @@ example.com:80 {
 async fn test_control_plane_span_links_in_traces() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -358,15 +318,12 @@ async fn test_control_plane_span_links_in_traces() {
 
     let client = reqwest::Client::new();
 
-    // Trigger a request to produce a trace
     let _ = client
         .get(format!("http://localhost:{}/index.html", http_port))
         .send()
         .await
         .unwrap();
 
-    // Verify the trace was produced and the configured span link was exported.
-    // The mock collector exposes link data via `links` on each decoded span.
     let received_url = format!("http://localhost:{}/received", otlp_port);
     let mut found = false;
     for _ in 0..60 {

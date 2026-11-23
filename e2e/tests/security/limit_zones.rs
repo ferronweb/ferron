@@ -34,15 +34,6 @@ pub(crate) async fn create_ferron_container(
         .await
 }
 
-/// Test that two hostnames sharing a global rate limit zone share buckets.
-///
-/// Config:
-///   { rate_limit { rate 10; burst 0; key remote_address } }
-///   *:80 { root }
-///
-/// The global block defines rate limit rules. All hosts inherit them
-/// and share the same global zone. We send many rapid requests from
-/// both hosts and verify the total allowed is shared (not doubled).
 #[tokio::test]
 async fn test_ratelimit_zone_global_shared() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -83,8 +74,6 @@ async fn test_ratelimit_zone_global_shared() {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Send rapid requests from both hosts and count total allowed
-    // With shared zone, total allowed should be ~10 (not ~20)
     let mut allowed = 0;
     for _ in 0..5 {
         let resp = client
@@ -119,15 +108,6 @@ async fn test_ratelimit_zone_global_shared() {
     container.stop().await.unwrap();
 }
 
-/// Test that a host with its own rate_limit rules gets isolated per-host buckets.
-///
-/// Config:
-///   { rate_limit { rate 10; burst 0; key remote_address } }
-///   *:80 { root }
-///   host-b: { rate_limit { rate 10; burst 0; key remote_address } }
-///
-/// host-a inherits the global zone. host-b has its own rate_limit
-/// block, so it gets a per-host zone.
 #[tokio::test]
 async fn test_ratelimit_zone_per_host_opt_out() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -177,7 +157,6 @@ host-b.example.com:80 {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Send rapid requests from host-a to exhaust global zone
     let mut host_a_allowed = 0;
     for _ in 0..15 {
         let resp = client
@@ -219,11 +198,6 @@ host-b.example.com:80 {
     container.stop().await.unwrap();
 }
 
-/// Test that a named zone allows multiple hostnames to share buckets.
-///
-/// Config:
-///   host-a: rate_limit { zone "shared"; rate 10; burst 0 }
-///   host-b: rate_limit { zone "shared"; rate 10; burst 0 }
 #[tokio::test]
 async fn test_ratelimit_zone_named_shared() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -272,7 +246,6 @@ host-b.example.com:80 {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Send rapid requests from both hosts and count total allowed
     let mut allowed = 0;
     for _ in 0..5 {
         let resp = client
@@ -307,13 +280,6 @@ host-b.example.com:80 {
     container.stop().await.unwrap();
 }
 
-/// Test that per-host isolation works when no global zone exists.
-///
-/// Config:
-///   host-a: rate_limit { rate 10; burst 0 }
-///   host-b: rate_limit { rate 10; burst 0 }
-///
-/// Each host gets its own per-host zone with isolated buckets.
 #[tokio::test]
 async fn test_ratelimit_zone_per_host_default() {
     let _ = rustls::crypto::ring::default_provider().install_default();

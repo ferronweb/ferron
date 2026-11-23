@@ -80,36 +80,18 @@ async fn create_ferron_container(
 async fn test_proxy_strict_dns_resolution() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let zones_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut bind9_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut ferron_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut resolv_conf = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let zones_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut bind9_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut ferron_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut resolv_conf = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-proxy-strict-dns";
 
-    // Start backend
     let backend = create_backend_container(network, "backend", "strict-dns-backend")
         .await
         .unwrap();
     let backend_ip = backend.get_bridge_ip_address().await.unwrap();
 
-    // Prepare BIND9 config
     let named_conf = r#"
 options {
     directory "/var/lib/bind";
@@ -152,12 +134,10 @@ backend.dns.test. IN A {backend_ip}
 
     std::fs::write(zones_dir.path().join("db.dns.test"), zone_file.as_bytes()).unwrap();
 
-    // Start BIND9
     let bind9 = create_bind9_container(network, bind9_config.path(), zones_dir.path())
         .await
         .unwrap();
 
-    // Prepare resolv.conf
     resolv_conf
         .as_file_mut()
         .write_all(
@@ -183,7 +163,6 @@ backend.dns.test. IN A {backend_ip}
         )
         .unwrap();
 
-    // Start Ferron
     let ferron = create_ferron_container(network, ferron_config.path(), resolv_conf.path())
         .await
         .unwrap();
@@ -194,7 +173,6 @@ backend.dns.test. IN A {backend_ip}
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Request should be proxied to the backend resolved via strict DNS
     let mut success = false;
     for _ in 0..10 {
         if let Ok(resp) = client
@@ -221,36 +199,18 @@ backend.dns.test. IN A {backend_ip}
 async fn test_proxy_strict_dns_logical_dns_opt_out() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let zones_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut bind9_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut ferron_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut resolv_conf = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let zones_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut bind9_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut ferron_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut resolv_conf = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-proxy-logical-dns";
 
-    // Start backend
     let backend = create_backend_container(network, "backend", "logical-dns-backend")
         .await
         .unwrap();
     let backend_ip = backend.get_bridge_ip_address().await.unwrap();
 
-    // Prepare BIND9 config
     let named_conf = r#"
 options {
     directory "/var/lib/bind";
@@ -293,12 +253,10 @@ backend.dns.test. IN A {backend_ip}
 
     std::fs::write(zones_dir.path().join("db.dns.test"), zone_file.as_bytes()).unwrap();
 
-    // Start BIND9
     let bind9 = create_bind9_container(network, bind9_config.path(), zones_dir.path())
         .await
         .unwrap();
 
-    // Prepare resolv.conf
     resolv_conf
         .as_file_mut()
         .write_all(
@@ -326,7 +284,6 @@ backend.dns.test. IN A {backend_ip}
         )
         .unwrap();
 
-    // Start Ferron
     let ferron = create_ferron_container(network, ferron_config.path(), resolv_conf.path())
         .await
         .unwrap();
@@ -337,7 +294,6 @@ backend.dns.test. IN A {backend_ip}
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Request should be proxied to the backend (logical_dns passes URL through as-is)
     let mut success = false;
     for _ in 0..10 {
         if let Ok(resp) = client

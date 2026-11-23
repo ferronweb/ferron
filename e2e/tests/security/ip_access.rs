@@ -57,7 +57,6 @@ async fn raw_http_get(addr: &str, port: u16, path: &str) -> u16 {
         .unwrap_or(0)
 }
 
-/// Test that `block "0.0.0.0/0"` rejects all requests with 403.
 #[tokio::test]
 async fn test_ip_block_all() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -96,9 +95,6 @@ async fn test_ip_block_all() {
     );
 }
 
-/// Test that `allow "127.0.0.1"` blocks non-localhost connections.
-/// In Docker, the connection comes from the Docker bridge gateway,
-/// so it should be rejected.
 #[tokio::test]
 async fn test_ip_allow_only_localhost() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -139,7 +135,6 @@ async fn test_ip_allow_only_localhost() {
     );
 }
 
-/// Test that without any block/allow directives, requests succeed normally.
 #[tokio::test]
 async fn test_ip_no_restrictions() {
     let _ = rustls::crypto::ring::default_provider().install_default();

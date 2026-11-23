@@ -1,9 +1,3 @@
-//! Trace ID injection tests for Ferron.
-//!
-//! These tests verify that the `trace_id_header` directive correctly injects
-//! the request's trace ID into response headers, with support for custom
-//! header names and on-demand reflection.
-//!
 //! See: modules/http-traceid/
 
 use std::io::Write;
@@ -12,10 +6,6 @@ use testcontainers::core::ContainerPort;
 
 use crate::common;
 
-/// Test that trace_id_header injects the default header.
-///
-/// Verifies that when `trace_id_header true` is configured, the response
-/// includes an `x-ferron-trace-id` header with a non-empty trace ID value.
 #[tokio::test]
 async fn test_trace_id_header_default() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -77,9 +67,6 @@ async fn test_trace_id_header_default() {
     container.stop().await.unwrap();
 }
 
-/// Test that trace_id_header works with a custom header name.
-///
-/// Verifies that `header_name` subdirective changes the injected header name.
 #[tokio::test]
 async fn test_trace_id_custom_header_name() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -150,11 +137,6 @@ async fn test_trace_id_custom_header_name() {
     container.stop().await.unwrap();
 }
 
-/// Test that trace_id_header with reflect_request only injects when
-/// the request includes the reflection trigger header.
-///
-/// Verifies that when `reflect_request true` is set, the trace ID header
-/// is only injected when the client sends `x-ferron-trace-reflect: 1`.
 #[tokio::test]
 async fn test_trace_id_reflect_request() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -233,9 +215,6 @@ async fn test_trace_id_reflect_request() {
     container.stop().await.unwrap();
 }
 
-/// Test that trace_id_header disabled does not inject the header.
-///
-/// Verifies that `trace_id_header false` prevents trace ID injection.
 #[tokio::test]
 async fn test_trace_id_disabled() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -284,9 +263,6 @@ async fn test_trace_id_disabled() {
     container.stop().await.unwrap();
 }
 
-/// Test that trace ID is unique per request.
-///
-/// Verifies that each request gets a different trace ID value.
 #[tokio::test]
 async fn test_trace_id_unique_per_request() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -339,7 +315,6 @@ async fn test_trace_id_unique_per_request() {
         trace_ids.push(trace_id);
     }
 
-    // All trace IDs should be unique
     let unique_count = trace_ids
         .iter()
         .collect::<std::collections::HashSet<_>>()
@@ -354,13 +329,6 @@ async fn test_trace_id_unique_per_request() {
     container.stop().await.unwrap();
 }
 
-/// Test that `trace { trust_request }` applies per host.
-///
-/// Verifies that a host block with `trust_request` reuses the incoming
-/// `traceparent` trace ID, while another host on the same listener keeps the
-/// default behavior of generating a fresh trace ID.
-///
-/// See: modules/http-server/src/config/trace.rs
 #[tokio::test]
 async fn test_per_host_trace_trust_request() {
     let _ = rustls::crypto::ring::default_provider().install_default();

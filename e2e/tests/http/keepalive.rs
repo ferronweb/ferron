@@ -1,10 +1,4 @@
-//! Keep-alive behavior tests for Ferron reverse proxy.
-//!
-//! These tests verify that HTTP keep-alive connections are correctly managed,
-//! including connection reuse when keepalive is enabled, connection pool
-//! behavior, and idle timeout enforcement.
-//!
-//! Inspired by nginx-tests `http_keepalive.t`.
+//! Inspired by nginx-tests http_keepalive.t.
 
 use std::io::Write;
 use std::time::Duration;
@@ -70,13 +64,7 @@ impl KeepaliveTestContext {
     async fn new(test_name: &str, config: &[u8]) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let mut config_file = self::common::create_temp_file();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
         let network = format!("e2e-test-keepalive-{}", test_name);
 
@@ -112,7 +100,6 @@ impl KeepaliveTestContext {
         }
     }
 
-    /// Poll the metrics endpoint until a condition is met.
     async fn wait_for_metrics(&self, condition: impl Fn(&str) -> bool) -> String {
         let mut last_body = String::new();
         for _ in 0..60 {
@@ -131,10 +118,6 @@ impl KeepaliveTestContext {
     }
 }
 
-/// Test that keepalive reuses connections to the backend.
-///
-/// Inspired by nginx-tests http_keepalive.t — verifies that when keepalive
-/// is enabled, subsequent requests reuse the same backend connection.
 #[tokio::test]
 async fn test_keepalive_reuses_connection() {
     let ctx = KeepaliveTestContext::new(
@@ -153,7 +136,6 @@ async fn test_keepalive_reuses_connection() {
     )
     .await;
 
-    // Send two sequential requests to establish and reuse a connection
     let resp1 = ctx
         .client
         .get(format!("{}/whoami", ctx.base_url))
@@ -170,7 +152,6 @@ async fn test_keepalive_reuses_connection() {
         .unwrap();
     assert_eq!(resp2.status(), 200);
 
-    // Poll metrics for connection reuse evidence
     let metrics_body = ctx
         .wait_for_metrics(|body| {
             body.contains("ferron_proxy_requests")
@@ -185,10 +166,6 @@ async fn test_keepalive_reuses_connection() {
     );
 }
 
-/// Test that keepalive disabled creates separate connections.
-///
-/// Inspired by nginx-tests http_keepalive.t — verifies that when keepalive
-/// is disabled, each request creates a new backend connection.
 #[tokio::test]
 async fn test_keepalive_disabled_creates_separate_connections() {
     let ctx = KeepaliveTestContext::new(
@@ -207,7 +184,6 @@ async fn test_keepalive_disabled_creates_separate_connections() {
     )
     .await;
 
-    // Send two sequential requests
     let resp1 = ctx
         .client
         .get(format!("{}/whoami", ctx.base_url))

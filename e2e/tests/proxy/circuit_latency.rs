@@ -1,8 +1,4 @@
-//! Latency-aware circuit breaker E2E tests.
-//!
-//! These tests verify that the `latency_threshold` directive in the
-//! `circuit_breaker` block causes the circuit to trip when upstream responses
-//! exceed the configured duration.
+//! Tests for the `latency_threshold` circuit breaker directive.
 
 use std::io::Write;
 
@@ -56,25 +52,11 @@ async fn create_ferron_container(
         .await
 }
 
-/// Test that the circuit trips when upstream response time exceeds `latency_threshold`.
-///
-/// Uses two backends:
-/// - backend-slow: always responds after 500ms via `/unstable?sleep=500`
-/// - backend-fast: always responds immediately via `/`
-///
-/// With `latency_threshold "0.1s"` and `max_fails 1`, the slow backend should
-/// trip after the first request, and subsequent requests should go to the fast backend.
 #[tokio::test]
 async fn test_circuit_breaker_trips_on_slow_upstream() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-cb-latency-trip";
 
@@ -124,8 +106,6 @@ async fn test_circuit_breaker_trips_on_slow_upstream() {
         .build()
         .unwrap();
 
-    // First request goes to backend-slow (round_robin), which takes 500ms.
-    // This exceeds latency_threshold of 100ms, so the circuit should trip.
     let response1 = client
         .get(format!("http://localhost:{}/unstable?sleep=500", port))
         .send()
@@ -149,21 +129,11 @@ async fn test_circuit_breaker_trips_on_slow_upstream() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that slow responses do NOT trip the circuit when `latency_threshold` is not set.
-///
-/// Uses a backend that always responds after 500ms via `/unstable?sleep=500`.
-/// Without `latency_threshold`, the circuit should never trip regardless of response time.
 #[tokio::test]
 async fn test_circuit_breaker_does_not_trip_without_latency_threshold() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-cb-latency-notrip";
 
@@ -221,31 +191,11 @@ async fn test_circuit_breaker_does_not_trip_without_latency_threshold() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that the circuit stays open after being tripped by latency, then
-/// transitions to half-open and closes after a fast response.
-///
-/// Uses two backends:
-/// - backend-slow: responds after 500ms
-/// - backend-fast: responds immediately
-///
-/// With `latency_threshold "0.1s"`, `max_fails 1`, `open_duration "2s"`, and
-/// `consecutive_passes 1`:
-/// 1. Request 1 → backend-slow (slow) → circuit trips
-/// 2. Request 2 → backend-fast (fast, circuit is open but we still route to fast)
-/// 3. Wait for open_duration to expire
-/// 4. Request 3 → backend-slow (now in half-open, fast response because timeout is short)
-///    → circuit should close
 #[tokio::test]
 async fn test_circuit_breaker_latency_half_open_recovery() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-cb-latency-halfopen";
 

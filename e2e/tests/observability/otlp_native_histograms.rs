@@ -6,9 +6,6 @@ use crate::otlp_setup::{
     create_ferron_container, create_otlp_container, create_test_files, find_metric, poll_received,
 };
 
-/// With `native_histograms false` the request duration histogram is exported
-/// as a plain `Histogram` with the SDK default explicit bucket boundaries
-/// instead of an exponential histogram.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_otlp_native_histograms_explicit() {
     let _ = rustls::crypto::ring::default_provider().install_default();

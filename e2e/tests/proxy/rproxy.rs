@@ -131,20 +131,9 @@ impl RProxyTestContext {
     async fn new(test_name: &str) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let cert_dir = crate::common::create_temp_dir();
-        #[cfg(unix)]
         let mut config_file = crate::common::create_temp_file();
 
-        #[cfg(not(unix))]
-        let cert_dir = tempfile::tempdir().unwrap();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-        // Generate certs for backend
         let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
         std::fs::write(cert_dir.path().join("server.crt"), cert.cert.pem()).unwrap();
         std::fs::write(
@@ -155,12 +144,10 @@ impl RProxyTestContext {
 
         let network = format!("e2e-test-rproxy-{}", test_name);
 
-        // Start backend
         let backend = create_backend_container(&network, cert_dir.path(), "backend", "backend", 0)
             .await
             .unwrap();
 
-        // Write Ferron config
         config_file
             .as_file_mut()
             .write_all(
@@ -192,7 +179,6 @@ impl RProxyTestContext {
             )
             .unwrap();
 
-        // Start Ferron
         let ferron = create_ferron_container(&network, config_file.path())
             .await
             .unwrap();
@@ -232,18 +218,8 @@ impl CircuitBreakerTestContext {
     async fn new(test_name: &str, config: &[u8], backends: &[(&str, &str, u32)]) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let cert_dir = crate::common::create_temp_dir();
-        #[cfg(unix)]
         let mut config_file = crate::common::create_temp_file();
-
-        #[cfg(not(unix))]
-        let cert_dir = tempfile::tempdir().unwrap();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
         let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
         std::fs::write(cert_dir.path().join("server.crt"), cert.cert.pem()).unwrap();
@@ -631,18 +607,8 @@ async fn test_circuit_breaker_half_open_recovery() {
 async fn test_proxy_http2_only() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let cert_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let cert_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
     std::fs::write(cert_dir.path().join("server.crt"), cert.cert.pem()).unwrap();
@@ -697,18 +663,8 @@ async fn test_proxy_http2_only() {
 async fn test_proxy_keepalive_metrics() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let cert_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let cert_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
     std::fs::write(cert_dir.path().join("server.crt"), cert.cert.pem()).unwrap();
@@ -758,7 +714,6 @@ async fn test_proxy_keepalive_metrics() {
 
     let client = reqwest::Client::new();
 
-    // Send requests
     for _ in 0..10 {
         let _ = client
             .get(format!("http://localhost:{}/", port))
@@ -767,7 +722,6 @@ async fn test_proxy_keepalive_metrics() {
             .unwrap();
     }
 
-    // Poll the Prometheus endpoint for metrics
     let metrics_url = format!("http://localhost:{}/metrics", metrics_port);
     let mut found_reused = false;
     let mut last_body = String::new();
@@ -777,7 +731,6 @@ async fn test_proxy_keepalive_metrics() {
             && let Ok(body) = resp.text().await
         {
             last_body = body.clone();
-            // Check for connection_reused
             if body.contains("ferron_proxy_requests")
                 && body.contains("ferron_proxy_connection_reused=\"1\"")
             {
@@ -802,7 +755,6 @@ async fn test_proxy_keepalive_metrics() {
 async fn test_hop_by_hop_headers_stripped() {
     let ctx = RProxyTestContext::new("hopbyhop").await;
 
-    // Send a request with hop-by-hop headers that should be stripped
     let response = ctx
         .client
         .get(format!("{}/echo-header?name=keep-alive", ctx.base_url))
@@ -819,7 +771,6 @@ async fn test_hop_by_hop_headers_stripped() {
         body
     );
 
-    // Verify TE header is stripped
     let response = ctx
         .client
         .get(format!("{}/echo-header?name=te", ctx.base_url))
@@ -835,7 +786,6 @@ async fn test_hop_by_hop_headers_stripped() {
         body
     );
 
-    // Verify Transfer-Encoding header is stripped
     let response = ctx
         .client
         .get(format!(

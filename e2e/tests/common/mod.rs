@@ -124,208 +124,134 @@ pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
     Ok(ferron_image_built)
 }
 
-pub async fn build_backend_image() -> Result<GenericImage, TestcontainersError> {
-    let mut backend_image = BACKEND_IMAGE.lock().await;
-    if let Some(image) = backend_image.as_ref() {
+async fn build_cached_image(
+    cache: &std::sync::LazyLock<Mutex<Option<GenericImage>>>,
+    image_name: &str,
+    dockerfile: &str,
+    files: &[(&str, &str)],
+) -> Result<GenericImage, TestcontainersError> {
+    let mut cached = cache.lock().await;
+    if let Some(image) = cached.as_ref() {
         return Ok(image.clone());
     }
-    let backend_image_built = GenericBuildableImage::new("e2e-test-backend-v2", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/backend/Dockerfile"
-        ))
-        .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/backend"), ".")
-        .build_image()
-        .await?;
-    backend_image.replace(backend_image_built.clone());
-    Ok(backend_image_built)
+    let mut builder = GenericBuildableImage::new(image_name, "latest")
+        .with_dockerfile(format!("{}{dockerfile}", env!("CARGO_MANIFEST_DIR")));
+    for (local, dest) in files {
+        builder = builder.with_file(format!("{}{local}", env!("CARGO_MANIFEST_DIR")), *dest);
+    }
+    let built = builder.build_image().await?;
+    cached.replace(built.clone());
+    Ok(built)
+}
+
+pub async fn build_backend_image() -> Result<GenericImage, TestcontainersError> {
+    build_cached_image(
+        &BACKEND_IMAGE,
+        "e2e-test-backend-v2",
+        "/images/backend/Dockerfile",
+        &[("/images/backend", ".")],
+    )
+    .await
 }
 
 pub async fn build_backend_grpc_image() -> Result<GenericImage, TestcontainersError> {
-    let mut backend_grpc_image = BACKEND_GRPC_IMAGE.lock().await;
-    if let Some(image) = backend_grpc_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let backend_grpc_image_built = GenericBuildableImage::new("e2e-test-backend-grpc", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/backend-grpc/Dockerfile"
-        ))
-        .with_file(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/images/backend-grpc"),
-            ".",
-        )
-        .build_image()
-        .await?;
-    backend_grpc_image.replace(backend_grpc_image_built.clone());
-    Ok(backend_grpc_image_built)
+    build_cached_image(
+        &BACKEND_GRPC_IMAGE,
+        "e2e-test-backend-grpc",
+        "/images/backend-grpc/Dockerfile",
+        &[("/images/backend-grpc", ".")],
+    )
+    .await
 }
 
 pub async fn build_cgi_image() -> Result<GenericImage, TestcontainersError> {
-    let mut cgi_image = CGI_IMAGE.lock().await;
-    if let Some(image) = cgi_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let cgi_image_built = GenericBuildableImage::new("e2e-test-cgi", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/cgi/Dockerfile"
-        ))
-        .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/cgi"), ".")
-        .build_image()
-        .await?;
-    cgi_image.replace(cgi_image_built.clone());
-    Ok(cgi_image_built)
+    build_cached_image(
+        &CGI_IMAGE,
+        "e2e-test-cgi",
+        "/images/cgi/Dockerfile",
+        &[("/images/cgi", ".")],
+    )
+    .await
 }
 
 pub async fn build_fcgiwrap_image() -> Result<GenericImage, TestcontainersError> {
-    let mut fcgiwrap_image = FCGIWRAP_IMAGE.lock().await;
-    if let Some(image) = fcgiwrap_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let fcgiwrap_image_built = GenericBuildableImage::new("e2e-test-fcgiwrap", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/fcgiwrap/Dockerfile"
-        ))
-        .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/fcgiwrap"), ".")
-        .build_image()
-        .await?;
-    fcgiwrap_image.replace(fcgiwrap_image_built.clone());
-    Ok(fcgiwrap_image_built)
+    build_cached_image(
+        &FCGIWRAP_IMAGE,
+        "e2e-test-fcgiwrap",
+        "/images/fcgiwrap/Dockerfile",
+        &[("/images/fcgiwrap", ".")],
+    )
+    .await
 }
 
 pub async fn build_otlp_image() -> Result<GenericImage, TestcontainersError> {
-    let mut otlp_image = OTLP_IMAGE.lock().await;
-    if let Some(image) = otlp_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let otlp_image_built = GenericBuildableImage::new("e2e-test-otlp", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/otlp/Dockerfile"
-        ))
-        .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/otlp"), ".")
-        .build_image()
-        .await?;
-    otlp_image.replace(otlp_image_built.clone());
-    Ok(otlp_image_built)
+    build_cached_image(
+        &OTLP_IMAGE,
+        "e2e-test-otlp",
+        "/images/otlp/Dockerfile",
+        &[("/images/otlp", ".")],
+    )
+    .await
 }
 
 pub async fn build_statsd_image() -> Result<GenericImage, TestcontainersError> {
-    let mut statsd_image = STATSD_IMAGE.lock().await;
-    if let Some(image) = statsd_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let statsd_image_built = GenericBuildableImage::new("e2e-test-statsd", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/statsd/Dockerfile"
-        ))
-        .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/statsd"), ".")
-        .build_image()
-        .await?;
-    statsd_image.replace(statsd_image_built.clone());
-    Ok(statsd_image_built)
+    build_cached_image(
+        &STATSD_IMAGE,
+        "e2e-test-statsd",
+        "/images/statsd/Dockerfile",
+        &[("/images/statsd", ".")],
+    )
+    .await
 }
 
 pub async fn build_ocsp_image() -> Result<GenericImage, TestcontainersError> {
-    let mut ocsp_image = OCSP_IMAGE.lock().await;
-    if let Some(image) = ocsp_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let image = GenericBuildableImage::new("e2e-test-ocsp", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/ocsp/Dockerfile"
-        ))
-        .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/ocsp"), ".")
-        .build_image()
-        .await?;
-    ocsp_image.replace(image.clone());
-    Ok(image)
+    build_cached_image(
+        &OCSP_IMAGE,
+        "e2e-test-ocsp",
+        "/images/ocsp/Dockerfile",
+        &[("/images/ocsp", ".")],
+    )
+    .await
 }
 
 pub async fn build_bind9_image() -> Result<GenericImage, TestcontainersError> {
-    let mut bind9_image = BIND9_IMAGE.lock().await;
-    if let Some(image) = bind9_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let bind9_image_built = GenericBuildableImage::new("e2e-test-bind9", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/bind9/Dockerfile"
-        ))
-        .with_file(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/images/bind9/entrypoint.sh"),
-            "/entrypoint.sh",
-        )
-        .build_image()
-        .await?;
-    bind9_image.replace(bind9_image_built.clone());
-    Ok(bind9_image_built)
+    build_cached_image(
+        &BIND9_IMAGE,
+        "e2e-test-bind9",
+        "/images/bind9/Dockerfile",
+        &[("/images/bind9/entrypoint.sh", "/entrypoint.sh")],
+    )
+    .await
 }
 
 pub async fn build_auth_backend_image() -> Result<GenericImage, TestcontainersError> {
-    let mut auth_backend_image = AUTH_BACKEND_IMAGE.lock().await;
-    if let Some(image) = auth_backend_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let auth_backend_image_built = GenericBuildableImage::new("e2e-test-auth-backend", "latest")
-        .with_dockerfile(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/images/auth-backend/Dockerfile"
-        ))
-        .with_file(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/images/auth-backend"),
-            ".",
-        )
-        .build_image()
-        .await?;
-    auth_backend_image.replace(auth_backend_image_built.clone());
-    Ok(auth_backend_image_built)
+    build_cached_image(
+        &AUTH_BACKEND_IMAGE,
+        "e2e-test-auth-backend",
+        "/images/auth-backend/Dockerfile",
+        &[("/images/auth-backend", ".")],
+    )
+    .await
 }
 
 pub async fn build_lscache_backend_image() -> Result<GenericImage, TestcontainersError> {
-    let mut lscache_backend_image = LSCACHE_BACKEND_IMAGE.lock().await;
-    if let Some(image) = lscache_backend_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let lscache_backend_image_built =
-        GenericBuildableImage::new("e2e-test-lscache-backend", "latest")
-            .with_dockerfile(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/images/lscache-backend/Dockerfile"
-            ))
-            .with_file(
-                concat!(env!("CARGO_MANIFEST_DIR"), "/images/lscache-backend"),
-                ".",
-            )
-            .build_image()
-            .await?;
-    lscache_backend_image.replace(lscache_backend_image_built.clone());
-    Ok(lscache_backend_image_built)
+    build_cached_image(
+        &LSCACHE_BACKEND_IMAGE,
+        "e2e-test-lscache-backend",
+        "/images/lscache-backend/Dockerfile",
+        &[("/images/lscache-backend", ".")],
+    )
+    .await
 }
 
 pub async fn build_mock_control_plane_image() -> Result<GenericImage, TestcontainersError> {
-    let mut control_plane_image = MOCK_CONTROL_PLANE_IMAGE.lock().await;
-    if let Some(image) = control_plane_image.as_ref() {
-        return Ok(image.clone());
-    }
-    let control_plane_image_built =
-        GenericBuildableImage::new("e2e-test-mock-control-plane", "latest")
-            .with_dockerfile(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/images/mock-control-plane/Dockerfile"
-            ))
-            .with_file(
-                concat!(env!("CARGO_MANIFEST_DIR"), "/images/mock-control-plane"),
-                ".",
-            )
-            .build_image()
-            .await?;
-    control_plane_image.replace(control_plane_image_built.clone());
-    Ok(control_plane_image_built)
+    build_cached_image(
+        &MOCK_CONTROL_PLANE_IMAGE,
+        "e2e-test-mock-control-plane",
+        "/images/mock-control-plane/Dockerfile",
+        &[("/images/mock-control-plane", ".")],
+    )
+    .await
 }
 
 pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {

@@ -25,7 +25,6 @@ async fn raw_http_get(addr: &str, port: u16, raw_path: &str) -> u16 {
     buf.truncate(n);
 
     let response = String::from_utf8_lossy(&buf);
-    // Parse status code from "HTTP/1.1 <code> <description>"
     response
         .split_whitespace()
         .nth(1)
@@ -33,7 +32,6 @@ async fn raw_http_get(addr: &str, port: u16, raw_path: &str) -> u16 {
         .unwrap_or(0)
 }
 
-/// Send a raw HTTP request and return the status code line.
 async fn raw_http_send(host: &str, port: u16, raw_request: &[u8]) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -51,8 +49,6 @@ async fn raw_http_send(host: &str, port: u16, raw_request: &[u8]) -> String {
     String::from_utf8_lossy(&buf).to_string()
 }
 
-/// Test for URL canonicalization rejecting null bytes.
-/// Ensures %00 and \0 are rejected during URL canonicalization.
 #[tokio::test]
 async fn test_url_canonicalization_rejects_null_bytes() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -86,7 +82,6 @@ async fn test_url_canonicalization_rejects_null_bytes() {
             .expect("Failed to get host port")
     );
 
-    // Test with %00 (URL-encoded null byte)
     let response = client
         .get(format!("{}/path%00/file", ferron_addr))
         .send()
@@ -99,7 +94,6 @@ async fn test_url_canonicalization_rejects_null_bytes() {
         "Request with null byte in path should fail with 4xx status"
     );
 
-    // Test with %2500 (double-encoded null byte should be rejected)
     let response = client
         .get(format!("{}/path%2500/file", ferron_addr))
         .send()
@@ -161,7 +155,6 @@ async fn test_url_canonicalization_rejects_triple_encoding() {
         response.status()
     );
 
-    // Also test that %252F (doubly-encoded /) is rejected
     let response = client
         .get(format!("{}/path%252Ftest", ferron_addr))
         .send()
@@ -306,8 +299,6 @@ async fn test_multiple_host_headers_rejected() {
     );
 }
 
-/// Test that the server properly handles the Host header with a trailing dot
-/// (e.g., "example.com.") by normalizing it.
 #[tokio::test]
 async fn test_host_header_trailing_dot_normalized() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -339,7 +330,6 @@ async fn test_host_header_trailing_dot_normalized() {
         .await
         .expect("Failed to get host port");
 
-    // Send with Host containing trailing dot
     let request =
         format!("GET /hello.txt HTTP/1.1\r\nHost: localhost.:{port}\r\nConnection: close\r\n\r\n");
     let response = raw_http_send("127.0.0.1", port, request.as_bytes()).await;

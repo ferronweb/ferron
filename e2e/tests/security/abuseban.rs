@@ -183,7 +183,6 @@ async fn test_abuse_protection_blocks_error_rate_abusers() {
         .unwrap();
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
 
-    // First request to non-existent file: 404
     let resp = client
         .get(format!("http://localhost:{}/nonexistent.txt", port))
         .send()
@@ -191,7 +190,6 @@ async fn test_abuse_protection_blocks_error_rate_abusers() {
         .unwrap();
     assert_eq!(resp.status(), 404, "first 404 request should pass");
 
-    // Second request to non-existent file: 404 (still below threshold)
     let resp = client
         .get(format!("http://localhost:{}/another-nonexistent.txt", port))
         .send()
@@ -199,7 +197,6 @@ async fn test_abuse_protection_blocks_error_rate_abusers() {
         .unwrap();
     assert_eq!(resp.status(), 404, "second 404 request should pass");
 
-    // Third request: should be banned (threshold reached)
     let resp = client
         .get(format!("http://localhost:{}/yet-another.txt", port))
         .send()

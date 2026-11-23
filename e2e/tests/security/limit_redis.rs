@@ -1,59 +1,24 @@
 use std::io::Write;
-use std::path::Path;
 
 use testcontainers::{
-    ContainerAsync, GenericImage, ImageExt,
+    GenericImage, ImageExt,
     core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
     runners::AsyncRunner,
 };
 
 use crate::common;
 
-async fn create_redis_container(
-    network: &str,
-) -> Result<ContainerAsync<GenericImage>, testcontainers::TestcontainersError> {
-    GenericImage::new("redis", "8-alpine")
-        .with_exposed_port(ContainerPort::Tcp(6379))
-        .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
-        .with_network(network)
-        .with_hostname("redis")
-        .start()
-        .await
-}
-
-async fn create_ferron_on_network(
-    network: &str,
-    webroot_dir: &Path,
-    config_file: &Path,
-) -> Result<ContainerAsync<GenericImage>, testcontainers::TestcontainersError> {
-    let ferron_image = common::build_ferron_image().await?;
-    ferron_image
-        .with_exposed_port(ContainerPort::Tcp(80))
-        .with_wait_for(WaitFor::Http(Box::new(
-            HttpWaitStrategy::new("/")
-                .with_port(ContainerPort::Tcp(80))
-                .with_response_matcher(|_| true),
-        )))
-        .with_network(network)
-        .with_mount(Mount::bind_mount(
-            webroot_dir.to_string_lossy(),
-            "/var/www/ferron",
-        ))
-        .with_mount(Mount::bind_mount(
-            config_file.to_string_lossy(),
-            "/etc/ferron.conf",
-        ))
-        .start()
-        .await
-}
-
-/// Distributed rate limiting via Redis: burst is enforced through Redis.
 #[tokio::test]
 async fn test_rate_limiting_redis_basic() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let network = format!("e2e-ratelimit-redis-{}", std::process::id());
-    let _redis = create_redis_container(&network)
+    let _redis = GenericImage::new("redis", "8-alpine")
+        .with_exposed_port(ContainerPort::Tcp(6379))
+        .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
+        .with_network(&network)
+        .with_hostname("redis")
+        .start()
         .await
         .expect("Failed to start redis");
 
@@ -85,7 +50,24 @@ async fn test_rate_limiting_redis_basic() {
         .unwrap();
     config_file.flush().unwrap();
 
-    let container = create_ferron_on_network(&network, webroot_dir.path(), config_file.path())
+    let ferron_image = common::build_ferron_image().await.unwrap();
+    let container = ferron_image
+        .with_exposed_port(ContainerPort::Tcp(80))
+        .with_wait_for(WaitFor::Http(Box::new(
+            HttpWaitStrategy::new("/")
+                .with_port(ContainerPort::Tcp(80))
+                .with_response_matcher(|_| true),
+        )))
+        .with_network(&network)
+        .with_mount(Mount::bind_mount(
+            webroot_dir.path().to_string_lossy(),
+            "/var/www/ferron",
+        ))
+        .with_mount(Mount::bind_mount(
+            config_file.path().to_string_lossy(),
+            "/etc/ferron.conf",
+        ))
+        .start()
         .await
         .expect("Failed to create ferron");
 
@@ -116,7 +98,6 @@ async fn test_rate_limiting_redis_basic() {
     container.stop().await.unwrap();
 }
 
-/// Fail-open: unreachable Redis with default `fail_open true` allows traffic.
 #[tokio::test]
 async fn test_rate_limiting_redis_fail_open() {
     let _ = rustls::crypto::ring::default_provider().install_default();

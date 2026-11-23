@@ -80,26 +80,10 @@ async fn create_ferron_container(
 async fn test_proxy_dns_resolution_stale() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let zones_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut bind9_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut ferron_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut resolv_conf = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let zones_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut bind9_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut ferron_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut resolv_conf = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-proxy-dns-resolution";
 
@@ -218,11 +202,9 @@ backend.dns.test. IN A {another_backend_ip}
     let body = resp.text().await.unwrap();
     assert_eq!(body.trim(), "dns-resolution-backend");
 
-    // Wait for some time for the DNS record to expire
+    // Wait for the cached DNS answer to expire before swapping the zone.
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-    // Replace the zone file with one with another backend IP,
-    // and reload the DNS server (requirement when using BIND9 with static zone files)
     std::fs::write(
         zones_dir.path().join("db.dns.test"),
         alt_zone_file.as_bytes(),
@@ -233,7 +215,7 @@ backend.dns.test. IN A {another_backend_ip}
     bind9.stop_with_timeout(Some(1)).await.unwrap();
     bind9.start().await.unwrap();
 
-    // Wait for more time for the DNS record to expire
+    // BIND9 serves static zone files, so a restart is needed to pick up the change.
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     let resp = client

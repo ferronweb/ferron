@@ -1,6 +1,5 @@
 mod common;
 
-/// Send a raw HTTP request and return whether we received any response.
 async fn raw_http_expect_empty(host: &str, port: u16, request: &[u8]) -> bool {
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
@@ -21,7 +20,6 @@ async fn raw_http_expect_empty(host: &str, port: u16, request: &[u8]) -> bool {
     result.is_err() || matches!(result, Ok(Err(_))) || matches!(result, Ok(Ok(0)))
 }
 
-/// abort true immediately closes the connection without sending any HTTP response.
 #[tokio::test]
 async fn test_abort_true() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -68,7 +66,6 @@ abort.example.com:80 {
     );
 }
 
-/// abort false allows requests through normally.
 #[tokio::test]
 async fn test_abort_false_allows_requests() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -116,7 +113,6 @@ normal.example.com:80 {
     assert_eq!(body, "hello", "Response body should be normal");
 }
 
-/// Bare `abort` (without argument) should also abort the connection.
 #[tokio::test]
 async fn test_abort_bare_directive() {
     let _ = rustls::crypto::ring::default_provider().install_default();

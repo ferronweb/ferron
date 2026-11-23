@@ -59,13 +59,7 @@ impl LSCacheTestContext {
     async fn new(test_name: &str, config: &str) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let mut config_file = common::create_temp_file();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
         let network = format!("e2e-test-lscache-{}", test_name);
 
@@ -1463,7 +1457,6 @@ const BASE_CONFIG_PURGE_METHOD_NO_ALLOW: &str = r#"
 async fn test_lscache_purge_method() {
     let ctx = LSCacheTestContext::new("purge-method", BASE_CONFIG_PURGE_METHOD).await;
 
-    // Cache a page
     let resp = ctx
         .get_with_headers(
             "/purge-method-test",
@@ -1476,7 +1469,6 @@ async fn test_lscache_purge_method() {
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "before-purge");
 
-    // Verify it's cached
     let resp = ctx
         .get_with_headers(
             "/purge-method-test",
@@ -1496,11 +1488,9 @@ async fn test_lscache_purge_method() {
     assert_eq!(ls_cache, "hit");
     assert_eq!(resp.text().await.unwrap(), "before-purge");
 
-    // Send PURGE request
     let resp = ctx.purge("/purge-method-test").await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
-    // Verify cache was invalidated
     let resp = ctx
         .get_with_headers(
             "/purge-method-test",
@@ -1557,7 +1547,6 @@ async fn test_lscache_purge_propagation_loop_prevention() {
     )
     .await;
 
-    // Cache a page
     let resp = ctx
         .get_with_headers(
             "/propagation-loop-test",
@@ -1570,7 +1559,6 @@ async fn test_lscache_purge_propagation_loop_prevention() {
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "original-content");
 
-    // Verify it's cached
     let resp = ctx
         .get_with_headers(
             "/propagation-loop-test",
@@ -1619,7 +1607,6 @@ async fn test_lscache_purge_propagation_loop_prevention() {
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
-    // Verify cache was invalidated
     let resp = ctx
         .get_with_headers(
             "/propagation-loop-test",
@@ -1642,22 +1629,14 @@ async fn test_lscache_purge_propagation_loop_prevention() {
 
 /// Test that an original PURGE (without X-Purge-Source header) attempts to
 /// propagate to the control-plane by verifying the webhook URL is contacted.
-/// Uses a mock control-plane Docker container on the same network.
 #[tokio::test]
 async fn test_lscache_purge_propagation_outbound_webhook() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-lscache-propagation-webhook";
 
-    // Start backend
     let backend_image = common::build_lscache_backend_image().await.unwrap();
     let _backend = backend_image
         .with_exposed_port(ContainerPort::Tcp(3000))
@@ -1672,7 +1651,6 @@ async fn test_lscache_purge_propagation_outbound_webhook() {
         .await
         .unwrap();
 
-    // Start mock control-plane
     let control_plane_image = common::build_mock_control_plane_image().await.unwrap();
     let control_plane = control_plane_image
         .with_exposed_port(ContainerPort::Tcp(9090))
@@ -1740,7 +1718,6 @@ async fn test_lscache_purge_propagation_outbound_webhook() {
 
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
 
-    // Cache a page
     let resp = client
         .get(format!("{}/webhook-test", base_url))
         .header("X-Test-Cache-Control", "public,max-age=60")
@@ -1750,7 +1727,6 @@ async fn test_lscache_purge_propagation_outbound_webhook() {
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
-    // Send PURGE request (original, not propagated)
     let method = Method::from_bytes(b"PURGE").unwrap();
     let resp = client
         .request(method, format!("{}/webhook-test", base_url))
@@ -1759,7 +1735,6 @@ async fn test_lscache_purge_propagation_outbound_webhook() {
         .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
-    // Wait for async propagation to complete
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     // Query the mock control-plane's /received endpoint to verify the webhook

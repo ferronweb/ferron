@@ -64,9 +64,6 @@ async fn fetch(client: &reqwest::Client, port: u16, cookie: Option<&str>) -> Str
 async fn test_canary_sticky_cookie_affinity() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
     let webroot_dir = create_dir_with_variants();
     let mut config_file = common::create_temp_file();
     config_file
@@ -111,9 +108,6 @@ async fn test_canary_sticky_cookie_affinity() {
 async fn test_canary_ip_fallback_without_cookie() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
     let webroot_dir = create_dir_with_variants();
     let mut config_file = common::create_temp_file();
     config_file
@@ -142,9 +136,6 @@ async fn test_canary_ip_fallback_without_cookie() {
 #[tokio::test]
 async fn test_canary_reload_preserves_affinity() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     let webroot_dir = create_dir_with_variants();
     let mut config_file = common::create_temp_file();
@@ -191,9 +182,6 @@ async fn test_canary_reload_preserves_affinity() {
 #[tokio::test]
 async fn test_canary_reload_weight_change_moves_few_keys() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     let webroot_dir = create_dir_with_variants();
     let mut config_file = common::create_temp_file();
@@ -267,9 +255,6 @@ fn create_dir_with_variants() -> tempfile::TempDir {
 #[tokio::test]
 async fn test_canary_ferron_sets_sticky_cookie() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     let webroot_dir = create_dir_with_variants();
     let mut config_file = common::create_temp_file();

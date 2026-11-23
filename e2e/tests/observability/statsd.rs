@@ -7,7 +7,6 @@ use testcontainers::{
 
 use crate::otlp_setup::{create_ferron_container, create_test_files, poll_received};
 
-/// Start the mock StatsD receiver on a shared network.
 async fn create_statsd_container(
     network: &str,
 ) -> Result<ContainerAsync<GenericImage>, TestcontainersError> {
@@ -22,7 +21,6 @@ async fn create_statsd_container(
         .await
 }
 
-/// Send a few HTTP requests to generate server metrics.
 async fn generate_requests(client: &reqwest::Client, http_port: u16) {
     for _ in 0..3 {
         let _ = client
@@ -34,7 +32,6 @@ async fn generate_requests(client: &reqwest::Client, http_port: u16) {
     }
 }
 
-/// Poll the mock receiver until a datagram matching `needle` arrives.
 async fn wait_for_datagram(
     client: &reqwest::Client,
     received_url: &str,
@@ -50,8 +47,6 @@ async fn wait_for_datagram(
     .await
 }
 
-/// Every request produces server metrics. With `datadog true`, the module
-/// emits counters with the `c` type, histograms with the `h` type, and tags.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_statsd_metrics_emitted_datadog() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -134,8 +129,6 @@ async fn test_statsd_metrics_emitted_datadog() {
     ferron.stop().await.unwrap();
 }
 
-/// Without `datadog`, histograms use the vanilla `ms` timer type and no tags
-/// are attached.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_statsd_vanilla_mode() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -202,7 +195,6 @@ async fn test_statsd_vanilla_mode() {
         joined
     );
 
-    // No DogStatsD tags in vanilla mode.
     assert!(
         !joined.contains("|#"),
         "unexpected DogStatsD tags in vanilla mode, got:\n{}",
@@ -213,8 +205,6 @@ async fn test_statsd_vanilla_mode() {
     ferron.stop().await.unwrap();
 }
 
-/// With `datadog` and a `baggage` promotion, a W3C Baggage key from the
-/// request is emitted as a DogStatsD tag on metric datagrams.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_statsd_baggage_promotion() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -270,7 +260,6 @@ async fn test_statsd_baggage_promotion() {
 
     let client = reqwest::Client::new();
 
-    // Send requests carrying a W3C Baggage header.
     for _ in 0..3 {
         let _ = client
             .get(format!("http://localhost:{}/basic.txt", http_port))

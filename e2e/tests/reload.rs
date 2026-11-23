@@ -47,23 +47,10 @@ async fn create_ferron_container(
 async fn test_config_reload() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let webroot_dir2 = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let webroot_dir2 = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
-    // Initial configuration
     config_file
         .as_file_mut()
         .write_all(
@@ -90,7 +77,6 @@ async fn test_config_reload() {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Test before reload
     let response = client
         .get(format!("http://localhost:{}/test.txt", port))
         .send()
@@ -104,7 +90,6 @@ async fn test_config_reload() {
     config_file.as_file_mut().seek(SeekFrom::Start(0)).unwrap();
     config_file.as_file_mut().set_len(0).unwrap();
 
-    // Update configuration to point to new webroot
     config_file
         .as_file_mut()
         .write_all(
@@ -117,7 +102,6 @@ async fn test_config_reload() {
         )
         .unwrap();
 
-    // Send SIGHUP to reload configuration
     testcontainers::bollard::Docker::connect_with_local_defaults()
         .unwrap()
         .kill_container(
@@ -127,10 +111,8 @@ async fn test_config_reload() {
         .await
         .unwrap();
 
-    // Wait for reload to complete
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-    // Test after reload
     let response = client
         .get(format!("http://localhost:{}/test.txt", port))
         .send()

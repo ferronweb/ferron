@@ -77,7 +77,6 @@ impl StaticTestContext {
         )
         .unwrap();
 
-        // Create precompressed gzip file
         let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         encoder.write_all(basic_content.as_bytes()).unwrap();
         let compressed_content = encoder.finish().unwrap();
@@ -312,7 +311,6 @@ async fn test_partial_content() {
 async fn test_etags() {
     let ctx = StaticTestContext::new().await;
 
-    // Get ETag
     let response = ctx
         .client
         .head(format!("{}/basic.txt", ctx.base_url))
@@ -482,7 +480,6 @@ async fn test_custom_index() {
 async fn test_post_if_none_match() {
     let ctx = StaticTestContext::new().await;
 
-    // Get ETag via HEAD
     let response = ctx
         .client
         .head(format!("{}/basic.txt", ctx.base_url))
@@ -545,7 +542,6 @@ async fn test_on_the_fly_compression_with_precompressed() {
 async fn test_multipart_range_content() {
     let ctx = StaticTestContext::new().await;
 
-    // Request two non-contiguous ranges
     let response = ctx
         .client
         .get(format!("{}/basic.txt", ctx.base_url))
@@ -571,21 +567,16 @@ async fn test_multipart_range_content() {
     assert!(body_str.contains("content-range: bytes 0-11/"));
     assert!(body_str.contains("content-range: bytes 100-200/"));
 
-    // Extract boundary from Content-Type
     let boundary = content_type.split("boundary=").nth(1).unwrap().to_string();
 
-    // Split on boundary to get individual parts
     let parts: Vec<&str> = body_str.split(&format!("--{}", boundary)).collect();
     // parts[0] = preamble (empty), parts[last] = "--\r\n" (epilogue)
     // Intermediate parts are actual range data
 
     for (i, part) in parts.iter().enumerate().skip(1).take(parts.len() - 2) {
-        // Remove leading \r\n
         let trimmed = part.trim_start_matches("\r\n");
-        // Split headers from body
         if let Some(body_section) = trimmed.split_once("\r\n\r\n") {
             let part_body = body_section.1.trim_end_matches("\r\n");
-            // Verify each part has at least 1 byte of content
             assert!(!part_body.is_empty(), "part {} should have content", i);
         }
     }

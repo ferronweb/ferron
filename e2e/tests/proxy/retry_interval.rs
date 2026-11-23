@@ -1,7 +1,4 @@
 //! Retry-interval tests for Ferron reverse proxy.
-//!
-//! Verifies `retry_interval` is accepted and same-upstream retries still
-//! recover from transient transport failures (e.g. brief backend restarts).
 
 use std::io::Write;
 
@@ -57,19 +54,11 @@ async fn create_ferron_container(
         .await
 }
 
-/// `retry_interval` with an explicit delay still recovers from a transient
-/// failure via same-upstream retry.
 #[tokio::test]
 async fn test_retry_interval_recovers() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-retry-interval";
 

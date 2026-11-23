@@ -82,19 +82,9 @@ async fn test_routing_bypass() {
     container.stop().await.unwrap();
 }
 
-/// A `proxy` directive on the wildcard host must not leak into a named host.
-///
-/// Config:
-///   *:80 { proxy "http://backend:3000" }
-///   isolated.example.com:80 { root "/var/www/ferron" }
-///
-/// The named host serves static files while other hosts are proxied.
 #[tokio::test]
 async fn test_wildcard_proxy_does_not_leak_into_named_host() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
     let network = "e2e-test-routing-host-isolation";
 

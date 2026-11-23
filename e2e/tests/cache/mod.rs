@@ -43,18 +43,8 @@ async fn create_ferron_container(
 async fn test_cache_hit() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -117,18 +107,8 @@ async fn test_cache_hit() {
 async fn test_private_scope_requires_identity_not_ip() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -186,18 +166,8 @@ async fn test_private_scope_requires_identity_not_ip() {
 async fn test_cache_expiry() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -262,18 +232,8 @@ async fn test_cache_expiry() {
 async fn test_cache_only_if_cached() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -316,7 +276,6 @@ async fn test_cache_only_if_cached() {
             .contains("bypass")
     );
 
-    // Cache the resource normally.
     let response = client.get(&url).send().await.unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert!(
@@ -346,18 +305,8 @@ async fn test_cache_only_if_cached() {
 async fn test_cache_request_max_age_revalidates() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -420,18 +369,8 @@ async fn test_cache_request_max_age_revalidates() {
 async fn test_cache_request_no_store() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -459,7 +398,6 @@ async fn test_cache_request_no_store() {
         .await
         .unwrap();
 
-    // Prime the cache for cached.txt.
     let response = client
         .get(format!("http://localhost:{}/cached.txt", port))
         .send()
@@ -517,18 +455,8 @@ async fn test_cache_request_no_store() {
 async fn test_cache_purge_authorization() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     // Host a requires basic auth (alice/secret123). Host b has no basic_auth
     // and no allow list. Host c purges via an allow-listed IP.
@@ -593,7 +521,6 @@ async fn test_cache_purge_authorization() {
             .basic_auth("alice", Some("secret123"))
     };
 
-    // Prime host a's cache.
     let response = auth_get("a.example.com").send().await.unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert!(
@@ -645,18 +572,8 @@ async fn test_cache_purge_authorization() {
 async fn test_cache_purge_scoped_to_requesting_host() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     // Two hosts share one named cache zone. A PURGE from one host must not
     // touch the other host's entries.
@@ -743,18 +660,8 @@ async fn test_cache_purge_scoped_to_requesting_host() {
 async fn test_cache_propagation_purge_requires_shared_secret() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -799,7 +706,6 @@ async fn test_cache_propagation_purge_requires_shared_secret() {
         request.send()
     };
 
-    // Prime the cache.
     let response = client
         .get(&url)
         .header("Host", "a.example.com")
@@ -852,17 +758,8 @@ async fn test_cache_propagation_purge_requires_shared_secret() {
 async fn test_cache_key_uses_resolved_vhost_case_insensitively() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -917,18 +814,8 @@ async fn test_cache_key_uses_resolved_vhost_case_insensitively() {
 async fn test_cache_vary() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -1019,18 +906,8 @@ async fn test_cache_vary() {
 async fn test_cache_vary_cookies() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -1063,7 +940,6 @@ async fn test_cache_vary_cookies() {
 
     self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
 
-    // Request 1: cookie session_id=abc → miss
     let response = client
         .get(format!("{}/test.txt", base_url))
         .header("Cookie", "session_id=abc")
@@ -1078,7 +954,6 @@ async fn test_cache_vary_cookies() {
     );
     assert_eq!(&*response.bytes().await.unwrap(), b"v1");
 
-    // Request 2: same cookie session_id=abc → hit
     let response = client
         .get(format!("{}/test.txt", base_url))
         .header("Cookie", "session_id=abc")
@@ -1093,10 +968,8 @@ async fn test_cache_vary_cookies() {
     );
     assert_eq!(&*response.bytes().await.unwrap(), b"v1");
 
-    // Update the file to verify miss for different cookie
     self::common::write_file(webroot_dir.path().join("test.txt"), "v2".as_bytes()).unwrap();
 
-    // Request 3: different cookie session_id=xyz → miss
     let response = client
         .get(format!("{}/test.txt", base_url))
         .header("Cookie", "session_id=xyz")
@@ -1111,7 +984,6 @@ async fn test_cache_vary_cookies() {
     );
     assert_eq!(&*response.bytes().await.unwrap(), b"v2");
 
-    // Request 4: no cookie → miss (different key from c:session_id=abc and c:session_id=xyz)
     self::common::write_file(webroot_dir.path().join("test.txt"), "v3".as_bytes()).unwrap();
     let response = client
         .get(format!("{}/test.txt", base_url))
@@ -1126,7 +998,6 @@ async fn test_cache_vary_cookies() {
     );
     assert_eq!(&*response.bytes().await.unwrap(), b"v3");
 
-    // Request 5: session_id=abc again → hit (still the original v1)
     let response = client
         .get(format!("{}/test.txt", base_url))
         .header("Cookie", "session_id=abc")
@@ -1148,18 +1019,8 @@ async fn test_cache_vary_cookies() {
 async fn test_cache_vary_cookies_multiple() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the webroot directory is accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -1193,7 +1054,6 @@ async fn test_cache_vary_cookies_multiple() {
 
     self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
 
-    // Request 1: cookie lang=en;theme=dark → miss
     let response = client
         .get(format!("{}/test.txt", base_url))
         .header("Cookie", "lang=en; theme=dark")
@@ -1208,7 +1068,6 @@ async fn test_cache_vary_cookies_multiple() {
     );
     assert_eq!(&*response.bytes().await.unwrap(), b"v1");
 
-    // Request 2: same cookies → hit
     let response = client
         .get(format!("{}/test.txt", base_url))
         .header("Cookie", "lang=en; theme=dark")
@@ -1223,7 +1082,6 @@ async fn test_cache_vary_cookies_multiple() {
     );
     assert_eq!(&*response.bytes().await.unwrap(), b"v1");
 
-    // Request 3: different theme cookie → miss
     self::common::write_file(webroot_dir.path().join("test.txt"), "v2".as_bytes()).unwrap();
     let response = client
         .get(format!("{}/test.txt", base_url))
@@ -1239,7 +1097,6 @@ async fn test_cache_vary_cookies_multiple() {
     );
     assert_eq!(&*response.bytes().await.unwrap(), b"v2");
 
-    // Request 4: different lang cookie → miss
     self::common::write_file(webroot_dir.path().join("test.txt"), "v3".as_bytes()).unwrap();
     let response = client
         .get(format!("{}/test.txt", base_url))
@@ -1255,7 +1112,6 @@ async fn test_cache_vary_cookies_multiple() {
     );
     assert_eq!(&*response.bytes().await.unwrap(), b"v3");
 
-    // Request 5: lang=en;theme=dark again → still hit with v1
     let response = client
         .get(format!("{}/test.txt", base_url))
         .header("Cookie", "lang=en; theme=dark")
@@ -1291,7 +1147,6 @@ async fn create_backend_container(
         .await
 }
 
-/// Context for cache revalidation E2E tests using a reverse proxy + cache.
 struct CacheRevalidationTestContext {
     _backend: ContainerAsync<GenericImage>,
     _ferron: ContainerAsync<GenericImage>,
@@ -1303,13 +1158,7 @@ impl CacheRevalidationTestContext {
     async fn new(test_name: &str) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let mut config_file = common::create_temp_file();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
         let network = format!("e2e-test-cache-etag-{}", test_name);
         let backend = create_backend_container(&network).await.unwrap();
@@ -1409,7 +1258,6 @@ impl CacheRevalidationTestContext {
 async fn test_cache_etag_revalidation_304() {
     let ctx = CacheRevalidationTestContext::new("revalidate-304").await;
 
-    // First request: cache miss, stores response with ETag W/"v1"
     let resp = ctx.get("/cache-etag?id=reval-304").await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let cache_status = resp
@@ -1422,9 +1270,6 @@ async fn test_cache_etag_revalidation_304() {
     assert_eq!(cache_status, "miss");
     assert_eq!(resp.text().await.unwrap(), "v1");
 
-    // Second request with max-age=0: triggers conditional revalidation.
-    // Backend receives If-None-Match: W/"v1" and returns 304.
-    // Ferron should reconstruct a 200 response with the cached body.
     let resp = ctx
         .get_with_headers(
             "/cache-etag?id=reval-304",
@@ -1460,15 +1305,12 @@ async fn test_cache_etag_revalidation_304() {
 async fn test_cache_etag_content_change() {
     let ctx = CacheRevalidationTestContext::new("content-change").await;
 
-    // First request: cache miss
     let resp = ctx.get("/cache-etag?id=content-change").await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "v1");
 
-    // Trigger a content update on the backend
     ctx.update_backend_version("content-change").await;
 
-    // Request with max-age=0: backend now returns v2 with new ETag
     let resp = ctx
         .get_with_headers(
             "/cache-etag?id=content-change",
@@ -1490,7 +1332,6 @@ async fn test_cache_etag_content_change() {
         "Should return updated content"
     );
 
-    // Next unconditional request should hit the cache with the new content
     let resp = ctx.get("/cache-etag?id=content-change").await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let cache_status = resp
@@ -1508,12 +1349,10 @@ async fn test_cache_etag_content_change() {
 async fn test_cache_no_cache_triggers_revalidation() {
     let ctx = CacheRevalidationTestContext::new("no-cache-reval").await;
 
-    // First request: cache miss
     let resp = ctx.get("/cache-etag?id=no-cache-reval").await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     assert_eq!(resp.text().await.unwrap(), "v1");
 
-    // Request with Cache-Control: no-cache triggers revalidation
     let resp = ctx
         .get_with_headers(
             "/cache-etag?id=no-cache-reval",
@@ -1540,10 +1379,6 @@ async fn test_cache_no_cache_triggers_revalidation() {
     );
 }
 
-/// Test stale-while-revalidate behavior.
-///
-/// After the entry expires, a concurrent follower is served the stale body
-/// while the leader revalidates upstream and receives the fresh body.
 #[tokio::test]
 async fn test_cache_stale_while_revalidate() {
     let ctx = CacheRevalidationTestContext::new("swr").await;
@@ -1554,7 +1389,6 @@ async fn test_cache_stale_while_revalidate() {
         .unwrap();
     let backend = reqwest::Client::new();
 
-    // First request: cache miss, stores response with max-age=1, stale-while-revalidate=60
     let resp = ctx.get("/cache-swr?id=swr-test").await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let cache_status = resp
@@ -1567,7 +1401,6 @@ async fn test_cache_stale_while_revalidate() {
     assert_eq!(cache_status, "miss");
     assert_eq!(resp.text().await.unwrap(), "swr-v1");
 
-    // Wait for the entry to expire (max-age=1s)
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     // Bump the version to v2 and make the next upstream fetch slow, so the
@@ -1652,12 +1485,10 @@ async fn test_cache_stale_while_revalidate() {
     );
 }
 
-/// Test stale-if-error behavior
 #[tokio::test]
 async fn test_cache_stale_if_error() {
     let ctx = CacheRevalidationTestContext::new("sie").await;
 
-    // First request: cache miss, stores response with max-age=300, stale-if-error=60
     let resp = ctx.get("/cache-sie?id=sie-test").await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
     let cache_status = resp
@@ -1670,7 +1501,6 @@ async fn test_cache_stale_if_error() {
     assert_eq!(cache_status, "miss");
     assert_eq!(resp.text().await.unwrap(), "sie-v1");
 
-    // Enable error mode on the backend
     let backend_port = ctx
         ._backend
         .get_host_port_ipv4(ContainerPort::Tcp(3000))
@@ -1686,8 +1516,6 @@ async fn test_cache_stale_if_error() {
         .unwrap();
     assert!(resp.status().is_success());
 
-    // Request with max-age=0 to trigger revalidation with the backend
-    // Backend returns 503, Ferron should serve stale content (SIE)
     let resp = ctx
         .get_with_headers("/cache-sie?id=sie-test", &[("Cache-Control", "max-age=0")])
         .await;
@@ -1701,7 +1529,6 @@ async fn test_cache_stale_if_error() {
         .to_string();
     assert_eq!(cache_status, "hit", "SIE should serve stale as hit");
 
-    // Verify Cache-Status header labels stale-if-error correctly
     let cache_status_header = resp
         .headers()
         .get("Cache-Status")
@@ -1728,25 +1555,12 @@ async fn test_cache_stale_if_error() {
 }
 
 /// Regression test: cache revalidation with If-None-Match on static files.
-///
-/// Verifies that when a client revalidates a cached static file with
-/// `Cache-Control: max-age=0` and an `If-None-Match` ETag, the server
-/// correctly handles the conditional response (304 or 200).
 #[tokio::test]
 async fn test_cache_static_etag_revalidation() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -1772,10 +1586,8 @@ async fn test_cache_static_etag_revalidation() {
         .unwrap();
     let base_url = format!("http://localhost:{}", port);
 
-    // Write a static file and cache it
     common::write_file(webroot_dir.path().join("etag-test.txt"), b"content").unwrap();
 
-    // Request 1: cache miss, response includes ETag header
     let client = reqwest::Client::new();
     let resp1 = client
         .get(format!("{}/etag-test.txt", base_url))
@@ -1792,7 +1604,6 @@ async fn test_cache_static_etag_revalidation() {
         .to_string();
     assert_eq!(resp1.text().await.unwrap(), "content");
 
-    // Request 2: conditional revalidation with max-age=0 and If-None-Match
     let resp2 = client
         .get(format!("{}/etag-test.txt", base_url))
         .header("Cache-Control", "max-age=0")
@@ -1819,7 +1630,6 @@ async fn test_cache_static_etag_revalidation() {
         other => panic!("expected 304 or 200, got {}", other),
     }
 
-    // Request 3: repeat the same conditional request, same expectation
     let resp3 = client
         .get(format!("{}/etag-test.txt", base_url))
         .header("Cache-Control", "max-age=0")

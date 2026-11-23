@@ -52,17 +52,10 @@ async fn create_ferron_container(
 async fn test_lb() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-lb";
 
-    // Start backends
     let _backend1 = create_backend_container(network, "backend-1")
         .await
         .unwrap();
@@ -73,7 +66,6 @@ async fn test_lb() {
         .await
         .unwrap();
 
-    // Write Ferron config
     config_file
         .as_file_mut()
         .write_all(
@@ -201,13 +193,7 @@ ferron-weighted-round-robin:80 {
 async fn test_lb_retry_connection() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-lb-retry";
 

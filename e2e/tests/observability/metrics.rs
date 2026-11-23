@@ -37,20 +37,9 @@ async fn create_ferron_container(
 async fn test_prometheus_metrics_exposed() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
 
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    // Minimal config enabling Prometheus observability and binding metrics to all interfaces
     config_file
         .as_file_mut()
         .write_all(
@@ -66,7 +55,6 @@ async fn test_prometheus_metrics_exposed() {
         )
         .unwrap();
 
-    // Basic content to generate metrics when requested
     crate::common::write_file(webroot_dir.path().join("basic.txt"), b"hello").unwrap();
 
     let container = create_ferron_container(webroot_dir.path(), config_file.path())
@@ -84,14 +72,12 @@ async fn test_prometheus_metrics_exposed() {
 
     let client = reqwest::Client::new();
 
-    // Trigger a request to cause metrics to be emitted and the Prometheus endpoint to start
     let _ = client
         .get(format!("http://localhost:{}/basic.txt", http_port))
         .send()
         .await
         .unwrap();
 
-    // Poll the metrics endpoint until some metrics are present
     let metrics_url = format!("http://localhost:{}/metrics", metrics_port);
     let mut found = false;
     for _ in 0..30 {

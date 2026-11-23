@@ -37,7 +37,6 @@ async fn test_dynamic_compression_gzip() {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Test gzip compression
     let response = client
         .get(format!("http://localhost:{}/small.txt", port))
         .header("Accept-Encoding", "gzip")
@@ -89,7 +88,6 @@ async fn test_dynamic_compression_deflate() {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Test gzip compression
     let response = client
         .get(format!("http://localhost:{}/small.txt", port))
         .header("Accept-Encoding", "deflate")
@@ -141,7 +139,6 @@ async fn test_dynamic_compression_brotli() {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Test gzip compression
     let response = client
         .get(format!("http://localhost:{}/small.txt", port))
         .header("Accept-Encoding", "br")
@@ -192,7 +189,6 @@ async fn test_dynamic_compression_zstd() {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Test gzip compression
     let response = client
         .get(format!("http://localhost:{}/small.txt", port))
         .header("Accept-Encoding", "zstd")

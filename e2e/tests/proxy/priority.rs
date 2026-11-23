@@ -1,8 +1,4 @@
 //! Priority-based failover E2E tests.
-//!
-//! These tests verify that priority grouping works end-to-end:
-//! requests route to the highest-priority tier first, and fail
-//! over to lower tiers when the higher tier is unavailable.
 
 use std::io::Write;
 
@@ -56,18 +52,11 @@ async fn create_ferron_container(
         .await
 }
 
-/// Test that requests route to the highest-priority tier when available.
 #[tokio::test]
 async fn test_priority_failover_basic() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-priority-basic";
 
@@ -111,7 +100,6 @@ async fn test_priority_failover_basic() {
 
     let client = reqwest::Client::new();
 
-    // All requests should go to the primary backend (priority 0)
     for _ in 0..10 {
         let response = client
             .get(format!("http://localhost:{}/whoami", port))
@@ -125,18 +113,11 @@ async fn test_priority_failover_basic() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that requests distribute across backends within the same priority tier.
 #[tokio::test]
 async fn test_priority_within_tier() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-priority-within-tier";
 
@@ -204,18 +185,11 @@ async fn test_priority_within_tier() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that requests fail over to a lower-priority tier when the higher tier is unavailable.
 #[tokio::test]
 async fn test_priority_failover_across_tiers() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-priority-across-tiers";
 
@@ -270,19 +244,11 @@ async fn test_priority_failover_across_tiers() {
     ferron.stop().await.unwrap();
 }
 
-/// Test priority failover with circuit breaker: when the higher-priority
-/// backend trips the circuit breaker, requests fall through to the next tier.
 #[tokio::test]
 async fn test_priority_failover_circuit_breaker() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-priority-circuit-breaker";
 
@@ -330,8 +296,6 @@ async fn test_priority_failover_circuit_breaker() {
 
     let client = reqwest::Client::new();
 
-    // First request trips circuit breaker on primary (port 3999), then fails over
-    // to secondary (port 3000). Subsequent requests go directly to secondary.
     for _ in 0..5 {
         let response = client
             .get(format!("http://localhost:{}/whoami", port))

@@ -1,10 +1,4 @@
-//! HTTP method handling tests for Ferron.
-//!
-//! These tests are inspired by the nginx-tests `http_method.t` test file,
-//! which verifies correct handling of various HTTP methods including GET,
-//! POST, PUT, DELETE, HEAD, OPTIONS, and TRACE.
-//!
-//! See: https://github.com/nginx/nginx-tests/blob/master/http_method.t
+//! Inspired by nginx-tests http_method.t: https://github.com/nginx/nginx-tests/blob/master/http_method.t
 
 use std::io::Write;
 
@@ -55,20 +49,11 @@ async fn create_ferron_container(
         .await
 }
 
-/// Test that GET requests are correctly proxied.
-///
-/// Inspired by nginx-tests http_method.t — verifies basic GET handling.
 #[tokio::test]
 async fn test_method_get() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-method-get";
 
@@ -107,20 +92,11 @@ async fn test_method_get() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that HEAD requests are correctly proxied.
-///
-/// Inspired by nginx-tests http_method.t — verifies HEAD handling.
 #[tokio::test]
 async fn test_method_head() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-method-head";
 
@@ -163,20 +139,11 @@ async fn test_method_head() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that POST requests are correctly proxied.
-///
-/// Inspired by nginx-tests http_method.t — verifies POST handling with body.
 #[tokio::test]
 async fn test_method_post() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-method-post";
 
@@ -216,20 +183,11 @@ async fn test_method_post() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that OPTIONS requests are correctly handled.
-///
-/// Inspired by nginx-tests http_method.t — verifies OPTIONS handling.
 #[tokio::test]
 async fn test_method_options() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-method-options";
 

@@ -1,7 +1,5 @@
 use std::path::Path;
 use std::time::Duration;
-#[cfg(unix)]
-use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 use std::{io::Write, net::IpAddr};
 
 use rsa::pkcs8::EncodePrivateKey;
@@ -18,22 +16,16 @@ mod common;
 /// Configuration for DNS-01 challenge testing with BIND 9.
 #[derive(Debug, Clone)]
 struct DnsConfig {
-    /// The key name for TSIG authentication
     key_name: String,
-    /// The TSIG secret (base64-encoded)
     key_secret: String,
-    /// Test domain(s) to be served by BIND 9 (e.g., "example.com")
     domains: Vec<String>,
 }
 
 /// Configuration for CSR key type.
 #[derive(Debug, Clone, Copy)]
 enum CsrConfig {
-    /// Unspecified key type
     Unspecified,
-    /// RSA key type
     Rsa,
-    /// ECDSA key type
     Ecdsa,
 }
 
@@ -123,7 +115,6 @@ async fn create_pebble_container(
         ))
         .with_cmd(vec!["-config", "/etc/pebble-config.json"]);
 
-    // Mount custom resolv.conf if provided (for DNS-01 testing)
     if let Some(resolv_path) = resolv_conf {
         builder = builder.with_mount(Mount::bind_mount(
             resolv_path.to_string_lossy().to_string(),
@@ -162,7 +153,6 @@ async fn create_ferron_container(
             "/var/cache/ferron-acme",
         ));
 
-    // Mount custom resolv.conf if provided (for DNS-01 testing)
     if let Some(resolv_path) = resolv_conf {
         builder = builder.with_mount(Mount::bind_mount(
             resolv_path.to_string_lossy().to_string(),
@@ -182,7 +172,6 @@ async fn create_bind9_container(
     bind9_image
         .with_exposed_port(ContainerPort::Tcp(53))
         .with_exposed_port(ContainerPort::Udp(53))
-        // Wait for BIND 9 to start
         .with_wait_for(WaitFor::seconds(3))
         .with_network(network)
         .with_hostname("bind9")
@@ -231,7 +220,6 @@ pub fn generate_bind9_named_conf_tmpl(
 ) -> String {
     let mut conf = String::new();
 
-    // Include the TSIG key definition
     conf.push_str(&format!(
         r#"key "{}" {{
     algorithm HMAC-SHA256;
@@ -304,7 +292,6 @@ pub fn generate_bind9_named_conf_tmpl(
     conf.push_str(
         r#"zone "." {
     type forward;
-    // Configure forwarders for recursive lookups
     {{FORWARDERS}}
     forward only;
 };
@@ -385,7 +372,6 @@ pub fn generate_custom_resolv_conf(
     // Primary nameserver pointing to BIND 9
     conf.push_str(&format!("nameserver {}\n", bind9_container_ip));
 
-    // Add search domains if provided
     if let Some(domains) = search_domains
         && !domains.is_empty()
     {
@@ -394,7 +380,6 @@ pub fn generate_custom_resolv_conf(
         conf.push('\n');
     }
 
-    // Add standard options for DNS resolution
     conf.push_str("options edns0 trust-ad\n");
     conf.push_str("search .\n");
 
@@ -410,82 +395,15 @@ async fn test_acme_common(
 ) {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+    let webroot_dir = crate::common::create_temp_dir();
+    let cert_dir = crate::common::create_temp_dir();
+    let cache_dir = crate::common::create_temp_dir();
+    let zones_dir = crate::common::create_temp_dir();
 
-    // Prepare directories
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let cert_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let cache_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let zones_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let cert_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let cache_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let zones_dir = tempfile::tempdir().unwrap();
-
-    // Prepare config files
-    #[cfg(unix)]
-    let mut ferron_config = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut pebble_config = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut bind9_config = if dns_config.is_some() {
-        Some(
-            tempfile::Builder::new()
-                .permissions(Permissions::from_mode(0o666))
-                .tempfile()
-                .unwrap(),
-        )
-    } else {
-        None
-    };
-    #[cfg(unix)]
-    let mut resolv_conf = if dns_config.is_some() {
-        Some(
-            tempfile::Builder::new()
-                .permissions(Permissions::from_mode(0o666))
-                .tempfile()
-                .unwrap(),
-        )
-    } else {
-        None
-    };
-
-    #[cfg(not(unix))]
-    let mut ferron_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut pebble_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut bind9_config: Option<tempfile::NamedTempFile> = None;
-    #[cfg(not(unix))]
-    let mut resolv_conf: Option<tempfile::NamedTempFile> = None;
+    let mut ferron_config = crate::common::create_temp_file();
+    let mut pebble_config = crate::common::create_temp_file();
+    let mut bind9_config = dns_config.is_some().then(crate::common::create_temp_file);
+    let mut resolv_conf = dns_config.is_some().then(crate::common::create_temp_file);
 
     // 1. Generate CA for Pebble
     let (cert, key) = match csr_config {
@@ -548,7 +466,6 @@ async fn test_acme_common(
 
     // 3. Setup BIND 9 if DNS-01 challenge
     if let Some(ref dns_cfg) = dns_config {
-        // Generate BIND 9 config template
         let bind9_conf_tmpl = generate_bind9_named_conf_tmpl(
             &dns_cfg
                 .domains
@@ -566,7 +483,6 @@ async fn test_acme_common(
                 .unwrap();
         }
 
-        // Generate zone files for each domain
         for domain in &dns_cfg.domains {
             let zone_file = generate_bind9_zone_file(domain);
             self::common::write_file(
@@ -642,7 +558,6 @@ async fn test_acme_common(
         .await
         .unwrap();
 
-        // Generate custom resolv.conf pointing to BIND 9
         let custom_resolv =
             generate_custom_resolv_conf(&container.get_bridge_ip_address().await.unwrap(), None);
 
@@ -697,7 +612,6 @@ async fn test_acme_common(
         .build()
         .unwrap();
 
-    // Poll until success
     let mut success = false;
     for _ in 0..100 {
         // 100 seconds should be enough
@@ -913,7 +827,6 @@ async fn test_acme_dns01_ondemand() {
         key_secret,
         domains: vec!["ferron-dns01-ondemand".to_string()],
     };
-    // Test on-demand certificate generation with DNS-01
     test_acme_common(
         "dns-01",
         "ferron-dns01-ondemand",
@@ -924,56 +837,16 @@ async fn test_acme_dns01_ondemand() {
     .await;
 }
 
-/// Tests that when the primary ACME provider fails, the fallback provider is used.
-/// The primary provider points to a non-existent directory, so account creation
-/// will fail. The fallback provider points to Pebble, which should succeed.
 #[tokio::test]
 async fn test_acme_fallback_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
+    let webroot_dir = crate::common::create_temp_dir();
+    let cert_dir = crate::common::create_temp_dir();
+    let cache_dir = crate::common::create_temp_dir();
 
-    // Prepare directories
-    #[cfg(unix)]
-    let webroot_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let cert_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-    #[cfg(unix)]
-    let cache_dir = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o777))
-        .tempdir()
-        .unwrap();
-
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let cert_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let cache_dir = tempfile::tempdir().unwrap();
-
-    // Prepare config files
-    #[cfg(unix)]
-    let mut ferron_config = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-    #[cfg(unix)]
-    let mut pebble_config = tempfile::Builder::new()
-        .permissions(Permissions::from_mode(0o666))
-        .tempfile()
-        .unwrap();
-
-    #[cfg(not(unix))]
-    let mut ferron_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut pebble_config = tempfile::NamedTempFile::new().unwrap();
+    let mut ferron_config = crate::common::create_temp_file();
+    let mut pebble_config = crate::common::create_temp_file();
 
     // 1. Generate CA for Pebble
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
@@ -1101,14 +974,9 @@ ferron-fallback {
     );
 }
 
-/// Tests distributed ACME with two Ferron nodes sharing one cache directory.
-///
-/// Both nodes register the same hostname alias on one Docker network, so
-/// Pebble's HTTP-01 validation may reach either node. Exactly one node must
-/// win the `lock_certificate_*` lock and place the order; the peer serves the
-/// challenge from the shared `challenge_http_*` file and later picks up the
-/// shared `certificate_*` file. At the end both nodes serve HTTPS, exactly
-/// one certificate file exists (no duplicate orders), and no lockfiles remain.
+/// Two nodes share one cache directory. Exactly one must win the certificate
+/// lock and place the order; the peer reuses the resulting certificate, so no
+/// duplicate orders or lockfiles remain.
 #[tokio::test]
 async fn test_acme_http01_shared_cache_two_nodes() {
     let _ = rustls::crypto::ring::default_provider().install_default();

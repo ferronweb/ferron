@@ -1,9 +1,3 @@
-//! `OPTIONS *` (asterisk-form) handling tests for Ferron.
-//!
-//! Ferron answers asterisk-form `OPTIONS` requests itself, before the pipeline
-//! runs, and advertises the methods from `http { options_allowed_methods }`.
-//! Origin-form `OPTIONS /path` requests must keep going through the pipeline.
-//!
 //! See: modules/http-server/src/handler/mod.rs
 
 use std::io::Write;
@@ -57,7 +51,6 @@ fn status_code(response: &[u8]) -> u16 {
         .unwrap_or(0)
 }
 
-/// Test that `OPTIONS *` returns the default `Allow` list.
 #[tokio::test]
 async fn test_options_star_default_allow_header() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -105,7 +98,6 @@ async fn test_options_star_default_allow_header() {
     container.stop().await.unwrap();
 }
 
-/// Test that `options_allowed_methods` is honored per host.
 #[tokio::test]
 async fn test_options_star_per_host_allow_header() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -172,7 +164,6 @@ rw.example.com:80 {
     container.stop().await.unwrap();
 }
 
-/// Test that origin-form `OPTIONS /path` is not answered by the asterisk-form shortcut.
 #[tokio::test]
 async fn test_options_origin_form_is_not_short_circuited() {
     let _ = rustls::crypto::ring::default_provider().install_default();

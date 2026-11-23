@@ -4,7 +4,6 @@ use testcontainers::core::ContainerPort;
 
 use crate::{common, create_ferron_container};
 
-/// Basic rate limiting: rate 2 / burst 2 should trigger 429 under load.
 #[tokio::test]
 async fn test_rate_limiting_basic() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -65,7 +64,6 @@ async fn test_rate_limiting_basic() {
     container.stop().await.unwrap();
 }
 
-/// Basic rate limiting with throttling: rate 2 / burst 2 should trigger delay under load.
 #[tokio::test]
 async fn test_rate_limiting_basic_throttle() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -134,7 +132,6 @@ async fn test_rate_limiting_basic_throttle() {
         }
     }
 
-    // Slight delay
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // rate_limit {

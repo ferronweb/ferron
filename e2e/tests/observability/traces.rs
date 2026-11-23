@@ -52,7 +52,6 @@ async fn test_otlp_traces_exported() {
 
     let client = reqwest::Client::new();
 
-    // Trigger a request to produce a trace
     let _ = client
         .get(format!("http://localhost:{}/basic.txt", http_port))
         .send()
@@ -96,7 +95,6 @@ async fn test_otlp_traces_exported() {
     otlp.stop().await.unwrap();
 }
 
-/// Count decoded spans that belong to `service_name`.
 fn spans_for_service<'a>(
     payload: &'a serde_json::Value,
     service_name: &str,
@@ -117,12 +115,6 @@ fn spans_for_service<'a>(
         .unwrap_or_default()
 }
 
-/// Test that `trace_sampling` applies per host.
-///
-/// Verifies that a host block with `trace_sampling always_off` exports no
-/// spans, while another host on the same listener still exports them.
-///
-/// See: modules/http-server/src/config/trace.rs
 #[tokio::test]
 async fn test_per_host_trace_sampling_always_off() {
     let _ = rustls::crypto::ring::default_provider().install_default();

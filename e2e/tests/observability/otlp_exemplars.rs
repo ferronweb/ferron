@@ -9,9 +9,6 @@ use crate::otlp_setup::{
 const TRACE_ID: &str = "4bf92f3577b34da6a3ce929d0e0e4736";
 const SPAN_ID: &str = "00f067aa0ba902b7";
 
-/// When a request carries a W3C `traceparent` header, the exported metric
-/// data points for that request carry an exemplar whose trace and span IDs
-/// match the header.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_otlp_exemplars() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -113,8 +110,6 @@ async fn test_otlp_exemplars() {
         .flat_map(|point| point["exemplars"].as_array().into_iter().flatten())
         .find(|exemplar| exemplar["trace_id"] == TRACE_ID)
         .expect("exemplar must carry the request trace ID");
-    // Commented out, because Ferron generates new span ID in this configuration.
-    //assert_eq!(_exemplar["span_id"], SPAN_ID);
 
     ferron.stop().await.unwrap();
     otlp.stop().await.unwrap();

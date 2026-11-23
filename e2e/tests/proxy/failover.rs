@@ -1,12 +1,4 @@
-//! Proxy failover tests for Ferron reverse proxy.
-//!
-//! These tests are inspired by the nginx-tests `proxy_next_upstream.t` test
-//! file, which verifies that the proxy correctly retries requests on upstream
-//! failures. The original nginx tests cover failover on error, timeout,
-//! invalid_header, http_500, http_404, non_idempotent, max_tries, and
-//! trying times.
-//!
-//! See: https://github.com/nginx/nginx-tests/blob/master/proxy_next_upstream.t
+//! Inspired by nginx-tests proxy_next_upstream.t: https://github.com/nginx/nginx-tests/blob/master/proxy_next_upstream.t
 
 use std::io::Write;
 
@@ -62,21 +54,11 @@ async fn create_ferron_container(
         .await
 }
 
-/// Test failover on connection refused (transport failure).
-///
-/// Inspired by nginx-tests proxy_next_upstream.t — when the first upstream
-/// is unreachable, Ferron should retry on the second upstream.
 #[tokio::test]
 async fn test_failover_on_connection_refused() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-failover-connrefused";
 
@@ -126,21 +108,11 @@ async fn test_failover_on_connection_refused() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that retry can be disabled.
-///
-/// Inspired by nginx-tests proxy_next_upstream.t — when retry is disabled,
-/// the first failure should be returned directly.
 #[tokio::test]
 async fn test_failover_disabled() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-failover-disabled";
 
@@ -206,13 +178,7 @@ async fn test_failover_disabled() {
 async fn test_retry_budget_not_consumed_without_failover() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-retry-budget-no-failover";
 
@@ -270,13 +236,7 @@ async fn test_retry_budget_not_consumed_without_failover() {
 async fn test_retry_budget_enforces_max_retry_rate() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-retry-budget-rate";
 

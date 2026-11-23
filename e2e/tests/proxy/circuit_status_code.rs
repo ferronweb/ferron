@@ -1,8 +1,4 @@
-//! HTTP status code-based circuit breaker E2E tests.
-//!
-//! These tests verify that the `record_5xx` directive in the `circuit_breaker`
-//! block correctly records upstream HTTP 5xx responses as failures, tripping
-//! the circuit when the `max_fails` threshold is reached.
+//! Tests for the `record_5xx` circuit breaker directive.
 
 use std::io::Write;
 
@@ -56,25 +52,11 @@ async fn create_ferron_container(
         .await
 }
 
-/// Test that the circuit trips when `record_5xx true` and the upstream returns 503.
-///
-/// Uses two backends:
-/// - backend-a: returns 503 via `/status?code=503`
-/// - backend-b: always responds OK via `/`
-///
-/// With `max_fails 1`, `record_5xx true`, the 503 response should trip
-/// the circuit, and subsequent requests should route to backend-b.
 #[tokio::test]
 async fn test_circuit_breaker_trips_on_5xx_with_record_5xx() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-cb-status-trip";
 
@@ -124,7 +106,6 @@ async fn test_circuit_breaker_trips_on_5xx_with_record_5xx() {
         .build()
         .unwrap();
 
-    // First request goes to backend-a (round_robin), which returns 503.
     let response1 = client
         .get(format!("http://localhost:{}/status?code=503", port))
         .send()
@@ -147,21 +128,11 @@ async fn test_circuit_breaker_trips_on_5xx_with_record_5xx() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that 5xx responses do NOT trip the circuit when `record_5xx` is not set (default: false).
-///
-/// With `record_5xx` absent (default false), the circuit should never trip
-/// regardless of 5xx responses from the backend.
 #[tokio::test]
 async fn test_circuit_breaker_does_not_trip_on_5xx_without_record_5xx() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-cb-status-notrip";
 
@@ -227,21 +198,11 @@ async fn test_circuit_breaker_does_not_trip_on_5xx_without_record_5xx() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that the circuit correctly records only 5xx, not 4xx responses.
-///
-/// With `record_5xx true`, 4xx responses should NOT trip the circuit,
-/// but a 5xx response should.
 #[tokio::test]
 async fn test_circuit_breaker_does_not_record_4xx() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-cb-status-4xx";
 
@@ -308,21 +269,11 @@ async fn test_circuit_breaker_does_not_record_4xx() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that different 5xx status codes accumulate toward tripping the circuit.
-///
-/// With `record_5xx true` and `max_fails 2`, a single 500 does not trip
-/// the circuit, but a second 502 does — confirming both codes are recorded.
 #[tokio::test]
 async fn test_circuit_breaker_various_5xx_codes() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-cb-status-various";
 
@@ -417,7 +368,6 @@ async fn test_circuit_breaker_various_5xx_codes() {
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-    // Request 4: backend circuit is open, route to fallback
     let response = client
         .get(format!("http://localhost:{}/whoami", port))
         .send()
@@ -429,25 +379,11 @@ async fn test_circuit_breaker_various_5xx_codes() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that the circuit breaker recovers (half-open -> closed) after being
-/// tripped by 5xx status codes.
-///
-/// With `record_5xx true`, `max_fails 1`, `open_duration "1s"`, and
-/// `consecutive_passes 1`:
-/// 1. First 503 response trips the circuit
-/// 2. Wait for open_duration to expire
-/// 3. Half-open probe succeeds, circuit closes
 #[tokio::test]
 async fn test_circuit_breaker_5xx_half_open_recovery() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-cb-status-recovery";
 

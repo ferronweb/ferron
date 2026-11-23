@@ -1,10 +1,4 @@
-//! Map directive tests for Ferron.
-//!
-//! These tests are inspired by the nginx-tests `map.t` test file, which
-//! verifies correct variable mapping based on request properties including
-//! exact match, wildcards, regex, and variable chaining.
-//!
-//! See: https://github.com/nginx/nginx-tests/blob/master/map.t
+//! Inspired by nginx-tests map.t: https://github.com/nginx/nginx-tests/blob/master/map.t
 
 use std::io::Write;
 
@@ -12,10 +6,6 @@ use testcontainers::core::ContainerPort;
 
 use crate::common;
 
-/// Test basic map directive with exact match.
-///
-/// Inspired by nginx-tests map.t — verifies that map correctly maps
-/// source values to target values.
 #[tokio::test]
 async fn test_map_exact_match() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -59,7 +49,6 @@ async fn test_map_exact_match() {
 
     let client = reqwest::Client::new();
 
-    // Test exact match for /foo.html
     let response = client
         .get(format!("http://localhost:{}/foo.html", port))
         .send()
@@ -68,7 +57,6 @@ async fn test_map_exact_match() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.headers().get("X-Map-Value").unwrap(), "bar");
 
-    // Test exact match for /baz.html
     let response = client
         .get(format!("http://localhost:{}/baz.html", port))
         .send()
@@ -77,7 +65,6 @@ async fn test_map_exact_match() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.headers().get("X-Map-Value").unwrap(), "qux");
 
-    // Test default
     let response = client
         .get(format!("http://localhost:{}/other.html", port))
         .send()
@@ -89,9 +76,6 @@ async fn test_map_exact_match() {
     container.stop().await.unwrap();
 }
 
-/// Test map directive with regex match.
-///
-/// Inspired by nginx-tests map.t — verifies regex-based variable mapping.
 #[tokio::test]
 async fn test_map_regex_match() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -142,7 +126,6 @@ async fn test_map_regex_match() {
     // File doesn't exist, but map should still be evaluated
     assert_eq!(response.headers().get("X-User-ID").unwrap(), "42");
 
-    // Test no match
     let response = client
         .get(format!("http://localhost:{}/other.html", port))
         .send()
@@ -153,9 +136,6 @@ async fn test_map_regex_match() {
     container.stop().await.unwrap();
 }
 
-/// Test map directive with header-based matching.
-///
-/// Inspired by nginx-tests map.t — verifies header value mapping.
 #[tokio::test]
 async fn test_map_header_match() {
     let _ = rustls::crypto::ring::default_provider().install_default();

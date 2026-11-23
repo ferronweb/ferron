@@ -36,17 +36,8 @@ async fn create_ferron_container(
 async fn test_url_rewriting() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -91,7 +82,6 @@ async fn test_url_rewriting() {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Test rewriting at index
     let response = client
         .get(format!("http://localhost:{}/", port))
         .send()
@@ -101,7 +91,6 @@ async fn test_url_rewriting() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.text().await.unwrap(), "test content");
 
-    // Test rewriting with path
     let response = client
         .get(format!("http://localhost:{}/basic", port))
         .send()
@@ -111,7 +100,6 @@ async fn test_url_rewriting() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.text().await.unwrap(), "test content");
 
-    // Test chained named rewrites: /chain/foo -> /intermediate -> /basic.txt
     let response = client
         .get(format!("http://localhost:{}/chain/foo", port))
         .send()

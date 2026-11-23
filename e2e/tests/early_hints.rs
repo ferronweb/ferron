@@ -39,7 +39,6 @@ async fn test_early_hints_h1() {
         .await
         .unwrap();
 
-    // Use raw TCP to see the 103 response
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
         .await

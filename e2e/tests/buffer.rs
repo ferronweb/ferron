@@ -62,13 +62,7 @@ impl BufferTestContext {
     async fn new(test_name: &str, config_body: &[u8]) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let mut config_file = common::create_temp_file();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
         let network = format!("e2e-test-buffer-{test_name}");
 

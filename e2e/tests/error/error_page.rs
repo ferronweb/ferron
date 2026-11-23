@@ -1,10 +1,4 @@
-//! Error page cascading tests for Ferron.
-//!
-//! These tests are inspired by the nginx-tests `http_error_page.t` test file,
-//! which verifies correct error page handling including cascading errors,
-//! error redirects, and error page interactions with other directives.
-//!
-//! See: https://github.com/nginx/nginx-tests/blob/master/http_error_page.t
+//! Inspired by nginx-tests http_error_page.t: https://github.com/nginx/nginx-tests/blob/master/http_error_page.t
 
 use std::io::Write;
 
@@ -12,10 +6,6 @@ use testcontainers::core::ContainerPort;
 
 use crate::common;
 
-/// Test cascading error pages — when an error page itself triggers another error.
-///
-/// Inspired by nginx-tests http_error_page.t — verifies that cascading error
-/// pages don't cause infinite loops and resolve correctly.
 #[tokio::test]
 async fn test_error_page_cascading() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -60,7 +50,6 @@ async fn test_error_page_cascading() {
         .build()
         .unwrap();
 
-    // Request for non-existent file should redirect to fallback
     let response = client
         .get(format!("http://localhost:{}/nonexistent.html", port))
         .send()

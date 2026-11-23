@@ -36,17 +36,8 @@ async fn create_ferron_container(
 async fn test_redirecting() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -79,7 +70,6 @@ async fn test_redirecting() {
         .build()
         .unwrap();
 
-    // Request that should be redirected
     let response = client
         .get(format!("http://localhost:{}/", port))
         .send()
@@ -95,25 +85,13 @@ async fn test_redirecting() {
     container.stop().await.unwrap();
 }
 
-/// Test that trailing_slash_redirect false prevents the automatic
-/// 301 redirect for directory paths without a trailing slash.
 #[tokio::test]
 async fn test_trailing_slash_redirect_disabled() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
-    // Create a directory in the webroot
     crate::common::create_dir(webroot_dir.path().join("subdir")).unwrap();
     crate::common::write_file(
         webroot_dir.path().join("subdir/index.html"),
@@ -172,19 +150,9 @@ async fn test_trailing_slash_redirect_disabled() {
 async fn test_trailing_slash_redirect_noindex() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
-    // Create a directory in the webroot
     crate::common::create_dir(webroot_dir.path().join("subdir")).unwrap();
     crate::common::write_file(
         webroot_dir.path().join("subdir/index.html"),
@@ -236,19 +204,9 @@ async fn test_trailing_slash_redirect_noindex() {
 async fn test_trailing_slash_redirect_index() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
-    // Create a directory in the webroot
     crate::common::create_dir(webroot_dir.path().join("subdir")).unwrap();
 
     config_file

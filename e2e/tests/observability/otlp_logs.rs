@@ -6,9 +6,6 @@ use crate::otlp_setup::{
     create_ferron_container, create_otlp_container, create_test_files, poll_received,
 };
 
-/// Error-path requests emit log records. A malformed request produces a
-/// "Request error" log; every request produces an access log. The mock
-/// collector decodes both from `ExportLogsServiceRequest`.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_otlp_logs_exported() {
     let _ = rustls::crypto::ring::default_provider().install_default();

@@ -66,8 +66,6 @@ async fn raw_http_get_with_header(
         .unwrap_or(0)
 }
 
-/// Test that `client_ip_from_header` with `trusted_proxy` correctly
-/// rewrites the client IP from X-Forwarded-For for IP access control.
 #[tokio::test]
 async fn test_client_ip_from_x_forwarded_for() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -142,7 +140,6 @@ async fn test_client_ip_from_x_forwarded_for() {
     );
 }
 
-/// Test that `client_ip_from_header` with `forwarded` header works.
 #[tokio::test]
 async fn test_client_ip_from_forwarded_header() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -209,8 +206,6 @@ async fn test_client_ip_from_forwarded_header() {
     );
 }
 
-/// Test that untrusted proxies are ignored: when connecting peer is not
-/// in the trusted_proxy list, X-Forwarded-For header is NOT trusted.
 #[tokio::test]
 async fn test_client_ip_untrusted_proxy_ignored() {
     let _ = rustls::crypto::ring::default_provider().install_default();

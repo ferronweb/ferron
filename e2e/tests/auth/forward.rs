@@ -64,17 +64,8 @@ impl FAuthTestContext {
     async fn new(test_name: &str, config: &str) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let webroot_dir = crate::common::create_temp_dir();
-        #[cfg(unix)]
         let mut config_file = crate::common::create_temp_file();
-        #[cfg(not(unix))]
-        let webroot_dir = tempfile::tempdir().unwrap();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
         let network = format!("e2e-test-fauth-{}", test_name);
 
@@ -319,17 +310,8 @@ async fn test_fauth_request_header_replace() {
 async fn test_fauth_connection_refused() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-fauth-conn-refused";
 

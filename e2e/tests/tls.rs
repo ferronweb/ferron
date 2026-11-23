@@ -130,7 +130,6 @@ async fn test_tls_http_1() {
     let mut cert_file = common::create_temp_file();
     let mut key_file = common::create_temp_file();
 
-    // Generate self-signed TLS certificate using rcgen
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
     cert_file
         .as_file_mut()
@@ -196,7 +195,6 @@ async fn test_tls_http_2() {
     let mut cert_file = common::create_temp_file();
     let mut key_file = common::create_temp_file();
 
-    // Generate self-signed TLS certificate using rcgen
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
     cert_file
         .as_file_mut()
@@ -262,7 +260,6 @@ async fn test_tls_http_3() {
     let mut cert_file = common::create_temp_file();
     let mut key_file = common::create_temp_file();
 
-    // Generate self-signed TLS certificate using rcgen
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
     cert_file
         .as_file_mut()
@@ -369,7 +366,6 @@ async fn test_tls_http_3() {
     container.stop().await.unwrap();
 }
 
-/// Create an enhanced Ferron container with ticket key support.
 async fn create_ferron_container_with_ticket_keys(
     config_file: &Path,
     cert_file: &Path,
@@ -439,7 +435,6 @@ fn decrypt_ticket(ticket: &[u8], aes_key: &[u8; 32], hmac_key: &[u8; 32]) -> Opt
     let ciphertext = &ticket[16..ticket.len() - 32];
     let hmac_val = &ticket[ticket.len() - 32..];
 
-    // Verify HMAC
     type HmacSha256 = Hmac<Sha256>;
     let mut mac = HmacSha256::new_from_slice(hmac_key).ok()?;
     mac.update(&ticket[..ticket.len() - 32]);
@@ -456,7 +451,6 @@ fn decrypt_ticket(ticket: &[u8], aes_key: &[u8; 32], hmac_key: &[u8; 32]) -> Opt
 async fn test_tls_session_ticket_decryption_and_resumption() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Generate TLS certificate
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
 
     let cert_file = common::create_temp_file();
@@ -464,7 +458,6 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
     let config_file = common::create_temp_file();
     let ticket_key_file = common::create_temp_file();
 
-    // Generate a known ticket key
     let mut ticket_key_record = [0u8; 80];
     getrandom::fill(&mut ticket_key_record).unwrap();
     std::fs::write(ticket_key_file.path(), ticket_key_record).unwrap();
@@ -472,7 +465,6 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
     let aes_key: [u8; 32] = ticket_key_record[16..48].try_into().unwrap();
     let hmac_key: [u8; 32] = ticket_key_record[48..80].try_into().unwrap();
 
-    // Write cert and key
     std::fs::write(cert_file.path(), cert.cert.pem().as_bytes()).unwrap();
     std::fs::write(key_file.path(), cert.signing_key.serialize_pem().as_bytes()).unwrap();
 
@@ -512,7 +504,6 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
         .await
         .unwrap();
 
-    // Create a capturing session store
     let sessions = Arc::new(Mutex::new(std::collections::HashMap::new()));
     let store = Arc::new(CapturingSessionStore {
         sessions: sessions.clone(),
@@ -536,7 +527,6 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
     let domain = ServerName::try_from("localhost").unwrap();
     let mut tls_stream = connector.connect(domain.clone(), stream).await.unwrap();
 
-    // Trigger NewSessionTicket by reading/writing
     tls_stream
         .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
         .await
@@ -545,7 +535,6 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
     let _ = tls_stream.read_to_end(&mut buf).await;
     drop(tls_stream);
 
-    // Wait for the session to be stored
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     {
@@ -598,14 +587,12 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
 async fn test_tls_session_tickets_auto_rotate_enabled() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Generate TLS certificate
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
 
     let mut config_file = common::create_temp_file();
     let mut cert_file = common::create_temp_file();
     let mut key_file = common::create_temp_file();
 
-    // Write certificate and key
     cert_file
         .as_file_mut()
         .write_all(cert.cert.pem().as_bytes())
@@ -652,7 +639,6 @@ async fn test_tls_session_tickets_auto_rotate_enabled() {
         .await
         .unwrap();
 
-    // Create a capturing session store
     let sessions = Arc::new(Mutex::new(std::collections::HashMap::new()));
     let store = Arc::new(CapturingSessionStore {
         sessions: sessions.clone(),
@@ -676,7 +662,6 @@ async fn test_tls_session_tickets_auto_rotate_enabled() {
     let domain = ServerName::try_from("localhost").unwrap();
     let mut tls_stream = connector.connect(domain.clone(), stream).await.unwrap();
 
-    // Trigger NewSessionTicket by reading/writing
     tls_stream
         .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
         .await

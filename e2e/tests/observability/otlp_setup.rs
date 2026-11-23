@@ -1,5 +1,4 @@
-//! Shared helpers for the OTLP e2e tests: container setup, test files, and
-//! polling the mock collector's `/received` endpoint.
+//! Shared helpers for the OTLP e2e tests.
 
 use std::path::Path;
 
@@ -14,7 +13,6 @@ pub struct TestFiles {
     pub config: tempfile::NamedTempFile,
 }
 
-/// Create the temporary webroot directory and config file used by the tests.
 pub fn create_test_files() -> TestFiles {
     let webroot = crate::common::create_temp_dir();
     let config = crate::common::create_temp_file();
@@ -100,7 +98,6 @@ pub async fn poll_received(
     None
 }
 
-/// Helpers to find a decoded metric by name in the `/received` payload.
 pub fn find_metric<'a>(
     payload: &'a serde_json::Value,
     name: &str,

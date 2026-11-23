@@ -9,13 +9,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::common;
 
-/// Ferron + HTTP backend on an isolated Docker network, so forward-proxy
-/// requests can actually be routed to (or blocked from) a real upstream.
-///
-/// This mirrors the harness in `e2e/tests/fproxy.rs`: the backend is reachable
-/// from Ferron as `backend:<port>`, and the test talks to Ferron over raw TCP
-/// so it can issue `CONNECT` and absolute-URI requests that `reqwest` cannot
-/// express against the proxy listener itself.
+/// Ferron and a backend on an isolated Docker network, reached over raw TCP.
 struct ForwardProxySecurityContext {
     _backend: ContainerAsync<GenericImage>,
     _ferron: ContainerAsync<GenericImage>,
@@ -28,9 +22,6 @@ impl ForwardProxySecurityContext {
         // Required by testcontainers' HTTP wait strategy (reqwest with
         // rustls-no-provider needs a process-wide crypto provider).
         let _ = rustls::crypto::ring::default_provider().install_default();
-
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
         let network = format!("e2e-test-sec-fproxy-{test_name}");
 
@@ -48,10 +39,7 @@ impl ForwardProxySecurityContext {
             .await
             .unwrap();
 
-        #[cfg(unix)]
         let mut config_file = common::create_temp_file();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
         config_file.as_file_mut().write_all(ferron_config).unwrap();
         config_file.flush().unwrap();
 
@@ -95,7 +83,6 @@ impl ForwardProxySecurityContext {
     }
 }
 
-/// Send one raw HTTP request and read until the response head is complete.
 async fn send_raw(stream: &mut tokio::net::TcpStream, request: &str) -> String {
     stream.write_all(request.as_bytes()).await.unwrap();
     stream.flush().await.unwrap();
@@ -137,11 +124,6 @@ fn status_code(response_head: &str) -> u16 {
 /// to a denied IP must be rejected with 403 on both the CONNECT tunnel path
 /// and the absolute-URI forwarding path — never tunnelled, forwarded, or
 /// silently passed through to the normal request pipeline.
-///
-/// The backend lives on a Docker network in `172.16.0.0/12`, which is part of
-/// the default `deny_ips` list, so with no `deny_ips` override every request
-/// to `backend:3000` exercises the "resolved IP is denied" path. Literal and
-/// obfuscated loopback forms exercise the `inet_aton` pre-resolution check.
 #[tokio::test]
 async fn test_forward_proxy_dns_rebinding_protection() {
     let config = br#"

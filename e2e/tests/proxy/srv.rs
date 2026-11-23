@@ -78,34 +78,16 @@ async fn create_ferron_container(
 async fn test_proxy_srv_resolution() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let zones_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut bind9_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut ferron_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut resolv_conf = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let zones_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut bind9_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut ferron_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut resolv_conf = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-proxy-srv";
 
-    // Start backend
     let backend = create_backend_container(network).await.unwrap();
     let backend_ip = backend.get_bridge_ip_address().await.unwrap();
 
-    // Prepare BIND9 config
     let tsig_key_name = "ferron-test-key";
     let tsig_key_secret = "c2VjcmV0c2FsdDEyMzQ1Njc4"; // "secretsalt12345678" in base64
 
@@ -162,12 +144,10 @@ backend.backend.test. IN A {backend_ip}
     )
     .unwrap();
 
-    // Start BIND9
     let bind9 = create_bind9_container(network, bind9_config.path(), zones_dir.path())
         .await
         .unwrap();
 
-    // Get BIND9 IP using the exposed port
     let bind9_ip_str = "127.0.0.1";
     let bind9_port = bind9
         .get_host_port_ipv4(ContainerPort::Tcp(53))
@@ -175,7 +155,6 @@ backend.backend.test. IN A {backend_ip}
         .unwrap();
     println!("--- BIND9 IP: {}, Port: {} ---", bind9_ip_str, bind9_port);
 
-    // Prepare resolv.conf
     resolv_conf
         .as_file_mut()
         .write_all(
@@ -187,7 +166,6 @@ backend.backend.test. IN A {backend_ip}
         )
         .unwrap();
 
-    // Prepare Ferron config
     ferron_config
         .as_file_mut()
         .write_all(
@@ -201,7 +179,6 @@ backend.backend.test. IN A {backend_ip}
         )
         .unwrap();
 
-    // Start Ferron
     let ferron = create_ferron_container(network, ferron_config.path(), resolv_conf.path())
         .await
         .unwrap();
@@ -212,7 +189,6 @@ backend.backend.test. IN A {backend_ip}
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Request should be proxied to the backend resolved via SRV
     let mut success = false;
     for _ in 0..10 {
         if let Ok(resp) = client
@@ -239,30 +215,13 @@ backend.backend.test. IN A {backend_ip}
 async fn test_proxy_srv_priority_selection() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let zones_dir = crate::common::create_temp_dir();
-    #[cfg(unix)]
     let mut bind9_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut ferron_config = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut resolv_conf = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let zones_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let mut bind9_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut ferron_config = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut resolv_conf = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-proxy-srv-priority";
 
-    // Start two backends with different names
     let backend_image = crate::common::build_backend_image().await.unwrap();
 
     let backend1 = backend_image
@@ -296,7 +255,6 @@ async fn test_proxy_srv_priority_selection() {
         .unwrap();
     let backend2_ip = backend2.get_bridge_ip_address().await.unwrap();
 
-    // Prepare BIND9 config with two SRV records at different priorities
     let tsig_key_name = "ferron-test-key";
     let tsig_key_secret = "c2VjcmV0c2FsdDEyMzQ1Njc4";
 
@@ -357,12 +315,10 @@ backend-low.priority.test. IN A {backend2_ip}
     )
     .unwrap();
 
-    // Start BIND9
     let bind9 = create_bind9_container(network, bind9_config.path(), zones_dir.path())
         .await
         .unwrap();
 
-    // Prepare resolv.conf
     resolv_conf
         .as_file_mut()
         .write_all(
@@ -374,7 +330,6 @@ backend-low.priority.test. IN A {backend2_ip}
         )
         .unwrap();
 
-    // Prepare Ferron config
     ferron_config
         .as_file_mut()
         .write_all(
@@ -388,7 +343,6 @@ backend-low.priority.test. IN A {backend2_ip}
         )
         .unwrap();
 
-    // Start Ferron
     let ferron = create_ferron_container(network, ferron_config.path(), resolv_conf.path())
         .await
         .unwrap();
@@ -399,7 +353,6 @@ backend-low.priority.test. IN A {backend2_ip}
         .unwrap();
     let client = reqwest::Client::new();
 
-    // All requests should go to the priority-10 backend (lower number = higher priority)
     let mut all_routed_to_high_priority = true;
     for _ in 0..10 {
         if let Ok(resp) = client

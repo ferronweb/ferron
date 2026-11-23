@@ -2,8 +2,6 @@ use std::io::Write;
 
 use crate::common;
 
-/// Host configuration smoke test: requests with the correct Host header
-/// should reach the right virtual host and serve the file.
 #[tokio::test]
 async fn test_host_configuration() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -77,7 +75,6 @@ async fn test_host_configuration() {
     )
     .unwrap();
 
-    // Test 1: Host configuration smoke test
     let response = client
         .get(format!("http://localhost:{}/basic.txt", port))
         .header("Host", "ferron")
@@ -88,7 +85,6 @@ async fn test_host_configuration() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.text().await.unwrap(), basic_content);
 
-    // Test 2: Access denial with location (exact URL)
     let response = client
         .get(format!("http://localhost:{}/phpmyadmin", port))
         .header("Host", "ferron")
@@ -98,7 +94,6 @@ async fn test_host_configuration() {
 
     assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
 
-    // Test 3: Access denial with location (subdirectory)
     let response = client
         .get(format!("http://localhost:{}/phpmyadmin/index.php", port))
         .header("Host", "ferron")
@@ -108,7 +103,6 @@ async fn test_host_configuration() {
 
     assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
 
-    // Test 4: Access denial with regex conditional and snippet
     let response = client
         .get(format!("http://localhost:{}/wp-login.php", port))
         .header("Host", "ferron")
@@ -118,7 +112,6 @@ async fn test_host_configuration() {
 
     assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
 
-    // Test 5: Access denial with Rego-based conditional
     let response = client
         .get(format!("http://localhost:{}/", port))
         .header("Host", "ferron")

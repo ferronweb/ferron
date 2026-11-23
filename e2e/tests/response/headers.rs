@@ -30,25 +30,15 @@ async fn create_ferron_container(
         .await
 }
 
-/// Test that `header +Name "value"` adds a custom response header.
 #[tokio::test]
 async fn test_header_add_custom() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -95,26 +85,15 @@ async fn test_header_add_custom() {
     );
 }
 
-/// Test that `header +Name "value"` with `header -Name` toggles removal.
-/// The header is added, then removed by a subsequent `-Name` directive.
 #[tokio::test]
 async fn test_header_add_then_remove() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -158,25 +137,15 @@ async fn test_header_add_then_remove() {
     );
 }
 
-/// Test that `header Name "value"` replaces an existing header.
 #[tokio::test]
 async fn test_header_replace() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = crate::common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()

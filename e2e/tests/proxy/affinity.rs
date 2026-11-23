@@ -101,7 +101,6 @@ ferron-affinity-cookie:80 {
         .build()
         .unwrap();
 
-    // First request should set the cookie in Set-Cookie header
     let resp1 = client
         .get(format!("http://localhost:{}/whoami", port))
         .header("Host", "ferron-affinity-cookie")
@@ -138,13 +137,7 @@ ferron-affinity-cookie:80 {
 async fn test_affinity_header() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = crate::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-affinity-header";
 
@@ -184,7 +177,6 @@ async fn test_affinity_header() {
     let client = reqwest::Client::new();
     let url = format!("http://localhost:{port}/whoami");
 
-    // Test sticky routing for user-1
     let mut responses_user1 = Vec::new();
     for _ in 0..5 {
         let resp = client
@@ -200,7 +192,6 @@ async fn test_affinity_header() {
         assert_eq!(r, first1, "User-1 should always route to the same backend");
     }
 
-    // Test sticky routing for user-2 (should be consistent, hopefully different from user-1)
     let mut responses_user2 = Vec::new();
     for _ in 0..5 {
         let resp = client

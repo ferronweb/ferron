@@ -6,8 +6,6 @@ use crate::otlp_setup::{
     create_ferron_container, create_otlp_container, create_test_files, find_metric, poll_received,
 };
 
-/// All three signals exported over gRPC (port 4317) arrive at the mock
-/// collector's gRPC services and are decoded from the protobuf payloads.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_otlp_grpc_exported() {
     let _ = rustls::crypto::ring::default_provider().install_default();

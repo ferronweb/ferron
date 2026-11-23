@@ -29,18 +29,8 @@ async fn create_ferron_container_proxy(
 async fn test_proxy_header_end_to_end() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_a = crate::common::create_temp_file();
-    #[cfg(unix)]
     let mut config_b = crate::common::create_temp_file();
-
-    #[cfg(not(unix))]
-    let mut config_a = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let mut config_b = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-proxy-header-e2e";
 

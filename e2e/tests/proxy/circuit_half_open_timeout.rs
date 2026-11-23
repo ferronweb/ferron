@@ -1,13 +1,4 @@
-//! Circuit breaker half-open trial timeout E2E tests.
-//!
-//! These tests verify that when a half-open trial request is aborted before
-//! response headers arrive, Ferron releases the single half-open trial slot
-//! instead of leaving the backend permanently stuck in half-open.
-//!
-//! The abort is produced by the `timeout` pipeline directive: an upstream that
-//! accepts the connection but withholds response headers past the timeout makes
-//! the pipeline cancel `execute_proxy`, so neither the success nor the failure
-//! recording path runs.
+//! A half-open trial aborted by the pipeline timeout must release the trial slot.
 
 use std::io::Write;
 
@@ -63,7 +54,6 @@ async fn create_ferron_container(
         .await
 }
 
-/// Read a counter sample for `family` from the Prometheus endpoint.
 async fn scrape_counter(ferron: &ContainerAsync<GenericImage>, family: &str) -> Option<f64> {
     let port = ferron
         .get_host_port_ipv4(ContainerPort::Tcp(8889))
@@ -87,26 +77,14 @@ async fn ferron_logs(ferron: &ContainerAsync<GenericImage>) -> String {
     String::from_utf8(ferron.stdout_to_vec().await.unwrap_or_default()).unwrap_or_default()
 }
 
-/// Test that a half-open trial aborted by the pipeline timeout does not
-/// permanently eject the backend.
-///
-/// The backend fails its first `/unstable` request with a 503, which trips the
-/// circuit because `record_5xx` is enabled and `max_fails` is 1. After
-/// `open_duration` elapses the next request becomes the half-open trial. That
-/// trial targets `/unstable?sleep=5000`, so the `timeout "1s"` pipeline
-/// directive cancels it before response headers arrive. Ferron must then
-/// release the trial slot so the following request can recover the circuit.
+/// The half-open trial is cancelled by the pipeline timeout before headers
+/// arrive; the trial slot must still be released so the next request can
+/// recover the circuit.
 #[tokio::test]
 async fn test_half_open_trial_timeout_releases_slot() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-cb-half-open-timeout";
 
@@ -169,7 +147,6 @@ async fn test_half_open_trial_timeout_releases_slot() {
     let tripped = client.get(format!("{base}/unstable")).send().await.unwrap();
     assert_eq!(tripped.status(), reqwest::StatusCode::SERVICE_UNAVAILABLE);
 
-    // Wait out `open_duration` so the next request may take the half-open slot.
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
 
     // The trial targets a slow endpoint, so the 1s pipeline timeout cancels it

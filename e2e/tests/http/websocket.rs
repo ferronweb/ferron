@@ -1,10 +1,4 @@
-//! WebSocket edge case tests for Ferron reverse proxy.
-//!
-//! These tests verify WebSocket proxying behavior beyond the basic echo test,
-//! including large frames, binary messages, multiple sequential messages,
-//! close handshakes, and ping/pong keepalive frames.
-//!
-//! Inspired by nginx-tests `proxy_websocket.t`.
+//! Inspired by nginx-tests proxy_websocket.t.
 
 use std::io::Write;
 
@@ -68,13 +62,7 @@ impl WsTestContext {
     async fn new(test_name: &str, config: &[u8]) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let mut config_file = self::common::create_temp_file();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
         let network = format!("e2e-test-ws-{}", test_name);
 
@@ -102,10 +90,6 @@ impl WsTestContext {
     }
 }
 
-/// Test WebSocket with a large text frame (10KB).
-///
-/// Inspired by nginx-tests proxy_websocket.t — verifies that large WebSocket
-/// frames are correctly proxied without truncation.
 #[tokio::test]
 async fn test_ws_large_text_frame() {
     let ctx = WsTestContext::new(
@@ -120,7 +104,6 @@ async fn test_ws_large_text_frame() {
 
     let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
-    // Send a 10KB text message
     let large_msg = "A".repeat(10240);
     ws_stream
         .send(Message::Text(large_msg.clone().into()))
@@ -144,10 +127,6 @@ async fn test_ws_large_text_frame() {
     ws_stream.send(Message::Close(None)).await.ok();
 }
 
-/// Test WebSocket with binary messages.
-///
-/// Inspired by nginx-tests proxy_websocket.t — verifies that binary WebSocket
-/// frames are correctly proxied without corruption.
 #[tokio::test]
 async fn test_ws_binary_message() {
     let ctx = WsTestContext::new(
@@ -162,7 +141,6 @@ async fn test_ws_binary_message() {
 
     let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
-    // Send binary data (1KB of alternating bytes)
     let binary_data: Vec<u8> = (0..1024).map(|i| (i % 256) as u8).collect();
     ws_stream
         .send(Message::Binary(binary_data.clone().into()))
@@ -186,10 +164,6 @@ async fn test_ws_binary_message() {
     ws_stream.send(Message::Close(None)).await.ok();
 }
 
-/// Test WebSocket with multiple sequential messages.
-///
-/// Inspired by nginx-tests proxy_websocket.t — verifies that the WebSocket
-/// proxy handles multiple messages in sequence without mixing them up.
 #[tokio::test]
 async fn test_ws_multiple_messages() {
     let ctx = WsTestContext::new(
@@ -204,7 +178,6 @@ async fn test_ws_multiple_messages() {
 
     let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
-    // Send 10 messages and verify each is echoed correctly
     for i in 0..10 {
         let msg = format!("message-{}", i);
         ws_stream
@@ -230,10 +203,6 @@ async fn test_ws_multiple_messages() {
     ws_stream.send(Message::Close(None)).await.ok();
 }
 
-/// Test WebSocket close handshake.
-///
-/// Inspired by nginx-tests proxy_websocket.t — verifies that the close
-/// handshake is correctly proxied between client and backend.
 #[tokio::test]
 async fn test_ws_close_handshake() {
     let ctx = WsTestContext::new(
@@ -248,7 +217,6 @@ async fn test_ws_close_handshake() {
 
     let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
-    // Send a message first to verify connection is working
     ws_stream
         .send(Message::Text("before-close".into()))
         .await
@@ -295,10 +263,6 @@ async fn test_ws_close_handshake() {
     assert!(got_close, "Did not receive close frame from backend");
 }
 
-/// Test WebSocket with ping/pong keepalive frames.
-///
-/// Inspired by nginx-tests proxy_websocket.t — verifies that ping/pong
-/// frames are correctly proxied for WebSocket keepalive.
 #[tokio::test]
 async fn test_ws_ping_pong() {
     let ctx = WsTestContext::new(
@@ -313,14 +277,12 @@ async fn test_ws_ping_pong() {
 
     let (mut ws_stream, _) = connect_async(&ctx.ws_url).await.expect("Failed to connect");
 
-    // Send a ping with custom payload
     let ping_data = b"ping-test";
     ws_stream
         .send(Message::Ping(ping_data.to_vec().into()))
         .await
         .expect("Failed to send ping");
 
-    // Wait for pong response
     let mut got_pong = false;
     for _ in 0..5 {
         match tokio::time::timeout(std::time::Duration::from_secs(2), ws_stream.next()).await {

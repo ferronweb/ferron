@@ -157,20 +157,10 @@ async fn create_ferron_container(
 async fn test_ocsp_stapling_quic() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let cert_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let cert_dir = tempfile::tempdir().unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
-    // Write minimal Ferron config (TLS manual, enable h3 for QUIC)
     config_file
         .as_file_mut()
         .write_all(
@@ -196,7 +186,6 @@ async fn test_ocsp_stapling_quic() {
 
     let network = "e2e-test-ocsp-quic".to_string();
 
-    // Start OCSP responder container which will generate CA and server cert into cert_dir
     let _ocsp = create_ocsp_container(&network, cert_dir.path(), false, false)
         .await
         .unwrap();
@@ -208,16 +197,13 @@ async fn test_ocsp_stapling_quic() {
     let server_cert = cert_dir.path().join("server.crt");
     let server_key = cert_dir.path().join("server.key");
 
-    // Ensure the responder wrote certs
     assert!(server_cert.exists(), "server.crt should exist");
     assert!(server_key.exists(), "server.key should exist");
 
-    // Start Ferron
     let ferron = create_ferron_container(&network, config_file.path(), &server_cert, &server_key)
         .await
         .unwrap();
 
-    // Get host UDP port for QUIC
     let port = ferron
         .get_host_port_ipv4(ContainerPort::Udp(443))
         .await
@@ -264,7 +250,6 @@ async fn test_ocsp_stapling_quic() {
         // Give verifier a moment to run and record OCSP bytes
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-        // Check recorder
         if let Some(bytes) = recorder.lock().unwrap().clone()
             && !bytes.is_empty()
         {
@@ -272,7 +257,6 @@ async fn test_ocsp_stapling_quic() {
             break;
         }
 
-        // No staple yet; wait a bit to allow OCSP fetch to complete and retry
         client_endpoint.wait_idle().await;
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     }
@@ -282,7 +266,6 @@ async fn test_ocsp_stapling_quic() {
         "Expected to see an OCSP stapled response after retries"
     );
 
-    // Verify OCSP response correctness: serial and issuer binding
     if let Some(bytes) = recorder.lock().unwrap().clone() {
         verify_ocsp_response(&bytes, &server_cert, &cert_dir.path().join("ca.crt"))
             .expect("OCSP response verification failed");
@@ -298,7 +281,6 @@ fn verify_ocsp_response(
     server_cert_path: &Path,
     ca_cert_path: &Path,
 ) -> Result<(), String> {
-    // Decode OCSP response
     let ocsp_resp: OcspResponse = der::decode(response_der)
         .map_err(|e| format!("Failed to decode OCSP response: {:?}", e))?;
 
@@ -306,7 +288,6 @@ fn verify_ocsp_response(
         .bytes
         .ok_or_else(|| "OCSP response missing response bytes".to_string())?;
 
-    // Ensure basic response OID
     let basic_oid = rasn::types::ObjectIdentifier::new(vec![1, 3, 6, 1, 5, 5, 7, 48, 1, 1])
         .ok_or_else(|| "Invalid OID for basic OCSP response".to_string())?;
     if response_bytes.r#type != basic_oid {
@@ -323,7 +304,6 @@ fn verify_ocsp_response(
         .next()
         .ok_or_else(|| "No SingleResponse in OCSP response".to_string())?;
 
-    // Parse server cert to get serial
     let server_pem = std::fs::read(server_cert_path)
         .map_err(|e| format!("Failed to read server cert: {:?}", e))?;
     let (_, server_pem) =
@@ -331,7 +311,6 @@ fn verify_ocsp_response(
     let (_, server_cert) = parse_x509_certificate(&server_pem.contents)
         .map_err(|e| format!("parse server cert DER: {:?}", e))?;
 
-    // Parse CA cert
     let ca_pem =
         std::fs::read(ca_cert_path).map_err(|e| format!("Failed to read CA cert: {:?}", e))?;
     let (_, ca_pem) =
@@ -339,7 +318,6 @@ fn verify_ocsp_response(
     let (_, ca_cert) = parse_x509_certificate(&ca_pem.contents)
         .map_err(|e| format!("parse CA cert DER: {:?}", e))?;
 
-    // Compare serial numbers (string form)
     let ocsp_serial = single.cert_id.serial_number.to_string();
     let server_serial = server_cert.tbs_certificate.serial.to_string();
     if ocsp_serial != server_serial {
@@ -349,7 +327,6 @@ fn verify_ocsp_response(
         ));
     }
 
-    // Compute issuer key hash (try sha256 then sha1)
     let pub_key = &ca_cert.public_key().subject_public_key.data;
     let sha256 = Sha256::digest(pub_key).to_vec();
     let sha1 = Sha1::digest(pub_key).to_vec();
@@ -367,18 +344,9 @@ fn verify_ocsp_response(
 async fn test_ocsp_stapling_tcp() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let cert_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let cert_dir = tempfile::tempdir().unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     // Write minimal Ferron config (TLS manual, no QUIC needed)
     config_file
@@ -404,7 +372,6 @@ async fn test_ocsp_stapling_tcp() {
 
     let network = "e2e-test-ocsp-tcp".to_string();
 
-    // Start OCSP responder container
     let _ocsp = create_ocsp_container(&network, cert_dir.path(), false, false)
         .await
         .unwrap();
@@ -431,7 +398,6 @@ async fn test_ocsp_stapling_tcp() {
     let ca_file = cert_dir.path().join("ca.crt");
     assert!(ca_file.exists(), "ca.crt should exist for verification");
 
-    // Use rustls TLS client to capture stapled OCSP response via our OcspRecorder verifier.
     let recorder = Arc::new(std::sync::Mutex::new(None));
     let verifier = Arc::new(OcspRecorder::new(recorder.clone()));
     let client_config = Arc::new(
@@ -469,7 +435,6 @@ async fn test_ocsp_stapling_tcp() {
                 .map_err(|e| std::io::Error::other(format!("tls conn error: {}", e)))?;
             let mut stream = StreamOwned::new(conn, tcp);
 
-            // Send a simple HTTP/1.0 request to trigger handshake and receive response
             stream.write_all(b"GET / HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n")?;
 
             let mut buf = Vec::new();
@@ -482,7 +447,6 @@ async fn test_ocsp_stapling_tcp() {
         .await
         .expect("spawn_blocking failed");
 
-        // Check if verifier recorded OCSP bytes
         if let Some(bytes) = recorder.lock().unwrap().clone()
             && !bytes.is_empty()
         {
@@ -498,7 +462,6 @@ async fn test_ocsp_stapling_tcp() {
         "Expected OCSP stapled response visible via rustls client"
     );
 
-    // Verify stapled OCSP response contents
     if let Some(bytes) = recorder.lock().unwrap().clone() {
         verify_ocsp_response(&bytes, &server_cert, &cert_dir.path().join("ca.crt"))
             .expect("OCSP response verification failed");
@@ -513,18 +476,9 @@ async fn test_ocsp_stapling_tcp() {
 async fn test_ocsp_stapling_down() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let cert_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let cert_dir = tempfile::tempdir().unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     // Write minimal Ferron config (TLS manual, no QUIC needed)
     config_file
@@ -550,7 +504,6 @@ async fn test_ocsp_stapling_down() {
 
     let network = "e2e-test-ocsp-down".to_string();
 
-    // Start OCSP responder container
     let ocsp = create_ocsp_container(&network, cert_dir.path(), false, false)
         .await
         .unwrap();
@@ -578,7 +531,6 @@ async fn test_ocsp_stapling_down() {
     // Simulate "taking the OCSP stapler down"
     ocsp.stop().await.unwrap();
 
-    // Use rustls TLS client to capture stapled OCSP response via our OcspRecorder verifier.
     let recorder = Arc::new(std::sync::Mutex::new(None));
     let verifier = Arc::new(OcspRecorder::new(recorder.clone()));
     let client_config = Arc::new(
@@ -614,7 +566,6 @@ async fn test_ocsp_stapling_down() {
             .map_err(|e| std::io::Error::other(format!("tls conn error: {}", e)))?;
         let mut stream = StreamOwned::new(conn, tcp);
 
-        // Send a simple HTTP/1.0 request to trigger handshake and receive response
         stream.write_all(b"GET / HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n")?;
 
         let mut buf = Vec::new();
@@ -638,18 +589,9 @@ async fn test_ocsp_stapling_down() {
 async fn test_ocsp_stapling_signature_forgery() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let cert_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let cert_dir = tempfile::tempdir().unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     // Write minimal Ferron config (TLS manual, no QUIC needed)
     config_file
@@ -675,7 +617,6 @@ async fn test_ocsp_stapling_signature_forgery() {
 
     let network = "e2e-test-ocsp-forgery".to_string();
 
-    // Start OCSP responder container
     let _ocsp = create_ocsp_container(&network, cert_dir.path(), true, false)
         .await
         .unwrap();
@@ -702,7 +643,6 @@ async fn test_ocsp_stapling_signature_forgery() {
     let ca_file = cert_dir.path().join("ca.crt");
     assert!(ca_file.exists(), "ca.crt should exist for verification");
 
-    // Use rustls TLS client to capture stapled OCSP response via our OcspRecorder verifier.
     let recorder = Arc::new(std::sync::Mutex::new(None));
     let verifier = Arc::new(OcspRecorder::new(recorder.clone()));
     let client_config = Arc::new(
@@ -740,7 +680,6 @@ async fn test_ocsp_stapling_signature_forgery() {
                 .map_err(|e| std::io::Error::other(format!("tls conn error: {}", e)))?;
             let mut stream = StreamOwned::new(conn, tcp);
 
-            // Send a simple HTTP/1.0 request to trigger handshake and receive response
             stream.write_all(b"GET / HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n")?;
 
             let mut buf = Vec::new();
@@ -753,7 +692,6 @@ async fn test_ocsp_stapling_signature_forgery() {
         .await
         .expect("spawn_blocking failed");
 
-        // Check if verifier recorded OCSP bytes
         if let Some(bytes) = recorder.lock().unwrap().clone()
             && !bytes.is_empty()
         {
@@ -776,18 +714,9 @@ async fn test_ocsp_stapling_signature_forgery() {
 async fn test_ocsp_stapling_intermediate_signer() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let cert_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let cert_dir = tempfile::tempdir().unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     // Write minimal Ferron config (TLS manual, no QUIC needed)
     config_file
@@ -813,7 +742,6 @@ async fn test_ocsp_stapling_intermediate_signer() {
 
     let network = "e2e-test-ocsp-intermediate".to_string();
 
-    // Start OCSP responder container
     let _ocsp = create_ocsp_container(&network, cert_dir.path(), false, true)
         .await
         .unwrap();
@@ -840,7 +768,6 @@ async fn test_ocsp_stapling_intermediate_signer() {
     let ca_file = cert_dir.path().join("ca.crt");
     assert!(ca_file.exists(), "ca.crt should exist for verification");
 
-    // Use rustls TLS client to capture stapled OCSP response via our OcspRecorder verifier.
     let recorder = Arc::new(std::sync::Mutex::new(None));
     let verifier = Arc::new(OcspRecorder::new(recorder.clone()));
     let client_config = Arc::new(
@@ -878,7 +805,6 @@ async fn test_ocsp_stapling_intermediate_signer() {
                 .map_err(|e| std::io::Error::other(format!("tls conn error: {}", e)))?;
             let mut stream = StreamOwned::new(conn, tcp);
 
-            // Send a simple HTTP/1.0 request to trigger handshake and receive response
             stream.write_all(b"GET / HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n")?;
 
             let mut buf = Vec::new();
@@ -891,7 +817,6 @@ async fn test_ocsp_stapling_intermediate_signer() {
         .await
         .expect("spawn_blocking failed");
 
-        // Check if verifier recorded OCSP bytes
         if let Some(bytes) = recorder.lock().unwrap().clone()
             && !bytes.is_empty()
         {
@@ -907,7 +832,6 @@ async fn test_ocsp_stapling_intermediate_signer() {
         "Expected OCSP stapled response visible via rustls client"
     );
 
-    // Verify stapled OCSP response contents
     if let Some(bytes) = recorder.lock().unwrap().clone() {
         verify_ocsp_response(&bytes, &server_cert, &cert_dir.path().join("ca.crt"))
             .expect("OCSP response verification failed");

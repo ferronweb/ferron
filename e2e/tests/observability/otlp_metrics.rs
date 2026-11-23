@@ -6,10 +6,6 @@ use crate::otlp_setup::{
     create_ferron_container, create_otlp_container, create_test_files, find_metric, poll_received,
 };
 
-/// Every request produces server metrics. With a 1 s read interval the mock
-/// collector decodes an `ExportMetricsServiceRequest` containing at least the
-/// request counter, the active-request up/down counter, and the request
-/// duration exponential histogram.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_otlp_metrics_exported() {
     let _ = rustls::crypto::ring::default_provider().install_default();

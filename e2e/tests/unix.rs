@@ -43,7 +43,6 @@ async fn exec_curl_unix(
     let code: i64 = code_str.parse().unwrap_or(0);
     let body = lines.join("\n");
 
-    // Also consider exit_code, but http_code is more reliable
     Ok((code, body, stderr_str))
 }
 
@@ -102,8 +101,6 @@ async fn test_unix_absolute() {
 
     #[cfg(unix)]
     {
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
         let webroot_dir = common::create_temp_dir();
         let mut config_file = common::create_temp_file();
 
@@ -163,7 +160,6 @@ while kill -0 $(cat /tmp/ferron.pid) 2>/dev/null; do sleep 1; done",
             container_socket_path
         );
 
-        // Verify TCP 80 is disabled: curl to 127.0.0.1:80 inside container should fail
         assert!(
             exec_curl_tcp_should_fail(&container, 80).await,
             "curl to 127.0.0.1:80 inside container should fail when Unix is enabled"
@@ -206,8 +202,6 @@ async fn test_unix_relative() {
 
     #[cfg(unix)]
     {
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
         let webroot_dir = common::create_temp_dir();
         let mut config_file = common::create_temp_file();
 
@@ -297,8 +291,6 @@ async fn test_unix_tcp_disabled() {
 
     #[cfg(unix)]
     {
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
         let webroot_dir = common::create_temp_dir();
         let mut config_file = common::create_temp_file();
 

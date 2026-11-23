@@ -58,21 +58,9 @@ async fn create_ferron_container(
 async fn test_cgi_hello_world() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the directories are accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    // Prepare directories
-    #[cfg(unix)]
     let cgi_bin_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let cgi_bin_dir = tempfile::tempdir().unwrap();
 
-    // Prepare config file
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -97,7 +85,6 @@ async fn test_cgi_hello_world() {
         .await
         .unwrap();
 
-    // Test the CGI script
     let port = ferron
         .get_host_port_ipv4(ContainerPort::Tcp(80))
         .await

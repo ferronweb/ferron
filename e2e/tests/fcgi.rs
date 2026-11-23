@@ -75,21 +75,9 @@ async fn create_ferron_container(
 async fn test_fcgi_php_hello_world() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the directories are accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    // Prepare directories
-    #[cfg(unix)]
     let wwwroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let wwwroot_dir = tempfile::tempdir().unwrap();
 
-    // Prepare config file
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     self::common::write_file(
         wwwroot_dir.path().join("index.php"),
@@ -122,7 +110,6 @@ echo "Hello, World!";
         .await
         .unwrap();
 
-    // Test the PHP script
     let port = ferron
         .get_host_port_ipv4(ContainerPort::Tcp(80))
         .await
@@ -142,21 +129,9 @@ echo "Hello, World!";
 async fn test_fcgiwrap_cgi_hello_world() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Set umask to 000 to ensure that the directories are accessible to the container.
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    // Prepare directories
-    #[cfg(unix)]
     let wwwroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let wwwroot_dir = tempfile::tempdir().unwrap();
 
-    // Prepare config file
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let _ = self::common::create_dir(wwwroot_dir.path().join("cgi-bin"));
     self::common::write_file(
@@ -207,7 +182,6 @@ echo "Hello, World!"
         .await
         .unwrap();
 
-    // Test the CGI script via fcgiwrap
     let port = ferron
         .get_host_port_ipv4(ContainerPort::Tcp(80))
         .await
@@ -227,18 +201,9 @@ echo "Hello, World!"
 async fn test_fcgi_backend_reset_midrequest() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let wwwroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let wwwroot_dir = tempfile::tempdir().unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     // Long-running PHP script so we can kill the backend mid-request
     self::common::write_file(
@@ -303,7 +268,6 @@ echo "Hello after sleep";
     tokio::time::sleep(Duration::from_millis(200)).await;
     php_fpm.stop_with_timeout(Some(0)).await.unwrap();
 
-    // Wait for the request to complete or fail
     match tokio::time::timeout(Duration::from_secs(10), req_future).await {
         Ok(join_res) => match join_res.unwrap() {
             Ok(resp) => {

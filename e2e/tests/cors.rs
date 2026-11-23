@@ -20,20 +20,11 @@ impl CorsTestContext {
     async fn new(config_body: &[u8]) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let webroot_dir = common::create_temp_dir();
-        #[cfg(not(unix))]
-        let webroot_dir = tempfile::tempdir().unwrap();
 
         std::fs::write(webroot_dir.path().join("index.html"), b"cors test").unwrap();
 
-        #[cfg(unix)]
         let mut config_file = common::create_temp_file();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
         config_file.as_file_mut().write_all(config_body).unwrap();
         config_file.flush().unwrap();
@@ -76,7 +67,6 @@ impl CorsTestContext {
     }
 }
 
-/// CORS preflight with wildcard origin should return 204 with CORS headers.
 #[tokio::test]
 async fn test_cors_preflight_wildcard_origin() {
     let config = br#"
@@ -137,7 +127,6 @@ async fn test_cors_preflight_wildcard_origin() {
     );
 }
 
-/// Simple CORS request: GET with Origin should get Access-Control-Allow-Origin back.
 #[tokio::test]
 async fn test_cors_simple_request() {
     let config = br#"
@@ -170,7 +159,6 @@ async fn test_cors_simple_request() {
     );
 }
 
-/// Request from a non-allowed origin should NOT get CORS headers.
 #[tokio::test]
 async fn test_cors_disallowed_origin() {
     let config = br#"
@@ -200,7 +188,6 @@ async fn test_cors_disallowed_origin() {
     );
 }
 
-/// CORS with credentials should set Access-Control-Allow-Credentials: true.
 #[tokio::test]
 async fn test_cors_with_credentials() {
     let config = br#"
@@ -241,7 +228,6 @@ async fn test_cors_with_credentials() {
     );
 }
 
-/// CORS with expose_headers should include Access-Control-Expose-Headers.
 #[tokio::test]
 async fn test_cors_expose_headers() {
     let config = br#"
@@ -281,7 +267,6 @@ async fn test_cors_expose_headers() {
     );
 }
 
-/// Vary: Origin header should be present on CORS responses with non-wildcard origins.
 #[tokio::test]
 async fn test_cors_vary_origin_header() {
     let config = br#"

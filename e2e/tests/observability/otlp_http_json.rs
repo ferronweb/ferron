@@ -6,9 +6,6 @@ use crate::otlp_setup::{
     create_ferron_container, create_otlp_container, create_test_files, poll_received,
 };
 
-/// With `protocol "http/json"` spans are transported as OTLP JSON
-/// (pbjson + hex ID fields) and the mock collector decodes them from the
-/// JSON body.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_otlp_http_json_exported() {
     let _ = rustls::crypto::ring::default_provider().install_default();

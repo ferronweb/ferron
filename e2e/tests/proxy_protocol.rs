@@ -133,21 +133,11 @@ fn parse_status_code(response: &[u8]) -> u16 {
 async fn test_proxy_protocol_v1() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
 
-    // Create index.html
     std::fs::write(webroot_dir.path().join("index.html"), b"hello proxy").unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -203,20 +193,11 @@ async fn test_proxy_protocol_v1() {
 async fn test_proxy_protocol_v2() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"hello proxy v2").unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -272,20 +253,11 @@ async fn test_proxy_protocol_v2() {
 async fn test_proxy_protocol_malformed_rejected() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"hello").unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()
@@ -310,7 +282,6 @@ async fn test_proxy_protocol_malformed_rejected() {
         .await
         .expect("Failed to get host port");
 
-    // Wait for container readiness using a valid PROXY request first
     {
         let proxy_header = make_v1_header("TCP4", "10.0.0.1", "10.0.0.2", 54321, 80);
         let http_request =
@@ -362,20 +333,11 @@ async fn test_proxy_protocol_malformed_rejected() {
 async fn test_proxy_protocol_global_block_without_wildcard_host() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
 
     std::fs::write(webroot_dir.path().join("index.html"), b"hello proxy").unwrap();
 
-    #[cfg(unix)]
     let mut config_file = common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     config_file
         .as_file_mut()

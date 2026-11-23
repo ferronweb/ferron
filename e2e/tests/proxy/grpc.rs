@@ -7,8 +7,8 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
-// Include the generated protobuf code (message types only)
 pub mod hello {
+    // Generated protobuf message types only; tonic's client stubs are unused here.
     include!(concat!(env!("OUT_DIR"), "/helloworld.rs"));
 }
 
@@ -77,20 +77,9 @@ struct GRpcRProxyTestContext {
 
 impl GRpcRProxyTestContext {
     async fn new(test_name: &str, config_content: &[u8]) -> Self {
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-        #[cfg(unix)]
         let cert_dir = crate::common::create_temp_dir();
-        #[cfg(unix)]
         let mut config_file = crate::common::create_temp_file();
 
-        #[cfg(not(unix))]
-        let cert_dir = tempfile::tempdir().unwrap();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-        // Generate certs for Ferron
         let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
         std::fs::write(cert_dir.path().join("server.crt"), cert.cert.pem()).unwrap();
         std::fs::write(
@@ -209,10 +198,6 @@ async fn test_grpc_reverse_proxy_basic() {
     assert_eq!(response, "Hello Ferron");
 }
 
-/// Test gRPC proxy with multiple sequential requests.
-///
-/// Inspired by nginx-tests grpc.t — verifies that gRPC connections are
-/// properly managed across multiple requests.
 #[tokio::test]
 async fn test_grpc_multiple_requests() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -238,7 +223,6 @@ async fn test_grpc_multiple_requests() {
 
     let ctx = GRpcRProxyTestContext::new("multi-request", config).await;
 
-    // Send multiple requests
     for i in 0..5 {
         let name = format!("User{}", i);
         let response = call_say_hello("localhost".to_string(), ctx.ferron_port, name.clone())

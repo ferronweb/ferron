@@ -1,12 +1,6 @@
-//! Request body handling tests for Ferron reverse proxy.
-//!
-//! These tests are inspired by the nginx-tests `body.t` and `body_chunked.t`
-//! test files, which verify correct request body reading, buffering, and
-//! forwarding to upstream backends. The original nginx tests cover body
-//! buffering, max body size, body discard, and chunked transfer encoding.
-//!
-//! See: https://github.com/nginx/nginx-tests/blob/master/body.t
-//! See: https://github.com/nginx/nginx-tests/blob/master/body_chunked.t
+//! Inspired by nginx-tests body.t and body_chunked.t:
+//! https://github.com/nginx/nginx-tests/blob/master/body.t
+//! https://github.com/nginx/nginx-tests/blob/master/body_chunked.t
 
 use std::io::Write;
 
@@ -57,20 +51,11 @@ async fn create_ferron_container(
         .await
 }
 
-/// Test that a small POST body is correctly proxied to the backend.
-///
-/// Inspired by nginx-tests body.t — verifies body reading and forwarding.
 #[tokio::test]
 async fn test_proxy_small_post_body() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-body-small";
 
@@ -113,20 +98,11 @@ async fn test_proxy_small_post_body() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that a large POST body is correctly proxied.
-///
-/// Inspired by nginx-tests body.t — verifies body buffering with large payloads.
 #[tokio::test]
 async fn test_proxy_large_post_body() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-body-large";
 
@@ -157,7 +133,6 @@ async fn test_proxy_large_post_body() {
         .build()
         .unwrap();
 
-    // Create a 16KB body
     let body = "X".repeat(16384);
     let response = client
         .post(format!("http://localhost:{}/echo-body", port))
@@ -173,21 +148,11 @@ async fn test_proxy_large_post_body() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that a chunked POST body is correctly proxied.
-///
-/// Inspired by nginx-tests body_chunked.t — verifies chunked transfer encoding
-/// is handled correctly when forwarding request bodies.
 #[tokio::test]
 async fn test_proxy_chunked_post_body() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-body-chunked";
 
@@ -213,7 +178,6 @@ async fn test_proxy_chunked_post_body() {
         .await
         .unwrap();
 
-    // Use raw TCP to send chunked request
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
         .await
@@ -248,7 +212,6 @@ async fn test_proxy_chunked_post_body() {
     }
 
     let response = String::from_utf8_lossy(&response_bytes);
-    // Find the body after the double CRLF
     if let Some(pos) = response.find("\r\n\r\n") {
         let response_body = &response[pos + 4..];
         assert_eq!(
@@ -263,20 +226,11 @@ async fn test_proxy_chunked_post_body() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that a PUT body is correctly proxied.
-///
-/// Inspired by nginx-tests body.t — verifies non-POST methods also forward bodies.
 #[tokio::test]
 async fn test_proxy_put_body() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-body-put";
 
@@ -319,20 +273,11 @@ async fn test_proxy_put_body() {
     ferron.stop().await.unwrap();
 }
 
-/// Test that an empty POST body is correctly proxied.
-///
-/// Inspired by nginx-tests body.t — edge case with zero-length body.
 #[tokio::test]
 async fn test_proxy_empty_body() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
 
     let network = "e2e-test-body-empty";
 

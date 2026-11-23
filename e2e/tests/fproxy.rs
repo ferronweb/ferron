@@ -21,12 +21,8 @@ impl ForwardProxyTestContext {
     async fn new(test_name: &str, ferron_config: &[u8]) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        #[cfg(unix)]
-        nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
         let network = format!("e2e-test-fproxy-{test_name}");
 
-        // Start the HTTP backend on the custom network
         let backend_image = common::build_backend_image().await.unwrap();
         let backend = backend_image
             .with_exposed_port(ContainerPort::Tcp(3000))
@@ -41,15 +37,10 @@ impl ForwardProxyTestContext {
             .await
             .unwrap();
 
-        // Create config file for Ferron
-        #[cfg(unix)]
         let mut config_file = common::create_temp_file();
-        #[cfg(not(unix))]
-        let mut config_file = tempfile::NamedTempFile::new().unwrap();
         config_file.as_file_mut().write_all(ferron_config).unwrap();
         config_file.flush().unwrap();
 
-        // Start Ferron on the same network
         let ferron_image = common::build_ferron_image().await.unwrap();
         let ferron = ferron_image
             .with_exposed_port(ContainerPort::Tcp(80))
@@ -73,7 +64,6 @@ impl ForwardProxyTestContext {
             .await
             .unwrap();
 
-        // Wait for Ferron to be fully ready
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
         Self {
@@ -85,9 +75,6 @@ impl ForwardProxyTestContext {
     }
 }
 
-/// Test forward proxy CONNECT method to port 80 (HTTP tunnel).
-/// Establishes a TCP tunnel through Ferron to the backend, then sends
-/// an HTTP GET request through the tunnel.
 #[tokio::test]
 async fn test_forward_proxy_connect_port_80() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -149,9 +136,6 @@ async fn test_forward_proxy_connect_port_80() {
     );
 }
 
-/// Test forward proxy HTTP forwarding with absolute URI.
-/// Sends a GET request with absolute URI (http://backend:3000/)
-/// which Ferron should forward to the backend.
 #[tokio::test]
 async fn test_forward_proxy_http_forwarding() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -169,7 +153,6 @@ async fn test_forward_proxy_http_forwarding() {
 
     let ctx = ForwardProxyTestContext::new("http-fwd", config).await;
 
-    // Send absolute URI request to Ferron's forward proxy
     let request =
         "GET http://backend:3000/ HTTP/1.1\r\nHost: backend:3000\r\nConnection: close\r\n\r\n"
             .to_string();

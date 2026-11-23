@@ -44,22 +44,9 @@ fn setup_test_dirs() -> (
     tempfile::NamedTempFile,
     tempfile::TempDir,
 ) {
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
     let webroot_dir = common::create_temp_dir();
-    #[cfg(unix)]
     let config_file = common::create_temp_file();
-    #[cfg(unix)]
     let log_dir = common::create_temp_dir();
-
-    #[cfg(not(unix))]
-    let webroot_dir = tempfile::tempdir().unwrap();
-    #[cfg(not(unix))]
-    let config_file = tempfile::NamedTempFile::new().unwrap();
-    #[cfg(not(unix))]
-    let log_dir = tempfile::tempdir().unwrap();
 
     common::write_file(
         webroot_dir.path().join("index.html"),
