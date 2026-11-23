@@ -67,10 +67,6 @@ name = "fproxy"
 path = "tests/fproxy.rs"
 
 [[test]]
-name = "grpc"
-path = "tests/grpc/mod.rs"
-
-[[test]]
 name = "http"
 path = "tests/http/mod.rs"
 

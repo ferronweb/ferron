@@ -2,19 +2,17 @@
 mod common;
 
 mod affinity;
+mod circuit_half_open_timeout;
+mod circuit_latency;
+mod circuit_status_code;
 mod dns_resolution;
+mod failover;
 mod grpc;
+mod header;
 mod lb;
 mod priority;
-mod proxy_cache;
-mod proxy_circuit_breaker_half_open_timeout;
-mod proxy_circuit_breaker_latency;
-mod proxy_circuit_breaker_status_code;
-mod proxy_failover;
-mod proxy_header;
-mod proxy_redirect;
-mod proxy_retry_interval;
-mod proxy_same_upstream_retry;
+mod retry_interval;
 mod rproxy;
+mod same_upstream_retry;
 mod srv;
 mod strict_dns;

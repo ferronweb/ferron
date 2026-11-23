@@ -208,3 +208,43 @@ async fn test_grpc_reverse_proxy_basic() {
 
     assert_eq!(response, "Hello Ferron");
 }
+
+/// Test gRPC proxy with multiple sequential requests.
+///
+/// Inspired by nginx-tests grpc.t — verifies that gRPC connections are
+/// properly managed across multiple requests.
+#[tokio::test]
+async fn test_grpc_multiple_requests() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let config = br#"
+{
+  http {
+    protocols "h1" "h2"
+  }
+}
+
+*:443 {
+  tls {
+    provider manual
+    cert "/etc/certs/server.crt"
+    key "/etc/certs/server.key"
+  }
+  proxy "http://backend:50051/" {
+    http2_only true
+  }
+}
+"#;
+
+    let ctx = GRpcRProxyTestContext::new("multi-request", config).await;
+
+    // Send multiple requests
+    for i in 0..5 {
+        let name = format!("User{}", i);
+        let response = call_say_hello("localhost".to_string(), ctx.ferron_port, name.clone())
+            .await
+            .unwrap_or_else(|e| panic!("Request {} failed: {}", i, e));
+
+        assert_eq!(response, format!("Hello {}", name));
+    }
+}
