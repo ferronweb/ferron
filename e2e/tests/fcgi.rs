@@ -307,18 +307,14 @@ echo "Hello after sleep";
     match tokio::time::timeout(Duration::from_secs(10), req_future).await {
         Ok(join_res) => match join_res.unwrap() {
             Ok(resp) => {
-                // Ferron should surface an upstream error; allow either a 502/5xx or client error
-                assert!(
-                    resp.status().is_server_error()
-                        || resp.status() == reqwest::StatusCode::BAD_GATEWAY
-                );
+                assert_eq!(resp.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
             }
-            Err(_) => {
-                // request failed at the client level -> acceptable
+            Err(e) => {
+                panic!("client error, should have been 500: {e}");
             }
         },
         Err(_) => {
-            // timed out -> accept as failure mode
+            panic!("request timeout, should have been 500");
         }
     }
 

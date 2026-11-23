@@ -629,6 +629,8 @@ async fn test_ocsp_stapling_down() {
     .expect("spawn_blocking failed")
     .expect("HTTPS request failed");
 
+    // TLS should still work even if OCSP stapling is down
+
     ferron.stop().await.unwrap();
 }
 

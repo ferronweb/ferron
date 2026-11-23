@@ -95,11 +95,12 @@ async fn test_prometheus_metrics_exposed() {
     let metrics_url = format!("http://localhost:{}/metrics", metrics_port);
     let mut found = false;
     for _ in 0..30 {
+        // If there were no metrics, nothing would be exported.
         if let Ok(resp) = client.get(&metrics_url).send().await
             && resp.status().is_success()
             && let Ok(body) = resp.text().await
             && !body.trim().is_empty()
-            && (body.contains("ferron") || body.contains("http_server") || body.contains("request"))
+            && (body.contains("ferron_") || body.contains("http_server_"))
         {
             found = true;
             break;

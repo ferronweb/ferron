@@ -413,6 +413,10 @@ backend-low.priority.test. IN A {backend2_ip}
                 all_routed_to_high_priority = false;
                 break;
             }
+        } else {
+            // It won't go to any backend at all...
+            all_routed_to_high_priority = false;
+            break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }

@@ -198,7 +198,7 @@ async fn test_http_auth_too_many_attempts() {
         .send()
         .await
         .unwrap();
-    assert_ne!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
 
     container.stop().await.unwrap();
 }

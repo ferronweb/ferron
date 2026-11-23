@@ -796,11 +796,39 @@ async fn test_lscache_purge_all() {
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
+    // Old pages should be cached
+    let resp = ctx
+        .get_with_headers(
+            "/page-a",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "TagA"),
+                ("X-Test-Body", "page-a-new"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "page-a");
+
+    let resp = ctx
+        .get_with_headers(
+            "/page-b",
+            &[
+                ("X-Test-Cache-Control", "public,max-age=60"),
+                ("X-Test-Tag", "TagB"),
+                ("X-Test-Body", "page-b-new"),
+            ],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "page-b");
+
     let resp = ctx
         .get_with_headers("/purge-all-trigger", &[("X-Test-Purge", "*")])
         .await;
     assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
+    // Now, the old pages are purged away
     let resp = ctx
         .get_with_headers(
             "/page-a",
@@ -989,6 +1017,21 @@ async fn test_lscache_bypass_uncacheable_status() {
         .to_str()
         .unwrap();
     assert!(ls_cache == "bypass" || ls_cache == "miss");
+
+    let resp = ctx
+        .get_with_headers(
+            "/error",
+            &[("X-Test-Status", "500"), ("X-Test-Body", "error")],
+        )
+        .await;
+    assert_eq!(resp.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
+    let ls_cache = resp
+        .headers()
+        .get("X-LiteSpeed-Cache")
+        .expect("X-LiteSpeed-Cache header missing")
+        .to_str()
+        .unwrap();
+    assert!(ls_cache == "bypass" || ls_cache == "miss"); // Second time, it must not be stored
 }
 
 #[tokio::test]

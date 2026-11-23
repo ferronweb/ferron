@@ -32,43 +32,6 @@ async fn create_ferron_container(
         .await
 }
 
-/// Helper: send raw HTTP request and return the full response text.
-async fn raw_http_get_full(host: &str, port: u16, raw_path: &str, extra_headers: &str) -> String {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    let request = format!(
-        "GET {raw_path} HTTP/1.1\r\nHost: {host}:{port}\r\n{extra_headers}Connection: close\r\n\r\n"
-    );
-
-    let mut stream = tokio::net::TcpStream::connect((host, port))
-        .await
-        .expect("Failed to connect");
-
-    stream.write_all(request.as_bytes()).await.unwrap();
-    stream.flush().await.unwrap();
-
-    let mut buf = vec![0u8; 8192];
-    let mut response = Vec::new();
-    loop {
-        match stream.read(&mut buf).await {
-            Ok(0) => break,
-            Ok(n) => response.extend_from_slice(&buf[..n]),
-            Err(_) => break,
-        }
-    }
-
-    String::from_utf8_lossy(&response).to_string()
-}
-
-/// Helper: get response status code from raw HTTP response.
-fn get_status(response: &str) -> u16 {
-    response
-        .split_whitespace()
-        .nth(1)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0)
-}
-
 #[tokio::test]
 async fn test_redirecting() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -111,7 +74,10 @@ async fn test_redirecting() {
         .get_host_port_ipv4(ContainerPort::Tcp(80))
         .await
         .unwrap();
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
 
     // Request that should be redirected
     let response = client
@@ -121,11 +87,8 @@ async fn test_redirecting() {
         .unwrap();
 
     assert!(
-        matches!(
-            response.status(),
-            reqwest::StatusCode::OK | reqwest::StatusCode::MOVED_PERMANENTLY
-        ),
-        "expected 200 OK or 301 Moved Permanently, got {}",
+        matches!(response.status(), reqwest::StatusCode::MOVED_PERMANENTLY),
+        "expected 301 Moved Permanently, got {}",
         response.status()
     );
 
@@ -181,21 +144,27 @@ async fn test_trailing_slash_redirect_disabled() {
         .await
         .expect("Failed to get host port");
 
-    let response = raw_http_get_full("127.0.0.1", port, "/subdir", "").await;
-    let status = get_status(&response);
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+    let response = client
+        .get(format!("http://localhost:{}/subdir", port))
+        .send()
+        .await
+        .unwrap();
+    let status = response.status().as_u16();
 
     assert!(
         status != 301 && status != 308 && status != 302,
-        "trailing_slash_redirect false should prevent redirect, got status: {}\nFull response: {}",
-        status,
-        response
+        "trailing_slash_redirect false should prevent redirect, got status: {}",
+        status
     );
 
     assert!(
         status == 200 || status == 403,
-        "Expected 200 (directory listing/index) or 403 (if disabled), got: {}\nFull response: {}",
-        status,
-        response
+        "Expected 200 (directory listing/index) or 403 (if disabled), got: {}",
+        status
     );
 }
 
@@ -245,14 +214,21 @@ async fn test_trailing_slash_redirect_noindex() {
         .await
         .expect("Failed to get host port");
 
-    let response = raw_http_get_full("127.0.0.1", port, "/subdir", "").await;
-    let status = get_status(&response);
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+    let response = client
+        .get(format!("http://localhost:{}/subdir", port))
+        .send()
+        .await
+        .unwrap();
+    let status = response.status().as_u16();
 
     assert!(
         status == 301 || status == 308 || status == 302 || status == 307,
-        "Expected a redirect (301/308/302/307), got status: {}\nFull response: {}",
-        status,
-        response
+        "Expected a redirect (301/308/302/307), got status: {}",
+        status
     );
 }
 
@@ -297,13 +273,20 @@ async fn test_trailing_slash_redirect_index() {
         .await
         .expect("Failed to get host port");
 
-    let response = raw_http_get_full("127.0.0.1", port, "/subdir", "").await;
-    let status = get_status(&response);
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+    let response = client
+        .get(format!("http://localhost:{}/subdir", port))
+        .send()
+        .await
+        .unwrap();
+    let status = response.status().as_u16();
 
     assert!(
         status == 301 || status == 308 || status == 302 || status == 307,
-        "Expected a redirect (301/308/302/307), got status: {}\nFull response: {}",
+        "Expected a redirect (301/308/302/307), got status: {}",
         status,
-        response
     );
 }

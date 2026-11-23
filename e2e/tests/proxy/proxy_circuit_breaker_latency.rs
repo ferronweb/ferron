@@ -321,14 +321,7 @@ async fn test_circuit_breaker_latency_half_open_recovery() {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
-    // The response should be from one of the backends (either slow or fast is fine
-    // in half-open; what matters is the circuit closes and subsequent requests succeed)
-    let body = response.text().await.unwrap();
-    assert!(
-        body == "backend-slow" || body == "backend-fast",
-        "Expected backend name, got: {}",
-        body
-    );
+    assert_eq!(response.text().await.unwrap(), "backend-slow"); // backend-slow just recovered
 
     ferron.stop().await.unwrap();
 }

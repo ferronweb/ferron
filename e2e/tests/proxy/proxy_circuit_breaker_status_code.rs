@@ -522,12 +522,7 @@ async fn test_circuit_breaker_5xx_half_open_recovery() {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(
-        body == "backend-a" || body == "backend-b",
-        "Expected backend name, got: {}",
-        body
-    );
+    assert_eq!(response.text().await.unwrap(), "backend-a"); // backend-a just recovered
 
     ferron.stop().await.unwrap();
 }

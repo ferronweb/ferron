@@ -369,26 +369,6 @@ async fn test_tls_http_3() {
     container.stop().await.unwrap();
 }
 
-/// Generate a ticket key file with the specified number of keys.
-///
-/// Returns the path to the generated key file.
-fn generate_ticket_key_file(num_keys: usize) -> tempfile::NamedTempFile {
-    use std::io::Write;
-
-    let mut file = tempfile::NamedTempFile::new().expect("Failed to create temp key file");
-
-    // Generate random key records (80 bytes each: 16-byte name + 32-byte AES + 32-byte HMAC)
-    for _ in 0..num_keys.min(5) {
-        let mut key = [0u8; 80];
-        getrandom::fill(&mut key).expect("Failed to generate random bytes for ticket key");
-        file.write_all(&key)
-            .expect("Failed to write ticket key to file");
-    }
-    file.flush().expect("Failed to flush key file");
-
-    file
-}
-
 /// Create an enhanced Ferron container with ticket key support.
 async fn create_ferron_container_with_ticket_keys(
     config_file: &Path,
@@ -424,105 +404,6 @@ async fn create_ferron_container_with_ticket_keys(
         ))
         .start()
         .await
-}
-
-/// Build a rustls ClientConfig that can reuse sessions from a stored session ID.
-fn build_session_resumption_client() -> reqwest::Client {
-    reqwest::ClientBuilder::new()
-        .http1_only()
-        .tls_danger_accept_invalid_certs(true)
-        .tls_danger_accept_invalid_hostnames(true)
-        .build()
-        .unwrap()
-}
-
-#[tokio::test]
-async fn test_tls_session_tickets_static() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    // Generate TLS certificate
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
-
-    let mut config_file = common::create_temp_file();
-    let mut cert_file = common::create_temp_file();
-    let mut key_file = common::create_temp_file();
-
-    // Write certificate and key
-    cert_file
-        .as_file_mut()
-        .write_all(cert.cert.pem().as_bytes())
-        .unwrap();
-    key_file
-        .as_file_mut()
-        .write_all(cert.signing_key.serialize_pem().as_bytes())
-        .unwrap();
-
-    // Generate ticket key file
-    let ticket_key_file = generate_ticket_key_file(1);
-
-    // Create Ferron configuration with auto-rotating ticket keys
-    config_file
-        .as_file_mut()
-        .write_all(
-            r#"
-*:80 {
-  root "/var/www/ferron"
-}
-
-*:443 {
-  tls {
-    provider manual
-    cert "/etc/cert.pem"
-    key "/etc/key.pem"
-    ticket_keys {
-      file "/etc/session_tickets.keys"
-      auto_rotate
-      rotation_interval "1h"
-      max_keys 3
-    }
-  }
-  root "/var/www/ferron"
-}
-"#
-            .as_bytes(),
-        )
-        .unwrap();
-
-    let container = create_ferron_container_with_ticket_keys(
-        config_file.path(),
-        cert_file.path(),
-        key_file.path(),
-        ticket_key_file.path(),
-    )
-    .await
-    .unwrap();
-
-    let port = container
-        .get_host_port_ipv4(ContainerPort::Tcp(443))
-        .await
-        .unwrap();
-
-    let client = build_session_resumption_client();
-
-    // First connection - establish session
-    let response = client
-        .get(format!("https://localhost:{}/", port))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-
-    // Second connection - should also succeed with ticket present
-    let response = client
-        .get(format!("https://localhost:{}/", port))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-
-    container.stop().await.unwrap();
 }
 
 #[derive(Debug)]

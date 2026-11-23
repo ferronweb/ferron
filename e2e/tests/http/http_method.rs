@@ -267,8 +267,7 @@ async fn test_method_options() {
 
     // OPTIONS should be proxied to backend
     assert!(
-        response.status().is_success()
-            || response.status() == reqwest::StatusCode::METHOD_NOT_ALLOWED,
+        response.status().is_success(),
         "OPTIONS should be handled, got {}",
         response.status()
     );

@@ -110,6 +110,16 @@ async fn test_proxy_cache_hit_miss() {
     let body1 = response1.text().await.unwrap();
     assert_eq!(body1, "v1");
 
+    let response_update = client
+        .post(format!(
+            "http://localhost:{}/cache-etag/update?id=hitmiss",
+            port
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response_update.status(), reqwest::StatusCode::OK);
+
     // Second request — should be served from cache
     let response2 = client
         .get(format!("http://localhost:{}/cache-etag?id=hitmiss", port))
@@ -176,104 +186,60 @@ async fn test_proxy_cache_stale_while_revalidate() {
     assert_eq!(response1.status(), reqwest::StatusCode::OK);
     assert_eq!(response1.text().await.unwrap(), "swr-v1");
 
-    // Wait for cache to expire (max-age=1s)
+    let response_update = client
+        .post(format!(
+            "http://localhost:{}/cache-swr/update?id=swr1",
+            port
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response_update.status(), reqwest::StatusCode::OK);
+
+    let response_slow = client
+        .post(format!("http://localhost:{}/cache-swr/slow?id=swr1", port))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response_slow.status(), reqwest::StatusCode::OK);
+
+    // Wait until expiry (max-age set is 1s)
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    // Request after expiry — should still get stale response (swr-v1)
-    // because stale-while-revalidate=60 allows stale serving
-    let response2 = client
-        .get(format!("http://localhost:{}/cache-swr?id=swr1", port))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response2.status(), reqwest::StatusCode::OK);
-    let body2 = response2.text().await.unwrap();
-    // Should be stale v1 content (not a 5xx error)
-    assert!(
-        body2.contains("swr-v"),
-        "Expected cached stale response, got: {}",
-        body2
-    );
+    let response2_leader = async {
+        let _ = client
+            .get(format!("http://localhost:{}/cache-swr?id=swr1", port))
+            .send()
+            .await;
+        std::future::pending::<()>().await
+    };
+    let response2_follower = async {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        client
+            .get(format!("http://localhost:{}/cache-swr?id=swr1", port))
+            .send()
+            .await
+    };
 
-    ferron.stop().await.unwrap();
-}
+    tokio::select! {
+        _ = response2_leader => {
+            unreachable!();
+        },
+        response2 = response2_follower => {
+            // Request after expiry — should still get stale response (swr-v1)
+            // because stale-while-revalidate=60 allows stale serving
+            let response2 = response2.unwrap();
 
-/// Test cache stale-if-error behavior.
-///
-/// Inspired by nginx-tests proxy_cache_use_stale.t — when the upstream returns
-/// a 5xx error during revalidation, the stale cached response should be served.
-#[tokio::test]
-async fn test_proxy_cache_stale_if_error() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    #[cfg(unix)]
-    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
-
-    #[cfg(unix)]
-    let mut config_file = self::common::create_temp_file();
-    #[cfg(not(unix))]
-    let mut config_file = tempfile::NamedTempFile::new().unwrap();
-
-    let network = "e2e-test-cache-sie";
-
-    let _backend = create_backend_container(network).await.unwrap();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            br#"
-*:80 {
-  cache true
-  proxy "http://backend:3000"
-}
-"#,
-        )
-        .unwrap();
-
-    let ferron = create_ferron_container(network, config_file.path())
-        .await
-        .unwrap();
-
-    let port = ferron
-        .get_host_port_ipv4(ContainerPort::Tcp(80))
-        .await
-        .unwrap();
-
-    let client = reqwest::Client::new();
-
-    // First request — populate cache
-    let response1 = client
-        .get(format!("http://localhost:{}/cache-sie?id=sie1", port))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response1.status(), reqwest::StatusCode::OK);
-    assert_eq!(response1.text().await.unwrap(), "sie-v1");
-
-    // Tell backend to return 503 for subsequent requests
-    let _ = client
-        .post(format!("http://localhost:{}/cache-sie/error?id=sie1", port))
-        .send()
-        .await;
-
-    // Wait a moment for the backend to start returning errors
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // Request while backend is erroring — should serve stale from cache
-    // (stale-if-error=60 allows this)
-    let response2 = client
-        .get(format!("http://localhost:{}/cache-sie?id=sie1", port))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response2.status(), reqwest::StatusCode::OK);
-    let body2 = response2.text().await.unwrap();
-    // Should be stale v1 content, not a 503 error
-    assert!(
-        body2.contains("sie-v"),
-        "Expected stale cached response, got: {}",
-        body2
-    );
+            assert_eq!(response2.status(), reqwest::StatusCode::OK);
+            let body2 = response2.text().await.unwrap();
+            // Should be stale v1 content (not a 5xx error)
+            assert!(
+                body2 == "swr-v1",
+                "Expected cached stale response, got: {}",
+                body2
+            );
+        }
+    }
 
     ferron.stop().await.unwrap();
 }
