@@ -201,7 +201,7 @@ async fn test_url_canonicalization_rejects_literal_control_chars() {
         .await
         .expect("Failed to get host port");
 
-    // Send raw HTTP with literal tab (0x09) in path — reqwest would encode as %09
+    // Send raw HTTP with literal tab (0x09) in path, which reqwest would encode as %09
     let status = raw_http_get("127.0.0.1", port, "/test\t.txt").await;
 
     assert_eq!(
@@ -249,7 +249,7 @@ async fn test_url_canonicalization_rejects_literal_control_chars() {
 }
 
 /// Test that the server rejects requests with multiple Host headers.
-/// Per RFC 7230 §5.4, a server MUST respond with 400 Bad Request when
+/// Per RFC 7230 section 5.4, a server MUST respond with 400 Bad Request when
 /// a request contains multiple Host header fields.
 #[tokio::test]
 async fn test_multiple_host_headers_rejected() {

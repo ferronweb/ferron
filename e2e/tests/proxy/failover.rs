@@ -160,9 +160,6 @@ async fn test_failover_disabled() {
         .await
         .unwrap();
 
-    // Could be 502 (bad gateway) if the first upstream is selected and fails
-    // or 200 if the healthy backend is selected first — either is acceptable
-    // when retry is disabled and round_robin is used
     assert!(
         response1.status() == reqwest::StatusCode::BAD_GATEWAY
             || response2.status() == reqwest::StatusCode::BAD_GATEWAY,

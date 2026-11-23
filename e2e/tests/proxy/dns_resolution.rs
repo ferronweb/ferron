@@ -169,7 +169,7 @@ backend.dns.test. IN A {another_backend_ip}
         )
         .unwrap();
 
-    // Prepare Ferron config — use hostname, not IP
+    // Prepare Ferron config: use hostname, not IP
     ferron_config
         .as_file_mut()
         .write_all(

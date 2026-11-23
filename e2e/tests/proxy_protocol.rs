@@ -308,11 +308,11 @@ async fn test_proxy_protocol_malformed_rejected() {
     let result = tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await;
 
     // When PROXY protocol is enabled and the header is missing/malformed,
-    // Ferron should close the connection — read should return 0 or error.
+    // Ferron should close the connection.
     match result {
-        Ok(Ok(0)) => {}  // clean close — expected
-        Ok(Err(_)) => {} // connection reset — also expected
-        Err(_) => {}     // timeout means connection was NOT dropped — fail
+        Ok(Ok(0)) => {}  // clean close, expected
+        Ok(Err(_)) => {} // connection reset, also expected
+        Err(_) => {}     // timeout means connection was NOT dropped, fail!
         Ok(Ok(n)) => {
             let resp = String::from_utf8_lossy(&buf[..n]);
             panic!(

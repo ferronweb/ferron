@@ -200,7 +200,7 @@ async fn test_keepalive_disabled_creates_separate_connections() {
         .unwrap();
     assert_eq!(resp2.status(), 200);
 
-    // Wait for metrics — all connections should show connection_reused="0"
+    // Wait for metrics, all connections should show connection_reused="0"
     let metrics_body = ctx
         .wait_for_metrics(|body| body.contains("ferron_proxy_requests"))
         .await;

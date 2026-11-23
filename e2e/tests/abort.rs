@@ -13,7 +13,7 @@ async fn raw_http_expect_empty(host: &str, port: u16, request: &[u8]) -> bool {
     let _ = stream.write_all(request).await;
     let _ = stream.flush().await;
 
-    // Try to read — should get nothing (connection closed)
+    // Try to read, it should get nothing (connection closed)
     let mut buf = [0u8; 1];
     let result = tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buf)).await;
 
@@ -54,7 +54,7 @@ abort.example.com:80 {
         .await
         .expect("Failed to get host port");
 
-    // Request with the abort host header — connection should be closed
+    // Request with the abort host header, the connection should be closed
     let request = format!(
         "GET /index.html HTTP/1.1\r\nHost: abort.example.com:{port}\r\nConnection: close\r\n\r\n"
     );

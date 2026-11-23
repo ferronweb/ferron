@@ -149,7 +149,7 @@ backend.dns.test. IN A {backend_ip}
         )
         .unwrap();
 
-    // Prepare Ferron config — use hostname, not IP
+    // Prepare Ferron config: use hostname, not IP
     ferron_config
         .as_file_mut()
         .write_all(
@@ -268,7 +268,7 @@ backend.dns.test. IN A {backend_ip}
         )
         .unwrap();
 
-    // Prepare Ferron config — use hostname with logical_dns flag
+    // Prepare Ferron config: use hostname with logical_dns flag
     ferron_config
         .as_file_mut()
         .write_all(

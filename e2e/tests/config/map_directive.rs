@@ -117,7 +117,7 @@ async fn test_map_regex_match() {
 
     let client = reqwest::Client::new();
 
-    // Test regex match with capture group — even 404 should have the header
+    // Test regex match with capture group, even 404 should have the header
     let response = client
         .get(format!("http://localhost:{}/users/42.html", port))
         .send()

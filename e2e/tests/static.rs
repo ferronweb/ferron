@@ -518,7 +518,7 @@ async fn test_on_the_fly_compression_with_precompressed() {
     )
     .unwrap();
 
-    // Request with Accept-Encoding: gzip — should compress on-the-fly
+    // Request with Accept-Encoding: gzip should compress on-the-fly
     let response = ctx
         .client
         .get(format!("{}/precompressed/nogz.txt", ctx.base_url))
@@ -586,7 +586,7 @@ async fn test_multipart_range_content() {
 async fn test_invalid_range_syntax_returns_200() {
     let ctx = StaticTestContext::new().await;
 
-    // Invalid range syntax should return 200 (treat as absent) per RFC 7233 §3.1
+    // Invalid range syntax should return 200 (treat as absent) per RFC 7233 section 3.1
     let response = ctx
         .client
         .get(format!("{}/basic.txt", ctx.base_url))

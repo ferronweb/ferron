@@ -326,7 +326,7 @@ host-b.example.com:80 {
         .unwrap();
     let client = reqwest::Client::new();
 
-    // Send rapid requests from both hosts — each has its own zone
+    // Send rapid requests from both hosts; each has its own zone
     let mut host_a_allowed = 0;
     for _ in 0..15 {
         let resp = client
@@ -353,7 +353,7 @@ host-b.example.com:80 {
         }
     }
 
-    // Both hosts should have their own buckets — each should get ~10 allowed
+    // Both hosts should have their own buckets; each should get ~10 allowed
     assert!(
         host_a_allowed >= 5,
         "host-a should have its own zone (allowed={host_a_allowed})"

@@ -176,7 +176,7 @@ async fn test_circuit_breaker_does_not_trip_on_5xx_without_record_5xx() {
         .build()
         .unwrap();
 
-    // Send multiple 5xx requests — without record_5xx, the circuit should never trip.
+    // Send multiple 5xx requests, without record_5xx, the circuit should never trip.
     for _ in 0..5 {
         let response = client
             .get(format!("http://localhost:{}/status?code=503", port))
@@ -247,7 +247,7 @@ async fn test_circuit_breaker_does_not_record_4xx() {
         .build()
         .unwrap();
 
-    // Send 4xx responses — should NOT trip the circuit
+    // Send 4xx responses, should NOT trip the circuit
     for _ in 0..5 {
         let response = client
             .get(format!("http://localhost:{}/status?code=404", port))
@@ -331,7 +331,7 @@ async fn test_circuit_breaker_various_5xx_codes() {
         .build()
         .unwrap();
 
-    // Request 1 (round_robin → backend): returns 500 — failure count: 1
+    // Request 1 (round_robin + backend): returns 500, failure count: 1
     let response = client
         .get(format!("http://localhost:{}/status?code=500", port))
         .send()
@@ -344,7 +344,7 @@ async fn test_circuit_breaker_various_5xx_codes() {
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-    // Request 2 (round_robin → fallback): returns 502 — not a failure for backend.
+    // Request 2 (round_robin + fallback): returns 502, not a failure for backend.
     // This also verifies the fallback works correctly.
     let response = client
         .get(format!("http://localhost:{}/status?code=502", port))
@@ -355,7 +355,7 @@ async fn test_circuit_breaker_various_5xx_codes() {
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-    // Request 3 (round_robin → backend): returns 500 — failure count: 2, circuit trips
+    // Request 3 (round_robin + backend): returns 500, failure count: 2, circuit trips
     let response = client
         .get(format!("http://localhost:{}/status?code=500", port))
         .send()

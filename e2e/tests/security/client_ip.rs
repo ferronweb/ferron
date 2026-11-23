@@ -104,7 +104,7 @@ async fn test_client_ip_from_x_forwarded_for() {
         .expect("Failed to get host port");
 
     // Request without X-Forwarded-For: client IP is the actual Docker bridge IP
-    // which is NOT 1.2.3.4 — so request succeeds
+    // which is NOT 1.2.3.4, so request succeeds
     let status = raw_http_get_with_header("127.0.0.1", ferron_port, "/index.html", &[]).await;
     assert_eq!(
         status, 200,
@@ -112,7 +112,7 @@ async fn test_client_ip_from_x_forwarded_for() {
     );
 
     // Request with X-Forwarded-For: 1.2.3.4: client IP is rewritten to 1.2.3.4
-    // which IS blocked — so request returns 403
+    // which IS blocked, so request returns 403
     let status = raw_http_get_with_header(
         "127.0.0.1",
         ferron_port,
@@ -126,7 +126,7 @@ async fn test_client_ip_from_x_forwarded_for() {
     );
 
     // Request with X-Forwarded-For: 5.6.7.8: client IP is rewritten to 5.6.7.8
-    // which is NOT blocked — so request succeeds
+    // which is NOT blocked, so request succeeds
     let status = raw_http_get_with_header(
         "127.0.0.1",
         ferron_port,
@@ -178,7 +178,7 @@ async fn test_client_ip_from_forwarded_header() {
         .expect("Failed to get host port");
 
     // Request with Forwarded: for=10.0.0.1: client IP is rewritten to 10.0.0.1
-    // which IS blocked — so request returns 403
+    // which IS blocked, so request returns 403
     let status = raw_http_get_with_header(
         "127.0.0.1",
         ferron_port,
@@ -192,7 +192,7 @@ async fn test_client_ip_from_forwarded_header() {
     );
 
     // Request with Forwarded: for=192.168.1.1: client IP is rewritten to 192.168.1.1
-    // which is NOT blocked — so request succeeds
+    // which is NOT blocked, so request succeeds
     let status = raw_http_get_with_header(
         "127.0.0.1",
         ferron_port,

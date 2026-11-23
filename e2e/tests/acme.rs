@@ -953,7 +953,7 @@ ferron-fallback {
         .build()
         .unwrap();
 
-    // Poll until success — the fallback provider should be used after the primary fails
+    // Poll until success, the fallback provider should be used after the primary fails
     let mut success = false;
     for _ in 0..100 {
         if let Ok(response) = client

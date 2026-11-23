@@ -436,7 +436,7 @@ async fn test_cache_zone_per_host_default() {
     let webroot_b = common::create_temp_dir();
     let mut config_file = common::create_temp_file();
 
-    // No global cache block — each host should get its own per-host zone
+    // No global cache block, so each host should get its own per-host zone
     config_file
         .as_file_mut()
         .write_all(

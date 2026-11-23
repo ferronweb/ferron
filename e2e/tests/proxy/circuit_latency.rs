@@ -177,7 +177,7 @@ async fn test_circuit_breaker_does_not_trip_without_latency_threshold() {
         .build()
         .unwrap();
 
-    // Send multiple slow requests — without latency_threshold, the circuit should never trip.
+    // Send multiple slow requests, without latency_threshold, the circuit should never trip.
     for _ in 0..3 {
         let response = client
             .get(format!("http://localhost:{}/unstable?sleep=200", port))

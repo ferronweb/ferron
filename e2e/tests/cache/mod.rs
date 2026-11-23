@@ -406,7 +406,7 @@ async fn test_cache_request_no_store() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(&*response.bytes().await.unwrap(), b"v1");
 
-    // A no-store request still serves the fresh stored entry (RFC 9111 §5.2.1.5).
+    // A no-store request still serves the fresh stored entry (RFC 9111 section 5.2.1.5).
     let response = client
         .get(format!("http://localhost:{}/cached.txt", port))
         .header("Cache-Control", "no-store")

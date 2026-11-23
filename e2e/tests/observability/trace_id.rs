@@ -172,7 +172,7 @@ async fn test_trace_id_reflect_request() {
 
     let client = reqwest::Client::new();
 
-    // Request WITHOUT the reflect header — trace ID should NOT be injected
+    // Request WITHOUT the reflect header, trace ID should NOT be injected
     let response = client
         .get(format!("http://localhost:{}/test.txt", port))
         .send()
@@ -185,7 +185,7 @@ async fn test_trace_id_reflect_request() {
         "Trace ID should not be present without reflect header"
     );
 
-    // Request WITH the reflect header — trace ID SHOULD be injected
+    // Request WITH the reflect header, trace ID SHOULD be injected
     let response = client
         .get(format!("http://localhost:{}/test.txt", port))
         .header("x-ferron-trace-reflect", "1")

@@ -122,8 +122,7 @@ fn status_code(response_head: &str) -> u16 {
 
 /// DNS-rebinding / SSRF protection: a hostname (or literal IP) that resolves
 /// to a denied IP must be rejected with 403 on both the CONNECT tunnel path
-/// and the absolute-URI forwarding path — never tunnelled, forwarded, or
-/// silently passed through to the normal request pipeline.
+/// and the absolute-URI forwarding path.
 #[tokio::test]
 async fn test_forward_proxy_dns_rebinding_protection() {
     let config = br#"

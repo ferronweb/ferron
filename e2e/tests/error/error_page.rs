@@ -69,7 +69,7 @@ async fn test_error_page_cascading() {
         .unwrap_or("");
     assert_eq!(location, "/fallback.html");
 
-    // Follow the redirect — should get the fallback content
+    // Follow the redirect, it should get the fallback content
     let response = client
         .get(format!("http://localhost:{}/fallback.html", port))
         .send()
