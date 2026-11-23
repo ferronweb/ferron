@@ -94,10 +94,7 @@ pub async fn background_ocsp_task(
                         "OCSP fetch triggered",
                         &format!("OCSP fetch triggered for certificate {ident}"),
                         LOG_TARGET,
-                        vec![(
-                            "ferron.ocsp.cert.subject",
-                            LogAttributeValue::String(ident),
-                        )],
+                        vec![("ferron.ocsp.cert.subject", LogAttributeValue::String(ident))],
                     );
                     known_certs.insert(key.clone(), chain.clone());
                     // Trigger immediate fetch (use time in the past to ensure it is fetched immediately)

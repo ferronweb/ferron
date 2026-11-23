@@ -547,7 +547,7 @@ pub fn process_block(
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
                             trailing_comment: None,
-                            name: name,
+                            name,
                             args: vec![ferronconf::Value::String(
                                 val,
                                 ferronconf::Span { line: 0, column: 0 },

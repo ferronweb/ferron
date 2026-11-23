@@ -348,15 +348,9 @@ impl Module for OtlpObservabilityModule {
                         event_sink.as_deref(),
                     )
                 });
-                let metrics = metric_pipelines
-                    .entry(cache_key)
-                    .or_insert_with(|| {
-                        MetricPipelineEntry::init(
-                            &config,
-                            cancel_token.clone(),
-                            event_sink.as_deref(),
-                        )
-                    });
+                let metrics = metric_pipelines.entry(cache_key).or_insert_with(|| {
+                    MetricPipelineEntry::init(&config, cancel_token.clone(), event_sink.as_deref())
+                });
 
                 match &*msg.event {
                     Event::Log(log_event) => {
