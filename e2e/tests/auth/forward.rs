@@ -213,13 +213,13 @@ async fn test_fauth_failure_500() {
 }
 
 #[tokio::test]
-async fn test_fauth_header_copy_single() {
+async fn test_fauth_header_copy() {
     let ctx = FAuthTestContext::new(
-        "header-copy-single",
+        "header-copy",
         r#"
 *:80 {
-    auth_to http://auth-backend:9090/auth/ok {
-        copy X-Auth-User
+    auth_to http://auth-backend:9090/auth/check-header-added {
+        copy X-Custom-Header
     }
 
     proxy http://auth-backend:9090
@@ -228,51 +228,13 @@ async fn test_fauth_header_copy_single() {
     )
     .await;
 
-    let response = ctx.client.get(&ctx.base_url).send().await.unwrap();
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
-async fn test_fauth_header_copy_multiple() {
-    let ctx = FAuthTestContext::new(
-        "header-copy-multiple",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/ok {
-        copy X-Auth-User X-Auth-Roles X-Auth-Email
-    }
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx.client.get(&ctx.base_url).send().await.unwrap();
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
-async fn test_fauth_header_copy_missing() {
-    let ctx = FAuthTestContext::new(
-        "header-copy-missing",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/ok {
-        copy X-Nonexistent-Header
-    }
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx.client.get(&ctx.base_url).send().await.unwrap();
+    let response = ctx
+        .client
+        .get(&ctx.base_url)
+        .header("X-Custom-Header", "added-value")
+        .send()
+        .await
+        .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     let body = response.text().await.unwrap();
     assert!(body.contains("Hello from auth backend!"));
@@ -351,33 +313,6 @@ async fn test_fauth_request_header_replace() {
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.text().await.unwrap(), "Authenticated!");
-}
-
-#[tokio::test]
-async fn test_fauth_no_spoof_x_forwarded_user() {
-    let ctx = FAuthTestContext::new(
-        "no-spoof-x-forwarded-user",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/echo
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx
-        .client
-        .get(format!("{}/test", ctx.base_url))
-        .header("X-Forwarded-User", "spoofed-user")
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
 }
 
 #[tokio::test]
@@ -460,58 +395,6 @@ async fn test_fauth_nested_url_directive() {
 }
 
 #[tokio::test]
-async fn test_fauth_path_and_query_preserved() {
-    let ctx = FAuthTestContext::new(
-        "path-query-preserved",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/echo
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx
-        .client
-        .get(format!("{}/api/v1/users?page=2&limit=10", ctx.base_url))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
-async fn test_fauth_post_method_preserved() {
-    let ctx = FAuthTestContext::new(
-        "post-method",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/echo
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx
-        .client
-        .post(format!("{}/submit", ctx.base_url))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
 async fn test_fauth_malformed_response() {
     let ctx = FAuthTestContext::new(
         "malformed-response",
@@ -530,64 +413,4 @@ async fn test_fauth_malformed_response() {
         response.status(),
         reqwest::StatusCode::INTERNAL_SERVER_ERROR
     );
-}
-
-#[tokio::test]
-async fn test_fauth_upgrade_headers_removed() {
-    let ctx = FAuthTestContext::new(
-        "upgrade-removed",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/echo
-
-    proxy http://auth-backend:9090
-}
-"#,
-    )
-    .await;
-
-    let response = ctx
-        .client
-        .get(format!("{}/test", ctx.base_url))
-        .header("Upgrade", "websocket")
-        .header("Connection", "Upgrade")
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Hello from auth backend!"));
-}
-
-#[tokio::test]
-async fn test_fauth_limit_concurrent() {
-    let ctx = FAuthTestContext::new(
-        "limit-concurrent",
-        r#"
-*:80 {
-    auth_to http://auth-backend:9090/auth/ok {
-        limit 10
-    }
-
-    root "/var/www/ferron"
-}
-"#,
-    )
-    .await;
-
-    let mut handles = vec![];
-    for _ in 0..5 {
-        let client = ctx.client.clone();
-        let url = ctx.base_url.clone();
-        handles.push(tokio::spawn(async move {
-            client.get(&url).send().await.unwrap()
-        }));
-    }
-
-    let results = futures_util::future::join_all(handles).await;
-    for result in results {
-        let response = result.unwrap();
-        assert_eq!(response.status(), reqwest::StatusCode::OK);
-    }
 }

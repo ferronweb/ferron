@@ -15,61 +15,6 @@ use testcontainers::core::ContainerPort;
 
 use crate::common;
 
-/// Test basic connection limiting with concurrent requests.
-///
-/// Inspired by nginx-tests limit_conn.t — verifies that concurrent
-/// connections exceeding the limit are rejected.
-#[tokio::test]
-async fn test_connection_limit_basic() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    let webroot_dir = common::create_temp_dir();
-    let mut config_file = common::create_temp_file();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            r#"
-*:80 {
-    root "/var/www/ferron"
-}
-"#
-            .as_bytes(),
-        )
-        .unwrap();
-
-    common::write_file(webroot_dir.path().join("test.txt"), b"test content").unwrap();
-
-    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
-        .await
-        .unwrap();
-
-    let port = container
-        .get_host_port_ipv4(ContainerPort::Tcp(80))
-        .await
-        .unwrap();
-
-    let client = reqwest::Client::new();
-
-    // Without connection limiting, multiple concurrent requests should all succeed
-    let mut handles = Vec::new();
-    for _ in 0..10 {
-        let client = client.clone();
-        let url = format!("http://localhost:{}/test.txt", port);
-        handles.push(tokio::spawn(async move {
-            client.get(&url).send().await.unwrap().status()
-        }));
-    }
-
-    let results = futures_util::future::join_all(handles).await;
-    for result in results {
-        let status = result.unwrap();
-        assert_eq!(status, reqwest::StatusCode::OK);
-    }
-
-    container.stop().await.unwrap();
-}
-
 /// Test rate limiting with different keys (IP vs URI).
 ///
 /// Inspired by nginx-tests limit_conn_complex.t — verifies that rate

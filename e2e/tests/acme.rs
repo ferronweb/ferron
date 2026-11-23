@@ -906,26 +906,7 @@ async fn test_acme_dns01_basic() {
 }
 
 #[tokio::test]
-async fn test_acme_dns01_cache_persistence() {
-    let (key_name, key_secret) = generate_tsig_key("ferron-test-key-cache");
-    let dns_config = DnsConfig {
-        key_name,
-        key_secret,
-        domains: vec!["ferron-dns01-cache".to_string()],
-    };
-    // Test with cache directory to ensure cert persistence
-    test_acme_common(
-        "dns-01",
-        "ferron-dns01-cache",
-        "cache \"/var/cache/ferron-acme-custom\"",
-        Some(dns_config),
-        CsrConfig::Unspecified,
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_acme_dns01_on_demand() {
+async fn test_acme_dns01_ondemand() {
     let (key_name, key_secret) = generate_tsig_key("ferron-test-key-ondemand");
     let dns_config = DnsConfig {
         key_name,
@@ -937,66 +918,6 @@ async fn test_acme_dns01_on_demand() {
         "dns-01",
         "ferron-dns01-ondemand",
         "on_demand",
-        Some(dns_config),
-        CsrConfig::Unspecified,
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_acme_dns01_rfc2136_updates() {
-    // This test verifies RFC 2136 TSIG-authenticated updates are properly handled.
-    // Uses the same basic DNS-01 setup but logs will be checked for successful updates.
-    let (key_name, key_secret) = generate_tsig_key("ferron-test-key-rfc2136");
-    let dns_config = DnsConfig {
-        key_name,
-        key_secret,
-        domains: vec!["ferron-dns01-rfc2136".to_string()],
-    };
-    test_acme_common(
-        "dns-01",
-        "ferron-dns01-rfc2136",
-        "",
-        Some(dns_config),
-        CsrConfig::Unspecified,
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_acme_dns01_dns_propagation() {
-    // This test verifies DNS record propagation timing.
-    // Uses standard DNS-01 flow which inherently tests propagation.
-    let (key_name, key_secret) = generate_tsig_key("ferron-test-key-propagation");
-    let dns_config = DnsConfig {
-        key_name,
-        key_secret,
-        domains: vec!["ferron-dns01-propagation".to_string()],
-    };
-    test_acme_common(
-        "dns-01",
-        "ferron-dns01-propagation",
-        "",
-        Some(dns_config),
-        CsrConfig::Unspecified,
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn test_acme_dns01_custom_resolver() {
-    // This test explicitly verifies that custom /etc/resolv.conf is used.
-    // Uses BIND 9 as the resolver which tests the custom resolv.conf mounting.
-    let (key_name, key_secret) = generate_tsig_key("ferron-test-key-resolver");
-    let dns_config = DnsConfig {
-        key_name,
-        key_secret,
-        domains: vec!["ferron-dns01-resolver".to_string()],
-    };
-    test_acme_common(
-        "dns-01",
-        "ferron-dns01-resolver",
-        "",
         Some(dns_config),
         CsrConfig::Unspecified,
     )

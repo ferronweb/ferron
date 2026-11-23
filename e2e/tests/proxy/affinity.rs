@@ -109,6 +109,10 @@ ferron-affinity-cookie:80 {
         .await
         .unwrap();
     assert_eq!(resp1.status(), reqwest::StatusCode::OK);
+    assert!(
+        resp1.cookies().next().is_some_and(|c| c.name() == "sticky"),
+        "A cookie named 'sticky' should be set"
+    );
     let body1 = resp1.text().await.unwrap();
 
     // The cookie should be set on the response (we can't easily verify without cookie parsing)
@@ -121,72 +125,12 @@ ferron-affinity-cookie:80 {
             .await
             .unwrap();
         assert_eq!(resp.status(), reqwest::StatusCode::OK);
+        assert!(
+            resp.headers().get(reqwest::header::SET_COOKIE).is_none(),
+            "Set-Cookie should not be here (cookie is already there)"
+        );
         let body = resp.text().await.unwrap();
         assert_eq!(body, body1);
-    }
-}
-
-#[tokio::test]
-async fn test_affinity_ip() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    let mut config_file = crate::common::create_temp_file();
-
-    let network = "e2e-test-affinity-ip";
-
-    let _backend1 = create_backend_container(network, "backend-1", Some("A"))
-        .await
-        .unwrap();
-    let _backend2 = create_backend_container(network, "backend-2", Some("B"))
-        .await
-        .unwrap();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            br#"
-ferron-affinity-ip:80 {
-  proxy {
-    upstream "http://backend-1:3000"
-    upstream "http://backend-2:3000"
-    affinity ip
-  }
-}
-"#,
-        )
-        .unwrap();
-
-    let ferron = create_ferron_container(network, config_file.path())
-        .await
-        .unwrap();
-
-    let port = ferron
-        .get_host_port_ipv4(ContainerPort::Tcp(80))
-        .await
-        .unwrap();
-
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-    let client = reqwest::Client::new();
-
-    // Multiple requests from the same client IP should go to the same backend
-    let mut responses = Vec::new();
-    for _ in 0..10 {
-        let resp = client
-            .get(format!("http://localhost:{}/", port))
-            .header("Host", "ferron-affinity-ip")
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), reqwest::StatusCode::OK);
-        let body = resp.text().await.unwrap();
-        responses.push(body);
-    }
-
-    // All responses should be identical (same backend)
-    let first = &responses[0];
-    for resp in &responses[1..] {
-        assert_eq!(resp, first, "IP affinity should route to same backend");
     }
 }
 

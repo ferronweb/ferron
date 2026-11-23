@@ -19,6 +19,7 @@ async fn create_backend_container(
                 .with_port(ContainerPort::Tcp(3000))
                 .with_response_matcher(|_| true),
         )))
+        .with_env_var("BACKEND_NAME", alias)
         .with_network(network)
         .with_hostname(alias)
         .start()
@@ -154,28 +155,46 @@ ferron-weighted-round-robin:80 {
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // Helper to test an algorithm
-    let test_algo = |host: &'static str, count: usize| {
+    let test_algo = |host: &'static str, count: usize, round_robin: bool| {
         let client = client.clone();
         async move {
+            let mut previous_body = None;
             for _ in 0..count {
-                let response = client
-                    .get(format!("http://localhost:{}/", port))
-                    .header("Host", host)
-                    .send()
-                    .await
-                    .unwrap();
-                assert_eq!(response.status(), reqwest::StatusCode::OK);
-                assert_eq!(response.text().await.unwrap(), "Hello, World!");
+                if round_robin {
+                    let response = client
+                        .get(format!("http://localhost:{}/whoami", port))
+                        .header("Host", host)
+                        .send()
+                        .await
+                        .unwrap();
+                    assert_eq!(response.status(), reqwest::StatusCode::OK);
+                    let body = response.text().await.unwrap();
+                    assert_ne!(
+                        Some(&body),
+                        previous_body.as_ref(),
+                        "round-robin should select a next backend"
+                    );
+                    previous_body = Some(body);
+                } else {
+                    let response = client
+                        .get(format!("http://localhost:{}/", port))
+                        .header("Host", host)
+                        .send()
+                        .await
+                        .unwrap();
+                    assert_eq!(response.status(), reqwest::StatusCode::OK);
+                    assert_eq!(response.text().await.unwrap(), "Hello, World!");
+                }
             }
         }
     };
 
-    test_algo("ferron-random", 3).await;
-    test_algo("ferron-round-robin", 3).await;
-    test_algo("ferron-least-conn", 3).await;
-    test_algo("ferron-two-random", 3).await;
-    test_algo("ferron-p2c-ewma", 33).await; // 10 samples per backend would be warmup...
-    test_algo("ferron-weighted-round-robin", 3).await;
+    test_algo("ferron-random", 3, false).await;
+    test_algo("ferron-round-robin", 3, true).await;
+    test_algo("ferron-least-conn", 3, false).await;
+    test_algo("ferron-two-random", 3, false).await;
+    test_algo("ferron-p2c-ewma", 33, false).await; // 10 samples per backend would be warmup...
+    test_algo("ferron-weighted-round-robin", 3, true).await;
 }
 
 #[tokio::test]
@@ -231,7 +250,7 @@ async fn test_lb_retry_connection() {
     for _ in 0..10 {
         let resp = client.get(&url).send().await.unwrap();
         assert_eq!(resp.status(), reqwest::StatusCode::OK);
-        assert_eq!(resp.text().await.unwrap(), "backend");
+        assert_eq!(resp.text().await.unwrap(), "backend-ok");
     }
 
     ferron.stop().await.unwrap();

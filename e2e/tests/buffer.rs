@@ -114,22 +114,26 @@ impl BufferTestContext {
     }
 }
 
-/// buffer_response with a positive size buffers the full response body
-/// before sending it to the client.
+// This doesn't really test buffering as-is, but at least it tests if buffering would interfere
+// with regular requests...
+
 #[tokio::test]
-async fn test_buffer_response() {
+async fn test_buffer() {
     let config = br#"
 *:80 {
+    buffer_request 65536
     buffer_response 65536
     proxy "http://backend:3000"
 }
 "#;
 
-    let ctx = BufferTestContext::new("resp", config).await;
+    let ctx = BufferTestContext::new("buffer", config).await;
 
     let resp = ctx
         .client
-        .get(format!("{}/", ctx.base_url))
+        .post(format!("{}/echo-body", ctx.base_url))
+        .header(reqwest::header::CONTENT_TYPE, "text/plain")
+        .body("Hello, World!")
         .send()
         .await
         .expect("Request failed");
@@ -140,37 +144,5 @@ async fn test_buffer_response() {
         body.trim(),
         "Hello, World!",
         "Response body should match backend content"
-    );
-}
-
-/// buffer_request with a positive size buffers the full request body
-/// before forwarding it to the backend.
-#[tokio::test]
-async fn test_buffer_request() {
-    let config = br#"
-*:80 {
-    buffer_request 65536
-    proxy "http://backend:3000"
-}
-"#;
-
-    let ctx = BufferTestContext::new("req", config).await;
-
-    // Send a POST with a body — the backend doesn't handle POST, but the
-    // request buffering happens before forwarding; we just verify it doesn't
-    // break normal GET requests
-    let resp = ctx
-        .client
-        .get(format!("{}/whoami", ctx.base_url))
-        .send()
-        .await
-        .expect("Request failed");
-
-    assert_eq!(resp.status(), 200, "Expected 200 OK");
-    let body = resp.text().await.unwrap_or_default();
-    assert_eq!(
-        body.trim(),
-        "buffer-backend",
-        "Should reach the buffer-backend backend"
     );
 }

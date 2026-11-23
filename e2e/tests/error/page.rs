@@ -120,8 +120,8 @@ async fn test_error_page_multiple_codes() {
     let webroot_dir = common::create_temp_dir();
     std::fs::create_dir_all(webroot_dir.path().join("custom")).unwrap();
     std::fs::write(
-        webroot_dir.path().join("custom").join("50x.html"),
-        b"custom server error page",
+        webroot_dir.path().join("custom").join("40x.html"),
+        b"custom client error page",
     )
     .unwrap();
 
@@ -133,7 +133,7 @@ async fn test_error_page_multiple_codes() {
             br#"
 *:80 {
     root "/var/www/ferron"
-    error_page 500 502 503 504 /var/www/ferron/custom/50x.html
+    error_page 400 403 404 410 /var/www/ferron/custom/40x.html
 }
 "#,
         )
@@ -163,7 +163,7 @@ async fn test_error_page_multiple_codes() {
     assert_eq!(response.status(), 404, "Expected 404 Not Found");
     let body = response.text().await.expect("Failed to read body");
     assert!(
-        !body.contains("custom server error page"),
-        "404 should not use the 50x error page"
+        body.contains("custom client error page"),
+        "404 should use the 40x error page"
     );
 }

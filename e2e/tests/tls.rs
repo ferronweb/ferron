@@ -1,3 +1,5 @@
+mod common;
+
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::{
     io::Write,
@@ -25,8 +27,6 @@ use testcontainers::{
     core::{ContainerPort, Mount, WaitFor, wait::HttpWaitStrategy},
     runners::AsyncRunner,
 };
-
-use crate::common;
 
 /// A server certificate verifier that always returns a successful verification.
 #[derive(Debug)]
@@ -525,173 +525,6 @@ async fn test_tls_session_tickets_static() {
     container.stop().await.unwrap();
 }
 
-#[tokio::test]
-async fn test_tls_session_tickets_multiple_keys() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    // Generate TLS certificate
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
-
-    let mut config_file = common::create_temp_file();
-    let mut cert_file = common::create_temp_file();
-    let mut key_file = common::create_temp_file();
-
-    // Write certificate and key
-    cert_file
-        .as_file_mut()
-        .write_all(cert.cert.pem().as_bytes())
-        .unwrap();
-    key_file
-        .as_file_mut()
-        .write_all(cert.signing_key.serialize_pem().as_bytes())
-        .unwrap();
-
-    // Generate ticket key file with 3 keys
-    let ticket_key_file = generate_ticket_key_file(3);
-
-    // Create Ferron configuration with static ticket keys
-    config_file
-        .as_file_mut()
-        .write_all(
-            r#"
-*:80 {
-  root "/var/www/ferron"
-}
-
-*:443 {
-  tls {
-    provider manual
-    cert "/etc/cert.pem"
-    key "/etc/key.pem"
-    ticket_keys {
-      file "/etc/session_tickets.keys"
-    }
-  }
-  root "/var/www/ferron"
-}
-"#
-            .as_bytes(),
-        )
-        .unwrap();
-
-    let container = create_ferron_container_with_ticket_keys(
-        config_file.path(),
-        cert_file.path(),
-        key_file.path(),
-        ticket_key_file.path(),
-    )
-    .await
-    .unwrap();
-
-    let port = container
-        .get_host_port_ipv4(ContainerPort::Tcp(443))
-        .await
-        .unwrap();
-
-    let client = build_session_resumption_client();
-
-    // Make multiple requests to ensure server handles multiple keys properly
-    for i in 0..5 {
-        let response = client
-            .get(format!("https://localhost:{}/", port))
-            .send()
-            .await
-            .unwrap_or_else(|_| panic!("Request {} failed", i));
-
-        assert_eq!(response.status(), reqwest::StatusCode::OK);
-    }
-
-    container.stop().await.unwrap();
-}
-
-#[tokio::test]
-async fn test_tls_session_tickets_auto_rotate_enabled() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    // Generate TLS certificate
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
-
-    let mut config_file = common::create_temp_file();
-    let mut cert_file = common::create_temp_file();
-    let mut key_file = common::create_temp_file();
-
-    // Write certificate and key
-    cert_file
-        .as_file_mut()
-        .write_all(cert.cert.pem().as_bytes())
-        .unwrap();
-    key_file
-        .as_file_mut()
-        .write_all(cert.signing_key.serialize_pem().as_bytes())
-        .unwrap();
-
-    // Create Ferron configuration with auto-rotation enabled (using short intervals for testing)
-    config_file
-        .as_file_mut()
-        .write_all(
-            r#"
-*:80 {
-  root "/var/www/ferron"
-}
-
-*:443 {
-  tls {
-    provider manual
-    cert "/etc/cert.pem"
-    key "/etc/key.pem"
-    ticket_keys {
-      file "/tmp/session_tickets.keys"
-      auto_rotate
-      rotation_interval "2s"
-      max_keys 3
-    }
-  }
-  root "/var/www/ferron"
-}
-"#
-            .as_bytes(),
-        )
-        .unwrap();
-
-    let container = create_ferron_container(config_file.path(), cert_file.path(), key_file.path())
-        .await
-        .unwrap();
-
-    let port = container
-        .get_host_port_ipv4(ContainerPort::Tcp(443))
-        .await
-        .unwrap();
-
-    let client = build_session_resumption_client();
-
-    // Make initial requests to ensure ticket generation works
-    for i in 0..3 {
-        let response = client
-            .get(format!("https://localhost:{}/", port))
-            .send()
-            .await
-            .unwrap_or_else(|_| panic!("Request {} failed", i));
-
-        assert_eq!(response.status(), reqwest::StatusCode::OK);
-    }
-
-    // Wait for key rotation to occur (rotation_interval = 2s)
-    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-
-    // Make more requests after rotation to ensure tickets still work
-    for i in 0..3 {
-        let response = client
-            .get(format!("https://localhost:{}/", port))
-            .send()
-            .await
-            .unwrap_or_else(|_| panic!("Post-rotation request {} failed", i));
-
-        assert_eq!(response.status(), reqwest::StatusCode::OK);
-    }
-
-    container.stop().await.unwrap();
-}
-
 #[derive(Debug)]
 struct CapturingSessionStore {
     sessions: Arc<Mutex<std::collections::HashMap<ServerName<'static>, Tls13ClientSessionValue>>>,
@@ -876,6 +709,126 @@ async fn test_tls_session_ticket_decryption_and_resumption() {
     let (_, conn) = tls_stream.get_mut();
     let is_resumed = conn.handshake_kind() == Some(rustls::HandshakeKind::Resumed);
     assert!(is_resumed, "Handshake was not resumed");
+
+    container.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_tls_session_tickets_auto_rotate_enabled() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Generate TLS certificate
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+
+    let mut config_file = common::create_temp_file();
+    let mut cert_file = common::create_temp_file();
+    let mut key_file = common::create_temp_file();
+
+    // Write certificate and key
+    cert_file
+        .as_file_mut()
+        .write_all(cert.cert.pem().as_bytes())
+        .unwrap();
+    key_file
+        .as_file_mut()
+        .write_all(cert.signing_key.serialize_pem().as_bytes())
+        .unwrap();
+
+    // Create Ferron configuration with auto-rotation enabled (using short intervals for testing)
+    config_file
+        .as_file_mut()
+        .write_all(
+            r#"
+*:80 {
+  root "/var/www/ferron"
+}
+
+*:443 {
+  tls {
+    provider manual
+    cert "/etc/cert.pem"
+    key "/etc/key.pem"
+    ticket_keys {
+      file "/tmp/session_tickets.keys"
+      auto_rotate
+      rotation_interval "1s"
+      max_keys 2
+    }
+  }
+  root "/var/www/ferron"
+}
+"#
+            .as_bytes(),
+        )
+        .unwrap();
+
+    let container = create_ferron_container(config_file.path(), cert_file.path(), key_file.path())
+        .await
+        .unwrap();
+
+    let port = container
+        .get_host_port_ipv4(ContainerPort::Tcp(443))
+        .await
+        .unwrap();
+
+    // Create a capturing session store
+    let sessions = Arc::new(Mutex::new(std::collections::HashMap::new()));
+    let store = Arc::new(CapturingSessionStore {
+        sessions: sessions.clone(),
+    });
+
+    let mut client_config = rustls::ClientConfig::builder()
+        .with_root_certificates(rustls::RootCertStore::empty())
+        .with_no_client_auth();
+
+    client_config
+        .dangerous()
+        .set_certificate_verifier(Arc::new(NoServerVerifier::new()));
+    client_config.resumption = rustls::client::Resumption::store(store.clone());
+    let client_config = Arc::new(client_config);
+
+    // 1. First connection to get a ticket
+    let connector = TlsConnector::from(client_config.clone());
+    let stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port))
+        .await
+        .unwrap();
+    let domain = ServerName::try_from("localhost").unwrap();
+    let mut tls_stream = connector.connect(domain.clone(), stream).await.unwrap();
+
+    // Trigger NewSessionTicket by reading/writing
+    tls_stream
+        .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut buf = Vec::new();
+    let _ = tls_stream.read_to_end(&mut buf).await;
+    drop(tls_stream);
+
+    // 2. Second connection to verify resumption
+    {
+        let stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port))
+            .await
+            .unwrap();
+        let mut tls_stream = connector.connect(domain.clone(), stream).await.unwrap();
+
+        let (_, conn) = tls_stream.get_mut();
+        let is_resumed = conn.handshake_kind() == Some(rustls::HandshakeKind::Resumed);
+        assert!(is_resumed, "Handshake was not resumed");
+    }
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+    // At this point, initial session ticket key is rotated away...
+    {
+        let stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port))
+            .await
+            .unwrap();
+        let mut tls_stream = connector.connect(domain, stream).await.unwrap();
+
+        let (_, conn) = tls_stream.get_mut();
+        let is_resumed = conn.handshake_kind() == Some(rustls::HandshakeKind::Resumed);
+        assert!(!is_resumed, "Handshake was resumed");
+    }
 
     container.stop().await.unwrap();
 }
