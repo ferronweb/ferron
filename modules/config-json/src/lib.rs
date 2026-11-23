@@ -101,32 +101,24 @@ impl JsonConfigurationWatcher {
     fn new(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let (tx, rx) = mpsc::channel(32);
 
+        // Default notify::Config would exclude access events.
+        let debouncer_config = notify_debouncer_full::Config::default()
+            .with_timeout(Duration::from_millis(100))
+            .with_notify_config(notify::Config::default());
         let mut debouncer = new_debouncer_opt(
-            Duration::from_millis(100),
-            None,
+            debouncer_config,
             move |result: DebounceEventResult| {
-                let new_result: Result<(), Box<dyn std::error::Error + Send + Sync>> = match result
-                {
-                    Ok(events) => {
-                        let hash_change_events = events.iter().any(|e| {
-                            e.kind.is_create() || e.kind.is_modify() || e.kind.is_remove()
-                        });
-                        if hash_change_events {
-                            Ok(())
+                let new_result: Result<(), Box<dyn std::error::Error + Send + Sync>> =
+                    result.map(|_| ()).map_err(|e| {
+                        if let Some(e) = e.into_iter().next() {
+                            Box::new(e).into()
                         } else {
-                            return; // No significant events...
+                            "Unknown watcher error".into()
                         }
-                    }
-                    Err(e) => Err(if let Some(e) = e.into_iter().next() {
-                        Box::new(e)
-                    } else {
-                        "Unknown watcher error".into()
-                    }),
-                };
+                    });
                 let _ = tx.blocking_send(new_result);
             },
             notify_debouncer_full::NoCache,
-            notify::Config::default(),
         )?;
 
         debouncer.watch(&path, RecursiveMode::NonRecursive)?;

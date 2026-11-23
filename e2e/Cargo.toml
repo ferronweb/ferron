@@ -5,7 +5,7 @@ edition = "2024"
 build = "build.rs"
 
 [target.'cfg(unix)'.dev-dependencies]
-nix = { version = "0.31.2", features = ["fs"] }
+nix = { version = "0.32.0", features = ["fs"] }
 
 [build-dependencies]
 prost-build = "0.14"

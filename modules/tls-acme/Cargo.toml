@@ -83,7 +83,7 @@ chrono = "0.4.45"
 arc-swap = "1.9.3"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31.3", features = ["dir"] }
+nix = { version = "0.32", features = ["dir"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }

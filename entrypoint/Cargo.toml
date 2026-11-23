@@ -64,7 +64,7 @@ windows-service = "0.8"
 mimalloc = "0.1.52"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", features = ["fs", "signal", "process"] }
+nix = { version = "0.32", features = ["fs", "signal", "process"] }
 signal-hook = "0.4"
 tikv-jemallocator = { version = "0.7", features = [
     "background_threads",
