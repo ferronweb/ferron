@@ -168,9 +168,6 @@ async fn test_failover_disabled() {
     ferron.stop().await.unwrap();
 }
 
-/// A failed request without an available failover target must not consume
-/// retry-budget tokens. Otherwise a fully unavailable upstream degrades from
-/// 502 to 503 even though no retry was ever possible.
 #[tokio::test]
 async fn test_retry_budget_not_consumed_without_failover() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -227,8 +224,6 @@ async fn test_retry_budget_not_consumed_without_failover() {
     ferron.stop().await.unwrap();
 }
 
-/// A tiny `max_retry_rate` must refuse cross-backend retries even when the
-/// token bucket is large and refills quickly.
 #[tokio::test]
 async fn test_retry_budget_enforces_max_retry_rate() {
     let _ = rustls::crypto::ring::default_provider().install_default();

@@ -1,5 +1,3 @@
-//! Tests for the `record_5xx` circuit breaker directive.
-
 use std::io::Write;
 
 use testcontainers::{

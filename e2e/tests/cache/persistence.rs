@@ -39,8 +39,6 @@ async fn create_persist_container(
         .await
 }
 
-/// Entries journaled to disk must survive a full container restart: after the
-/// restart the same request is served from cache without touching the origin.
 #[tokio::test]
 async fn test_cache_persistence_survives_restart() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -140,7 +138,7 @@ async fn test_cache_persistence_survives_restart() {
         .unwrap();
     let url = format!("http://localhost:{}/test.txt", port);
 
-    // The entry must be restored from disk: a cache hit without touching
+    // The entry must be restored from disk, meaning a cache hit without touching
     // the origin file (the file is gone, so a miss would fail).
     std::fs::remove_file(webroot_dir.path().join("test.txt")).unwrap();
 

@@ -1537,8 +1537,6 @@ const BASE_CONFIG_PURGE_PROPAGATION_LOOP_PREVENTION: &str = r#"
 }
 "#;
 
-/// Test that a PURGE with `X-Purge-Source: propagation` header executes the
-/// purge locally but does NOT attempt to re-propagate to the control-plane.
 #[tokio::test]
 async fn test_lscache_purge_propagation_loop_prevention() {
     let ctx = LSCacheTestContext::new(
@@ -1627,8 +1625,6 @@ async fn test_lscache_purge_propagation_loop_prevention() {
     assert_eq!(resp.text().await.unwrap(), "after-propagated-purge");
 }
 
-/// Test that an original PURGE (without X-Purge-Source header) attempts to
-/// propagate to the control-plane by verifying the webhook URL is contacted.
 #[tokio::test]
 async fn test_lscache_purge_propagation_outbound_webhook() {
     let _ = rustls::crypto::ring::default_provider().install_default();

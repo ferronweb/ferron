@@ -1,5 +1,3 @@
-//! Tests for the `latency_threshold` circuit breaker directive.
-
 use std::io::Write;
 
 use testcontainers::{

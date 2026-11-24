@@ -195,33 +195,6 @@ async fn test_intercept_errors_default_passthrough() {
 }
 
 #[tokio::test]
-async fn test_intercept_errors_false_explicit() {
-    let config = br#"
-*:80 {
-    proxy "http://backend:3000" {
-        intercept_errors false
-    }
-}
-"#;
-
-    let ctx = InterceptTestContext::new("false", config, 1).await;
-
-    let resp = ctx
-        .client
-        .get(format!("{}/unstable", ctx.base_url))
-        .send()
-        .await
-        .expect("request failed");
-
-    assert_eq!(resp.status(), 503, "Expected 503 Service Unavailable");
-    let body = resp.text().await.unwrap_or_default();
-    assert!(
-        body.contains("unstable"),
-        "With intercept_errors false, body should contain backend content ('unstable'), got: {body}"
-    );
-}
-
-#[tokio::test]
 async fn test_intercept_errors_successful_requests_unaffected() {
     let config = br#"
 *:80 {

@@ -8,7 +8,6 @@ use testcontainers::{
 };
 
 pub mod hello {
-    // Generated protobuf message types only; tonic's client stubs are unused here.
     include!(concat!(env!("OUT_DIR"), "/helloworld.rs"));
 }
 

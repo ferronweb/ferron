@@ -1,5 +1,3 @@
-//! A half-open trial aborted by the pipeline timeout must release the trial slot.
-
 use std::io::Write;
 
 use testcontainers::{
@@ -77,9 +75,6 @@ async fn ferron_logs(ferron: &ContainerAsync<GenericImage>) -> String {
     String::from_utf8(ferron.stdout_to_vec().await.unwrap_or_default()).unwrap_or_default()
 }
 
-/// The half-open trial is cancelled by the pipeline timeout before headers
-/// arrive; the trial slot must still be released so the next request can
-/// recover the circuit.
 #[tokio::test]
 async fn test_half_open_trial_timeout_releases_slot() {
     let _ = rustls::crypto::ring::default_provider().install_default();

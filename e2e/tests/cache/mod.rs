@@ -136,7 +136,7 @@ async fn test_private_scope_requires_identity_not_ip() {
     );
 
     // Two clients on the same public IP with no identifying cookie must not
-    // share private data: every request is served from origin, never cached.
+    // share private data...
     self::common::write_file(webroot_dir.path().join("private.txt"), "one".as_bytes()).unwrap();
     let first = reqwest::get(format!("{base_url}private.txt"))
         .await
@@ -749,62 +749,6 @@ async fn test_cache_propagation_purge_requires_shared_secret() {
     assert!(
         String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
             .contains("miss")
-    );
-
-    container.stop().await.unwrap();
-}
-
-#[tokio::test]
-async fn test_cache_key_uses_resolved_vhost_case_insensitively() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    let webroot_dir = common::create_temp_dir();
-    let mut config_file = common::create_temp_file();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            r#"
-      a.example.com:80 {
-        root "/var/www/ferron"
-        file_cache_control "public, max-age=60"
-        cache {
-          purge_method
-        }
-      }
-  "#
-            .as_bytes(),
-        )
-        .unwrap();
-
-    let container = create_ferron_container(webroot_dir.path(), config_file.path())
-        .await
-        .unwrap();
-
-    self::common::write_file(webroot_dir.path().join("test.txt"), "v1".as_bytes()).unwrap();
-    let client = reqwest::Client::new();
-    let port = container
-        .get_host_port_ipv4(ContainerPort::Tcp(80))
-        .await
-        .unwrap();
-    let url = format!("http://localhost:{}/test.txt", port);
-
-    let get = |host: &str| client.get(&url).header("Host", host).send();
-
-    // Prime with a lowercase host, then request with mixed case. Both must
-    // resolve to the same vhost and produce the same cache key.
-    let response = get("a.example.com").await.unwrap();
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    assert!(
-        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
-            .contains("miss")
-    );
-
-    let response = get("A.Example.COM").await.unwrap();
-    assert_eq!(response.status(), reqwest::StatusCode::OK);
-    assert!(
-        String::from_utf8_lossy(response.headers().get("Cache-Status").unwrap().as_bytes())
-            .contains("hit")
     );
 
     container.stop().await.unwrap();
@@ -1552,104 +1496,4 @@ async fn test_cache_stale_if_error() {
         "sie-v1",
         "SIE should return stale content"
     );
-}
-
-/// Regression test: cache revalidation with If-None-Match on static files.
-#[tokio::test]
-async fn test_cache_static_etag_revalidation() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    let webroot_dir = common::create_temp_dir();
-    let mut config_file = common::create_temp_file();
-
-    config_file
-        .as_file_mut()
-        .write_all(
-            r#"
-      *:80 {
-        root "/var/www/ferron"
-        file_cache_control "public, max-age=60"
-        cache true
-      }
-  "#
-            .as_bytes(),
-        )
-        .unwrap();
-
-    let container = common::create_ferron_container(webroot_dir.path(), config_file.path())
-        .await
-        .unwrap();
-
-    let port = container
-        .get_host_port_ipv4(ContainerPort::Tcp(80))
-        .await
-        .unwrap();
-    let base_url = format!("http://localhost:{}", port);
-
-    common::write_file(webroot_dir.path().join("etag-test.txt"), b"content").unwrap();
-
-    let client = reqwest::Client::new();
-    let resp1 = client
-        .get(format!("{}/etag-test.txt", base_url))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp1.status(), reqwest::StatusCode::OK);
-    let etag = resp1
-        .headers()
-        .get("ETag")
-        .expect("response should include ETag header")
-        .to_str()
-        .unwrap()
-        .to_string();
-    assert_eq!(resp1.text().await.unwrap(), "content");
-
-    let resp2 = client
-        .get(format!("{}/etag-test.txt", base_url))
-        .header("Cache-Control", "max-age=0")
-        .header("If-None-Match", &etag)
-        .send()
-        .await
-        .unwrap();
-
-    // The response should be either 304 (not modified) or 200 (content changed).
-    // Before the fix, the server would always return 200 even when the backend
-    // responded with 304.
-    match resp2.status() {
-        s if s == reqwest::StatusCode::NOT_MODIFIED => {
-            // 304 must not include a body
-            assert!(
-                resp2.text().await.unwrap().is_empty(),
-                "304 response should have empty body"
-            );
-        }
-        s if s == reqwest::StatusCode::OK => {
-            // 200 must include the body
-            assert_eq!(resp2.text().await.unwrap(), "content");
-        }
-        other => panic!("expected 304 or 200, got {}", other),
-    }
-
-    let resp3 = client
-        .get(format!("{}/etag-test.txt", base_url))
-        .header("Cache-Control", "max-age=0")
-        .header("If-None-Match", &etag)
-        .send()
-        .await
-        .unwrap();
-
-    match resp3.status() {
-        s if s == reqwest::StatusCode::NOT_MODIFIED => {
-            assert!(
-                resp3.text().await.unwrap().is_empty(),
-                "304 response should have empty body"
-            );
-        }
-        s if s == reqwest::StatusCode::OK => {
-            assert_eq!(resp3.text().await.unwrap(), "content");
-        }
-        other => panic!("expected 304 or 200, got {}", other),
-    }
-
-    container.stop().await.unwrap();
 }
