@@ -1,6 +1,6 @@
 # shellcheck shell=sh
 #
-# 10_download.sh — fetch the Ferron release tarball for the detected arch.
+# Fetch the Ferron release tarball for the detected arch.
 #
 # For archive installs this step either:
 #   1. Downloads the latest release from https://dl.ferron.sh/ (or a
@@ -17,19 +17,15 @@
 #   https://dl.ferron.sh/{version}/SHA256SUMS  (signed with GPG)
 #
 # Key variables exported:
-#   FERRON_VERSION      — detected or user-specified release version
-#   FERRON_ARCHIVE_PATH — path to the downloaded or local archive file
+#   FERRON_VERSION        detected or user-specified release version
+#   FERRON_ARCHIVE_PATH   path to the downloaded or local archive file
 
 step_download() {
-    # Package managers handle binary distribution.
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then
         step_skip "package manager handles binary distribution"
         return 0
     fi
 
-    # ------------------------------------------------------------------
-    # Detect the download source mode.
-    # ------------------------------------------------------------------
     # Honor FERRON_ARCHIVE_PATH as an explicit override for local installs.
     # If it's set and points to an existing file, we use local mode.
     # Otherwise we download from the internet.
@@ -41,9 +37,6 @@ step_download() {
         log_write "install source: download from internet"
     fi
 
-    # ------------------------------------------------------------------
-    # Local archive mode
-    # ------------------------------------------------------------------
     if [ "$FERRON_INSTALL_SOURCE" = "archive" ]; then
         # The user may have set FERRON_ARCHIVE_PATH via environment, or we
         # ask them for the path.
@@ -54,7 +47,6 @@ step_download() {
             ui_spinner_resume
         fi
 
-        # Validate the file exists and is a valid gzip-compressed tar archive.
         if [ ! -f "$FERRON_ARCHIVE_PATH" ]; then
             log_write "error: archive file not found: $FERRON_ARCHIVE_PATH"
             return 1
@@ -67,7 +59,8 @@ step_download() {
         fi
         log_write "archive validation passed"
 
-        # Try to detect the version from the archive filename (e.g. ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz).
+        # Try to detect the version from the archive filename
+        # (such as ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz).
         _archive_basename=$(basename "$FERRON_ARCHIVE_PATH")
         # Extract version: look for pattern -{digits}.{digits}.{digits}-
         if printf '%s' "$_archive_basename" | grep -qE -- '-[0-9]+\.[0-9]+\.[0-9]+-'; then
@@ -81,13 +74,6 @@ step_download() {
         return 0
     fi
 
-    # ------------------------------------------------------------------
-    # Download mode
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
-    # Choose the download tool.
-    # ------------------------------------------------------------------
     _download_cmd=""
     _download_args=""
 
@@ -103,9 +89,6 @@ step_download() {
         return 1
     fi
 
-    # ------------------------------------------------------------------
-    # Determine the version to download.
-    # ------------------------------------------------------------------
     # Honor FERRON_VERSION env override first. Then check if the user
     # wants the LTS channel. Finally, fetch the latest version from the
     # server.
@@ -129,9 +112,6 @@ step_download() {
         log_write "detected latest version: $FERRON_VERSION"
     fi
 
-    # ------------------------------------------------------------------
-    # Construct the download URL.
-    # ------------------------------------------------------------------
     # The archive naming convention is:
     #   ferron-{VERSION}-{ARCH}-unknown-{OS}-{LIBC}.tar.gz
     # Examples:
@@ -143,13 +123,9 @@ step_download() {
     _download_url="https://dl.ferron.sh/$FERRON_VERSION/ferron-$FERRON_VERSION-$FERRON_TARGET_TRIPLE.tar.gz"
     log_write "download URL: $_download_url"
 
-    # ------------------------------------------------------------------
-    # Create a temporary file for the download.
-    # ------------------------------------------------------------------
     FERRON_ARCHIVE_PATH=$(mktemp /tmp/ferron-download.XXXXXX)
     log_write "downloading to $FERRON_ARCHIVE_PATH"
 
-    # Download the archive.
     if ! $_download_cmd $_download_args "$_download_url" > "$FERRON_ARCHIVE_PATH"; then
         log_write "error: failed to download ferron archive"
         rm -f "$FERRON_ARCHIVE_PATH"
@@ -164,9 +140,6 @@ step_download() {
 
     log_write "download complete ($(du -h "$FERRON_ARCHIVE_PATH" | cut -f1))"
 
-    # ------------------------------------------------------------------
-    # Verify the checksum.
-    # ------------------------------------------------------------------
     log_write "verifying checksum"
     _expected_checksum=$($_download_cmd $_download_args "https://dl.ferron.sh/$FERRON_VERSION/SHA256SUMS" 2>/dev/null | grep "ferron-$FERRON_VERSION-$FERRON_TARGET_TRIPLE.tar.gz" | awk '{print $1}')
 

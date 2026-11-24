@@ -1,12 +1,9 @@
 # shellcheck shell=sh
 #
-# ui.sh — rendering primitives for the installer UI.
+# Rendering primitives for the installer UI.
 #
-# The UI is line-oriented, not screen-oriented. We render by appending lines
-# and — in ANSI mode — rewriting only the status cell of the current step
-# line. This keeps the implementation small and robust against stray output
-# from misbehaving steps (such output just scrolls past; it doesn't corrupt a
-# screen buffer we'd otherwise have to maintain).
+# The UI is line-oriented, and it's rendered by appending lines and, in ANSI mode,
+# rewriting only the status cell of the current step line.
 #
 # Status line anatomy:
 #
@@ -14,9 +11,7 @@
 #     ^^^^^^ ^^^^^^^^^^^^^^^^^^^
 #       |      label
 #       status cell, exactly 6 characters wide (`[`, space, 2- or 4-char
-#       state text, space, `]`). Two-letter states like `OK` get an extra
-#       leading space so the right bracket stays at the same column as it
-#       does for 4-letter states like `FAIL`.
+#       state text, space, `]`).
 #
 # The status cell is rewritten in place by moving the cursor back to column 1,
 # erasing the line, and reprinting `[ STATE ] label`.
@@ -81,7 +76,7 @@ ui_banner() {
     printf '\n'
 }
 
-# ui_info MESSAGE…
+# ui_info MESSAGE...
 #
 # Print an informational line between steps (no status cell).
 ui_info() {
@@ -91,10 +86,10 @@ ui_info() {
 # _ui_render_status STATE
 #
 # Internal: print a 6-character-wide status cell `[ STATE ]`. Two-letter
-# states like `OK` are rendered as `[ OK ]` (matching the mockup); four-
-# letter states like `FAIL`, `SKIP`, and `WAIT` are rendered as `[FAIL]`
-# (without interior spaces) so the outer brackets stay aligned across every
-# row. Does NOT emit a trailing newline.
+# states like `OK` are rendered as `[ OK ]`, while four-letter states
+# like `FAIL`, `SKIP`, and `WAIT` are rendered as `[FAIL]`, so the
+# outer brackets stay aligned across every row.
+# Does NOT emit a trailing newline.
 _ui_render_status() {
     case "$1" in
         OK)   color=$FERRON_UI_C_GREEN;  text=' OK ' ;;
@@ -109,8 +104,8 @@ _ui_render_status() {
 # _ui_spinner_frames
 #
 # Internal: print the spinner frame set as a single space-separated line.
-# Braille dots look great on modern terminals; ASCII fallback stays readable
-# on serial consoles and minimal busybox shells.
+# Braille dots look great on modern terminals, while ASCII fallback stays
+# readable on serial consoles and minimal busybox shells.
 _ui_spinner_frames() {
     if [ "$FERRON_UI_UTF8" = 1 ]; then
         printf '⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏'
@@ -133,9 +128,7 @@ _ui_spinner_loop() {
         for frame in "$@"; do
             # \r moves to column 1, \033[2K erases the whole line. Together
             # they give us a stable, flicker-free rewrite even when the
-            # terminal is narrower than the label. The spinner frame takes
-            # the place of the 4-char state text so the cell stays 6 chars
-            # wide (`[`, space, frame, 2 spaces, `]`).
+            # terminal is narrower than the label.
             printf '\r\033[2K[ %s%s%s  ] %s' \
                 "$FERRON_UI_C_DIM" "$frame" "$FERRON_UI_C_RESET" "$label"
             sleep 0.1 2>/dev/null || sleep 1
@@ -165,10 +158,10 @@ ui_step_begin() {
 # ui_step_end STATUS
 #
 # Finalize the currently in-progress step. STATUS is one of OK, FAIL, SKIP.
-# In ANSI mode, rewrites the spinner line with the final status and emits a
-# newline so subsequent output appears below. In degraded mode, prints a
-# fresh line (the earlier `[ .... ]` line stays in the scrollback, which is
-# fine for log capture).
+#
+# In ANSI mode, this rewrites the spinner line with the final status and
+# emits a newline so subsequent output appears below. In "degraded" mode,
+# prints a fresh line.
 ui_step_end() {
     status=$1
 
@@ -246,7 +239,7 @@ ui_success() {
 # ui_failure LABEL EXIT_CODE
 #
 # Final screen for a failed installation. Prints a red header, a tail of the
-# log, and a pointer to the full log file. Does NOT exit — the caller decides
+# log, and a pointer to the full log file. Does NOT exit, the caller decides
 # what exit code to propagate.
 ui_failure() {
     label=$1

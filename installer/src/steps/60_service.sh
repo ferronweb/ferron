@@ -1,11 +1,10 @@
 # shellcheck shell=sh
 #
-# 60_service.sh — install and enable the Ferron service.
+# Install and enable the Ferron service.
 #
 # For archive installs this step:
 #   1. Detects whether systemd or SysV init is the active init system.
-#   2. Generates the appropriate unit file or init script inline (as a
-#      heredoc) — no external assets are needed.
+#   2. Generates the appropriate unit file or init script inline.
 #   3. Installs it to the correct location.
 #   4. Asks the user whether to enable and start the service now.
 #   5. Enables and starts the service.
@@ -14,16 +13,11 @@
 # handles service setup via its %systemd_unit, %pre, or postinst scripts.
 
 step_install_service() {
-    # Package managers handle service setup.
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then
         step_skip "package manager handles service setup"
         return 0
     fi
 
-    # ------------------------------------------------------------------
-    # Ask the user whether to enable and start the service.
-    # ------------------------------------------------------------------
-    # In non-interactive mode we default to enabling and starting.
     _enable_default="yes"
     if [ "$FERRON_UI_STDIN" != 1 ]; then
         FERRON_ENABLE_SERVICE="$_enable_default"
@@ -40,13 +34,7 @@ step_install_service() {
         ui_spinner_resume
     fi
 
-    # ------------------------------------------------------------------
-    # Generate and install the service unit / init script.
-    # ------------------------------------------------------------------
     if [ "$FERRON_HAS_SYSTEMD" = 1 ]; then
-        # ------------------------------------------------------------------
-        # Generate systemd unit file inline.
-        # ------------------------------------------------------------------
         _unit_content=$(cat <<'UNIT_EOF'
 [Unit]
 Description=Ferron web server
@@ -78,8 +66,7 @@ UNIT_EOF
         if ! systemctl daemon-reload; then
             log_write "warning: systemctl daemon-reload failed"
         fi
-
-        # Enable and optionally start the service.
+.
         if [ "${FERRON_ENABLE_SERVICE:-no}" = "yes" ]; then
             log_write "enabling and starting ferron service"
             if ! systemctl enable --now ferron; then
@@ -95,11 +82,10 @@ UNIT_EOF
         else
             log_write "skipping service enable/start per user choice"
         fi
-
-    # ------------------------------------------------------------------
-    # Generate OpenRC init script inline.
-    # ------------------------------------------------------------------
     elif [ "$FERRON_HAS_OPENRC" -eq 1 ]; then
+        # Even though OpenRC uses init scripts in /etc/init.d,
+        # it would need to be invoked via /sbin/openrc-run, not a regular shell
+        # like sysv init, so to be able to be "installed" on OpenRC.
         _init_content=$(cat <<'INIT_EOF'
 #!/sbin/openrc-run
 
@@ -139,7 +125,6 @@ INIT_EOF
             log_write "warning: rc-update add ferron default failed"
         fi
 
-        # Start the service if the user opted in.
         if [ "${FERRON_ENABLE_SERVICE:-no}" = "yes" ]; then
             log_write "starting ferron via init script"
             if ! rc-service ferron start; then
@@ -149,10 +134,6 @@ INIT_EOF
         else
             log_write "skipping service start per user choice"
         fi
-
-    # ------------------------------------------------------------------
-    # Generate SysV init script inline.
-    # ------------------------------------------------------------------
     else
         _init_content=$(cat <<'INIT_EOF'
 #!/bin/sh
@@ -216,7 +197,7 @@ INIT_EOF
         chmod 0755 "$_init_dst"
         log_write "installed init script (mode 0755)"
 
-        # Enable the init script per distro.
+        # Enable the init script per distro (there are different commands).
         case "$FERRON_DISTRO" in
             debian|ubuntu|devuan|mx|pop|elementary|linuxmint)\
                 if ! type setcap >/dev/null 2>&1; then
@@ -285,7 +266,6 @@ INIT_EOF
                 ;;
         esac
 
-        # Start the service if the user opted in.
         if [ "${FERRON_ENABLE_SERVICE:-no}" = "yes" ]; then
             log_write "starting ferron via init script"
             if ! /etc/init.d/ferron start; then

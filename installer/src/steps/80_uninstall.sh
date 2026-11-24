@@ -1,6 +1,6 @@
 # shellcheck shell=sh
 #
-# 80_uninstall.sh — uninstall Ferron completely.
+# Uninstall Ferron completely.
 #
 # This step runs only when FERRON_INSTALL_MODE=uninstall. It detects how
 # Ferron was installed (installer-managed or package manager), stops and
@@ -19,13 +19,12 @@
 #   - Optionally removes the ferron user/group
 
 step_uninstall() {
-    # This step only runs when FERRON_INSTALL_MODE=uninstall.
     if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then
         step_skip "not an uninstall operation"
         return 0
     fi
 
-    # Detect how Ferron was installed.
+    # Detect how Ferron was installed, so to uninstall it correctly.
     FERRON_WAS_INSTALLED_BY_INSTALLER=0
     FERRON_WAS_INSTALLED_BY_PACKAGE=0
 
@@ -41,14 +40,11 @@ step_uninstall() {
         FERRON_INSTALL_METHOD="rhel"
         log_write "uninstall: detected RPM package installation"
     elif [ -x /usr/sbin/ferron ]; then
-        # Binary-only install detected — treat as installer-managed for removal.
+        # Binary-only install detected, so treat as installer-managed for removal.
         FERRON_WAS_INSTALLED_BY_INSTALLER=1
         log_write "uninstall: detected binary-only installation"
     fi
 
-    # ------------------------------------------------------------------
-    # Stop and disable the service
-    # ------------------------------------------------------------------
     log_write "stopping Ferron service"
 
     if [ "$FERRON_HAS_SYSTEMD" = 1 ]; then
@@ -95,9 +91,6 @@ step_uninstall() {
         log_write "removed init script"
     fi
 
-    # ------------------------------------------------------------------
-    # Remove binaries
-    # ------------------------------------------------------------------
     if [ "$FERRON_WAS_INSTALLED_BY_INSTALLER" = 1 ]; then
         log_write "removing binaries from /usr/sbin/"
         for _bin in ferron ferron-fmt ferron-kdl2ferron ferron-passwd ferron-precompress ferron-serve; do
@@ -122,9 +115,6 @@ step_uninstall() {
         esac
     fi
 
-    # ------------------------------------------------------------------
-    # Remove files (with confirmation)
-    # ------------------------------------------------------------------
     if [ "$FERRON_WAS_INSTALLED_BY_INSTALLER" = 1 ]; then
         log_write "removing configuration and data directories"
 
@@ -151,9 +141,6 @@ step_uninstall() {
         log_write "removed installer metadata"
     fi
 
-    # ------------------------------------------------------------------
-    # Optionally remove the ferron system user
-    # ------------------------------------------------------------------
     if [ "$FERRON_WAS_INSTALLED_BY_INSTALLER" = 1 ]; then
         ui_spinner_pause
         if ask_choice FERRON_REMOVE_USER \

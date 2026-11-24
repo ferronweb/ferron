@@ -1,6 +1,6 @@
 # shellcheck shell=sh
 #
-# tty.sh — terminal capability detection.
+# Terminal capability detection.
 #
 # Sets the following globals after `tty_init` has been called:
 #
@@ -14,9 +14,8 @@
 #                      Used to pick between Unicode and ASCII glyphs.
 #   FERRON_UI_COLS     Detected terminal width, or 80 as a safe default.
 #
-# The detection is intentionally conservative: when in doubt we pick the
-# degraded (plain-text, no-color) variant so logs piped through `tee` or
-# captured by CI systems stay readable.
+# When in doubt, the installer picks the degraded (plain-text, no-color)
+# variant so logs piped through `tee` or captured by CI systems stay readable.
 
 tty_init() {
     if [ -t 1 ]; then

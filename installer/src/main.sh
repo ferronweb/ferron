@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# main.sh — entry point for the self-extracting Ferron installer.
+# Entry point for the self-extracting Ferron installer.
 #
 # install.sh (produced by the Makefile) extracts every staging file into
 # $FERRON_INSTALLER_EXTRACT_DIR and then sources this script. Our job is to:
@@ -12,7 +12,7 @@
 #   4. Render the success screen (or let ui_failure in step.sh handle the
 #      unhappy path).
 #
-# The extraction directory is cleaned up on successful exit only; a failed
+# The extraction directory is cleaned up on successful exit only, and a failed
 # install leaves the log and the extracted scripts behind for inspection.
 
 set -eu
@@ -30,9 +30,11 @@ D=$FERRON_INSTALLER_EXTRACT_DIR
 log_init
 ui_init
 
-# Clean up the extraction directory only on clean exit. Failed installs fall
-# through ui_failure → exit in run_step, which skips this trap's success
-# path; we preserve the log and the extracted scripts in that case.
+# Clean up the extraction directory only on clean exit.
+#
+# Failed installs fall through ui_failure and exit in run_step, which skips
+# this trap's success path, so we preserve the log and the extracted scripts
+# in that case.
 _cleanup_success() {
     rm -rf "$FERRON_INSTALLER_EXTRACT_DIR"
 }

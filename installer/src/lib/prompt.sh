@@ -1,26 +1,25 @@
 # shellcheck shell=sh
 #
-# prompt.sh — interactive input helpers.
+# Interactive input helpers.
 #
 # Two public entry points:
 #
 #   ask_input VARNAME "Question" [default]
-#   ask_choice VARNAME "Question" opt1 opt2 …
+#   ask_choice VARNAME "Question" opt1 opt2 ...
 #
 # Both assign the user's answer to the shell variable named by VARNAME. In
-# non-interactive mode (stdin is not a TTY, typical of `curl … | sh`) they
-# honor an environment-variable override of the same name, then fall back to
-# the default (for ask_input) or the first option (for ask_choice). If
-# neither is available, they die with a clear message pointing at the env
-# variable to set.
+# non-interactive mode, they honor an environment-variable override of
+# the same name, then fall back to the default (for ask_input) or
+# the first option (for ask_choice). If neither is available,
+# they die with a clear message pointing at the env variable to set.
 #
 # Prompts automatically pause and resume the spinner if one is running.
 
 # _prompt_validate_varname NAME
 #
-# Internal: ensure NAME is a syntactically valid shell variable name before
-# using it in `eval`. Aborts the installer on violation; a bad varname here
-# is always a programmer bug, not user input.
+# Internal: check if NAME is a valid shell variable name before using
+# it in `eval`. Aborts the installer if it's invalid (invalid var name
+# would be a progammer bug)
 _prompt_validate_varname() {
     case "$1" in
         ''|*[!A-Za-z0-9_]*|[0-9]*)
@@ -49,7 +48,7 @@ ask_input() {
     _question=$2
     _default=${3:-}
 
-    # Honor env override first — works in both interactive and pipe modes.
+    # Honor env override first (works in both interactive and pipe modes).
     eval "_envval=\${$_varname:-}"
     if [ -n "$_envval" ]; then
         log_write "ask_input $_varname: using env override"
@@ -87,9 +86,9 @@ ask_input() {
     ui_spinner_resume
 }
 
-# ask_choice VARNAME "Question" opt1 opt2 …
+# ask_choice VARNAME "Question" opt1 opt2 ...
 #
-# Renders a numbered menu. Accepts either the option number or the exact
+# Renders a numbered menu, and accepts either the option number or the exact
 # option text as input. In non-interactive mode, the first option is used as
 # the default unless an env override is set.
 ask_choice() {

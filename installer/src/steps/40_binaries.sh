@@ -1,32 +1,25 @@
 # shellcheck shell=sh
 #
-# 40_binaries.sh — install the ferron binaries into /usr/sbin.
+# Install the ferron binaries into /usr/sbin.
 #
 # For archive installs this step extracts the downloaded tarball and copies
-# the binaries (ferron, ferron-fmt, ferron-kdl2ferron, ferron-passwd,
-# ferron-precompress, ferron-serve) into /usr/sbin with mode 0755.
+# the binaries into /usr/sbin with mode 0755.
 #
 # For package installs the step skips itself because the package manager
 # handles binary installation via its payload.
 #
 # When FERRON_INSTALL_MODE=update the step also creates a backup of the
 # existing binaries so they can be restored if the installation fails.
-#
-# Additionally, this step copies the service configuration files (ferron.service
-# for systemd, ferron.init for SysV init) from the installer bundle.
 
 step_install_binaries() {
-    # Package managers handle binary installation.
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then
         step_skip "package manager handles binary installation"
         return 0
     fi
 
-    # Create a temporary extraction directory.
     FERRON_EXTRACT_DIR=$(mktemp -d /tmp/ferron-install.XXXXXX)
     log_write "extraction directory: $FERRON_EXTRACT_DIR"
 
-    # Extract the archive.
     log_write "extracting archive $FERRON_ARCHIVE_PATH"
     if ! tar -xzf "$FERRON_ARCHIVE_PATH" -C "$FERRON_EXTRACT_DIR"; then
         log_write "error: failed to extract archive"
@@ -34,7 +27,6 @@ step_install_binaries() {
         return 1
     fi
 
-    # Verify that the expected binaries exist in the archive.
     _expected_binaries="ferron ferron-fmt ferron-kdl2ferron ferron-passwd ferron-precompress ferron-serve"
     for _bin in $_expected_binaries; do
         if [ ! -f "$FERRON_EXTRACT_DIR/$_bin" ]; then
@@ -54,7 +46,6 @@ step_install_binaries() {
         done
     fi
 
-    # Install binaries to /usr/sbin.
     for _bin in $_expected_binaries; do
         _src="$FERRON_EXTRACT_DIR/$_bin"
         [ -f "$_src" ] || continue
@@ -73,10 +64,6 @@ step_install_binaries() {
         chmod 0755 "/usr/sbin/$_bin"
         log_write "installed /usr/sbin/$_bin (mode 0755)"
     done
-
-    # Note: service unit files (ferron.service / ferron.init) are generated
-    # inline by step 60_service.sh, so we do not copy them from the bundle
-    # here.
 }
 
 if [ "$FERRON_INSTALL_MODE" = "uninstall" ]; then

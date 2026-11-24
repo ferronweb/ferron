@@ -1,38 +1,31 @@
 # shellcheck shell=sh
 #
-# 50_config.sh — install ferron.conf and the default wwwroot.
+# Install ferron.conf and the default wwwroot.
 #
 # For archive installs this step installs the configuration file and the
-# default web root from the extracted archive. It preserves existing files
-# to match the `%config(noreplace)` semantics of RPM and the `conffiles`
-# mechanism of Debian packages.
+# default web root from the extracted archive.
 #
 # For package installs the step skips itself because the package manager
 # handles configuration file placement.
 #
 # Configuration file:
-#   /etc/ferron/ferron.conf — only installed if it does not already exist
+#   /etc/ferron/ferron.conf   only installed if it does not already exist
 #
 # Web root:
-#   /var/www/ferron — only populated if the directory is empty or missing
+#   /var/www/ferron           only populated if the directory is empty or missing
 #
 # Ownership:
-#   /etc/ferron/ferron.conf — root:root 0644
-#   /var/www/ferron/*       — ferron:ferron 0644 (files), 0755 (dirs)
+#   /etc/ferron/ferron.conf   root:root 0644
+#   /var/www/ferron/*         ferron:ferron 0644 (files), 0755 (dirs)
 
 step_install_config() {
-    # Package managers handle configuration.
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then
         step_skip "package manager handles configuration"
         return 0
     fi
 
-    # ------------------------------------------------------------------
-    # Configuration file
-    # ------------------------------------------------------------------
     # Only install the configuration file if it does not already exist.
-    # This preserves the user's existing configuration across updates,
-    # matching the behavior of package managers.
+    # This preserves the user's existing configuration across updates.
     if [ -f /etc/ferron/ferron.conf ]; then
         log_write "skipping config install: /etc/ferron/ferron.conf already exists"
     else
@@ -51,9 +44,6 @@ step_install_config() {
         fi
     fi
 
-    # ------------------------------------------------------------------
-    # Web root
-    # ------------------------------------------------------------------
     # Only populate /var/www/ferron if it does not exist or is empty.
     # This preserves the user's existing website files across updates.
     if [ ! -d /var/www/ferron ]; then
@@ -77,11 +67,9 @@ step_install_config() {
         log_write "warning: wwwroot directory not found in archive"
     fi
 
-    # Clean up extraction directory.
     rm -rf "$FERRON_EXTRACT_DIR"
     log_write "cleaned up extraction directory"
 
-    # Clean up backup directory if update succeeded.
     if [ "$FERRON_INSTALL_MODE" = "update" ]; then
         rm -rf "$FERRON_BACKUP_DIR"
         log_write "cleaned up backup directory"

@@ -1,12 +1,13 @@
 # shellcheck shell=sh
 #
-# log.sh — installer log file management.
+# Installer log file management.
 #
 # Every step's stdout and stderr are redirected into $FERRON_INSTALLER_LOG so
-# that the on-screen UI stays clean and a full transcript is available when
-# something goes wrong. The log file lives inside the extraction directory so
-# it survives a failed install (the trap in main.sh only cleans up on
-# success).
+# that the on-screen UI stays clean and a full log is available when something
+# goes wrong.
+#
+# The log file lives inside the extraction directory so it survives a failed
+# install (the trap in main.sh only cleans up on success).
 
 log_init() {
     : "${FERRON_INSTALLER_EXTRACT_DIR:?log_init: FERRON_INSTALLER_EXTRACT_DIR is unset}"
@@ -15,10 +16,10 @@ log_init() {
     export FERRON_INSTALLER_LOG
 }
 
-# log_write MESSAGE…
+# log_write MESSAGE...
 #
 # Append a timestamped line to the log file only. Useful for breadcrumbs that
-# shouldn't appear on screen (e.g. detected distro, chosen options).
+# shouldn't appear on screen (like the detected distro or chosen options).
 log_write() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" \
         >>"$FERRON_INSTALLER_LOG"

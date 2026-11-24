@@ -1,6 +1,6 @@
 # shellcheck shell=sh
 #
-# 70_selinux.sh — configure SELinux contexts and booleans for Ferron.
+# Configure SELinux contexts and booleans for Ferron.
 #
 # This step runs only for archive installs on RHEL/Fedora systems where
 # SELinux is enabled. It mirrors the logic from the RPM %post scriptlet:
@@ -14,17 +14,13 @@
 # package manager's %post scriptlet handles it.
 #
 # For non-SELinux systems this step skips.
-#
-# For non-RHEL/Fedora systems this step skips.
 
 step_configure_selinux() {
-    # Only run for archive installs.
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then
         step_skip "package manager handles SELinux configuration"
         return 0
     fi
 
-    # Skip if SELinux is not enabled.
     if ! type selinuxenabled >/dev/null 2>&1; then
         log_write "SELinux tools not found, skipping SELinux configuration"
         return 0
@@ -37,9 +33,6 @@ step_configure_selinux() {
 
     log_write "SELinux is enabled, configuring contexts and booleans"
 
-    # ------------------------------------------------------------------
-    # Set SELinux boolean for network connectivity (ACME, reverse proxy)
-    # ------------------------------------------------------------------
     if type setsebool >/dev/null 2>&1; then
         log_write "setting httpd_can_network_connect boolean"
         if ! setsebool -P httpd_can_network_connect on; then
@@ -49,9 +42,6 @@ step_configure_selinux() {
         log_write "warning: setsebool not available, skipping boolean configuration"
     fi
 
-    # ------------------------------------------------------------------
-    # Set file contexts using semanage
-    # ------------------------------------------------------------------
     if type semanage >/dev/null 2>&1; then
         log_write "configuring SELinux file contexts"
 
@@ -90,9 +80,6 @@ step_configure_selinux() {
         log_write "warning: semanage not available, skipping file context configuration"
     fi
 
-    # ------------------------------------------------------------------
-    # Restore contexts with restorecon
-    # ------------------------------------------------------------------
     if type restorecon >/dev/null 2>&1; then
         log_write "restoring SELinux contexts"
         if ! restorecon -r /usr/sbin/ferron \
@@ -112,9 +99,6 @@ step_configure_selinux() {
         log_write "warning: restorecon not available, skipping context restoration"
     fi
 
-    # ------------------------------------------------------------------
-    # Optionally add QUIC UDP ports (80, 443)
-    # ------------------------------------------------------------------
     if type semanage >/dev/null 2>&1; then
         log_write "checking QUIC port configuration"
 

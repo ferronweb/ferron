@@ -1,12 +1,11 @@
 # shellcheck shell=sh
 #
-# 15_package_install.sh — install Ferron via the system package manager.
+# Install Ferron via the system package manager.
 #
 # This step runs when FERRON_INSTALL_METHOD is "debian" or "rhel". It sets up
 # the repository (if not already configured) and installs the ferron3 package.
 #
-# For archive installs, this step is not shown.
-# For uninstall mode, this step is not shown (handled by 80_uninstall.sh).
+# For archive installs and the uninstall mode, this step is not shown.
 
 step_package_install() {
     case "$FERRON_INSTALL_METHOD" in
@@ -21,7 +20,6 @@ step_package_install() {
                     break
                 fi
             done
-            # debian-archive-keyring might already be present.
             if [ -z "$(dpkg -l debian-archive-keyring 2>/dev/null | grep '^ii')" ]; then
                 _need_prereqs=1
             fi
@@ -40,7 +38,6 @@ step_package_install() {
                 fi
             fi
 
-            # Install the signing key.
             _keyring="/usr/share/keyrings/ferron-keyring.gpg"
             if [ ! -f "$_keyring" ]; then
                 log_write "installing Ferron GPG key"
@@ -53,7 +50,6 @@ step_package_install() {
                 fi
             fi
 
-            # Add the repository if not already present.
             _sources_list="/etc/apt/sources.list.d/ferron.list"
             _codename="${FERRON_DISTRO_CODENAME:-}"
             if [ -z "$_codename" ] && command -v lsb_release >/dev/null 2>&1; then
@@ -79,7 +75,6 @@ step_package_install() {
                 log_write "warning: apt update failed"
             fi
 
-            # Install Ferron.
             log_write "installing ferron3 package"
             if ! DEBIAN_FRONTEND=noninteractive apt install -y ferron3; then
                 log_write "error: failed to install ferron3 package"
@@ -126,7 +121,6 @@ REPOEOF
                 log_write "repository already configured"
             fi
 
-            # Install Ferron.
             log_write "installing ferron3 package"
             if command -v dnf >/dev/null 2>&1; then
                 dnf install -y ferron3 2>/dev/null || yum install -y ferron3 2>/dev/null || (log_write "error: failed to install ferron3 via YUM/DNF" && return 1)
