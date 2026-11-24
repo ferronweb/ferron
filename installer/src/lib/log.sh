@@ -7,7 +7,7 @@
 # goes wrong.
 #
 # The log file lives inside the extraction directory so it survives a failed
-# install (the trap in main.sh only cleans up on success).
+# install.
 
 log_init() {
     : "${FERRON_INSTALLER_EXTRACT_DIR:?log_init: FERRON_INSTALLER_EXTRACT_DIR is unset}"

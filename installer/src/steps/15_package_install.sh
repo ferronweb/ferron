@@ -1,11 +1,4 @@
 # shellcheck shell=sh
-#
-# Install Ferron via the system package manager.
-#
-# This step runs when FERRON_INSTALL_METHOD is "debian" or "rhel". It sets up
-# the repository (if not already configured) and installs the ferron3 package.
-#
-# For archive installs and the uninstall mode, this step is not shown.
 
 step_package_install() {
     case "$FERRON_INSTALL_METHOD" in

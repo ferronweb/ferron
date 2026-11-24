@@ -1,22 +1,4 @@
 # shellcheck shell=sh
-#
-# Install ferron.conf and the default wwwroot.
-#
-# For archive installs this step installs the configuration file and the
-# default web root from the extracted archive.
-#
-# For package installs the step skips itself because the package manager
-# handles configuration file placement.
-#
-# Configuration file:
-#   /etc/ferron/ferron.conf   only installed if it does not already exist
-#
-# Web root:
-#   /var/www/ferron           only populated if the directory is empty or missing
-#
-# Ownership:
-#   /etc/ferron/ferron.conf   root:root 0644
-#   /var/www/ferron/*         ferron:ferron 0644 (files), 0755 (dirs)
 
 step_install_config() {
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then

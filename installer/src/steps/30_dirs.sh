@@ -1,19 +1,4 @@
 # shellcheck shell=sh
-#
-# Create the directory layout Ferron expects.
-#
-# For archive installs this step creates and chowns all directories that the
-# package manager would normally handle via its %dir or Files sections.
-#
-# For package installs the step skips itself because the package postinst
-# creates everything.
-#
-# Directories created:
-#   /etc/ferron            configuration
-#   /var/log/ferron        logs (owned by ferron:ferron, mode 0750)
-#   /var/lib/ferron        runtime data (owned by ferron:ferron, mode 0750)
-#   /var/www/ferron        web root
-#   /run/ferron            PID files, sockets
 
 step_create_dirs() {
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then
@@ -22,6 +7,12 @@ step_create_dirs() {
     fi
 
     # Create directories (idempotent, since mkdir -p is safe to call repeatedly).
+    # Directories created:
+    #   /etc/ferron            configuration
+    #   /var/log/ferron        logs (owned by ferron:ferron, mode 0750)
+    #   /var/lib/ferron        runtime data (owned by ferron:ferron, mode 0750)
+    #   /var/www/ferron        web root
+    #   /run/ferron            PID files, sockets
     for _dir in /etc/ferron /var/log/ferron /var/lib/ferron /var/www/ferron /run/ferron; do
         if [ ! -d "$_dir" ]; then
             mkdir -p "$_dir"

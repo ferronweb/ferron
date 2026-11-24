@@ -1,22 +1,6 @@
 # shellcheck shell=sh
-#
-# Fetch the Ferron release tarball for the detected arch.
-#
-# For archive installs this step either:
-#   1. Downloads the latest release from https://dl.ferron.sh/ (or a
-#      user-specified version via the FERRON_VERSION environment variable), or
-#   2. Validates a locally downloaded archive that the user provides.
-#
-# For package installs the step skips itself because the package manager
-# handles binary distribution via its own repositories.
-#
-# Downloaded tarball:
-#   https://dl.ferron.sh/{version}/ferron-{version}-{triple}.tar.gz
-#
-# Checksum verification:
-#   https://dl.ferron.sh/{version}/SHA256SUMS  (signed with GPG)
-#
-# Key variables exported:
+
+# Exported variables:
 #   FERRON_VERSION        detected or user-specified release version
 #   FERRON_ARCHIVE_PATH   path to the downloaded or local archive file
 

@@ -1,21 +1,4 @@
 # shellcheck shell=sh
-#
-# Post-install smoke tests.
-#
-# This step verifies that the Ferron installation is working correctly.
-# It performs multiple checks depending on the install method:
-#
-# For archive installs:
-#   - Binary check: ferron --version
-#   - Config validation: ferron validate -c /etc/ferron/ferron.conf
-#   - Service status: systemctl or init script status
-#   - HTTP check: curl http://localhost/
-#
-# For package installs:
-#   - Package presence: dpkg -l ferron3 or rpm -q ferron3
-#   - Service status: same as above
-#
-# The step does NOT abort on failures, so the user can then manually investigate.
 
 step_verify() {
     log_write "verifying ferron binary"

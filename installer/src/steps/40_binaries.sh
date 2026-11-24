@@ -1,15 +1,4 @@
 # shellcheck shell=sh
-#
-# Install the ferron binaries into /usr/sbin.
-#
-# For archive installs this step extracts the downloaded tarball and copies
-# the binaries into /usr/sbin with mode 0755.
-#
-# For package installs the step skips itself because the package manager
-# handles binary installation via its payload.
-#
-# When FERRON_INSTALL_MODE=update the step also creates a backup of the
-# existing binaries so they can be restored if the installation fails.
 
 step_install_binaries() {
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then

@@ -1,22 +1,4 @@
 # shellcheck shell=sh
-#
-# Uninstall Ferron completely.
-#
-# This step runs only when FERRON_INSTALL_MODE=uninstall. It detects how
-# Ferron was installed (installer-managed or package manager), stops and
-# disables the service, removes binaries and configuration files, and
-# optionally removes the ferron system user.
-#
-# For installer-managed installs:
-#   - Removes binaries from /usr/sbin/
-#   - Removes /etc/ferron, /var/log/ferron, /var/www/ferron, /run/ferron
-#   - Removes /etc/.ferron-installer.* metadata
-#   - Optionally removes the ferron user/group
-#
-# For package-based installs:
-#   - Uses the package manager to purge the package
-#   - Removes service configuration
-#   - Optionally removes the ferron user/group
 
 step_uninstall() {
     if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then

@@ -1,16 +1,4 @@
 # shellcheck shell=sh
-#
-# Install and enable the Ferron service.
-#
-# For archive installs this step:
-#   1. Detects whether systemd or SysV init is the active init system.
-#   2. Generates the appropriate unit file or init script inline.
-#   3. Installs it to the correct location.
-#   4. Asks the user whether to enable and start the service now.
-#   5. Enables and starts the service.
-#
-# For package installs the step skips itself because the package manager
-# handles service setup via its %systemd_unit, %pre, or postinst scripts.
 
 step_install_service() {
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then

@@ -1,19 +1,4 @@
 # shellcheck shell=sh
-#
-# Configure SELinux contexts and booleans for Ferron.
-#
-# This step runs only for archive installs on RHEL/Fedora systems where
-# SELinux is enabled. It mirrors the logic from the RPM %post scriptlet:
-#
-#   - Sets httpd_can_network_connect boolean (for ACME/TLS and reverse proxy)
-#   - Adds file contexts for binaries, config, and data directories
-#   - Restores contexts with restorecon
-#   - Optionally adds QUIC UDP ports (80, 443) if semanage is available
-#
-# For package installs (Debian/RHEL RPM) this step skips because the
-# package manager's %post scriptlet handles it.
-#
-# For non-SELinux systems this step skips.
 
 step_configure_selinux() {
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then

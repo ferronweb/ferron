@@ -1,24 +1,6 @@
 # shellcheck shell=sh
-#
-# Host detection and install method selection.
-#
-# This is the most complex step because it sets up the environment for every
-# subsequent step. It runs first and exports variables that control the rest
-# of the installer.
-#
-# Detection performed:
-#   - Root / elevated privileges
-#   - Distro name and version (from /etc/os-release, /etc/redhat-release, etc.)
-#   - CPU architecture normalized to a target-triple component
-#   - C library (glibc vs musl) for Linux
-#   - Active init system (systemd vs SysV)
-#   - Existing Ferron installation (via installer or package manager)
-#
-# User interaction:
-#   - Asks for install method: archive, Debian/Ubuntu APT, RHEL/Fedora DNF, etc.
-#   - If an existing installer-managed install is found, offers update / uninstall
-#
-# Key variables exported:
+
+# Exported variables:
 #   FERRON_DISTRO            distro name (debian, rhel, alpine, freebsd, unknown)
 #   FERRON_DISTRO_VERSION    distro version or codename
 #   FERRON_DISTRO_CODENAME   distro codename or version

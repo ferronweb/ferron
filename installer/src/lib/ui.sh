@@ -85,11 +85,11 @@ ui_info() {
 
 # _ui_render_status STATE
 #
-# Internal: print a 6-character-wide status cell `[ STATE ]`. Two-letter
-# states like `OK` are rendered as `[ OK ]`, while four-letter states
-# like `FAIL`, `SKIP`, and `WAIT` are rendered as `[FAIL]`, so the
-# outer brackets stay aligned across every row.
-# Does NOT emit a trailing newline.
+# Internal: print a 6-character-wide status cell `[ STATE ]`.
+#
+# Two-letter states like `OK` are rendered as `[ OK ]`, while four-letter
+# states like `FAIL`, `SKIP`, and `WAIT` are rendered as `[FAIL]`, so
+# the outer brackets stay aligned across every row.
 _ui_render_status() {
     case "$1" in
         OK)   color=$FERRON_UI_C_GREEN;  text=' OK ' ;;
@@ -214,8 +214,7 @@ ui_spinner_resume() {
 
 # ui_success
 #
-# Final screen for a successful installation. Matches the mockup exactly,
-# modulo the emoji which degrades to ":)" in non-UTF-8 locales.
+# Final screen for a successful installation.
 ui_success() {
     if [ "$FERRON_INSTALL_MODE" = "uninstall" ]; then
         printf '\n'
@@ -239,8 +238,9 @@ ui_success() {
 # ui_failure LABEL EXIT_CODE
 #
 # Final screen for a failed installation. Prints a red header, a tail of the
-# log, and a pointer to the full log file. Does NOT exit, the caller decides
-# what exit code to propagate.
+# log, and a pointer to the full log file.
+#
+# Does not exit, because the caller decides what exit code to propagate.
 ui_failure() {
     label=$1
     rc=$2

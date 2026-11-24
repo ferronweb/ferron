@@ -14,7 +14,7 @@
 # distro name) are visible to subsequent steps. Stdout and stderr are
 # redirected to the installer log for the duration of the step.
 #
-# A step that wants to be skipped (e.g. systemd setup on a non-systemd host)
+# A step that wants to be skipped (like systemd setup on a non-systemd host)
 # should call `step_skip "reason"` and return 0. The WAIT/OK/SKIP/FAIL state
 # transitions are handled here, not in the step body.
 

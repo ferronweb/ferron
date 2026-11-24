@@ -7,13 +7,12 @@
 #   ask_input VARNAME "Question" [default]
 #   ask_choice VARNAME "Question" opt1 opt2 ...
 #
-# Both assign the user's answer to the shell variable named by VARNAME. In
-# non-interactive mode, they honor an environment-variable override of
-# the same name, then fall back to the default (for ask_input) or
+# Both assign the user's answer to the shell variable named by VARNAME.
+#
+# In non-interactive mode, they honor an environment-variable override
+# of the same name, then fall back to the default (for ask_input) or
 # the first option (for ask_choice). If neither is available,
 # they die with a clear message pointing at the env variable to set.
-#
-# Prompts automatically pause and resume the spinner if one is running.
 
 # _prompt_validate_varname NAME
 #

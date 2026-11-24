@@ -1,15 +1,4 @@
 # shellcheck shell=sh
-#
-# Create the `ferron` system user and group.
-#
-# For archive installs this step creates the ferron system user and group
-# idempotently.
-#
-# For package installs the step skips itself because the package postinst
-# creates the user via its `useradd` or `adduser` commands.
-#
-# Alpine Linux uses `adduser` / `addgroup` instead of `useradd` / `groupadd`,
-# so we detect the distro and pick the right commands.
 
 step_create_user() {
     if [ "$FERRON_INSTALL_METHOD" != "archive" ]; then
