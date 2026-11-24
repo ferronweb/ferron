@@ -211,9 +211,10 @@ async fn test_unix_relative() {
         )
         .unwrap();
 
-        // Relative path: resolved against server's WORKDIR (/var/log/ferron in Dockerfile.test)
-        // So "ferron.sock" becomes "/var/log/ferron/ferron.sock" after canonicalization (if parent exists)
-        // The file does not exist beforehand, so it stays relative, then socket2 creates it relative to CWD.
+        // Unix socket relative path would be resolved against server's working
+        // directory (/var/log/ferron in Dockerfile.test)
+        //
+        // So it would be /var/log/ferron/ferron.sock
         let config_content = r#"{
   unix "ferron.sock"
 }
@@ -248,7 +249,6 @@ while kill -0 $(cat /tmp/ferron.pid) 2>/dev/null; do sleep 1; done",
             .await
             .unwrap();
 
-        // Relative socket should appear at /var/log/ferron/ferron.sock inside container
         let container_socket_path = "/var/log/ferron/ferron.sock";
         assert!(
             wait_for_socket_in_container(
@@ -261,8 +261,8 @@ while kill -0 $(cat /tmp/ferron.pid) 2>/dev/null; do sleep 1; done",
             container_socket_path
         );
 
-        // Also check that the relative name without prefix works via curl's --unix-socket
-        // (curl resolves relative to its CWD, but we use absolute inside container)
+        // curl resolves --unix-socket relative to its CWD, but we use absolute inside
+        // container...
         let (code, body, _) = exec_curl_unix(
             &container,
             container_socket_path,
@@ -352,7 +352,6 @@ while kill -0 $(cat /tmp/ferron.pid) 2>/dev/null; do sleep 1; done",
         .unwrap();
         assert_eq!(code, 200);
 
-        // TCP must be disabled: exec curl to 127.0.0.1:80 should fail
         assert!(
             exec_curl_tcp_should_fail(&container, 80).await,
             "TCP 80 should be disabled when Unix is enabled"

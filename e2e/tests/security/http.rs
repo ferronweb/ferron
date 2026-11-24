@@ -106,8 +106,6 @@ async fn test_url_canonicalization_rejects_null_bytes() {
     );
 }
 
-/// Test that triple-encoded sequences (%25252F -> %2F -> /) are rejected
-/// as excessive nested encoding, preventing double-decode attacks.
 #[tokio::test]
 async fn test_url_canonicalization_rejects_triple_encoding() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -168,8 +166,6 @@ async fn test_url_canonicalization_rejects_triple_encoding() {
     );
 }
 
-/// Test that the server rejects control characters (0x00-0x1F, 0x7F)
-/// in the URL path via raw TCP (bypasses reqwest which would encode them).
 #[tokio::test]
 async fn test_url_canonicalization_rejects_literal_control_chars() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -248,9 +244,6 @@ async fn test_url_canonicalization_rejects_literal_control_chars() {
     );
 }
 
-/// Test that the server rejects requests with multiple Host headers.
-/// Per RFC 7230 section 5.4, a server MUST respond with 400 Bad Request when
-/// a request contains multiple Host header fields.
 #[tokio::test]
 async fn test_multiple_host_headers_rejected() {
     let _ = rustls::crypto::ring::default_provider().install_default();

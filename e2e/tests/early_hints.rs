@@ -62,7 +62,6 @@ async fn test_early_hints_h1() {
         response
     );
 
-    // Should see both 103 and 200
     assert!(
         response.contains("HTTP/1.1 103 Early Hints"),
         "Should contain 103 Early Hints, got: {}",
@@ -86,13 +85,6 @@ async fn test_early_hints_h1() {
     ferron.stop().await.unwrap();
 }
 
-/// Verify that a host `http` block inherits the global directives it does not set.
-///
-/// A host block that only tweaks one directive used to replace the whole global
-/// `http` block, which silently dropped settings such as
-/// `h1_enable_early_hints`.
-///
-/// See: modules/http-server/src/server/mod.rs
 #[tokio::test]
 async fn test_early_hints_host_block_inherits_global_http_settings() {
     let _ = rustls::crypto::ring::default_provider().install_default();

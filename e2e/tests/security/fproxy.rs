@@ -190,12 +190,6 @@ async fn test_forward_proxy_dns_rebinding_protection() {
     );
 }
 
-/// `allow_ports` replaces the built-in default (`80, 443`) instead of adding
-/// to it: with only `allow_ports 3000`, port 3000 must tunnel/forward while
-/// ports 80 and 443 are rejected with 403.
-///
-/// `deny_ips` is overridden here so the backend subnet is reachable and the
-/// port-3000 requests can actually complete the tunnel.
 #[tokio::test]
 async fn test_forward_proxy_allow_ports_not_additive() {
     let config = br#"

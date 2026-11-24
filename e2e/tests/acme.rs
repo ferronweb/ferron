@@ -2,6 +2,7 @@ use std::path::Path;
 use std::time::Duration;
 use std::{io::Write, net::IpAddr};
 
+use rand::RngCore;
 use rsa::pkcs8::EncodePrivateKey;
 use rustls::client::danger::{ServerCertVerified, ServerCertVerifier};
 use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
@@ -190,23 +191,10 @@ async fn create_bind9_container(
 /// Generates a TSIG key suitable for RFC 2136 dynamic DNS updates.
 /// Returns (key_name, key_secret_base64)
 pub fn generate_tsig_key(key_name: &str) -> (String, String) {
-    // For testing, we use a deterministic but secure-looking key
-    // In production, this would be generated cryptographically
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    let mut key_bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut key_bytes);
 
-    let mut hasher = DefaultHasher::new();
-    key_name.hash(&mut hasher);
-    let hash = hasher.finish();
-
-    // Create a 32-byte key from the hash (repeat if necessary)
-    let mut key_bytes = Vec::with_capacity(32);
-    for i in 0..4 {
-        key_bytes.extend_from_slice(&(hash.wrapping_mul(i + 1)).to_le_bytes());
-    }
-
-    // Convert to base64
-    let key_secret = base64_simple::encode(&key_bytes);
+    let key_secret = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, key_bytes);
 
     (key_name.to_string(), key_secret)
 }
@@ -322,43 +310,6 @@ pub fn generate_bind9_zone_file(domain: &str) -> String {
 "#,
         domain = domain,
     )
-}
-
-// Simple base64 encoding for testing (doesn't need crypto security)
-mod base64_simple {
-    const BASE64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    pub fn encode(data: &[u8]) -> String {
-        let mut result = String::new();
-        let mut i = 0;
-
-        while i < data.len() {
-            let b1 = data[i];
-            let b2 = if i + 1 < data.len() { data[i + 1] } else { 0 };
-            let b3 = if i + 2 < data.len() { data[i + 2] } else { 0 };
-
-            let n = ((b1 as u32) << 16) | ((b2 as u32) << 8) | (b3 as u32);
-
-            result.push(BASE64_CHARS[((n >> 18) & 0x3F) as usize] as char);
-            result.push(BASE64_CHARS[((n >> 12) & 0x3F) as usize] as char);
-
-            if i + 1 < data.len() {
-                result.push(BASE64_CHARS[((n >> 6) & 0x3F) as usize] as char);
-            } else {
-                result.push('=');
-            }
-
-            if i + 2 < data.len() {
-                result.push(BASE64_CHARS[(n & 0x3F) as usize] as char);
-            } else {
-                result.push('=');
-            }
-
-            i += 3;
-        }
-
-        result
-    }
 }
 
 /// Generates a custom /etc/resolv.conf for a test container.

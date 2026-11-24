@@ -127,7 +127,7 @@ async fn test_ip_allow_only_localhost() {
         .expect("Failed to get host port");
 
     // The Docker bridge connection comes from a non-localhost IP
-    // (e.g., 172.17.0.1), so it should be blocked.
+    // (like 172.17.0.1), so it should be blocked.
     let status = raw_http_get("127.0.0.1", ferron_port, "/index.html").await;
     assert_eq!(
         status, 403,

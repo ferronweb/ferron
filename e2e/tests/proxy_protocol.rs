@@ -323,12 +323,6 @@ async fn test_proxy_protocol_malformed_rejected() {
     }
 }
 
-/// Verify that a global `http { protocol_proxy true }` works without a host
-/// block that has no hostname.
-///
-/// Previously Ferron read this setting from the default host of the port only,
-/// so the global block had no effect unless the configuration also declared a
-/// wildcard or bare host block.
 #[tokio::test]
 async fn test_proxy_protocol_global_block_without_wildcard_host() {
     let _ = rustls::crypto::ring::default_provider().install_default();

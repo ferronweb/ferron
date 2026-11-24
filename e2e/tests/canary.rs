@@ -312,7 +312,7 @@ async fn test_canary_ferron_sets_sticky_cookie() {
     assert!(!second_cookie.contains(&key), "random keys must differ");
 
     // Follow-up requests with the returned cookie stay on the variant and
-    // do not trigger a new Set-Cookie.
+    // do not trigger a new Set-Cookie (there's no need to).
     for _ in 0..3 {
         let response = client
             .get(format!("http://localhost:{}/", port))
