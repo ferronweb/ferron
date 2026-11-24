@@ -31,7 +31,7 @@ rustls = { version = "0.23", default-features = false, features = [
     "aws_lc_rs",
 ] }
 rustls-pki-types = "1"
-parking_lot = "0.12"
+parking_lot = "0.13"
 anyhow = "1"
 rand = "0.10"
 tokio-util = "0.7"

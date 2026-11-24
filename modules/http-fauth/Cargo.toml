@@ -12,7 +12,7 @@ http = "1"
 http-body-util = "0.1"
 bytes = "1"
 connpool = "0.2.0"
-parking_lot = "0.12.5"
+parking_lot = "0.13.0"
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 zincio = { version = "0.2.22", default-features = false, features = ["time"] }
 zincio-hyper = { version = "0.2.22" }
