@@ -37,7 +37,6 @@ fn parse_arguments() -> ArgMatches {
 fn main() {
     let args = parse_arguments();
 
-    // Obtain command-line arguments
     let input_pathbuf: PathBuf = match args.get_one::<PathBuf>("input") {
         Some(arg) => arg.to_owned(),
         None => {
@@ -53,7 +52,6 @@ fn main() {
         }
     };
 
-    // Read and parse the input KDL configuration
     let kdl_config = match read_kdl_file(input_pathbuf.as_path()) {
         Ok(config) => config,
         Err(err) => {
@@ -62,7 +60,6 @@ fn main() {
         }
     };
 
-    // Convert the server configuration
     let mut diagnostics = crate::translate::MigrationDiagnostics::new();
     let ferronconf_config = match translate(&kdl_config, &mut HashMap::new(), &mut diagnostics) {
         Ok(config) => config,
@@ -72,7 +69,6 @@ fn main() {
         }
     };
 
-    // Prepare output content with TODOs as comments at the start
     let mut output_content = String::new();
     for todo in diagnostics.todos {
         output_content.push_str(&format!("# TODO(ferron-kdl2ferron): {todo}\n"));
@@ -87,7 +83,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    // Report warnings to stderr
     for warning in diagnostics.warnings {
         eprintln!("Warning: {warning}");
     }

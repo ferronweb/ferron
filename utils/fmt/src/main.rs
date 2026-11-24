@@ -72,7 +72,6 @@ fn main() {
         sort_directives: cli.sort_directives,
     };
 
-    // Read input
     let input = match &cli.file {
         Some(path) => match std::fs::read_to_string(path) {
             Ok(s) => s,
@@ -99,10 +98,7 @@ fn main() {
         }
     };
 
-    // Analyze source for raw strings and line continuations
     let analysis = source_analysis::analyze_input(&input);
-
-    // Format
     let formatted =
         formatter::format_config_with_analysis(&config, &fmt_config, Some(&analysis), Some(&input));
 

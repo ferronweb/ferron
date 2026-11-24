@@ -262,11 +262,9 @@ fn compress_asset(path: &PathBuf) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-/// The main entry point of the application
 fn main() {
     let args = parse_arguments();
 
-    // Obtain command-line arguments
     let assets_pathbufs: Vec<PathBuf> = match args.get_many::<PathBuf>("assets") {
         Some(paths) => paths.cloned().collect(),
         None => {
@@ -275,7 +273,6 @@ fn main() {
         }
     };
 
-    // Obtain the number of threads
     let num_threads = match args.get_one::<usize>("threads") {
         Some(num) => *num,
         None => {
@@ -286,7 +283,6 @@ fn main() {
 
     let mut paths = Vec::new();
 
-    // Obtain the paths
     for assets_pathbuf in assets_pathbufs {
         paths.extend(match get_paths(&assets_pathbuf) {
             Ok(paths) => paths,
@@ -312,7 +308,8 @@ fn main() {
         }
     };
 
-    // Compress the assets
+    // Use multithreading with rayon for better CPU utilization,
+    // so the assets get compressed faster.
     thread_pool.scope(move |scope| {
         for path in paths {
             println!("Compressing asset at {}...", path.display());
