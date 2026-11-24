@@ -1,3 +1,15 @@
+//! The entry point for the Ferron web server.
+//!
+//! Custom Ferron binaries use that to start the web server.
+//! The default Ferron binary calls it like this:
+//!
+//! ```rust,ignore
+//! fn main() {
+//!     ferron_entrypoint::init();
+//!     ferron_entrypoint::main(ferron_entrypoint::default_profile());
+//! }
+//! ```
+
 mod cli;
 #[cfg(unix)]
 mod daemon;
