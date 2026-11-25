@@ -226,7 +226,7 @@ pub fn parse_forwarded_auth_from_context(
             if let Some(method) = children
                 .get_value("method")
                 .and_then(|m| m.as_string_with_interpolations(ctx))
-                .and_then(|m| Method::from_str(&m).ok())
+                .and_then(|m| Method::from_str(&m.to_ascii_uppercase()).ok())
             {
                 config.method = method;
             }
