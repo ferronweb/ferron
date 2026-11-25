@@ -20,6 +20,7 @@
 
 - **Many HTTP correctness improvements**: improved overall HTTP protocol correctness (see [`zincio-http` changelog](https://github.com/ferronweb/zincio-http/blob/main/CHANGELOG.md#zincio-http-0416)).
 - **Proper extended CONNECT support**: previously, extended CONNECT requests for HTTP/2 and HTTP/3 were not handled correctly, which could lead to connection stalls or dropped connections. This has been fixed.
+- **`mtls.cn` variable fix**: fixed `mtls.cn` resolving to an empty string due to improper parsing of the common name (CN) of the client certificate. ([GitHub issue](https://github.com/ferronweb/ferron/issues/1027))
 
 #### Reverse proxy
 

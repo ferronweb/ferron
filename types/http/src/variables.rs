@@ -172,11 +172,21 @@ pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
                         if satv.r#type
                             == rasn::types::Oid::JOINT_ISO_ITU_T_DS_ATTRIBUTE_TYPE_COMMON_NAME
                         {
+                            // Value can be UTF8String, but decoding into rasn_pkix::CommonName
+                            // expects a PrintableString, so use rasn_pkix::X520CommonName instead.
                             if let Ok(der) = rasn::der::encode(&satv.value) {
-                                if let Ok(cn) = rasn::der::decode::<rasn_pkix::CommonName>(&der) {
-                                    return Some(
-                                        String::from_utf8_lossy(cn.as_bytes()).to_string(),
-                                    );
+                                if let Ok(cn) = rasn::der::decode::<rasn_pkix::X520CommonName>(&der)
+                                {
+                                    let cn_bytes = match cn {
+                                        rasn_pkix::X520CommonName::Bmp(s) => s.to_bytes(),
+                                        rasn_pkix::X520CommonName::Utf8(s) => s.into_bytes(),
+                                        rasn_pkix::X520CommonName::Universal(s) => {
+                                            s.value.into_bytes()
+                                        }
+                                        rasn_pkix::X520CommonName::Teletex(s) => s.to_bytes(),
+                                        rasn_pkix::X520CommonName::Printable(s) => s.into_vec(),
+                                    };
+                                    return Some(String::from_utf8_lossy(&cn_bytes).to_string());
                                 }
                             }
                         }
