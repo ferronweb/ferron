@@ -186,6 +186,17 @@ impl ferron_core::loader::ModuleLoader for ForwardedAuthenticationModuleLoader {
                     subblock_link: None,
                 },
                 DirectiveSubblock::custom("http_auth_to"),
+            )
+            .register(
+                Directive {
+                    name: "method",
+                    usage: "method <method>",
+                    description: "This directive sets the HTTP method used for forwarded authentication. Default: GET",
+                    applicable_protocols: Some(&["http"]),
+                    global_only: false,
+                    subblock_link: None,
+                },
+                DirectiveSubblock::custom("http_auth_to"),
             );
     }
 

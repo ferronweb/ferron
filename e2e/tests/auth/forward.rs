@@ -123,6 +123,25 @@ async fn test_fauth_success() {
 }
 
 #[tokio::test]
+async fn test_fauth_success_post() {
+    let ctx = FAuthTestContext::new(
+        "success",
+        r#"
+*:80 {
+    auth_to http://auth-backend:9090/auth/ok-get
+
+    root "/var/www/ferron"
+}
+"#,
+    )
+    .await;
+
+    let response = ctx.client.post(&ctx.base_url).send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(response.text().await.unwrap(), "Authenticated!");
+}
+
+#[tokio::test]
 async fn test_fauth_failure_401() {
     let ctx = FAuthTestContext::new(
         "failure-401",

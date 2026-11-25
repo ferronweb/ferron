@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use ferron_core::config::ServerConfigurationValue;
 use http::header::HeaderName;
+use http::Method;
 
 /// Parsed forwarded authentication configuration.
 #[derive(Clone, Debug)]
@@ -31,6 +32,8 @@ pub struct ForwardedAuthConfig {
     pub headers_to_remove: Vec<HeaderName>,
     /// Whether to append the original URI to the auth request URL
     pub append_uri: bool,
+    /// HTTP method used for forwarded authentication:
+    pub method: Method,
 }
 
 impl Default for ForwardedAuthConfig {
@@ -47,6 +50,7 @@ impl Default for ForwardedAuthConfig {
             headers_to_replace: Vec::new(),
             headers_to_remove: Vec::new(),
             append_uri: false,
+            method: Method::GET,
         }
     }
 }
@@ -217,6 +221,14 @@ pub fn parse_forwarded_auth_from_context(
 
             if children.get_flag("append_uri") {
                 config.append_uri = true;
+            }
+
+            if let Some(method) = children
+                .get_value("method")
+                .and_then(|m| m.as_string_with_interpolations(ctx))
+                .and_then(|m| Method::from_str(&m).ok())
+            {
+                config.method = method;
             }
         }
 

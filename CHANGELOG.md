@@ -10,6 +10,10 @@
 
 - **Extended CONNECT support for HTTP/2 backends**: the reverse proxy now "upgrades" HTTP/2 requests via extended CONNECT, if the request specifies an HTTP upgrade.
 
+#### Forwarded authentication
+
+- **Forwarded auth method change**: Ferron now uses GET method by default instead of the original request method, with option to set a custom method using `method` subdirective. Use the `method {{request.method}}` subdirective to restore the previous behavior. ([GitHub issue](https://github.com/ferronweb/ferron/issues/1029))
+
 ### Fixed
 
 #### HTTP server core

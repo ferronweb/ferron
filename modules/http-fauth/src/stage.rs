@@ -126,7 +126,7 @@ impl ForwardedAuthenticationStage {
 
         let mut auth_request = Request::builder()
             .uri(auth_uri)
-            .method(original_request.method().clone());
+            .method(config.method.clone());
 
         // Copy headers from original request to auth request
         let Some(headers) = auth_request.headers_mut() else {

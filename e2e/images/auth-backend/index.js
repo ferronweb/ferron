@@ -8,6 +8,17 @@ app.all("/auth/ok", (_req, res) => {
   res.status(200).send("OK");
 });
 
+app.get("/auth/ok-get", (_req, res) => {
+  res.set("X-Auth-User", "dorian");
+  res.set("X-Auth-Roles", "admin,user");
+  res.set("X-Auth-Email", "dorian@example.com");
+  res.status(200).send("OK");
+});
+
+app.post("/auth/ok-get", (_req, res) => {
+  res.status(405).send("Wrong method");
+});
+
 app.all("/auth/fail", (_req, res) => {
   res.status(401).send("Unauthorized");
 });
