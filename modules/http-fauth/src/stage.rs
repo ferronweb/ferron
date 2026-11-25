@@ -133,6 +133,11 @@ impl ForwardedAuthenticationStage {
             return Err("Failed to get headers for auth request".into());
         };
         for (name, value) in original_request.headers() {
+            // Drop Content-* headers, because the auth request body would be empty,
+            // and the headers would intefere with that...
+            if name.as_str().starts_with("content-") {
+                continue;
+            }
             headers.insert(name.clone(), value.clone());
         }
 
@@ -190,6 +195,10 @@ impl ForwardedAuthenticationStage {
             http::header::CONNECTION,
             http::header::HeaderValue::from_static("keep-alive"),
         );
+
+        headers.remove(http::header::TRAILER);
+        headers.remove(http::header::TE);
+        headers.remove(http::header::TRANSFER_ENCODING);
 
         Ok(auth_request.body(
             Empty::<bytes::Bytes>::new()

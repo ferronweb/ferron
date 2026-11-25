@@ -35,7 +35,7 @@ example.com {
 | `append_uri`       | `[bool]`      | Whether to append the URI to the backend URL.                                                   | `false`                 |
 | `method`           | `<string>`    | HTTP method to use when forwarding requests to the auth backend.                                | GET                     |
 
-When you enable `client_ip_from_header`, Ferron appends `X-Forwarded-For` to the existing chain instead of replacing it. Ferron removes the `Upgrade` and `Connection` headers from auth requests.
+When you enable `client_ip_from_header`, Ferron appends `X-Forwarded-For` to the existing chain instead of replacing it. Ferron removes the `Content-*` (by default), `Upgrade` and `Connection` headers from auth requests.
 
 You can chain multiple backends. Set `last` to `true` on the final backend to terminate the chain.
 

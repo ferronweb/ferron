@@ -27,6 +27,10 @@
 - **Cookie affinity fix**: the reverse proxy no longer sets an affinity cookie when using cookie-based affinity and it is already set.
 - **Reverse proxy stall fix**: after some closed idle connections get evicted from the connection pool, the idle connection count did not decrease. This would cause the reverse proxy pool selection to hang, because the pool was wrongfully marked as at capacity. ([GitHub issue](https://github.com/ferronweb/ferron/issues/1028))
 
+#### Forwarded authentication
+
+- **Forwarded auth `Content-*` header fix**: when the original requests specifies a content header (for example, `Content-Length`), it got passed through to the authentication backend, interfering with the request. This has been fix to strip away `Content-*` headers by default. ([GitHub issue](https://github.com/ferronweb/ferron/issues/1029))
+
 ## Ferron 3.0.0-rc.11
 
 **Released in November 8, 2026**
