@@ -64,7 +64,8 @@ impl ResolvesServerCert for AcmeResolver {
         if certified_key_option.is_none() {
             if let Some((tx, port)) = &self.on_demand_tx {
                 if let Some(server_name) = server_name_string {
-                    // On-demand TLS channel would be unbounded...
+                    // The channel is bounded. When it is full, drop the request;
+                    // the next handshake for this hostname sends it again.
                     let _ = tx.try_send((server_name, *port));
                 }
             }

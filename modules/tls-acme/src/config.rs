@@ -597,7 +597,7 @@ fn build_root_cert_store() -> Result<rustls::RootCertStore, Box<dyn std::error::
 #[allow(clippy::too_many_arguments)]
 pub fn parse_acme_config(
     config: &ServerConfigurationBlock,
-    domain: &str,
+    domain: Option<&str>,
     port: u16,
     memory_account_cache: Arc<RwLock<std::collections::HashMap<String, Vec<u8>>>>,
     tls_alpn_01_resolvers: Arc<RwLock<Vec<TlsAlpn01DataLock>>>,
@@ -651,6 +651,19 @@ pub fn parse_acme_config(
         let on_demand_ask_auth = first_value(config, "on_demand_ask_auth");
         let on_demand_ask_no_verification = config.get_flag("on_demand_ask_no_verification");
 
+        // A host block without a hostname matches every SNI hostname. Without an
+        // approval endpoint, anyone could make Ferron request certificates for
+        // arbitrary names, so the endpoint is mandatory here.
+        if domain.is_none()
+            && on_demand_ask
+                .as_deref()
+                .is_none_or(|ask| ask.trim().is_empty())
+        {
+            return Err(
+                "On-demand ACME in a host block without a hostname requires `on_demand_ask`".into(),
+            );
+        }
+
         Ok(AcmeConfigOrOnDemand::OnDemand(AcmeOnDemandConfig {
             rustls_client_config: client_config,
             challenge_type,
@@ -661,7 +674,7 @@ pub fn parse_acme_config(
             tls_alpn_01_resolver_lock: tls_alpn_01_resolvers,
             http_01_resolver_lock: http_01_resolvers,
             dns_client,
-            sni_hostname: Some(domain.to_string()),
+            sni_hostname: domain.map(str::to_string),
             port,
             on_demand_ask,
             on_demand_ask_auth,
@@ -673,6 +686,9 @@ pub fn parse_acme_config(
             cert_algo_default: algo_default,
         }))
     } else {
+        let domain = domain.ok_or(
+            "ACME TLS provider requires a domain name or IP address unless `on_demand` is enabled",
+        )?;
         let certified_key_lock = Arc::new(RwLock::new(None));
         let tls_alpn_01_data_lock = Arc::new(RwLock::new(None));
         let http_01_data_lock = Arc::new(RwLock::new(None));
@@ -736,4 +752,101 @@ pub fn parse_acme_config(
 pub enum AcmeConfigOrOnDemand {
     Eager(AcmeConfig),
     OnDemand(AcmeOnDemandConfig),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+
+    fn block(directives: &[(&str, Option<&str>)]) -> ServerConfigurationBlock {
+        ServerConfigurationBlock {
+            directives: Arc::new(
+                directives
+                    .iter()
+                    .map(|(name, value)| {
+                        let args = match value {
+                            Some(value) => {
+                                vec![ServerConfigurationValue::String(value.to_string(), None)]
+                            }
+                            None => vec![ServerConfigurationValue::Boolean(true, None)],
+                        };
+                        (
+                            name.to_string(),
+                            vec![ServerConfigurationDirectiveEntry {
+                                args,
+                                ..Default::default()
+                            }],
+                        )
+                    })
+                    .collect(),
+            ),
+            ..Default::default()
+        }
+    }
+
+    fn parse(
+        config: &ServerConfigurationBlock,
+        domain: Option<&str>,
+    ) -> Result<AcmeConfigOrOnDemand, Box<dyn std::error::Error + Send + Sync>> {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        parse_acme_config(
+            config,
+            domain,
+            443,
+            Arc::new(RwLock::new(std::collections::HashMap::new())),
+            Arc::new(RwLock::new(Vec::new())),
+            Arc::new(RwLock::new(Vec::new())),
+            Arc::new(RwLock::new(std::collections::HashMap::new())),
+            None,
+        )
+    }
+
+    #[test]
+    fn catch_all_on_demand_with_ask_has_no_sni_pattern() {
+        let config = block(&[
+            ("on_demand", None),
+            ("on_demand_ask", Some("http://127.0.0.1:8081/check")),
+        ]);
+        match parse(&config, None).expect("catch-all on-demand config") {
+            AcmeConfigOrOnDemand::OnDemand(on_demand) => {
+                assert_eq!(on_demand.sni_hostname, None);
+                assert_eq!(
+                    on_demand.on_demand_ask.as_deref(),
+                    Some("http://127.0.0.1:8081/check")
+                );
+            }
+            AcmeConfigOrOnDemand::Eager(_) => panic!("expected an on-demand config"),
+        }
+    }
+
+    #[test]
+    fn catch_all_on_demand_without_ask_is_rejected() {
+        let config = block(&[("on_demand", None)]);
+        let error = parse(&config, None).err().expect("missing ask endpoint");
+        assert!(error.to_string().contains("on_demand_ask"));
+    }
+
+    #[test]
+    fn catch_all_on_demand_with_empty_ask_is_rejected() {
+        let config = block(&[("on_demand", None), ("on_demand_ask", Some(" "))]);
+        assert!(parse(&config, None).is_err());
+    }
+
+    #[test]
+    fn eager_config_without_hostname_is_rejected() {
+        let config = block(&[]);
+        assert!(parse(&config, None).is_err());
+    }
+
+    #[test]
+    fn named_on_demand_config_keeps_its_pattern_without_ask() {
+        let config = block(&[("on_demand", None)]);
+        match parse(&config, Some("*.example.com")).expect("named on-demand config") {
+            AcmeConfigOrOnDemand::OnDemand(on_demand) => {
+                assert_eq!(on_demand.sni_hostname.as_deref(), Some("*.example.com"));
+            }
+            AcmeConfigOrOnDemand::Eager(_) => panic!("expected an on-demand config"),
+        }
+    }
 }
